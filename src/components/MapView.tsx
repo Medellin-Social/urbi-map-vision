@@ -30,7 +30,13 @@ export function MapView({ onSelect, selectedId }: Props) {
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true, showCompass: true }), "bottom-right");
 
+    // Force resize once the container has its real size (fixes blank canvas on first paint)
+    const ro = new ResizeObserver(() => map.resize());
+    ro.observe(containerRef.current);
+    requestAnimationFrame(() => map.resize());
+
     map.on("load", () => {
+      map.resize();
       const data = buildNeighborhoodsGeoJSON();
       map.addSource("barrios", { type: "geojson", data });
 
