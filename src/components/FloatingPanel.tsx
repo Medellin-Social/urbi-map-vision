@@ -234,7 +234,7 @@ function CityOverview({ goal }: { goal?: ReturnType<typeof auth.get> extends inf
               <Tooltip
                 cursor={{ fill: "rgba(0,212,255,0.06)" }}
                 contentStyle={tooltipStyle}
-                formatter={(v: number) => [`${v.toFixed(1)}%`, "Yield"]}
+                formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, "Yield"]}
               />
               <Bar dataKey="yield" radius={[6, 6, 0, 0]} fill="url(#barGrad)" />
               <defs>
@@ -319,7 +319,7 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} domain={["dataMin - 2", "dataMax + 2"]} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: number) => [`Idx ${v.toFixed(1)}`, "Precio"]} />
+              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`Idx ${Number(v).toFixed(1)}`, "Precio"]} />
               <Line type="monotone" dataKey="precio" stroke="#00d4ff" strokeWidth={2} dot={false} />
             </LineChart>
           </ResponsiveContainer>
