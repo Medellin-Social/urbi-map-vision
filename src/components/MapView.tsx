@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
-import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
+import { getMapboxToken } from "@/server/mapbox.functions";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
 
 type Props = {
@@ -11,12 +11,22 @@ type Props = {
 export function MapView({ onSelect, selectedId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
-  const tokenInvalid = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState(false);
 
   useEffect(() => {
-    if (tokenInvalid || !containerRef.current || mapRef.current) return;
+    getMapboxToken()
+      .then((r) => {
+        if (r.token) setToken(r.token);
+        else setTokenError(true);
+      })
+      .catch(() => setTokenError(true));
+  }, []);
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+  useEffect(() => {
+    if (!token || !containerRef.current || mapRef.current) return;
+
+    mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/dark-v11",
@@ -172,15 +182,13 @@ export function MapView({ onSelect, selectedId }: Props) {
     });
   }, [selectedId]);
 
-  if (tokenInvalid) {
+  if (tokenError) {
     return (
       <div className="absolute inset-0 grid place-items-center bg-background px-6 text-center">
         <div className="max-w-md rounded-xl border border-border bg-surface p-6">
           <h2 className="font-display text-lg font-semibold">Token de Mapbox requerido</h2>
           <p className="mt-2 text-sm text-muted-foreground">
-            Pega tu token público de Mapbox (<span className="text-primary">pk.…</span>) en{" "}
-            <code className="rounded bg-background/60 px-1.5 py-0.5 text-xs">src/lib/mapboxToken.ts</code> para
-            cargar el mapa de Medellín.
+            Configura el secreto <code className="rounded bg-background/60 px-1.5 py-0.5 text-xs">MAPBOX_PUBLIC_TOKEN</code> en Lovable Cloud para cargar el mapa de Medellín.
           </p>
         </div>
       </div>
