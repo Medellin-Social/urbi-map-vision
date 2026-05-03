@@ -163,6 +163,7 @@ export function MapView({ onSelect, selectedId }: Props) {
     });
 
     return () => {
+      ro.disconnect();
       map.remove();
       mapRef.current = null;
     };
