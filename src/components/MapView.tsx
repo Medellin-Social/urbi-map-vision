@@ -184,7 +184,7 @@ export function MapView({ onSelect, selectedId }: Props) {
         let n = NEIGHBORHOODS.find((x) => x.id === id || x.nombre.toUpperCase() === name.toUpperCase());
         if (!n) {
           // Build a synthetic neighborhood from feature centroid
-          const seed = name.split("").reduce((a, c) => a + c.charCodeAt(0), 0);
+          const seed = name.split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
           const y = Number((f.properties?.yield ?? 6).toString());
           const [lng, lat] = (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : [-75.58, 6.24]);
           const precio_m2 = 3_500_000 + (seed % 60) * 100_000;
