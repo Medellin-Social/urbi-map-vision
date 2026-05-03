@@ -35,9 +35,34 @@ export function MapView({ onSelect, selectedId }: Props) {
     ro.observe(containerRef.current);
     requestAnimationFrame(() => map.resize());
 
-    map.on("load", () => {
+    map.on("load", async () => {
       map.resize();
-      const data = buildNeighborhoodsGeoJSON();
+      let data: any = buildNeighborhoodsGeoJSON();
+      try {
+        const res = await fetch("/data/barrios_medellin.geojson");
+        if (res.ok) {
+          const raw = await res.json();
+          // Assign numeric id + synthetic yield (matched to NEIGHBORHOODS by name when possible)
+          raw.features = raw.features.map((f: any, i: number) => {
+            const name = (f.properties?.nombre ?? "").toUpperCase();
+            const match = NEIGHBORHOODS.find((n) => n.nombre.toUpperCase() === name);
+            const seed = name.split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
+            const y = match ? match.yield : 4 + (seed % 90) / 10; // 4.0 - 13.0
+            return {
+              ...f,
+              id: i + 1,
+              properties: {
+                ...f.properties,
+                id: i + 1,
+                yield: Number(y.toFixed(2)),
+              },
+            };
+          });
+          data = raw;
+        }
+      } catch (e) {
+        console.warn("Failed to load barrios geojson, using fallback", e);
+      }
       map.addSource("barrios", { type: "geojson", data });
 
       // Glow underlayer
