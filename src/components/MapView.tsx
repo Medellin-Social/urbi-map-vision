@@ -1,6 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
-import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
+import { getMapboxToken } from "@/server/mapbox.functions";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
 
 type Props = {
@@ -11,12 +11,22 @@ type Props = {
 export function MapView({ onSelect, selectedId }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
-  const tokenInvalid = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
+  const [token, setToken] = useState<string | null>(null);
+  const [tokenError, setTokenError] = useState(false);
 
   useEffect(() => {
-    if (tokenInvalid || !containerRef.current || mapRef.current) return;
+    getMapboxToken()
+      .then((r) => {
+        if (r.token) setToken(r.token);
+        else setTokenError(true);
+      })
+      .catch(() => setTokenError(true));
+  }, []);
 
-    mapboxgl.accessToken = MAPBOX_TOKEN;
+  useEffect(() => {
+    if (!token || !containerRef.current || mapRef.current) return;
+
+    mapboxgl.accessToken = token;
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/dark-v11",
