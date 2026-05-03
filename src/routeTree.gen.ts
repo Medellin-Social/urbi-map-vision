@@ -11,7 +11,9 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as MapRouteImport } from './routes/map'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as IndexRouteImport } from './routes/index'
 
 const RegisterRoute = RegisterRouteImport.update({
@@ -24,9 +26,19 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MapRoute = MapRouteImport.update({
+  id: '/map',
+  path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ComparadorRoute = ComparadorRouteImport.update({
+  id: '/comparador',
+  path: '/comparador',
   getParentRoute: () => rootRouteImport,
 } as any)
 const IndexRoute = IndexRouteImport.update({
@@ -37,34 +49,55 @@ const IndexRoute = IndexRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/comparador': typeof ComparadorRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/register': typeof RegisterRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/comparador': typeof ComparadorRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/register': typeof RegisterRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/comparador': typeof ComparadorRoute
   '/login': typeof LoginRoute
+  '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/register': typeof RegisterRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/login' | '/onboarding' | '/register'
+  fullPaths:
+    | '/'
+    | '/comparador'
+    | '/login'
+    | '/map'
+    | '/onboarding'
+    | '/register'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/login' | '/onboarding' | '/register'
-  id: '__root__' | '/' | '/login' | '/onboarding' | '/register'
+  to: '/' | '/comparador' | '/login' | '/map' | '/onboarding' | '/register'
+  id:
+    | '__root__'
+    | '/'
+    | '/comparador'
+    | '/login'
+    | '/map'
+    | '/onboarding'
+    | '/register'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ComparadorRoute: typeof ComparadorRoute
   LoginRoute: typeof LoginRoute
+  MapRoute: typeof MapRoute
   OnboardingRoute: typeof OnboardingRoute
   RegisterRoute: typeof RegisterRoute
 }
@@ -85,11 +118,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/map': {
+      id: '/map'
+      path: '/map'
+      fullPath: '/map'
+      preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/login': {
       id: '/login'
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/comparador': {
+      id: '/comparador'
+      path: '/comparador'
+      fullPath: '/comparador'
+      preLoaderRoute: typeof ComparadorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/': {
@@ -104,7 +151,9 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ComparadorRoute: ComparadorRoute,
   LoginRoute: LoginRoute,
+  MapRoute: MapRoute,
   OnboardingRoute: OnboardingRoute,
   RegisterRoute: RegisterRoute,
 }
