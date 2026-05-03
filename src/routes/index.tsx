@@ -5,13 +5,14 @@ export const Route = createFileRoute("/")({
     if (typeof window === "undefined") return;
     const raw = localStorage.getItem("urbidata.user");
     if (!raw) throw redirect({ to: "/login" });
+    let goal: string | undefined;
     try {
-      const u = JSON.parse(raw) as { goal?: string };
-      if (!u.goal) throw redirect({ to: "/onboarding" });
-      throw redirect({ to: "/map" });
-    } catch (e) {
-      throw e;
+      goal = (JSON.parse(raw) as { goal?: string }).goal;
+    } catch {
+      throw redirect({ to: "/login" });
     }
+    if (!goal) throw redirect({ to: "/onboarding" });
+    throw redirect({ to: "/map" });
   },
   component: () => null,
 });
