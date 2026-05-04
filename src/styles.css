@@ -113,6 +113,12 @@ body {
 }
 .mapboxgl-popup-tip { display: none; }
 .mapboxgl-canvas:focus { outline: none; }
+.mapboxgl-map,
+.mapboxgl-canvas,
+.mapboxgl-canvas-container {
+  width: 100%;
+  height: 100%;
+}
 
 /* Glow utility */
 .glow-cyan { box-shadow: 0 0 24px -4px rgba(0, 212, 255, 0.45); }

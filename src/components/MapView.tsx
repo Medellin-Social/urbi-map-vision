@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
+import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
 
@@ -231,5 +232,5 @@ export function MapView({ onSelect, selectedId }: Props) {
     );
   }
 
-  return <div ref={containerRef} className="absolute inset-0" />;
+  return <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />;
 }
