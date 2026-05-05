@@ -25,6 +25,10 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Info,
+  Activity,
+  Target,
+  X,
 } from "lucide-react";
 import {
   CITY_STATS,
