@@ -319,6 +319,9 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
         </div>
       </Section>
 
+      <LiquiditySection n={n} />
+      <OpportunityBanner n={n} />
+
       <Section title="Tendencia de precio · 12 meses">
         <div className="h-32">
           <ResponsiveContainer>
