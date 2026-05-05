@@ -3,6 +3,7 @@ import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
+import { OPPORTUNITIES } from "@/data/marketActivity";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
