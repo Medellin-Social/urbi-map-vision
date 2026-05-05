@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Building2, GitCompare, LogOut, User } from "lucide-react";
+import { Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
 import { auth, GOAL_LABEL } from "@/lib/auth";
 
 export function Navbar() {
@@ -25,6 +25,13 @@ export function Navbar() {
       </Link>
 
       <div className="flex items-center gap-2">
+        <Link
+          to="/calculadora"
+          className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md transition hover:bg-primary/20"
+        >
+          <Calculator className="h-3.5 w-3.5" />
+          Calculadora 💰
+        </Link>
         <Link
           to="/comparador"
           className="hidden items-center gap-1.5 rounded-md border border-border bg-surface/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-md transition hover:text-foreground sm:inline-flex"
