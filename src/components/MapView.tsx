@@ -230,13 +230,17 @@ export function MapView({ onSelect, selectedId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Selection sync
+  // Selection sync + flyTo
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     NEIGHBORHOODS.forEach((n) => {
       map.setFeatureState({ source: "barrios", id: n.id }, { selected: n.id === selectedId });
     });
+    if (selectedId != null) {
+      const n = NEIGHBORHOODS.find((x) => x.id === selectedId);
+      if (n) map.flyTo({ center: [n.lng, n.lat], zoom: 13.4, speed: 0.9 });
+    }
   }, [selectedId]);
 
   if (tokenError) {
