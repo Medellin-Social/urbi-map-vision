@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Bar,
@@ -14,6 +15,7 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  Calculator,
   ChevronRight,
   GripVertical,
   Minus,
@@ -329,6 +331,15 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
           Precio actual: {below ? "BAJO" : "SOBRE"} el promedio ({diffPct >= 0 ? "+" : ""}{diffPct.toFixed(1)}%)
         </div>
       </Section>
+
+      <Link
+        to="/calculadora"
+        search={{ barrio: n.id }}
+        className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-primary to-accent py-2.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
+      >
+        <Calculator className="h-3.5 w-3.5" />
+        Simular inversión aquí <ArrowRight className="h-3 w-3" />
+      </Link>
 
       <Section title="Listings destacados">
         <div className="space-y-2">
