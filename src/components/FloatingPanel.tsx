@@ -1,4 +1,5 @@
 import { useMemo, useRef, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import {
   Bar,
@@ -14,6 +15,7 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  Calculator,
   ChevronRight,
   GripVertical,
   Minus,
