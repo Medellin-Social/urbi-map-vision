@@ -25,6 +25,7 @@ function MapPage() {
       <Navbar />
       <ProfileChipMobile />
       <FloatingPanel selected={selected} onClear={() => setSelected(null)} />
+      <OpportunitiesPanel onSelect={setSelected} />
     </div>
   );
 }
