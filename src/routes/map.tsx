@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Navbar, ProfileChipMobile } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
+import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
 import type { Neighborhood } from "@/data/neighborhoods";
 
 export const Route = createFileRoute("/map")({
@@ -24,6 +25,7 @@ function MapPage() {
       <Navbar />
       <ProfileChipMobile />
       <FloatingPanel selected={selected} onClear={() => setSelected(null)} />
+      <OpportunitiesPanel onSelect={setSelected} />
     </div>
   );
 }

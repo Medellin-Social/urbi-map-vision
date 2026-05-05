@@ -25,6 +25,10 @@ import {
   Sparkles,
   TrendingDown,
   TrendingUp,
+  Info,
+  Activity,
+  Target,
+  X,
 } from "lucide-react";
 import {
   CITY_STATS,
@@ -33,6 +37,7 @@ import {
   listingsFor,
   priceTrend,
 } from "@/data/neighborhoods";
+import { liquidityFor, LIQUIDITY_COLORS, opportunityForBarrio } from "@/data/marketActivity";
 import { auth, GOAL_LABEL, recommendation } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -314,6 +319,9 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
         </div>
       </Section>
 
+      <LiquiditySection n={n} />
+      <OpportunityBanner n={n} />
+
       <Section title="Tendencia de precio · 12 meses">
         <div className="h-32">
           <ResponsiveContainer>
@@ -555,3 +563,139 @@ const tooltipStyle: React.CSSProperties = {
   fontSize: 11,
   color: "#f9fafb",
 };
+
+/* ------------- Liquidity / Opportunity ------------- */
+
+function LiquiditySection({ n }: { n: Neighborhood }) {
+  const liq = liquidityFor(n);
+  const colors = LIQUIDITY_COLORS[liq.cat];
+  const [showInfo, setShowInfo] = useState(false);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+          <Activity className="h-3 w-3 text-primary" /> 💧 Actividad de Mercado
+        </div>
+        <button
+          onClick={() => setShowInfo(true)}
+          className="grid h-5 w-5 place-items-center rounded-full text-muted-foreground transition hover:bg-background/60 hover:text-primary"
+          title="¿Cómo calculamos esto?"
+        >
+          <Info className="h-3 w-3" />
+        </button>
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: colors.border, background: colors.bg }}
+      >
+        <div className="flex items-center justify-between">
+          <div className="text-sm font-bold uppercase tracking-wider" style={{ color: colors.border }}>
+            {liq.cat} — {liq.label}
+          </div>
+          <div className="text-[11px] font-semibold" style={{ color: colors.border }}>
+            {liq.score}/100
+          </div>
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">
+          Tiempo estimado: <span className="text-foreground">{liq.tiempoEstimado}</span>
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: `${liq.score}%` }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="h-full rounded-full"
+            style={{ background: colors.border }}
+          />
+        </div>
+
+        <div className="mt-3 grid grid-cols-1 gap-1 text-[11px]">
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">📊 Listings activos</span>
+            <span className="font-semibold">{liq.n}</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">🕐 Tiempo prom. publicado</span>
+            <span className="font-semibold">{liq.dias}d</span>
+          </div>
+          <div className="flex items-center justify-between">
+            <span className="text-muted-foreground">🔄 Listings frescos (&lt;30d)</span>
+            <span className="font-semibold">{liq.frescos}%</span>
+          </div>
+        </div>
+      </motion.div>
+
+      <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/80">
+        Basado en volumen de mercado activo. Liquidez real disponible próximamente con datos de transacciones oficiales.
+      </p>
+
+      <AnimatePresence>
+        {showInfo && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={() => setShowInfo(false)}
+            className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+          >
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              onClick={(e) => e.stopPropagation()}
+              className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-6"
+            >
+              <button
+                onClick={() => setShowInfo(false)}
+                className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-background/60 hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+              <h3 className="font-display text-lg font-semibold">¿Cómo calculamos esto?</h3>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Este índice mide la actividad del mercado inmobiliario basado en:
+              </p>
+              <ul className="mt-2 space-y-1 text-sm text-muted-foreground">
+                <li>• Tiempo de publicación de listings activos</li>
+                <li>• Volumen de propiedades en venta</li>
+                <li>• Interés de la zona (demanda Airbnb)</li>
+              </ul>
+              <div className="mt-4 rounded-lg border border-primary/30 bg-primary/5 p-3 text-xs text-muted-foreground">
+                📌 <span className="text-foreground">Próximamente:</span> integraremos datos reales de transacciones de la
+                Superintendencia de Notariado y Registro para mostrar tiempo real de venta por barrio.
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
+function OpportunityBanner({ n }: { n: Neighborhood }) {
+  const opp = opportunityForBarrio(n);
+  if (!opp) return null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, scale: 0.96 }}
+      animate={{ opacity: 1, scale: 1 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-xl border p-3"
+      style={{ borderColor: opp.color, background: `${opp.color}15` }}
+    >
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: opp.color }}>
+        <Target className="h-3 w-3" /> {opp.emoji} Oportunidad detectada
+      </div>
+      <div className="mt-1 text-sm font-semibold" style={{ color: opp.color }}>
+        {opp.tipo}
+      </div>
+      <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{opp.descripcion}"</p>
+    </motion.div>
+  );
+}
+

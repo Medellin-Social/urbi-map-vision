@@ -23,6 +23,7 @@ import {
 import { z } from "zod";
 import { Navbar } from "@/components/Navbar";
 import { NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
+import { opportunityForBarrio } from "@/data/marketActivity";
 import { formatCOP, formatPct } from "@/lib/format";
 
 const searchSchema = z.object({
@@ -257,6 +258,27 @@ function ResultsPanel({ r }: { r: ReturnType<typeof computeResults> }) {
       transition={{ duration: 0.35 }}
       className="space-y-4"
     >
+      {(() => {
+        const opp = opportunityForBarrio(r.barrio);
+        if (!opp) return null;
+        return (
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="rounded-2xl border p-4"
+            style={{ borderColor: opp.color, background: `${opp.color}15` }}
+          >
+            <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: opp.color }}>
+              {opp.emoji} Oportunidad detectada
+            </div>
+            <div className="mt-1 font-display text-base font-semibold" style={{ color: opp.color }}>
+              {opp.tipo}
+            </div>
+            <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{opp.descripcion}"</p>
+          </motion.div>
+        );
+      })()}
+
       {/* Header */}
       <div className={`rounded-2xl border bg-gradient-to-br ${ratingTone} p-5`}>
         <div className="text-[11px] font-bold uppercase tracking-widest opacity-80">

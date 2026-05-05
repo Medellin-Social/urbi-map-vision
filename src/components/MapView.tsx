@@ -3,6 +3,7 @@ import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
+import { OPPORTUNITIES } from "@/data/marketActivity";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
@@ -200,6 +201,25 @@ export function MapView({ onSelect, selectedId }: Props) {
         map.flyTo({ center: [n.lng, n.lat], zoom: 13.4, speed: 0.8 });
         onSelect(n);
       });
+
+      // Opportunity pulse markers (centroid-ish)
+      data.features.forEach((f: any) => {
+        const name = (f.properties?.nombre ?? "").toUpperCase();
+        const opp = OPPORTUNITIES.find((o) => o.barrio === name);
+        if (!opp) return;
+        const n = NEIGHBORHOODS.find((x) => x.nombre.toUpperCase() === name);
+        if (!n) return;
+        const el = document.createElement("div");
+        el.className = "opp-pulse-dot";
+        el.style.setProperty("--opp-color", opp.color);
+        el.title = `${opp.emoji} ${opp.tipo} — ${opp.descripcion}`;
+        el.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          map.flyTo({ center: [n.lng, n.lat], zoom: 13.6, speed: 0.8 });
+          onSelect(n);
+        });
+        new mapboxgl.Marker({ element: el }).setLngLat([n.lng, n.lat]).addTo(map);
+      });
     });
 
     return () => {
@@ -210,13 +230,17 @@ export function MapView({ onSelect, selectedId }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Selection sync
+  // Selection sync + flyTo
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
     NEIGHBORHOODS.forEach((n) => {
       map.setFeatureState({ source: "barrios", id: n.id }, { selected: n.id === selectedId });
     });
+    if (selectedId != null) {
+      const n = NEIGHBORHOODS.find((x) => x.id === selectedId);
+      if (n) map.flyTo({ center: [n.lng, n.lat], zoom: 13.4, speed: 0.9 });
+    }
   }, [selectedId]);
 
   if (tokenError) {
