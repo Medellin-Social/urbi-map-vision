@@ -23,6 +23,7 @@ import {
 import { z } from "zod";
 import { Navbar } from "@/components/Navbar";
 import { NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
+import { opportunityForBarrio } from "@/data/marketActivity";
 import { formatCOP, formatPct } from "@/lib/format";
 
 const searchSchema = z.object({
