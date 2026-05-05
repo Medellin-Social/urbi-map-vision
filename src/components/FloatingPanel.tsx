@@ -38,7 +38,6 @@ import {
   priceTrend,
 } from "@/data/neighborhoods";
 import { liquidityFor, LIQUIDITY_COLORS, opportunityForBarrio } from "@/data/marketActivity";
-import { Info, Activity, Target } from "lucide-react";
 import { auth, GOAL_LABEL, recommendation } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
