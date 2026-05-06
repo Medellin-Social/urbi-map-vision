@@ -288,7 +288,7 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
   const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
 
   // Log view to history once per neighborhood
-  useMemo(() => {
+  useEffect(() => {
     auth.pushHistory({ type: "view", label: `Vio ${titleCase(n.nombre)}`, barrioId: n.id });
     setFav(auth.isFavorite(n.id));
   }, [n.id]);
