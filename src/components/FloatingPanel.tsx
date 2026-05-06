@@ -23,6 +23,7 @@ import {
   Trees,
   ShoppingBag,
   Sparkles,
+  Star,
   TrendingDown,
   TrendingUp,
   Info,
