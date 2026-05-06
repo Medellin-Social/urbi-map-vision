@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
 import { OPPORTUNITIES } from "@/data/marketActivity";
+import { auth, MAP_STYLES } from "@/lib/auth";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
