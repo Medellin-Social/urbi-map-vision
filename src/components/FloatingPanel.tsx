@@ -285,6 +285,18 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
   const ylabel = yieldLabel(n.yield);
 
   const listings = listingsFor(n).slice(0, 3);
+  const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
+
+  // Log view to history once per neighborhood
+  useMemo(() => {
+    auth.pushHistory({ type: "view", label: `Vio ${titleCase(n.nombre)}`, barrioId: n.id });
+    setFav(auth.isFavorite(n.id));
+  }, [n.id]);
+
+  const toggleFav = () => {
+    auth.toggleFavorite({ id: n.id, nombre: titleCase(n.nombre), yield: n.yield });
+    setFav(auth.isFavorite(n.id));
+  };
 
   return (
     <div className="space-y-4">
@@ -296,8 +308,21 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
       </button>
 
       <div>
-        <h2 className="font-display text-xl font-semibold">{titleCase(n.nombre)}</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">{n.comuna}</p>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h2 className="font-display text-xl font-semibold">{titleCase(n.nombre)}</h2>
+            <p className="mt-0.5 text-xs text-muted-foreground">{n.comuna}</p>
+          </div>
+          <button
+            onClick={toggleFav}
+            title={fav ? "Quitar de favoritos" : "Guardar en favoritos"}
+            className={`grid h-9 w-9 place-items-center rounded-full border transition ${
+              fav ? "border-warning/60 bg-warning/15 text-warning" : "border-border bg-background/40 text-muted-foreground hover:text-warning"
+            }`}
+          >
+            <Star className={`h-4 w-4 ${fav ? "fill-warning" : ""}`} />
+          </button>
+        </div>
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Badge>Estrato {n.estrato}</Badge>
           <Badge>{n.municipio}</Badge>
