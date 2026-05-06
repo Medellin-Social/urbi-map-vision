@@ -20,9 +20,10 @@ export function MapView({ onSelect, selectedId }: Props) {
     if (tokenError || !containerRef.current || mapRef.current) return;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
+    const styleId = auth.get()?.mapStyle ?? "dark";
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/dark-v11",
+      style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/dark-v11",
       center: [-75.5812, 6.2442],
       zoom: 11.5,
       pitch: 35,
