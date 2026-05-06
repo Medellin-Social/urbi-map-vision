@@ -47,24 +47,28 @@ export function Navbar() {
           </span>
         )}
 
-        <div className="flex items-center gap-2 rounded-full border border-border bg-surface/80 py-1 pl-1 pr-3 backdrop-blur-md">
-          <div className="grid h-7 w-7 place-items-center rounded-full bg-gradient-to-br from-primary to-accent text-[11px] font-bold text-background">
-            {initials}
+        <Link
+          to="/perfil"
+          title="Configuración de cuenta"
+          className="flex items-center gap-2 rounded-full border border-border bg-surface/80 py-1 pl-1 pr-3 backdrop-blur-md transition hover:border-primary/60 hover:bg-surface"
+        >
+          <div className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent text-[11px] font-bold text-background">
+            {user?.avatar ? <img src={user.avatar} alt="avatar" className="h-full w-full object-cover" /> : initials}
           </div>
           <span className="hidden max-w-[140px] truncate text-xs text-muted-foreground sm:block">
             {user?.name ?? "Invitado"}
           </span>
-          <button
-            onClick={() => {
-              auth.clear();
-              navigate({ to: "/login" });
-            }}
-            className="text-muted-foreground hover:text-danger"
-            title="Salir"
-          >
-            <LogOut className="h-3.5 w-3.5" />
-          </button>
-        </div>
+        </Link>
+        <button
+          onClick={() => {
+            auth.clear();
+            navigate({ to: "/login" });
+          }}
+          className="rounded-full border border-border bg-surface/80 p-1.5 text-muted-foreground backdrop-blur-md transition hover:text-danger"
+          title="Salir"
+        >
+          <LogOut className="h-3.5 w-3.5" />
+        </button>
       </div>
     </header>
   );
