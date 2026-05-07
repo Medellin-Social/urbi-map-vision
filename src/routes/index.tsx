@@ -515,8 +515,8 @@ function Footer() {
       <div className="mx-auto flex max-w-7xl flex-col items-center justify-between gap-4 px-4 text-xs text-muted-foreground sm:px-6 md:flex-row">
         <div>Urbidata © 2026 · Medellín, Colombia</div>
         <div className="flex items-center gap-3">
-          <a href="#" className="rounded-md p-1.5 transition hover:bg-surface hover:text-foreground"><Linkedin className="h-4 w-4" /></a>
-          <a href="#" className="rounded-md p-1.5 transition hover:bg-surface hover:text-foreground"><Github className="h-4 w-4" /></a>
+          <a href="#" aria-label="LinkedIn" className="rounded-md px-2.5 py-1.5 text-xs font-semibold transition hover:bg-surface hover:text-foreground">LinkedIn</a>
+          <a href="#" aria-label="GitHub" className="rounded-md px-2.5 py-1.5 text-xs font-semibold transition hover:bg-surface hover:text-foreground">GitHub</a>
           <a href="#" className="rounded-md p-1.5 transition hover:bg-surface hover:text-foreground"><Mail className="h-4 w-4" /></a>
         </div>
       </div>
