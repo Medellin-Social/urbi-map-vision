@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   Building2, ArrowRight, MapPin, TrendingUp, Shield, Database,
   ClipboardList, Globe2, Target, User, Map as MapIcon, BarChart3,
-  Home, Briefcase, Landmark, Calculator, Github, Linkedin, Mail,
+  Home, Briefcase, Landmark, Calculator, Mail,
 } from "lucide-react";
 import { MapView } from "@/components/MapView";
 
