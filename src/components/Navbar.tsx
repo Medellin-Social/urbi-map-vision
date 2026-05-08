@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
 import { auth, GOAL_LABEL } from "@/lib/auth";
+import { LanguageToggle } from "@/lib/i18n";
 
 export function Navbar() {
   const user = typeof window !== "undefined" ? auth.get() : null;
@@ -25,6 +26,7 @@ export function Navbar() {
       </Link>
 
       <div className="flex items-center gap-2">
+        <LanguageToggle />
         <Link
           to="/calculadora"
           className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md transition hover:bg-primary/20"

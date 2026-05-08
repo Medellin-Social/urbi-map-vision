@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/auth";
+import { LanguageToggle } from "@/lib/i18n";
 import { Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -80,6 +81,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
         <div className="absolute -left-32 top-20 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
         <div className="absolute -right-32 bottom-10 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
       </div>
+      <div className="absolute right-4 top-4 z-20"><LanguageToggle /></div>
       <motion.div
         initial={{ opacity: 0, y: 12 }}
         animate={{ opacity: 1, y: 0 }}
