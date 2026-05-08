@@ -6,6 +6,7 @@ import {
   Home, Briefcase, Landmark, Calculator, Mail,
 } from "lucide-react";
 import { MapView } from "@/components/MapView";
+import { LanguageToggle } from "@/lib/i18n";
 
 export const Route = createFileRoute("/")({
   component: LandingPage,
