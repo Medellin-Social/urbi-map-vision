@@ -372,10 +372,13 @@ const PROTECT = new Set([
   "Google", "PSE", "Nequi",
 ]);
 
+// Sort once, longest phrases first so substrings don't pre-empt phrases.
+const SORTED_PHRASES = [...PHRASES].sort((a, b) => b[0].length - a[0].length);
+
 function translateString(input: string): string {
   if (!input) return input;
   let out = input;
-  for (const [es, en] of PHRASES) {
+  for (const [es, en] of SORTED_PHRASES) {
     if (PROTECT.has(es)) continue;
     if (out.includes(es)) {
       out = out.split(es).join(en);
