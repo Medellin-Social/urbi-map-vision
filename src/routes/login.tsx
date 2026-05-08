@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { auth } from "@/lib/auth";
+import { LanguageToggle } from "@/lib/i18n";
 import { Building2 } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
