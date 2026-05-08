@@ -80,6 +80,7 @@ function LandingNavbar() {
           <a href="#datos" className="rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground">Datos</a>
         </nav>
         <div className="flex items-center gap-2">
+          <LanguageToggle />
           <Link to="/login" className="hidden rounded-md px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground sm:inline-flex">
             Iniciar sesión
           </Link>
