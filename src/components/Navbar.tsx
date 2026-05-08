@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
 import { auth, GOAL_LABEL } from "@/lib/auth";
+import { LanguageToggle } from "@/lib/i18n";
 
 export function Navbar() {
   const user = typeof window !== "undefined" ? auth.get() : null;
