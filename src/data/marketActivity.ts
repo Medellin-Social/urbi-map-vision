@@ -66,6 +66,7 @@ function deriveLiquidity(n: Neighborhood): Omit<Liquidity, "tiempoEstimado" | "l
 export type OpportunityKind = "PRECIO BAJO MERCADO" | "ALTO RENDIMIENTO" | "INVERSIÓN SEGURA";
 
 export type Opportunity = {
+  barrio_id?: number;
   barrio: string; // uppercase name
   tipo: OpportunityKind;
   descripcion: string;
@@ -82,7 +83,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     descripcion: "Cotiza 43% bajo el precio justo según arriendo de la zona",
     score: 88,
     liquidez: "MEDIA",
-    color: "#f59e0b",
+    color: "#7B2FBE",
     emoji: "🎯",
   },
   {
@@ -91,7 +92,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     descripcion: "Yield 8.4% — sobre promedio Medellín (6.8%)",
     score: 83,
     liquidez: "MEDIA",
-    color: "#10b981",
+    color: "#00B4D8",
     emoji: "📈",
   },
   {
@@ -100,7 +101,7 @@ export const OPPORTUNITIES: Opportunity[] = [
     descripcion: "Score alto + mercado activo. Venta estimada: 3-6 meses",
     score: 68,
     liquidez: "BAJA",
-    color: "#00d4ff",
+    color: "#0077B6",
     emoji: "🛡️",
   },
 ];

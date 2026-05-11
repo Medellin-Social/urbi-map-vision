@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { auth } from "@/lib/auth";
+import { useRegister } from "@/hooks/useAuth";
 import { AuthShell } from "./login";
 
 export const Route = createFileRoute("/register")({
@@ -10,19 +10,25 @@ export const Route = createFileRoute("/register")({
 
 function RegisterPage() {
   const navigate = useNavigate();
+  const register = useRegister();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name || !email || !password) {
       setError("Completa todos los campos.");
       return;
     }
-    auth.set({ name, email });
-    navigate({ to: "/onboarding" });
+    setError("");
+    try {
+      await register.mutateAsync({ email, password, nombre: name });
+      navigate({ to: "/onboarding" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Error al crear la cuenta.");
+    }
   };
 
   return (
@@ -59,9 +65,10 @@ function RegisterPage() {
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           type="submit"
-          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan"
+          disabled={register.isPending}
+          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan disabled:opacity-60"
         >
-          Crear cuenta
+          {register.isPending ? "Creando cuenta…" : "Crear cuenta"}
         </motion.button>
         <p className="text-center text-xs text-muted-foreground">
           ¿Ya tienes cuenta?{" "}

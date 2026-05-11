@@ -15,6 +15,11 @@ export type Neighborhood = {
   n_arriendo: number;
   lat: number;
   lng: number;
+  // API-sourced fields (undefined when using hardcoded NEIGHBORHOODS)
+  score_activo?: number | null;
+  estado_precio?: string | null;
+  oportunidad?: { detectada: boolean | null; tipo: string | null; descripcion: string | null } | null;
+  liquidez_api?: { score: number | null; categoria: string | null; tiempo_estimado_venta: string | null } | null;
 };
 
 export const NEIGHBORHOODS: Neighborhood[] = [
@@ -64,6 +69,33 @@ export function buildNeighborhoodsGeoJSON() {
       },
     })),
   };
+}
+
+export function valorizacionHistorica(
+  seed: number,
+  estrato: number
+): { year: string; acumulado: number; varAnual: number }[] {
+  const baseVars = [8.6, 7.3, 6.8, 7.6, 4.4, 6.8, 7.5, 10.4, 10.2, 10.6];
+  const estratoMult: Record<number, number> = { 1: 0.85, 2: 0.90, 3: 1.00, 4: 1.05, 5: 1.12, 6: 1.18 };
+  const mult = estratoMult[estrato] ?? 1.0;
+
+  const result: { year: string; acumulado: number; varAnual: number }[] = [
+    { year: "2015", acumulado: 0, varAnual: 0 },
+  ];
+
+  for (let i = 0; i < baseVars.length; i++) {
+    const noise = Math.sin(seed * 2.1 + i * 1.3) * 1.0;
+    const v = baseVars[i] * mult + noise;
+    const prev = result[result.length - 1].acumulado;
+    const acumulado = (1 + prev / 100) * (1 + v / 100) * 100 - 100;
+    result.push({
+      year: String(2016 + i),
+      acumulado: Math.round(acumulado * 10) / 10,
+      varAnual: Math.round(v * 10) / 10,
+    });
+  }
+
+  return result;
 }
 
 export function priceTrend(seed: number): { mes: string; precio: number }[] {

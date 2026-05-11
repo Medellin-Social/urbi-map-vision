@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { motion, AnimatePresence, useDragControls } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   Bar,
   BarChart,
@@ -15,8 +15,10 @@ import {
 import {
   ArrowLeft,
   ArrowRight,
+  Briefcase,
   Calculator,
   ChevronRight,
+  Coffee,
   GripVertical,
   Minus,
   Train,
@@ -24,8 +26,6 @@ import {
   ShoppingBag,
   Sparkles,
   Star,
-  TrendingDown,
-  TrendingUp,
   Info,
   Activity,
   Target,
@@ -37,13 +37,50 @@ import {
   type Neighborhood,
   listingsFor,
   priceTrend,
+  valorizacionHistorica,
 } from "@/data/neighborhoods";
 import { liquidityFor, LIQUIDITY_COLORS, opportunityForBarrio } from "@/data/marketActivity";
-import { auth, GOAL_LABEL, recommendation } from "@/lib/auth";
+import { OPP_COLORS } from "@/config/mapColors";
+import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useListings } from "@/hooks/useBarrios";
+import type { ApiListing } from "@/lib/adapters";
 
 type View = "city" | "barrio" | "listings";
+
+// ── Panel persistence helpers ───────────────────────────────────────────────
+
+const PANEL_LS = { pos: "urbi_panel_pos", size: "urbi_panel_size" };
+
+function readPanelSize(): { width: number; height: number } {
+  try {
+    const raw = localStorage.getItem(PANEL_LS.size);
+    if (raw) {
+      const p = JSON.parse(raw) as { width: number; height: number };
+      return {
+        width: Math.max(300, Math.min(600, p.width)),
+        height: Math.max(200, Math.min(900, p.height)),
+      };
+    }
+  } catch {}
+  return { width: 380, height: 520 };
+}
+
+function readPanelPos(width: number): { left: number; top: number } {
+  if (typeof window === "undefined") return { left: 20, top: 80 };
+  try {
+    const raw = localStorage.getItem(PANEL_LS.pos);
+    if (raw) {
+      const p = JSON.parse(raw) as { left: number; top: number };
+      return {
+        left: Math.max(0, Math.min(window.innerWidth - width - 8, p.left)),
+        top: Math.max(70, Math.min(window.innerHeight - 200, p.top)),
+      };
+    }
+  } catch {}
+  return { left: Math.max(0, window.innerWidth - width - 20), top: 80 };
+}
 
 type Props = {
   selected: Neighborhood | null;
@@ -54,15 +91,89 @@ export function FloatingPanel({ selected, onClear }: Props) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<View>("city");
   const [minimized, setMinimized] = useState(false);
-  const dragControls = useDragControls();
-  const constraintsRef = useRef<HTMLDivElement>(null);
   const user = typeof window !== "undefined" ? auth.get() : null;
 
-  // when a barrio is selected, jump to barrio view
+  const [size, setSize] = useState<{ width: number; height: number }>(() =>
+    typeof window !== "undefined" ? readPanelSize() : { width: 380, height: 520 }
+  );
+  const [pos, setPos] = useState<{ left: number; top: number }>(() =>
+    typeof window !== "undefined" ? readPanelPos(size.width) : { left: 20, top: 80 }
+  );
+
+  // Capture latest size/pos in refs so event handlers are always current
+  const sizeRef = useRef(size);
+  const posRef = useRef(pos);
+  useEffect(() => { sizeRef.current = size; }, [size]);
+  useEffect(() => { posRef.current = pos; }, [pos]);
+
   useMemo(() => {
     if (selected) setView("barrio");
     else setView("city");
   }, [selected?.id]);
+
+  const startDrag = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest("button")) return;
+    e.preventDefault();
+    const offsetX = e.clientX - posRef.current.left;
+    const offsetY = e.clientY - posRef.current.top;
+    document.body.style.cursor = "grabbing";
+
+    const onMove = (ev: MouseEvent) => {
+      setPos({
+        left: Math.max(0, Math.min(window.innerWidth - sizeRef.current.width - 8, ev.clientX - offsetX)),
+        top: Math.max(70, Math.min(window.innerHeight - 200, ev.clientY - offsetY)),
+      });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      const newPos = {
+        left: Math.max(0, Math.min(window.innerWidth - sizeRef.current.width - 8, ev.clientX - offsetX)),
+        top: Math.max(70, Math.min(window.innerHeight - 200, ev.clientY - offsetY)),
+      };
+      setPos(newPos);
+      localStorage.setItem(PANEL_LS.pos, JSON.stringify(newPos));
+      document.body.style.cursor = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
+
+  const startResize = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const startX = e.clientX;
+    const startY = e.clientY;
+    const startW = sizeRef.current.width;
+    const startH = sizeRef.current.height;
+    document.body.style.cursor = "se-resize";
+
+    const onMove = (ev: MouseEvent) => {
+      const maxH = window.innerHeight - posRef.current.top - 20;
+      setSize({
+        width: Math.max(300, Math.min(600, startW + (ev.clientX - startX))),
+        height: Math.max(200, Math.min(maxH, startH + (ev.clientY - startY))),
+      });
+    };
+
+    const onUp = (ev: MouseEvent) => {
+      const maxH = window.innerHeight - posRef.current.top - 20;
+      const newSize = {
+        width: Math.max(300, Math.min(600, startW + (ev.clientX - startX))),
+        height: Math.max(200, Math.min(maxH, startH + (ev.clientY - startY))),
+      };
+      setSize(newSize);
+      localStorage.setItem(PANEL_LS.size, JSON.stringify(newSize));
+      document.body.style.cursor = "";
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+  };
 
   // ---- Mobile bottom sheet ----
   if (isMobile) {
@@ -81,13 +192,7 @@ export function FloatingPanel({ selected, onClear }: Props) {
             <div className="h-1.5 w-10 rounded-full bg-border" />
           </div>
           <div className="max-h-[70vh] overflow-y-auto px-4 pb-6">
-            <PanelContent
-              view={view}
-              setView={setView}
-              selected={selected}
-              onClear={onClear}
-              user={user}
-            />
+            <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} />
           </div>
         </motion.div>
       </AnimatePresence>
@@ -96,7 +201,7 @@ export function FloatingPanel({ selected, onClear }: Props) {
 
   // ---- Desktop draggable floating panel ----
   return (
-    <div ref={constraintsRef} className="pointer-events-none absolute inset-0 z-20">
+    <div className="pointer-events-none absolute inset-0 z-20">
       <AnimatePresence mode="wait">
         {minimized ? (
           <motion.button
@@ -115,27 +220,32 @@ export function FloatingPanel({ selected, onClear }: Props) {
         ) : (
           <motion.div
             key="panel"
-            drag
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={constraintsRef}
-            dragMomentum={false}
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 24 }}
-            transition={{ duration: 0.25 }}
-            className="pointer-events-auto absolute right-4 top-20 flex max-h-[calc(100vh-7rem)] w-[380px] flex-col overflow-hidden rounded-2xl border border-border bg-surface/85 shadow-2xl backdrop-blur-xl"
+            initial={{ opacity: 0, scale: 0.97 }}
+            animate={{ opacity: 1, scale: 1 }}
+            exit={{ opacity: 0, scale: 0.97 }}
+            transition={{ duration: 0.22 }}
+            style={{
+              position: "absolute",
+              left: pos.left,
+              top: pos.top,
+              width: size.width,
+              height: size.height,
+              minHeight: 200,
+              maxHeight: `calc(100vh - ${pos.top + 20}px)`,
+            }}
+            className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl border border-border bg-surface/85 shadow-2xl backdrop-blur-xl"
           >
             {/* Drag handle */}
             <div
-              onPointerDown={(e) => dragControls.start(e)}
-              className="flex cursor-grab items-center justify-between border-b border-border/60 px-3 py-2 active:cursor-grabbing"
+              onMouseDown={startDrag}
+              className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between border-b border-border/40 bg-background/50 px-3"
             >
-              <div className="flex items-center gap-1.5 text-muted-foreground">
-                <GripVertical className="h-3.5 w-3.5" />
-                <span className="text-[10px] uppercase tracking-widest">Mueve el panel</span>
+              <div className="flex items-center gap-2 text-muted-foreground">
+                <GripVertical className="h-4 w-4" />
+                <span className="text-[10px] font-medium uppercase tracking-widest">Mueve el panel</span>
               </div>
               <button
+                onMouseDown={(e) => e.stopPropagation()}
                 onClick={() => setMinimized(true)}
                 className="grid h-6 w-6 place-items-center rounded-md text-muted-foreground transition hover:bg-background/60 hover:text-foreground"
                 title="Minimizar"
@@ -144,14 +254,25 @@ export function FloatingPanel({ selected, onClear }: Props) {
               </button>
             </div>
 
+            {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
-              <PanelContent
-                view={view}
-                setView={setView}
-                selected={selected}
-                onClear={onClear}
-                user={user}
-              />
+              <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} />
+            </div>
+
+            {/* Resize handle — bottom-right corner */}
+            <div
+              onMouseDown={startResize}
+              className="absolute bottom-0 right-0 z-10 h-5 w-5 cursor-se-resize opacity-30 hover:opacity-70 transition-opacity"
+              title="Redimensionar"
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" className="h-full w-full text-muted-foreground">
+                <circle cx="13" cy="13" r="1.4" />
+                <circle cx="9" cy="13" r="1.4" />
+                <circle cx="13" cy="9" r="1.4" />
+                <circle cx="5" cy="13" r="1.4" />
+                <circle cx="9" cy="9" r="1.4" />
+                <circle cx="13" cy="5" r="1.4" />
+              </svg>
             </div>
           </motion.div>
         )}
@@ -184,6 +305,7 @@ function PanelContent({
         <motion.div key={`b-${selected.id}`} {...transition}>
           <BarrioDetail
             n={selected}
+            goal={user?.goal}
             onBack={() => {
               onClear();
               setView("city");
@@ -276,15 +398,47 @@ function shortName(s: string) {
 
 /* ------------- Barrio detail ------------- */
 
-function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () => void; onListings: () => void }) {
+function mockConnAmenities(n: Neighborhood) {
+  return {
+    cafes: Math.round(3 + n.estrato * 1.5 + (n.id % 4)),
+    coworks: Math.round(1 + n.estrato * 0.7 + (n.id % 3)),
+  };
+}
+
+const ESTADO_PRECIO_STYLE: Record<string, { bg: string; badge: string }> = {
+  BAJO:   { bg: "#99CDD8", badge: "✅ oportunidad" },
+  NORMAL: { bg: "#DAEBE3", badge: "✅ precio justo" },
+  SOBRE:  { bg: "#F3C3B2", badge: "⚠️ precio alto" },
+};
+
+function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
   const trend = useMemo(() => priceTrend(n.id), [n.id]);
   const last = trend[trend.length - 1].precio;
   const avg = trend.reduce((a, b) => a + b.precio, 0) / trend.length;
   const diffPct = ((last - avg) / avg) * 100;
   const below = diffPct < 0;
+  const varAnual = trend.length >= 2
+    ? ((trend[trend.length - 1].precio - trend[0].precio) / trend[0].precio) * 100
+    : 0;
+  const valoriz = useMemo(() => valorizacionHistorica(n.id, n.estrato), [n.id, n.estrato]);
+  const { cafes, coworks } = mockConnAmenities(n);
   const ylabel = yieldLabel(n.yield);
 
-  const listings = listingsFor(n).slice(0, 3);
+  const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
+  const apiListings = listingsData?.listings ?? [];
+  const listings: ApiListing[] = apiListings.length > 0
+    ? apiListings.slice(0, 3)
+    : listingsFor(n).slice(0, 3).map((l) => ({
+        id: l.id as unknown as number,
+        tipo_operacion: l.tipo_operacion,
+        tipo_inmueble: l.tipo_inmueble,
+        precio_cop: l.precio,
+        area_m2: l.area_m2,
+        precio_m2: l.precio_m2,
+        habitaciones: l.habitaciones,
+        banos: l.banos,
+        buena_oferta: l.buena_oferta,
+      }));
   const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
 
   // Log view to history once per neighborhood
@@ -339,31 +493,102 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
 
       <Section title="Conectividad">
         <div className="space-y-2">
-          <ConnRow icon={<Train className="h-3.5 w-3.5" />} label="Metro más cercano" value={`${n.dist_metro.toFixed(1)} km`} />
-          <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
-          <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
+          {goal === "airbnb" ? (
+            <>
+              <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
+              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
+              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={`${cafes} locales`} />
+            </>
+          ) : goal === "mixto" ? (
+            <>
+              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={`${cafes} locales`} />
+              <ConnRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Coworking en 1km" value={`${coworks} espacios`} />
+              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
+            </>
+          ) : goal === "renta-larga" ? (
+            <>
+              <ConnRow icon={<Train className="h-3.5 w-3.5" />} label="Metro más cercano" value={`${n.dist_metro.toFixed(1)} km`} />
+              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
+              <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
+            </>
+          ) : (
+            <>
+              <ConnRow icon={<Train className="h-3.5 w-3.5" />} label="Metro más cercano" value={`${n.dist_metro.toFixed(1)} km`} />
+              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
+              <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
+            </>
+          )}
         </div>
       </Section>
 
       <LiquiditySection n={n} />
       <OpportunityBanner n={n} />
 
-      <Section title="Tendencia de precio · 12 meses">
-        <div className="h-32">
+      <Section title="Valorización histórica · 2015–2025">
+        <div className="h-36">
           <ResponsiveContainer>
-            <LineChart data={trend} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+            <LineChart data={valoriz} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="mes" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} domain={["dataMin - 2", "dataMax + 2"]} />
-              <Tooltip contentStyle={tooltipStyle} formatter={(v: unknown) => [`Idx ${Number(v).toFixed(1)}`, "Precio"]} />
-              <Line type="monotone" dataKey="precio" stroke="#00d4ff" strokeWidth={2} dot={false} />
+              <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
+              <YAxis
+                width={44}
+                tick={{ fontSize: 10, fill: "#9ca3af" }}
+                axisLine={false}
+                tickLine={false}
+                domain={[0, "dataMax + 10"]}
+                tickFormatter={(v: number) => `+${Math.round(v)}%`}
+              />
+              <Tooltip
+                contentStyle={tooltipStyle}
+                cursor={{ stroke: "rgba(255,255,255,0.15)", strokeWidth: 1 }}
+                content={({ active, payload, label }) => {
+                  if (!active || !payload?.length) return null;
+                  const row = payload[0].payload as { year: string; acumulado: number; varAnual: number };
+                  if (row.year === "2015") return (
+                    <div style={tooltipStyle} className="px-2.5 py-1.5 text-[11px]">
+                      <div className="font-semibold">2015</div>
+                      <div>Base: 0%</div>
+                    </div>
+                  );
+                  return (
+                    <div style={tooltipStyle} className="px-2.5 py-1.5 text-[11px] space-y-0.5">
+                      <div className="font-semibold">{label}</div>
+                      <div>Acumulado desde 2015: +{row.acumulado.toFixed(1)}%</div>
+                      <div>Ese año: +{row.varAnual.toFixed(1)}%</div>
+                      <div className="text-muted-foreground/70">Fuente: DANE IPVN</div>
+                    </div>
+                  );
+                }}
+              />
+              <Line
+                type="monotone"
+                dataKey="acumulado"
+                stroke="#00d4ff"
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4, fill: "#00d4ff", stroke: "#0f1a1f", strokeWidth: 2 }}
+              />
             </LineChart>
           </ResponsiveContainer>
         </div>
-        <div className={`mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium ${below ? "bg-success/10 text-success" : "bg-danger/10 text-danger"}`}>
-          {below ? <TrendingDown className="h-3 w-3" /> : <TrendingUp className="h-3 w-3" />}
-          Precio actual: {below ? "BAJO" : "SOBRE"} el promedio ({diffPct >= 0 ? "+" : ""}{diffPct.toFixed(1)}%)
-        </div>
+        {(() => {
+          const estadoActual = (n.estado_precio ?? (below ? "BAJO" : "SOBRE")).toUpperCase();
+          const ep = ESTADO_PRECIO_STYLE[estadoActual] ?? ESTADO_PRECIO_STYLE.SOBRE;
+          const pct = `${diffPct >= 0 ? "+" : ""}${diffPct.toFixed(1)}%`;
+          return (
+            <div
+              className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium"
+              style={{ background: ep.bg, color: "#1a2e35" }}
+            >
+              {n.estado_precio
+                ? `${estadoActual} · ${ep.badge}`
+                : `${estadoActual} promedio (${pct}) · ${ep.badge}`}
+            </div>
+          );
+        })()}
+        <p className="mt-1.5 text-[10px] text-muted-foreground/70">
+          Fuente: DANE IPVN + Banrep IPVU · Base 2015=0% · Ajustado por estrato
+        </p>
       </Section>
 
       <Link
@@ -376,29 +601,12 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
       </Link>
 
       <Section title="Listings destacados">
+        {listingsLoading && apiListings.length === 0 && (
+          <div className="mb-2 h-1 w-full animate-pulse rounded-full bg-primary/20" />
+        )}
         <div className="space-y-2">
           {listings.map((l) => (
-            <div key={l.id} className="rounded-lg border border-border bg-background/40 p-3">
-              <div className="flex items-start justify-between gap-2">
-                <div>
-                  <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                    {l.tipo_inmueble} · {l.tipo_operacion}
-                  </div>
-                  <div className="mt-1 font-semibold">{formatCOP(l.precio)}</div>
-                  <div className="mt-0.5 text-xs text-muted-foreground">
-                    {l.area_m2} m² · {l.habitaciones} hab · {l.banos} baños
-                  </div>
-                </div>
-                <div className="text-right">
-                  {l.buena_oferta && (
-                    <span className="inline-block rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
-                      Buena oferta
-                    </span>
-                  )}
-                  <div className="mt-1 text-[11px] text-muted-foreground">{formatCOP(l.precio_m2)}/m²</div>
-                </div>
-              </div>
-            </div>
+            <ListingCard key={l.id} l={l} />
           ))}
         </div>
         <button
@@ -414,15 +622,80 @@ function BarrioDetail({ n, onBack, onListings }: { n: Neighborhood; onBack: () =
 
 /* ------------- Listings view ------------- */
 
+function ListingCard({ l }: { l: ApiListing }) {
+  return (
+    <div className="rounded-lg border border-border bg-background/40 p-3">
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="text-xs uppercase tracking-wider text-muted-foreground">
+            {l.tipo_inmueble ?? "—"} · {l.tipo_operacion ?? "—"}
+          </div>
+          <div className="mt-1 font-semibold">{formatCOP(l.precio_cop ?? 0)}</div>
+          <div className="mt-0.5 text-xs text-muted-foreground">
+            {l.area_m2 != null ? `${l.area_m2} m²` : "—"}
+            {l.habitaciones != null ? ` · ${l.habitaciones} hab` : ""}
+            {l.banos != null ? ` · ${l.banos} baños` : ""}
+          </div>
+          {l.direccion_raw && (
+            <div className="mt-0.5 truncate text-[10px] text-muted-foreground/70">{l.direccion_raw}</div>
+          )}
+        </div>
+        <div className="shrink-0 text-right">
+          {l.buena_oferta && (
+            <span className="inline-block rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
+              Buena oferta
+            </span>
+          )}
+          {l.precio_m2 != null && (
+            <div className="mt-1 text-[11px] text-muted-foreground">{formatCOP(l.precio_m2)}/m²</div>
+          )}
+          {l.url && (
+            <a
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="mt-1 block text-[10px] text-primary hover:underline"
+            >
+              Ver →
+            </a>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
-  const all = useMemo(() => listingsFor(n), [n.id]);
+  const { data: listingsData, isLoading } = useListings(n.id, 100);
   const [op, setOp] = useState<"venta" | "arriendo">("venta");
-  const inOp = all.filter((l) => l.tipo_operacion === op);
-  const maxPrecio = Math.max(...inOp.map((l) => l.precio), 1);
-  const [precioMax, setPrecioMax] = useState(maxPrecio);
   const [areaMin, setAreaMin] = useState(0);
 
-  const filtered = inOp.filter((l) => l.precio <= precioMax && l.area_m2 >= areaMin);
+  const allApi = listingsData?.listings ?? [];
+  // Fall back to mock only when API returned but empty
+  const source: ApiListing[] = allApi.length > 0
+    ? allApi
+    : listingsFor(n).map((l) => ({
+        id: l.id as unknown as number,
+        tipo_operacion: l.tipo_operacion,
+        tipo_inmueble: l.tipo_inmueble,
+        precio_cop: l.precio,
+        area_m2: l.area_m2,
+        precio_m2: l.precio_m2,
+        habitaciones: l.habitaciones,
+        banos: l.banos,
+        buena_oferta: l.buena_oferta,
+      }));
+
+  const inOp = source.filter((l) => l.tipo_operacion === op);
+  const maxPrecio = inOp.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 1);
+  const [precioMax, setPrecioMax] = useState(() => maxPrecio);
+
+  // Reset price filter when tab or data changes
+  useMemo(() => { setPrecioMax(maxPrecio); }, [op, maxPrecio]);
+
+  const filtered = inOp.filter(
+    (l) => (l.precio_cop ?? 0) <= precioMax && (l.area_m2 ?? 0) >= areaMin
+  );
 
   return (
     <div className="space-y-4">
@@ -435,18 +708,16 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
 
       <div>
         <h2 className="font-display text-xl font-semibold">Listings · {titleCase(n.nombre)}</h2>
-        <p className="mt-0.5 text-xs text-muted-foreground">{filtered.length} resultados</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {isLoading ? "Cargando…" : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}${listingsData ? ` de ${listingsData.total} totales` : ""}`}
+        </p>
       </div>
 
       <div className="inline-flex rounded-md border border-border p-0.5">
         {(["venta", "arriendo"] as const).map((o) => (
           <button
             key={o}
-            onClick={() => {
-              setOp(o);
-              const next = all.filter((l) => l.tipo_operacion === o);
-              setPrecioMax(Math.max(...next.map((l) => l.precio), 1));
-            }}
+            onClick={() => setOp(o)}
             className={`rounded px-3 py-1 text-xs font-medium uppercase tracking-wider transition ${op === o ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
           >
             {o}
@@ -479,31 +750,13 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
         </FilterRow>
       </div>
 
+      {isLoading && (
+        <div className="h-1 w-full animate-pulse rounded-full bg-primary/20" />
+      )}
+
       <div className="space-y-2">
-        {filtered.map((l) => (
-          <div key={l.id} className="rounded-lg border border-border bg-background/40 p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <div className="text-xs uppercase tracking-wider text-muted-foreground">
-                  {l.tipo_inmueble}
-                </div>
-                <div className="mt-1 font-semibold">{formatCOP(l.precio)}</div>
-                <div className="mt-0.5 text-xs text-muted-foreground">
-                  {l.area_m2} m² · {l.habitaciones} hab · {l.banos} baños
-                </div>
-              </div>
-              <div className="text-right">
-                {l.buena_oferta && (
-                  <span className="inline-block rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
-                    Buena oferta
-                  </span>
-                )}
-                <div className="mt-1 text-[11px] text-muted-foreground">{formatCOP(l.precio_m2)}/m²</div>
-              </div>
-            </div>
-          </div>
-        ))}
-        {filtered.length === 0 && (
+        {filtered.map((l) => <ListingCard key={l.id} l={l} />)}
+        {!isLoading && filtered.length === 0 && (
           <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
             No hay listings con estos filtros.
           </div>
@@ -593,8 +846,14 @@ const tooltipStyle: React.CSSProperties = {
 /* ------------- Liquidity / Opportunity ------------- */
 
 function LiquiditySection({ n }: { n: Neighborhood }) {
-  const liq = liquidityFor(n);
-  const colors = LIQUIDITY_COLORS[liq.cat];
+  // Prefer real API liquidez data; fall back to mock lookup
+  const apiLiq = n.liquidez_api;
+  const liq = apiLiq ? null : liquidityFor(n);
+  const cat = (apiLiq?.categoria ?? liq?.cat ?? "MEDIA") as import("@/data/marketActivity").LiquidityCat;
+  const colors = LIQUIDITY_COLORS[cat] ?? LIQUIDITY_COLORS["MEDIA"];
+  const score = apiLiq?.score ?? liq?.score ?? 50;
+  const tiempoEstimado = apiLiq?.tiempo_estimado_venta ?? liq?.tiempoEstimado ?? "—";
+  const label = liq?.label ?? cat;
   const [showInfo, setShowInfo] = useState(false);
 
   return (
@@ -621,39 +880,41 @@ function LiquiditySection({ n }: { n: Neighborhood }) {
       >
         <div className="flex items-center justify-between">
           <div className="text-sm font-bold uppercase tracking-wider" style={{ color: colors.border }}>
-            {liq.cat} — {liq.label}
+            {cat} — {label}
           </div>
           <div className="text-[11px] font-semibold" style={{ color: colors.border }}>
-            {liq.score}/100
+            {score}/100
           </div>
         </div>
         <div className="mt-1 text-[11px] text-muted-foreground">
-          Tiempo estimado: <span className="text-foreground">{liq.tiempoEstimado}</span>
+          Tiempo estimado: <span className="text-foreground">{tiempoEstimado}</span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
           <motion.div
             initial={{ width: 0 }}
-            animate={{ width: `${liq.score}%` }}
+            animate={{ width: `${score}%` }}
             transition={{ duration: 0.8, ease: "easeOut" }}
             className="h-full rounded-full"
             style={{ background: colors.border }}
           />
         </div>
 
-        <div className="mt-3 grid grid-cols-1 gap-1 text-[11px]">
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">📊 Listings activos</span>
-            <span className="font-semibold">{liq.n}</span>
+        {liq && (
+          <div className="mt-3 grid grid-cols-1 gap-1 text-[11px]">
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">📊 Listings activos</span>
+              <span className="font-semibold">{liq.n}</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">🕐 Tiempo prom. publicado</span>
+              <span className="font-semibold">{liq.dias}d</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">🔄 Listings frescos (&lt;30d)</span>
+              <span className="font-semibold">{liq.frescos}%</span>
+            </div>
           </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">🕐 Tiempo prom. publicado</span>
-            <span className="font-semibold">{liq.dias}d</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <span className="text-muted-foreground">🔄 Listings frescos (&lt;30d)</span>
-            <span className="font-semibold">{liq.frescos}%</span>
-          </div>
-        </div>
+        )}
       </motion.div>
 
       <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/80">
@@ -703,7 +964,41 @@ function LiquiditySection({ n }: { n: Neighborhood }) {
   );
 }
 
+const OPP_EMOJIS: Record<string, string> = {
+  "PRECIO BAJO MERCADO": "🎯",
+  "ALTO RENDIMIENTO": "📈",
+  "INVERSIÓN SEGURA": "🛡️",
+};
+
 function OpportunityBanner({ n }: { n: Neighborhood }) {
+  // Prefer real API oportunidad; fall back to hardcoded mock
+  const apiOpp = n.oportunidad;
+  if (apiOpp !== undefined) {
+    if (!apiOpp?.detectada) return null;
+    const tipo = (apiOpp.tipo ?? "ALTO RENDIMIENTO").toUpperCase();
+    const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#0077B6";
+    const emoji = OPP_EMOJIS[tipo] ?? "📊";
+    return (
+      <motion.div
+        initial={{ opacity: 0, scale: 0.96 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: color, background: `${color}15` }}
+      >
+        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color }}>
+          <Target className="h-3 w-3" /> {emoji} Oportunidad detectada
+        </div>
+        <div className="mt-1 text-sm font-semibold" style={{ color }}>
+          {tipo}
+        </div>
+        {apiOpp.descripcion && (
+          <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{apiOpp.descripcion}"</p>
+        )}
+      </motion.div>
+    );
+  }
+  // Fallback: hardcoded mock for NEIGHBORHOODS without API data
   const opp = opportunityForBarrio(n);
   if (!opp) return null;
   return (

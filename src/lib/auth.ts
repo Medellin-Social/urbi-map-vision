@@ -40,6 +40,7 @@ export type UrbiUser = {
   favorites?: FavoriteBarrio[];
   history?: HistoryEntry[];
   mapStyle?: MapStyleId;
+  mostrarOportunidades?: boolean;
 };
 
 const KEY = "urbidata.user";

@@ -1,7 +1,17 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { toast } from "sonner";
 import { auth, type Budget, type Goal, type Risk } from "@/lib/auth";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
+
+const GOAL_TO_OBJETIVO: Record<Goal, string> = {
+  airbnb: "airbnb",
+  "renta-larga": "largo_plazo",
+  valorizacion: "largo_plazo",
+  mixto: "mixto",
+};
 import { Building2, Home, KeyRound, TrendingUp, Layers, Shield, ShieldHalf, Flame } from "lucide-react";
 
 export const Route = createFileRoute("/onboarding")({
@@ -15,10 +25,21 @@ function OnboardingPage() {
   const [goal, setGoal] = useState<Goal | null>(null);
   const [risk, setRisk] = useState<Risk | null>(null);
 
-  const next = () => {
+  const next = async () => {
     if (step === 2) {
       if (budget && goal && risk) {
         auth.patch({ budget, goal, risk });
+        // Fire-and-forget: persist to backend, don't block navigation
+        apiFetch(API_ENDPOINTS.onboarding, {
+          method: "POST",
+          body: JSON.stringify({
+            presupuesto: budget,
+            objetivo: GOAL_TO_OBJETIVO[goal],
+            perfil_riesgo: risk,
+          }),
+        }).catch(() => {
+          toast.error("No pudimos guardar tu perfil en el servidor. Puedes continuar normalmente.");
+        });
         navigate({ to: "/map" });
       }
       return;

@@ -1,16 +1,34 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Flame, MapPin } from "lucide-react";
-import { allOpportunitiesWithBarrio, LIQUIDITY_COLORS } from "@/data/marketActivity";
+import { LIQUIDITY_COLORS } from "@/data/marketActivity";
 import type { Neighborhood } from "@/data/neighborhoods";
+import { useOportunidades } from "@/hooks/useOportunidades";
+import { useBarriosRaw } from "@/hooks/useBarrios";
+import { barrioToNeighborhood } from "@/lib/adapters";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
+  perfil?: string;
+  mostrarOportunidades?: boolean;
 };
 
-export function OpportunitiesPanel({ onSelect }: Props) {
+export function OpportunitiesPanel({ onSelect, perfil, mostrarOportunidades = false }: Props) {
   const [open, setOpen] = useState(true);
-  const items = allOpportunitiesWithBarrio();
+  const { data: oportunidades = [] } = useOportunidades(perfil);
+  const { data: barriosRaw = [] } = useBarriosRaw(perfil);
+
+  if (!mostrarOportunidades) return null;
+
+  function handleVerEnMapa(barrio_id: number | undefined, barrio: string) {
+    if (barrio_id !== undefined) {
+      const b = barriosRaw.find((x) => x.barrio_id === barrio_id);
+      if (b) { onSelect(barrioToNeighborhood(b)); return; }
+    }
+    // fallback: match by name
+    const b = barriosRaw.find((x) => (x.nombre ?? "").toUpperCase() === barrio);
+    if (b) onSelect(barrioToNeighborhood(b));
+  }
 
   return (
     <div className="pointer-events-auto absolute bottom-4 left-4 z-20 hidden w-[340px] overflow-hidden rounded-2xl border border-border bg-surface/85 shadow-2xl backdrop-blur-xl md:block">
@@ -21,7 +39,7 @@ export function OpportunitiesPanel({ onSelect }: Props) {
         <div>
           <div className="flex items-center gap-1.5 text-sm font-semibold">
             <Flame className="h-4 w-4 text-warning" />
-            Oportunidades detectadas ({items.length})
+            Oportunidades detectadas ({oportunidades.length})
           </div>
           <div className="mt-0.5 text-[11px] text-muted-foreground">Según tu perfil de inversión</div>
         </div>
@@ -40,11 +58,11 @@ export function OpportunitiesPanel({ onSelect }: Props) {
             className="max-h-[55vh] overflow-y-auto"
           >
             <div className="divide-y divide-border/60">
-              {items.map(({ opp, n }, i) => {
-                const liq = LIQUIDITY_COLORS[opp.liquidez];
+              {oportunidades.map((opp, i) => {
+                const liq = LIQUIDITY_COLORS[opp.liquidez] ?? LIQUIDITY_COLORS["MEDIA"];
                 return (
                   <motion.div
-                    key={opp.barrio}
+                    key={opp.barrio_id ?? opp.barrio}
                     initial={{ opacity: 0, x: -12 }}
                     animate={{ opacity: 1, x: 0 }}
                     transition={{ delay: i * 0.06 }}
@@ -77,7 +95,7 @@ export function OpportunitiesPanel({ onSelect }: Props) {
                       </span>
                     </div>
                     <button
-                      onClick={() => onSelect(n)}
+                      onClick={() => handleVerEnMapa(opp.barrio_id, opp.barrio)}
                       className="mt-2 inline-flex items-center gap-1 text-[11px] font-semibold text-primary transition hover:text-primary/80"
                     >
                       <MapPin className="h-3 w-3" /> Ver en mapa →

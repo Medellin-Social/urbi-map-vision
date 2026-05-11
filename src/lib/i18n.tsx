@@ -63,7 +63,7 @@ const PHRASES: Array<[string, string]> = [
     "Real yield, fair price (PBN), payback years, 5-year projection and comparison vs bank CDT."],
   ["o con intuición?", "or with intuition?"],
   ["Simulación Urbidata", "Urbidata simulation"],
-  ["📈 valorización anual", "📈 annual appreciation"],
+  ["📈 valorización anual", "📈 average annual appreciation"],
 
   // Map / floating panel
   ["Cómo funciona Urbidata", "How Urbidata works"],
@@ -237,6 +237,30 @@ const PHRASES: Array<[string, string]> = [
   ["Idioma", "Language"],
 
   // ---- Additional coverage (titles, subtitles, labels) ----
+  // Landing — Hero
+  ["Urbidata cruza precios de mercado, rendimiento Airbnb, seguridad, conectividad y valorización histórica para decirte exactamente dónde y cómo invertir en Medellín.",
+    "Urbidata crosses market prices, Airbnb performance, safety, connectivity and historical appreciation to tell you exactly where and how to invest in Medellín."],
+  ["Cruzamos +2,400 listings activos, 3,239 puntos de interés urbano, 10 años de datos de valorización y criminalidad por barrio — todo en tiempo real.",
+    "We cross-reference +2,400 active listings, 3,239 urban points of interest, 10 years of appreciation and crime data by neighborhood — all in real time."],
+  ["Ingresa tu presupuesto y zona objetivo. Urbidata calcula yield neto, proyección de valorización y retorno total a 5 años — comparado contra un CDT bancario.",
+    "Enter your budget and target area. Urbidata calculates net yield, appreciation projection and total 5-year return — compared to a bank CDT."],
+  ["Ya analizamos +65 barrios del Valle de Aburrá", "We've already analyzed +65 neighborhoods in the Aburrá Valley"],
+  ["Accede gratis durante el beta. Sin tarjeta de crédito.", "Free access during the beta. No credit card required."],
+  ["Datos con fines informativos. No constituye asesoría financiera.", "For informational purposes only. Not financial advice."],
+  ["El mercado inmobiliario en Medellín es opaco.", "The real estate market in Medellín is opaque."],
+  ["Comenzar ahora — Es gratis", "Start now — It's free"],
+  ["Datos actualizados · Mayo 2026", "Updated data · May 2026"],
+  ["¿Estás invirtiendo con datos", "Are you investing with data"],
+  ["Construido sobre", "Built on"],
+  ["Deja de adivinar.", "Stop guessing."],
+  ["Empieza a invertir", "Start investing"],
+  ["Medellín crece.", "Medellín grows."],
+  ["Más popular", "Most popular"],
+  ["Un motor de decisión,", "A decision engine,"],
+  ["Ver demo", "View demo"],
+  ["Explorar", "Explore"],
+  ["Paso", "Step"],
+
   // Landing & sections
   ["Toma decisiones con datos", "Make decisions with data"],
   ["Hasta ahora.", "Until now."],
@@ -255,7 +279,7 @@ const PHRASES: Array<[string, string]> = [
   ["Para inversores", "For investors"],
   ["Datos que usamos", "Data we use"],
   ["Datos", "Data"],
-  ["El problema", "The problem"],
+  ["El problema", "The Problem"],
   ["Tres perfiles, un mapa", "Three profiles, one map"],
   ["Define tu perfil", "Define your profile"],
   ["Editamos tus filtros y recomendaciones del mapa.", "We tune your filters and map recommendations."],
@@ -279,7 +303,7 @@ const PHRASES: Array<[string, string]> = [
   ["📊 Listings activos", "📊 Active listings"],
   ["🔄 Listings frescos (<30d)", "🔄 Fresh listings (<30d)"],
   ["🕐 Tiempo prom. publicado", "🕐 Avg. listing time"],
-  ["🏘️ barrios con datos", "🏘️ neighborhoods with data"],
+  ["🏘️ barrios con datos", "🏘️ neighborhoods with real data"],
   ["• Volumen de propiedades en venta", "• Volume of properties for sale"],
   ["✓ Actualizado", "✓ Updated"],
   ["Token de Mapbox requerido", "Mapbox token required"],

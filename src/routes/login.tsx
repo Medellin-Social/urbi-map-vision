@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { motion } from "framer-motion";
-import { auth } from "@/lib/auth";
+import { useLogin } from "@/hooks/useAuth";
 import { LanguageToggle } from "@/lib/i18n";
 import { Building2 } from "lucide-react";
 
@@ -11,24 +11,25 @@ export const Route = createFileRoute("/login")({
 
 function LoginPage() {
   const navigate = useNavigate();
+  const login = useLogin();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
-  const submit = (e: React.FormEvent) => {
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const existing = auth.get();
-    if (existing && existing.email === email) {
-      navigate({ to: existing.goal ? "/map" : "/onboarding" });
-      return;
-    }
     if (!email || !password) {
       setError("Ingresa tu correo y contraseña.");
       return;
     }
-    // Mock login: accept anything, create a user shell
-    auth.set({ name: email.split("@")[0], email });
-    navigate({ to: "/onboarding" });
+    setError("");
+    try {
+      const res = await login.mutateAsync({ email, password });
+      const hasProfile = !!res.perfil_inversor?.objetivo;
+      navigate({ to: hasProfile ? "/map" : "/onboarding" });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Credenciales inválidas.");
+    }
   };
 
   return (
@@ -57,9 +58,10 @@ function LoginPage() {
           whileHover={{ scale: 1.01 }}
           whileTap={{ scale: 0.99 }}
           type="submit"
-          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan"
+          disabled={login.isPending}
+          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan disabled:opacity-60"
         >
-          Entrar
+          {login.isPending ? "Entrando…" : "Entrar"}
         </motion.button>
         <p className="text-center text-xs text-muted-foreground">
           ¿Sin cuenta?{" "}

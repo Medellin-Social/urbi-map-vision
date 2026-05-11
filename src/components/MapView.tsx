@@ -1,21 +1,53 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
-import { buildNeighborhoodsGeoJSON, NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
+import { NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
 import { OPPORTUNITIES } from "@/data/marketActivity";
 import { auth, MAP_STYLES } from "@/lib/auth";
+import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio } from "@/lib/adapters";
+import { useBarriosRaw } from "@/hooks/useBarrios";
+import {
+  OPP_COLORS,
+  PALETTE_EVENT,
+  getActivePaletteId,
+  type ScorePaletteId,
+} from "@/config/mapColors";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
   selectedId: number | null;
+  perfil?: string;
+  mostrarOportunidades?: boolean;
 };
 
-export function MapView({ onSelect, selectedId }: Props) {
+const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+
+export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = false }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
+  const mapLoadedRef = useRef(false);
+  const barriosRef = useRef<ApiBarrio[]>([]);
+  const markersRef = useRef<mapboxgl.Marker[]>([]);
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
 
+  const [scorePalette, setScorePalette] = useState<ScorePaletteId>(getActivePaletteId);
+
+  useEffect(() => {
+    const onPalette = () => setScorePalette(getActivePaletteId());
+    window.addEventListener(PALETTE_EVENT, onPalette);
+    return () => window.removeEventListener(PALETTE_EVENT, onPalette);
+  }, []);
+
+  const { data: barriosRaw } = useBarriosRaw(perfil);
+
+  const geoJsonData = useMemo(() => {
+    if (!barriosRaw?.length) return null;
+    barriosRef.current = barriosRaw;
+    return barriosToGeoJSON(barriosRaw, scorePalette);
+  }, [barriosRaw, scorePalette]);
+
+  // Map initialization
   useEffect(() => {
     if (tokenError || !containerRef.current || mapRef.current) return;
 
@@ -34,98 +66,46 @@ export function MapView({ onSelect, selectedId }: Props) {
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true, showCompass: true }), "bottom-right");
 
-    // Force resize once the container has its real size (fixes blank canvas on first paint)
     const ro = new ResizeObserver(() => map.resize());
     ro.observe(containerRef.current);
     requestAnimationFrame(() => map.resize());
 
-    map.on("load", async () => {
+    map.on("load", () => {
       map.resize();
-      let data: any = buildNeighborhoodsGeoJSON();
-      try {
-        const res = await fetch("/data/barrios_medellin.geojson");
-        if (res.ok) {
-          const raw = await res.json();
-          // Assign numeric id + synthetic yield (matched to NEIGHBORHOODS by name when possible)
-          raw.features = raw.features.map((f: any, i: number) => {
-            const name = (f.properties?.nombre ?? "").toUpperCase();
-            const match = NEIGHBORHOODS.find((n) => n.nombre.toUpperCase() === name);
-            const seed = name.split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
-            const y = match ? match.yield : 4 + (seed % 90) / 10; // 4.0 - 13.0
-            return {
-              ...f,
-              id: i + 1,
-              properties: {
-                ...f.properties,
-                id: i + 1,
-                yield: Number(y.toFixed(2)),
-              },
-            };
-          });
-          data = raw;
-        }
-      } catch (e) {
-        console.warn("Failed to load barrios geojson, using fallback", e);
-      }
-      map.addSource("barrios", { type: "geojson", data });
+      mapLoadedRef.current = true;
 
-      // Glow underlayer
-      map.addLayer({
-        id: "barrios-glow",
-        type: "fill",
-        source: "barrios",
-        paint: {
-          "fill-color": [
-            "case",
-            [">", ["get", "yield"], 10], "#10b981",
-            [">=", ["get", "yield"], 7], "#00d4ff",
-            [">=", ["get", "yield"], 5], "#f59e0b",
-            "#ef4444",
-          ],
-          "fill-opacity": 0.18,
-        },
-      });
+      map.addSource("barrios", { type: "geojson", data: EMPTY_FC });
 
-      // Main fill
+      // Fill layer
       map.addLayer({
         id: "barrios-fill",
         type: "fill",
         source: "barrios",
         paint: {
-          "fill-color": [
-            "case",
-            [">", ["get", "yield"], 10], "#10b981",
-            [">=", ["get", "yield"], 7], "#00d4ff",
-            [">=", ["get", "yield"], 5], "#f59e0b",
-            "#ef4444",
-          ],
+          "fill-color": ["get", "color_hex"],
           "fill-opacity": [
             "case",
-            ["boolean", ["feature-state", "hover"], false], 0.55,
-            ["boolean", ["feature-state", "selected"], false], 0.65,
-            0.32,
+            ["boolean", ["feature-state", "selected"], false], 0.85,
+            ["boolean", ["feature-state", "hover"], false], 0.75,
+            ["==", ["get", "color_hex"], "#00d4ff"], 0.2,
+            0.5,
           ],
         },
       });
 
-      // Outline
+      // Outline layer
       map.addLayer({
         id: "barrios-line",
         type: "line",
         source: "barrios",
         paint: {
-          "line-color": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], "#00d4ff",
-            "rgba(0, 212, 255, 0.55)",
-          ],
+          "line-color": "#ffffff",
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.5,
             ["boolean", ["feature-state", "hover"], false], 1.5,
             0.8,
           ],
-          "line-blur": 0.4,
         },
       });
 
@@ -148,7 +128,7 @@ export function MapView({ onSelect, selectedId }: Props) {
         },
       });
 
-      // Hover
+      // Hover tooltip
       let hoverId: number | null = null;
       const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
 
@@ -162,12 +142,22 @@ export function MapView({ onSelect, selectedId }: Props) {
         hoverId = id;
         map.setFeatureState({ source: "barrios", id }, { hover: true });
         map.getCanvas().style.cursor = "pointer";
+        const nombre = f.properties?.nombre ?? "";
+        const score = f.properties?.score_activo as number | null;
+        const cat = f.properties?.cat_activo ?? "—";
+        const excluido = f.properties?.excluir_inversion === true;
+        const sinDatos = !excluido && (score === null || score < 20);
+        const scoreHtml = excluido
+          ? `<span style="color:#9ca3af;font-size:11px;">No disponible</span>`
+          : sinDatos
+          ? `<span style="color:#9ca3af;font-size:11px;">${cat}</span>`
+          : `<span style="color:#00d4ff;font-weight:700;">${score}</span><span style="color:#9ca3af;font-size:11px;">${cat}</span>`;
         popup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-weight:600;letter-spacing:.04em;">${f.properties?.nombre}</span>
-              <span style="color:#00d4ff;font-weight:600;">${(f.properties?.yield as number).toFixed(1)}%</span>
+              <span style="font-weight:600;letter-spacing:.04em;">${nombre}</span>
+              ${scoreHtml}
             </div>`
           )
           .addTo(map);
@@ -183,67 +173,110 @@ export function MapView({ onSelect, selectedId }: Props) {
       map.on("click", "barrios-fill", (e) => {
         if (!e.features?.length) return;
         const f = e.features[0];
+        if (f.properties?.excluir_inversion === true) return;
         const id = f.properties?.id as number;
         const name = (f.properties?.nombre ?? "").toString();
-        let n = NEIGHBORHOODS.find((x) => x.id === id || x.nombre.toUpperCase() === name.toUpperCase());
-        if (!n) {
-          // Build a synthetic neighborhood from feature centroid
+
+        const barrio = barriosRef.current.find((b) => b.barrio_id === id);
+        let n: Neighborhood;
+        if (barrio) {
+          n = barrioToNeighborhood(barrio);
+        } else {
           const seed = name.split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
           const y = Number((f.properties?.yield ?? 6).toString());
-          const [lng, lat] = (e.lngLat ? [e.lngLat.lng, e.lngLat.lat] : [-75.58, 6.24]);
+          const [lng, lat] = [e.lngLat.lng, e.lngLat.lat];
           const precio_m2 = 3_500_000 + (seed % 60) * 100_000;
           n = {
-            id, nombre: name, comuna: f.properties?.comuna ?? "—", municipio: f.properties?.municipio ?? "MEDELLÍN",
+            id, nombre: name, comuna: f.properties?.comuna ?? "—", municipio: "MEDELLÍN",
             estrato: 3, precio_m2, arriendo: Math.round(precio_m2 * 0.0008 * 90),
             yield: y, anos_recupero: Number((100 / y).toFixed(1)),
-            dist_metro: 1 + (seed % 30) / 10, dist_parque: 0.3 + (seed % 10) / 10, dist_mall: 1 + (seed % 25) / 10,
-            n_venta: 1 + (seed % 8), n_arriendo: 1 + (seed % 5), lat, lng,
+            dist_metro: 1 + (seed % 30) / 10, dist_parque: 0.3 + (seed % 10) / 10,
+            dist_mall: 1 + (seed % 25) / 10, n_venta: 1 + (seed % 8),
+            n_arriendo: 1 + (seed % 5), lat, lng,
           };
         }
         map.flyTo({ center: [n.lng, n.lat], zoom: 13.4, speed: 0.8 });
         onSelect(n);
       });
 
-      // Opportunity pulse markers (centroid-ish)
-      data.features.forEach((f: any) => {
-        const name = (f.properties?.nombre ?? "").toUpperCase();
-        const opp = OPPORTUNITIES.find((o) => o.barrio === name);
-        if (!opp) return;
-        const n = NEIGHBORHOODS.find((x) => x.nombre.toUpperCase() === name);
-        if (!n) return;
-        const el = document.createElement("div");
-        el.className = "opp-pulse-dot";
-        el.style.setProperty("--opp-color", opp.color);
-        el.title = `${opp.emoji} ${opp.tipo} — ${opp.descripcion}`;
-        el.addEventListener("click", (ev) => {
-          ev.stopPropagation();
-          map.flyTo({ center: [n.lng, n.lat], zoom: 13.6, speed: 0.8 });
-          onSelect(n);
-        });
-        new mapboxgl.Marker({ element: el }).setLngLat([n.lng, n.lat]).addTo(map);
-      });
+      // Populate source if data already arrived
+      if (barriosRef.current.length > 0) {
+        (map.getSource("barrios") as mapboxgl.GeoJSONSource).setData(
+          barriosToGeoJSON(barriosRef.current, getActivePaletteId()) as unknown as GeoJSON.FeatureCollection
+        );
+        if (mostrarOportunidades) addOpportunityMarkers(map);
+      }
     });
 
     return () => {
       ro.disconnect();
+      mapLoadedRef.current = false;
       map.remove();
       mapRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Selection sync + flyTo
+  // Update map source when GeoJSON data changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || !geoJsonData) return;
+    (map.getSource("barrios") as mapboxgl.GeoJSONSource)?.setData(
+      geoJsonData as unknown as GeoJSON.FeatureCollection
+    );
+    if (mostrarOportunidades) {
+      addOpportunityMarkers(map);
+    } else {
+      markersRef.current.forEach((m) => m.remove());
+      markersRef.current = [];
+    }
+  }, [geoJsonData, mostrarOportunidades]);
+
+  // Selection sync
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded()) return;
-    NEIGHBORHOODS.forEach((n) => {
-      map.setFeatureState({ source: "barrios", id: n.id }, { selected: n.id === selectedId });
-    });
+    map.removeFeatureState({ source: "barrios" });
     if (selectedId != null) {
-      const n = NEIGHBORHOODS.find((x) => x.id === selectedId);
-      if (n) map.flyTo({ center: [n.lng, n.lat], zoom: 13.4, speed: 0.9 });
+      map.setFeatureState({ source: "barrios", id: selectedId }, { selected: true });
+      const n =
+        barriosRef.current.length > 0
+          ? barriosRef.current.find((b) => b.barrio_id === selectedId)
+          : null;
+      if (n) {
+        const nb = barrioToNeighborhood(n);
+        map.flyTo({ center: [nb.lng, nb.lat], zoom: 13.4, speed: 0.9 });
+      } else {
+        const fallback = NEIGHBORHOODS.find((x) => x.id === selectedId);
+        if (fallback) map.flyTo({ center: [fallback.lng, fallback.lat], zoom: 13.4, speed: 0.9 });
+      }
     }
   }, [selectedId]);
+
+  function addOpportunityMarkers(map: MapboxMap) {
+    // Remove old markers
+    markersRef.current.forEach((m) => m.remove());
+    markersRef.current = [];
+
+    const barrios = barriosRef.current;
+    barrios.forEach((b) => {
+      const opp = b.oportunidad;
+      if (!opp.detectada) return;
+      const nb = barrioToNeighborhood(b);
+      const color = OPP_COLORS[opp.tipo as keyof typeof OPP_COLORS] ?? "#FDE8D3";
+      const el = document.createElement("div");
+      el.className = "opp-pulse-dot";
+      el.style.setProperty("--opp-color", color);
+      el.title = `${opp.tipo ?? ""} — ${opp.descripcion ?? ""}`;
+      el.addEventListener("click", (ev) => {
+        ev.stopPropagation();
+        map.flyTo({ center: [nb.lng, nb.lat], zoom: 13.6, speed: 0.8 });
+        onSelect(nb);
+      });
+      const marker = new mapboxgl.Marker({ element: el }).setLngLat([nb.lng, nb.lat]).addTo(map);
+      markersRef.current.push(marker);
+    });
+  }
 
   if (tokenError) {
     return (

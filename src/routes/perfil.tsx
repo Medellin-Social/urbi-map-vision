@@ -27,6 +27,12 @@ import {
   type Risk,
   type UrbiUser,
 } from "@/lib/auth";
+import {
+  SCORE_PALETTES,
+  getActivePaletteId,
+  setActivePalette,
+  type ScorePaletteId,
+} from "@/config/mapColors";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP } from "@/lib/format";
 
@@ -536,47 +542,128 @@ function relativeTime(ts: number): string {
 
 /* ---------------- Mapa ---------------- */
 
+const SCORE_LABELS = ["≥70", "≥50", "≥30", "<30"] as const;
+
 function MapaTab({ user }: { user: UrbiUser }) {
   const [style, setStyle] = useState<MapStyleId>(user.mapStyle ?? "dark");
+  const [oportunidades, setOportunidades] = useState(user.mostrarOportunidades ?? false);
+  const [scorePalette, setScorePalette] = useState<ScorePaletteId>(getActivePaletteId);
 
-  const apply = (id: MapStyleId) => {
+  const applyMapStyle = (id: MapStyleId) => {
     setStyle(id);
     auth.patch({ mapStyle: id });
   };
 
-  return (
-    <div className="space-y-5">
-      <SectionTitle title="Configuración del mapa" hint="Elige la paleta visual del mapa." />
+  const applyScorePalette = (id: ScorePaletteId) => {
+    setScorePalette(id);
+    setActivePalette(id);
+  };
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => {
-          const s = MAP_STYLES[id];
-          const active = style === id;
-          return (
-            <button
-              key={id}
-              onClick={() => apply(id)}
-              className={`overflow-hidden rounded-xl border text-left transition ${
-                active ? "border-primary glow-cyan" : "border-border hover:border-primary/40"
-              }`}
-            >
-              <div className="flex h-20">
-                {s.swatch.map((c) => (
-                  <div key={c} className="flex-1" style={{ background: c }} />
-                ))}
-              </div>
-              <div className="flex items-center justify-between bg-background/40 px-3 py-2">
-                <span className="text-sm font-semibold">{s.label}</span>
-                {active && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Activa</span>}
-              </div>
-            </button>
-          );
-        })}
+  const toggleOportunidades = () => {
+    const next = !oportunidades;
+    setOportunidades(next);
+    auth.patch({ mostrarOportunidades: next });
+  };
+
+  return (
+    <div className="space-y-7">
+      {/* ── Estilo del mapa base ── */}
+      <div className="space-y-3">
+        <SectionTitle title="Estilo del mapa" hint="Fondo cartográfico. Se aplica al volver al mapa." />
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => {
+            const s = MAP_STYLES[id];
+            const active = style === id;
+            return (
+              <button
+                key={id}
+                onClick={() => applyMapStyle(id)}
+                className={`overflow-hidden rounded-xl border text-left transition ${
+                  active ? "border-primary glow-cyan" : "border-border hover:border-primary/40"
+                }`}
+              >
+                <div className="flex h-16">
+                  {s.swatch.map((c) => (
+                    <div key={c} className="flex-1" style={{ background: c }} />
+                  ))}
+                </div>
+                <div className="flex items-center justify-between bg-background/40 px-3 py-2">
+                  <span className="text-sm font-semibold">{s.label}</span>
+                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Activo</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      <p className="text-[11px] text-muted-foreground">
-        El cambio se aplica al volver al mapa.
-      </p>
+      {/* ── Paleta de barrios por score ── */}
+      <div className="space-y-3">
+        <SectionTitle
+          title="Paleta de barrios"
+          hint="Color de los polígonos según score de inversión. Cambio inmediato."
+        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          {(Object.keys(SCORE_PALETTES) as ScorePaletteId[]).map((id) => {
+            const p = SCORE_PALETTES[id];
+            const active = scorePalette === id;
+            return (
+              <button
+                key={id}
+                onClick={() => applyScorePalette(id)}
+                className={`overflow-hidden rounded-xl border text-left transition ${
+                  active ? "border-primary glow-cyan" : "border-border hover:border-primary/40"
+                }`}
+              >
+                <div className="flex h-14">
+                  {p.swatch.map((c, i) => (
+                    <div key={c} className="relative flex-1" style={{ background: c }}>
+                      <span className="absolute inset-x-0 bottom-1 text-center text-[9px] font-bold"
+                        style={{ color: i < 2 ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)" }}>
+                        {SCORE_LABELS[i]}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between bg-background/40 px-3 py-2">
+                  <span className="text-sm font-semibold">{p.label}</span>
+                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Activa</span>}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="text-[11px] text-muted-foreground">
+          El cambio colorea los polígonos de barrios en tiempo real. El fondo del mapa no cambia.
+        </p>
+      </div>
+
+      {/* ── Alertas de oportunidad ── */}
+      <div className="rounded-xl border border-border bg-background/40 p-4">
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <div className="text-sm font-semibold">Alertas de oportunidad</div>
+            <div className="mt-0.5 text-[11px] text-muted-foreground">
+              Muestra barrios con oportunidades detectadas directamente en el mapa
+            </div>
+          </div>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={oportunidades}
+            onClick={toggleOportunidades}
+            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
+              oportunidades ? "bg-primary" : "bg-border"
+            }`}
+          >
+            <span
+              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
+                oportunidades ? "translate-x-5" : "translate-x-0"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
 
       <Link to="/map" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan">
         Ir al mapa

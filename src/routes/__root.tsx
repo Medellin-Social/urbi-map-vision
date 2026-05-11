@@ -1,6 +1,14 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { LanguageProvider } from "@/lib/i18n";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { Toaster } from "@/components/ui/sonner";
+
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: { staleTime: 5 * 60 * 1000, retry: 1 },
+  },
+});
 
 import appCss from "../styles.css?url";
 
@@ -68,8 +76,11 @@ function RootShell({ children }: { children: React.ReactNode }) {
 
 function RootComponent() {
   return (
-    <LanguageProvider>
-      <Outlet />
-    </LanguageProvider>
+    <QueryClientProvider client={queryClient}>
+      <LanguageProvider>
+        <Outlet />
+        <Toaster />
+      </LanguageProvider>
+    </QueryClientProvider>
   );
 }
