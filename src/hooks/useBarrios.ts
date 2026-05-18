@@ -13,17 +13,16 @@ function geoKey(nombre: string, municipio: string): string {
   return `${stripAccents(nombre.toUpperCase())}__${stripAccents(municipio.toUpperCase())}`;
 }
 
-// ── Static GeoJSON geometry cache — lazy-loaded per municipio ─────────────────
-// Medellín loads immediately; remaining municipios load 2s later in background.
-// This avoids fetching the 16MB monolithic barrios_valle_aburra.geojson on startup.
+// ── Static GeoJSON geometry cache — all municipios loaded in parallel ─────────
+// Individual files per municipio (vs 16MB monolithic). All fetched concurrently
+// so the query returns complete data on first render.
 
 type StaticFeature = {
   properties: { nombre: string; municipio: string };
   geometry: ApiBarrio["geometry"];
 };
 
-const MUNICIPIOS_IMMEDIATE = ["medellin"] as const;
-const MUNICIPIOS_DEFERRED = ["bello", "envigado", "itagui", "sabaneta", "la_estrella"] as const;
+const ALL_MUNICIPIOS = ["medellin", "bello", "envigado", "itagui", "sabaneta", "la_estrella"] as const;
 
 async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature[]> {
   try {
@@ -35,46 +34,31 @@ async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature
   }
 }
 
-// Shared mutable map — deferred loads append to it after initial promise resolves
 const _geoMap = new Map<string, ApiBarrio["geometry"]>();
 let _geoPromise: Promise<Map<string, ApiBarrio["geometry"]>> | null = null;
 
 function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
   if (!_geoPromise) {
     _geoPromise = (async () => {
-      const features = await _fetchMunicipioFeatures(MUNICIPIOS_IMMEDIATE[0]);
-      for (const f of features) {
-        _geoMap.set(geoKey(f.properties.nombre, f.properties.municipio), f.geometry);
-      }
-      // Load remaining municipios in background — they enrich the shared map
-      setTimeout(async () => {
-        for (const m of MUNICIPIOS_DEFERRED) {
-          const deferred = await _fetchMunicipioFeatures(m);
-          for (const f of deferred) {
-            _geoMap.set(geoKey(f.properties.nombre, f.properties.municipio), f.geometry);
-          }
+      const all = await Promise.all(ALL_MUNICIPIOS.map(_fetchMunicipioFeatures));
+      for (const features of all) {
+        for (const f of features) {
+          _geoMap.set(geoKey(f.properties.nombre, f.properties.municipio), f.geometry);
         }
-      }, 2000);
+      }
       return _geoMap;
     })();
   }
   return _geoPromise;
 }
 
-// Shared feature list for grey-polygon generation
 let _featuresPromise: Promise<StaticFeature[]> | null = null;
 
 async function loadStaticFeatures(): Promise<StaticFeature[]> {
   if (!_featuresPromise) {
     _featuresPromise = (async () => {
-      const immediate = await _fetchMunicipioFeatures(MUNICIPIOS_IMMEDIATE[0]);
-      // Deferred municipios — same 2s delay as geometry loader
-      setTimeout(async () => {
-        for (const m of MUNICIPIOS_DEFERRED) {
-          await _fetchMunicipioFeatures(m);
-        }
-      }, 2000);
-      return immediate;
+      const all = await Promise.all(ALL_MUNICIPIOS.map(_fetchMunicipioFeatures));
+      return all.flat();
     })();
   }
   return _featuresPromise;
