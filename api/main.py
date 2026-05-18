@@ -99,6 +99,11 @@ app.include_router(historial.router,     prefix="/api/v1/historial",      tags=[
 app.include_router(stats.router,         prefix="/api/v1/stats",           tags=["stats"])
 
 
+@app.get("/", tags=["meta"])
+async def root():
+    return {"status": "ok"}
+
+
 @app.get("/health", tags=["meta"])
 async def health():
     try:
