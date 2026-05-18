@@ -97,8 +97,40 @@ type BarrioStats = {
   lat: number;
   lng: number;
   estrato: number;
+  // scores
+  score_corto: number | null;
+  categoria_corto: string | null;
+  score_mediano: number | null;
+  categoria_mediano: string | null;
+  score_largo: number | null;
+  categoria_largo: string | null;
+  perfil_recomendado: string | null;
+  // verde
+  indice_verde_pct: number | null;
+  categoria_verde: string | null;
+  score_verde: number | null;
+  // conectividad
+  dist_metro_km: number | null;
+  dist_parque_km: number | null;
+  dist_mall_km: number | null;
+  n_cafes_500m: number | null;
+  n_coworking_1km: number | null;
+  n_gimnasios_1km: number | null;
+  n_yoga_1km: number | null;
+  indice_nomada: number | null;
+  // liquidez
   score_salud: number | null;
   categoria_salud: string | null;
+  tiempo_estimado_venta: string | null;
+  // oportunidad
+  oportunidad_detectada: boolean | null;
+  tipo_oportunidad: string | null;
+  descripcion_oportunidad: string | null;
+  // seguridad
+  score_seguridad: number | null;
+  categoria_seguridad: string | null;
+  nota_seguridad: string | null;
+  // remates
   n_remates_municipio: number;
   remates_por_100_listings: number | null;
 };
@@ -139,6 +171,11 @@ type StaticListing = {
   lat: number | null;
   lng: number | null;
   barrio: string;
+  url?: string | null;
+  habitaciones?: number | null;
+  banos?: number | null;
+  direccion_raw?: string | null;
+  fuente?: string | null;
 };
 
 const _listingsCache = new Map<string, Promise<StaticListing[]>>();
@@ -165,8 +202,15 @@ function yieldToScore(y: number | null): number | null {
   return 25;
 }
 
-function makeStatsBarrio(f: StaticFeature, stats: BarrioStats): ApiBarrio {
-  const score = yieldToScore(stats.yield_anual);
+function pickScoreActivo(stats: BarrioStats, perfil?: string): number | null {
+  if (perfil === "airbnb")     return stats.score_corto  ?? yieldToScore(stats.yield_anual);
+  if (perfil === "nomadas")    return stats.score_mediano ?? yieldToScore(stats.yield_anual);
+  // largo_plazo, valorizacion, or no perfil — score_largo is most fair for non-Airbnb municipalities
+  return stats.score_largo ?? stats.score_mediano ?? yieldToScore(stats.yield_anual);
+}
+
+function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string): ApiBarrio {
+  const scoreActivo = pickScoreActivo(stats, perfil);
   const fakeId = 800_000 + stats.id;
   _fakeBarrioIndex.set(fakeId, { slug: stats.slug_municipio.replace(/-/g, "_"), statsNombre: stats.nombre.toUpperCase() });
   return {
@@ -178,14 +222,60 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats): ApiBarrio {
     geometry: f.geometry,
     color_hex: null,
     excluir_inversion: false,
-    scores: { corto: null, cat_corto: null, mediano: null, cat_mediano: null, largo: null, cat_largo: null, perfil_recomendado: null, score_activo: score },
-    mercado: { precio_m2_cop: stats.precio_m2, precio_m2_usd: stats.precio_m2 ? Math.round(stats.precio_m2 / 4200) : null, arriendo_p50_cop: stats.arriendo, yield_bruto_pct: stats.yield_anual, anos_recupero: stats.anos_recupero, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null },
+    scores: {
+      corto: stats.score_corto,
+      cat_corto: stats.categoria_corto,
+      mediano: stats.score_mediano,
+      cat_mediano: stats.categoria_mediano,
+      largo: stats.score_largo,
+      cat_largo: stats.categoria_largo,
+      perfil_recomendado: stats.perfil_recomendado,
+      score_activo: scoreActivo,
+    },
+    mercado: {
+      precio_m2_cop: stats.precio_m2,
+      precio_m2_usd: stats.precio_m2 ? Math.round(stats.precio_m2 / 4200) : null,
+      arriendo_p50_cop: stats.arriendo,
+      yield_bruto_pct: stats.yield_anual,
+      anos_recupero: stats.anos_recupero,
+      estado_precio: null,
+      pbn_precio_justo: null,
+      poi_precio_oferta: null,
+    },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
-    seguridad: { score: null, categoria: null, zona_turistica: null, tendencia: null, nota: null },
-    conectividad: { dist_metro_km: null, dist_parque_km: null, dist_mall_km: null, n_cafes_500m: null, n_coworking_1km: null, n_gimnasios_1km: null, n_yoga_1km: null, indice_nomada: null },
-    verde: { indice_verde_pct: null, categoria: null, score_verde: null },
-    liquidez: { score: stats.score_salud, categoria: stats.categoria_salud, tiempo_estimado_venta: null, nota_metodologia: null },
-    oportunidad: { detectada: false, tipo: null, descripcion: null },
+    seguridad: {
+      score: stats.score_seguridad,
+      categoria: stats.categoria_seguridad,
+      zona_turistica: null,
+      tendencia: null,
+      nota: stats.nota_seguridad,
+    },
+    conectividad: {
+      dist_metro_km: stats.dist_metro_km,
+      dist_parque_km: stats.dist_parque_km,
+      dist_mall_km: stats.dist_mall_km,
+      n_cafes_500m: stats.n_cafes_500m,
+      n_coworking_1km: stats.n_coworking_1km,
+      n_gimnasios_1km: stats.n_gimnasios_1km,
+      n_yoga_1km: stats.n_yoga_1km,
+      indice_nomada: stats.indice_nomada,
+    },
+    verde: {
+      indice_verde_pct: stats.indice_verde_pct,
+      categoria: stats.categoria_verde,
+      score_verde: stats.score_verde,
+    },
+    liquidez: {
+      score: stats.score_salud,
+      categoria: stats.categoria_salud,
+      tiempo_estimado_venta: stats.tiempo_estimado_venta,
+      nota_metodologia: null,
+    },
+    oportunidad: {
+      detectada: stats.oportunidad_detectada ?? false,
+      tipo: stats.tipo_oportunidad,
+      descripcion: stats.descripcion_oportunidad,
+    },
     valorizacion: { var_anual_pct: null, proyeccion_3anos_pct: null, proyeccion_5anos_pct: null, tendencia: null },
     n_remates_municipio: stats.n_remates_municipio,
   };
@@ -264,7 +354,7 @@ export function useBarriosRaw(perfil?: string) {
         .map((f) => {
           const key = statsKey(f.properties.nombre, f.properties.municipio);
           const stats = statsMap.get(key);
-          return stats ? makeStatsBarrio(f, stats) : makeGreyBarrio(f, synId++);
+          return stats ? makeStatsBarrio(f, stats, perfil) : makeGreyBarrio(f, synId++);
         });
 
       return [...patched, ...extras];
@@ -373,7 +463,11 @@ export function useListings(
             precio_usd: l.precio_cop ? Math.round(l.precio_cop / 4200) : null,
             area_m2: l.area_m2,
             precio_m2: l.precio_m2,
-            fuente: "fincaraiz",
+            habitaciones: l.habitaciones ?? null,
+            banos: l.banos ?? null,
+            direccion_raw: l.direccion_raw ?? null,
+            url: l.url ?? null,
+            fuente: l.fuente ?? "metrocuadrado",
           })),
         };
       }
