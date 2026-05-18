@@ -494,7 +494,7 @@ async def get_barrio_listings(
             precio::bigint          AS precio_cop,
             (precio / 4100)::bigint AS precio_usd,
             area_m2::float8,
-            precio_m2::int,
+            CASE WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int END AS precio_m2,
             habitaciones,
             banos::float8,
             direccion_raw,
