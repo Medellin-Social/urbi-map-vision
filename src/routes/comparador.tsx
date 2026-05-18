@@ -367,7 +367,7 @@ function BarComparison({ items }: { items: ApiBarrio[] }) {
             <div key={m.key}>
               <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
                 {m.label}
-                <span className="text-[9px] opacity-50">{m.dir} mayor es mejor</span>
+                <span className="text-[9px] opacity-50">{m.dir} {m.dir === "↓" ? "menor es mejor" : "mayor es mejor"}</span>
               </div>
               <div className="space-y-1.5">
                 {items.map((b, i) => {
@@ -404,7 +404,7 @@ function BarComparison({ items }: { items: ApiBarrio[] }) {
         })}
       </div>
       <div className="mt-4 text-[9px] text-muted-foreground">
-        ↑ Mayor barra = mejor rendimiento · Precio m²: barra más larga = precio más bajo
+        Barra más larga = mejor rendimiento relativo en cada dimensión
       </div>
     </div>
   );

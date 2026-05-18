@@ -181,6 +181,7 @@ function CalculadoraPage() {
     });
   }, [barrios, isPlaceholderData, search.barrio]);
   const [presupuesto, setPresupuesto] = useState<number>(350);
+  const [presupuestoStr, setPresupuestoStr] = useState<string>("350");
   const [tipo, setTipo] = useState<Tipo>("airbnb");
   const [horizonte, setHorizonte] = useState<Horizonte>(5);
 
@@ -243,14 +244,27 @@ function CalculadoraPage() {
             <Field label="Presupuesto">
               <div className="flex items-center gap-2">
                 <input
-                  type="number"
-                  min={50}
-                  max={2000}
-                  step={50}
-                  value={presupuesto}
+                  type="text"
+                  inputMode="numeric"
+                  value={presupuestoStr}
                   onChange={(e) => {
-                    setPresupuesto(clamp(Number(e.target.value), 50, 2000));
-                    reset();
+                    const raw = e.target.value.replace(/[^0-9]/g, "");
+                    setPresupuestoStr(raw);
+                    const n = Number(raw);
+                    if (raw !== "" && n > 0) {
+                      setPresupuesto(clamp(n, 1, 2000));
+                      reset();
+                    }
+                  }}
+                  onBlur={() => {
+                    const n = Number(presupuestoStr);
+                    if (!presupuestoStr || n <= 0) {
+                      setPresupuestoStr(String(presupuesto));
+                    } else {
+                      const clamped = clamp(n, 50, 2000);
+                      setPresupuesto(clamped);
+                      setPresupuestoStr(String(clamped));
+                    }
                   }}
                   className="w-28 rounded-md border border-border bg-background/60 px-2 py-2 text-sm focus:border-primary focus:outline-none"
                 />
@@ -269,7 +283,9 @@ function CalculadoraPage() {
                 step={50}
                 value={presupuesto}
                 onChange={(e) => {
-                  setPresupuesto(Number(e.target.value));
+                  const n = Number(e.target.value);
+                  setPresupuesto(n);
+                  setPresupuestoStr(String(n));
                   reset();
                 }}
                 className="mt-3 w-full accent-[#00d4ff]"
@@ -280,6 +296,7 @@ function CalculadoraPage() {
                     key={p}
                     onClick={() => {
                       setPresupuesto(p);
+                      setPresupuestoStr(String(p));
                       reset();
                     }}
                     className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
@@ -339,7 +356,7 @@ function CalculadoraPage() {
 
             <button
               onClick={handleCalcular}
-              disabled={isPending}
+              disabled={isPending || !presupuesto || presupuesto <= 0}
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 glow-cyan disabled:opacity-60"
             >
               {isPending ? (
