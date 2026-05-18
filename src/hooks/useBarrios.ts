@@ -13,6 +13,23 @@ function geoKey(nombre: string, municipio: string): string {
   return `${stripAccents(nombre.toUpperCase())}__${stripAccents(municipio.toUpperCase())}`;
 }
 
+// Normalize barrio names to bridge GeoJSON (datos.gov.co) vs FincaRaiz naming
+// GeoJSON uses "B. NOMBRE", stats use "NOMBRE" or "LA NOMBRE"
+function normalizeNombre(n: string): string {
+  return n
+    .replace(/^B\.\s+/i, "")
+    .replace(/^ASENTAMIENTO\s+DE\s+HECHO\s+/i, "ASENTAMIENTO ")
+    .replace(/^ASENT\.\s+DE\s+HECHO\s+/i, "ASENTAMIENTO ")
+    .replace(/^BARRIO\s+/i, "")
+    .replace(/^URB\.\s+/i, "")
+    .replace(/^(LA|EL|LOS|LAS|SAN|DE|DEL)\s+/i, "")
+    .trim();
+}
+
+function statsKey(nombre: string, municipio: string): string {
+  return geoKey(normalizeNombre(nombre), municipio);
+}
+
 // ── Static GeoJSON geometry cache — all municipios loaded in parallel ─────────
 // Individual files per municipio (vs 16MB monolithic). All fetched concurrently
 // so the query returns complete data on first render.
@@ -96,7 +113,7 @@ function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
         const list: BarrioStats[] = await r.json();
         const map = new Map<string, BarrioStats>();
         for (const b of list) {
-          map.set(geoKey(b.nombre, b.municipio), b);
+          map.set(statsKey(b.nombre, b.municipio), b);
         }
         return map;
       } catch {
@@ -211,7 +228,7 @@ export function useBarriosRaw(perfil?: string) {
           return !apiKeys.has(key);
         })
         .map((f) => {
-          const key = geoKey(f.properties.nombre, f.properties.municipio);
+          const key = statsKey(f.properties.nombre, f.properties.municipio);
           const stats = statsMap.get(key);
           return stats ? makeStatsBarrio(f, stats) : makeGreyBarrio(f, synId++);
         });
