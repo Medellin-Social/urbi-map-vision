@@ -23,7 +23,8 @@ from shapely.geometry import Point, shape
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
-DB_URL = "postgresql://urbidata:urbidata007@localhost:5433/urbidata"
+import os
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:5433/urbidata")
 
 ROOT = Path(__file__).parent.parent
 GEOJSON_PATH = ROOT / "public" / "data" / "barrios_valle_aburra.geojson"

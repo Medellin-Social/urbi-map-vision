@@ -53,6 +53,7 @@ export type ApiBarrio = {
   geometry: { type: string; coordinates: unknown } | null;
   color_hex: string | null;
   excluir_inversion: boolean | null;
+  n_remates_municipio?: number | null;
   scores: {
     corto: number | null;
     cat_corto: string | null;
@@ -227,6 +228,7 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     seguridad_nota: b.seguridad?.nota ?? null,
     verde_pct: b.verde?.indice_verde_pct ?? null,
     verde_categoria: b.verde?.categoria ?? null,
+    n_remates_municipio: b.n_remates_municipio ?? undefined,
   };
 }
 

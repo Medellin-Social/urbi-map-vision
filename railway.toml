@@ -1,3 +1,5 @@
+# ── Servicio Frontend (este archivo) ─────────────────────────────────────────
+# Railway service: urbi-map-vision  →  Dockerfile
 [build]
 builder = "DOCKERFILE"
 
@@ -6,3 +8,8 @@ startCommand = "node /app/server.mjs"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
+
+# ── Servicio Backend ──────────────────────────────────────────────────────────
+# Railway service: urbi-api  →  Dockerfile.api
+# En Railway: Settings → Source → Dockerfile Path = Dockerfile.api
+# startCommand: sh -c 'uvicorn api.main:app --host 0.0.0.0 --port $PORT'

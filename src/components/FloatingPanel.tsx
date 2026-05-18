@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -37,7 +37,7 @@ import { OPP_COLORS } from "@/config/mapColors";
 import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useListings, useCiudadStats } from "@/hooks/useBarrios";
+import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 
 type View = "city" | "barrio" | "listings";
@@ -46,14 +46,19 @@ type View = "city" | "barrio" | "listings";
 
 const PANEL_LS = { pos: "urbi_panel_pos", size: "urbi_panel_size" };
 
+const PANEL_MIN_W = 300;
+const PANEL_MIN_H = 200;
+const panelMaxW = () => Math.floor(window.innerWidth * 0.85);
+const panelMaxH = () => Math.floor(window.innerHeight * 0.85);
+
 function readPanelSize(): { width: number; height: number } {
   try {
     const raw = localStorage.getItem(PANEL_LS.size);
     if (raw) {
       const p = JSON.parse(raw) as { width: number; height: number };
       return {
-        width: Math.max(300, Math.min(600, p.width)),
-        height: Math.max(200, Math.min(900, p.height)),
+        width: Math.max(PANEL_MIN_W, Math.min(panelMaxW(), p.width)),
+        height: Math.max(PANEL_MIN_H, Math.min(panelMaxH(), p.height)),
       };
     }
   } catch {}
@@ -144,18 +149,18 @@ export function FloatingPanel({ selected, onClear }: Props) {
     document.body.style.cursor = "se-resize";
 
     const onMove = (ev: MouseEvent) => {
-      const maxH = window.innerHeight - posRef.current.top - 20;
+      const maxH = Math.min(panelMaxH(), window.innerHeight - posRef.current.top - 20);
       setSize({
-        width: Math.max(300, Math.min(600, startW + (ev.clientX - startX))),
-        height: Math.max(200, Math.min(maxH, startH + (ev.clientY - startY))),
+        width: Math.max(PANEL_MIN_W, Math.min(panelMaxW(), startW + (ev.clientX - startX))),
+        height: Math.max(PANEL_MIN_H, Math.min(maxH, startH + (ev.clientY - startY))),
       });
     };
 
     const onUp = (ev: MouseEvent) => {
-      const maxH = window.innerHeight - posRef.current.top - 20;
+      const maxH = Math.min(panelMaxH(), window.innerHeight - posRef.current.top - 20);
       const newSize = {
-        width: Math.max(300, Math.min(600, startW + (ev.clientX - startX))),
-        height: Math.max(200, Math.min(maxH, startH + (ev.clientY - startY))),
+        width: Math.max(PANEL_MIN_W, Math.min(panelMaxW(), startW + (ev.clientX - startX))),
+        height: Math.max(PANEL_MIN_H, Math.min(maxH, startH + (ev.clientY - startY))),
       };
       setSize(newSize);
       localStorage.setItem(PANEL_LS.size, JSON.stringify(newSize));
@@ -334,7 +339,44 @@ function goalToPerfil(goal?: Goal | null): string | undefined {
 
 function CityOverview({ goal }: { goal?: Goal }) {
   const perfil = goalToPerfil(goal);
-  const { data: stats } = useCiudadStats(perfil);
+  const { data: apiStats } = useCiudadStats(perfil);
+  const { data: barriosRaw } = useBarriosRaw(perfil);
+
+  // Fallback: compute stats from all-Valle barrios when API returns nothing
+  const computedStats = useMemo(() => {
+    if (!barriosRaw?.length) return null;
+    const withYield = barriosRaw.filter((b) => b.mercado.yield_bruto_pct != null);
+    const yields = withYield.map((b) => b.mercado.yield_bruto_pct!);
+    const prices = barriosRaw
+      .filter((b) => b.mercado.precio_m2_cop != null)
+      .map((b) => b.mercado.precio_m2_cop!)
+      .sort((a, b) => a - b);
+    const yieldPromedio =
+      yields.length > 0
+        ? Math.round((yields.reduce((s, v) => s + v, 0) / yields.length) * 10) / 10
+        : null;
+    const precioMediana = prices.length > 0 ? prices[Math.floor(prices.length / 2)] : null;
+    const top5 = [...withYield]
+      .sort((a, b) => (b.mercado.yield_bruto_pct ?? 0) - (a.mercado.yield_bruto_pct ?? 0))
+      .slice(0, 5)
+      .map((b) => ({
+        barrio_id: b.barrio_id,
+        nombre: b.nombre,
+        municipio: b.municipio,
+        score: b.scores.score_activo,
+        yield_bruto_pct: b.mercado.yield_bruto_pct,
+        precio_m2_cop: b.mercado.precio_m2_cop,
+      }));
+    return {
+      barrios_analizados: withYield.length,
+      yield_promedio: yieldPromedio,
+      precio_m2_mediana: precioMediana,
+      oportunidades_activas: 0,
+      top5,
+    };
+  }, [barriosRaw]);
+
+  const stats = apiStats ?? computedStats;
 
   const chartData = stats?.top5.map((b) => ({
     name: shortName(b.nombre ?? ""),
@@ -448,6 +490,14 @@ const VERDE_COLORS: Record<string, string> = {
   "SIN DATOS": "#6b7280",
 };
 
+// Interpolate gray (#9ca3af) → plant green (#22c55e) based on 0–1 ratio
+function verdeColor(ratio: number): string {
+  const r = Math.round(156 + (34 - 156) * ratio);
+  const g = Math.round(163 + (197 - 163) * ratio);
+  const b = Math.round(175 + (94 - 175) * ratio);
+  return `rgb(${r},${g},${b})`;
+}
+
 const SALUD_COLORS: Record<string, string> = {
   "MUY SALUDABLE": "#10b981",
   "SALUDABLE":     "#00d4ff",
@@ -464,6 +514,12 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
   const apiListings = listingsData?.listings ?? [];
   const listings: ApiListing[] = apiListings.slice(0, 3);
+
+  const { data: allBarrios } = useBarrios();
+  const maxVerdePct = useMemo(() => {
+    const vals = allBarrios?.map((b) => b.verde_pct ?? 0).filter((v) => v > 0) ?? [];
+    return vals.length ? Math.max(...vals) : 40;
+  }, [allBarrios]);
   const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
 
   // Log view to history once per neighborhood
@@ -582,7 +638,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
       </Section>
 
       <SeguridadSection n={n} />
-      <VerdeSection n={n} />
+      <VerdeSection n={n} maxVerdePct={maxVerdePct} />
       <LiquiditySection n={n} />
 
       <Section title="📈 Valorización histórica">
@@ -677,17 +733,25 @@ function SeguridadSection({ n }: { n: Neighborhood }) {
 
 /* ------------- Índice verde ------------- */
 
-function VerdeSection({ n }: { n: Neighborhood }) {
+function VerdeSection({ n, maxVerdePct }: { n: Neighborhood; maxVerdePct: number }) {
   const pct = n.verde_pct;
   const cat = n.verde_categoria ?? "SIN DATOS";
-  const color = VERDE_COLORS[cat] ?? VERDE_COLORS["SIN DATOS"];
   if (pct === null || pct === undefined) return null;
+  const ratio = Math.min(1, pct / maxVerdePct);
+  const color = verdeColor(ratio);
+  const barWidth = `${(ratio * 100).toFixed(1)}%`;
   return (
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
         <Leaf className="h-3 w-3 text-success" /> Índice verde
       </div>
-      <div className="rounded-xl border p-3" style={{ borderColor: `${color}66`, background: `${color}10` }}>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: `${color}66`, background: `${color}10` }}
+      >
         <div className="flex items-center justify-between">
           <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
             {cat}
@@ -695,9 +759,18 @@ function VerdeSection({ n }: { n: Neighborhood }) {
           <span className="text-[11px] font-semibold" style={{ color }}>{pct.toFixed(1)}%</span>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
-          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+          <motion.div
+            initial={{ width: 0 }}
+            animate={{ width: barWidth }}
+            transition={{ duration: 0.8, ease: "easeOut" }}
+            className="h-full rounded-full"
+            style={{ background: color }}
+          />
         </div>
-      </div>
+        <div className="mt-1.5 text-[10px] text-muted-foreground/60">
+          Comparado con la zona más verde del Valle de Aburrá
+        </div>
+      </motion.div>
     </div>
   );
 }
@@ -775,60 +848,30 @@ function ListingCard({ l }: { l: ApiListing }) {
   );
 }
 
-const PAGE_SIZE = 100;
-
 function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
   const [op, setOp] = useState<"venta" | "arriendo">("venta");
-  // null = no filter active (show all)
-  const [precioMaxFilter, setPrecioMaxFilter] = useState<number | null>(null);
-  const [areaMinFilter, setAreaMinFilter] = useState<number | null>(null);
-  const [offset, setOffset] = useState(0);
-  const [accumulated, setAccumulated] = useState<ApiListing[]>([]);
+  const [precioMax, setPrecioMax] = useState<number | null>(null);
+  const [areaMin, setAreaMin] = useState(0);
 
-  // Fetch filtered by op — prevents arriendo filling first page when on venta tab
-  const { data: listingsData, isLoading, isFetching } = useListings(n.id, PAGE_SIZE, offset, op);
+  // Server-side op filter — avoids client-side case-mismatch, separate cached query per tab
+  const { data: listingsData, isLoading, isFetching } = useListings(n.id, 100, 0, op);
+  const listings = listingsData?.listings ?? [];
 
-  // Append incoming page
+  const maxPrecioData = listings.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 0);
+  const maxAreaData = Math.ceil(listings.reduce((m, l) => Math.max(m, l.area_m2 ?? 0), 50) / 10) * 10;
+  const sliderPrecio = precioMax ?? maxPrecioData;
+
+  // Reset filters on tab change
   useEffect(() => {
-    if (!listingsData?.listings.length) return;
-    if (offset === 0) {
-      setAccumulated(listingsData.listings);
-    } else {
-      setAccumulated((prev) => {
-        const existingIds = new Set(prev.map((l) => l.id));
-        const fresh = listingsData.listings.filter((l) => !existingIds.has(l.id));
-        return [...prev, ...fresh];
-      });
-    }
-  }, [listingsData, offset]);
+    setPrecioMax(null);
+    setAreaMin(0);
+  }, [op]);
 
-  // Reset on barrio or tab change
-  useEffect(() => {
-    setOffset(0);
-    setAccumulated([]);
-    setPrecioMaxFilter(null);
-    setAreaMinFilter(null);
-  }, [n.id, op]);
-
-  const total = listingsData?.total ?? 0;
-  const hasMore = accumulated.length < total;
-
-  // Derive range bounds from actual data
-  const maxPrecioData = accumulated.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 0);
-  const maxAreaData = Math.ceil(accumulated.reduce((m, l) => Math.max(m, l.area_m2 ?? 0), 50) / 10) * 10;
-
-  // Active slider values — fall back to full range when no filter set
-  const sliderPrecio = precioMaxFilter ?? maxPrecioData;
-  const sliderArea = areaMinFilter ?? 0;
-
-  const filtered = accumulated.filter(
+  const filtered = listings.filter(
     (l) =>
-      (precioMaxFilter === null || (l.precio_cop ?? 0) <= precioMaxFilter) &&
-      (areaMinFilter === null || (l.area_m2 ?? 0) >= areaMinFilter)
+      (precioMax === null || (l.precio_cop ?? 0) <= precioMax) &&
+      (l.area_m2 ?? 0) >= areaMin
   );
-
-  // True only during the first fetch — false once query resolves (even with 0 results)
-  const initialLoading = isLoading && accumulated.length === 0;
 
   return (
     <div className="space-y-4">
@@ -842,9 +885,9 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
       <div>
         <h2 className="font-display text-xl font-semibold">Listings · {titleCase(n.nombre)}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {isLoading && accumulated.length === 0
+          {isLoading
             ? "Cargando…"
-            : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""} · ${accumulated.length} de ${total} cargados`}
+            : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}${listingsData ? ` de ${listingsData.total} en ${op}` : ""}`}
         </p>
       </div>
 
@@ -863,37 +906,37 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
       <div className="space-y-3">
         <FilterRow
           label={
-            initialLoading
+            isLoading
               ? "Precio máx · cargando…"
               : maxPrecioData > 0
               ? `Precio máx · ${formatCOP(sliderPrecio)}`
               : "Precio máx · sin datos"
           }
-          onReset={precioMaxFilter !== null ? () => setPrecioMaxFilter(null) : undefined}
+          onReset={precioMax !== null ? () => setPrecioMax(null) : undefined}
         >
           <input
             type="range"
             min={0}
             max={maxPrecioData || 1}
-            step={5_000_000}
+            step={Math.max(5_000_000, Math.round(maxPrecioData / 50))}
             value={sliderPrecio}
-            disabled={initialLoading || maxPrecioData === 0}
-            onChange={(e) => setPrecioMaxFilter(Number(e.target.value))}
+            disabled={isLoading || maxPrecioData === 0}
+            onChange={(e) => setPrecioMax(Number(e.target.value))}
             className="w-full accent-[#00d4ff] disabled:opacity-40"
           />
         </FilterRow>
         <FilterRow
-          label={`Área mín · ${sliderArea} m²`}
-          onReset={areaMinFilter !== null && areaMinFilter > 0 ? () => setAreaMinFilter(null) : undefined}
+          label={`Área mín · ${areaMin} m²`}
+          onReset={areaMin > 0 ? () => setAreaMin(0) : undefined}
         >
           <input
             type="range"
             min={0}
             max={maxAreaData || 200}
             step={5}
-            value={sliderArea}
-            disabled={initialLoading}
-            onChange={(e) => setAreaMinFilter(Number(e.target.value))}
+            value={areaMin}
+            disabled={isLoading}
+            onChange={(e) => setAreaMin(Number(e.target.value))}
             className="w-full accent-[#00d4ff] disabled:opacity-40"
           />
         </FilterRow>
@@ -905,22 +948,17 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
 
       <div className="space-y-2">
         {filtered.map((l) => <ListingCard key={l.id} l={l} />)}
-        {!isLoading && filtered.length === 0 && accumulated.length > 0 && (
+        {!isLoading && filtered.length === 0 && listings.length > 0 && (
           <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
             No hay listings con estos filtros.
           </div>
         )}
+        {!isLoading && listings.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
+            No hay listings de {op} disponibles.
+          </div>
+        )}
       </div>
-
-      {hasMore && (
-        <button
-          onClick={() => setOffset(accumulated.length)}
-          disabled={isFetching}
-          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20 disabled:opacity-50"
-        >
-          {isFetching ? "Cargando…" : `Cargar más · ${total - accumulated.length} restantes`}
-        </button>
-      )}
     </div>
   );
 }

@@ -187,6 +187,7 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats): ApiBarrio {
     liquidez: { score: stats.score_salud, categoria: stats.categoria_salud, tiempo_estimado_venta: null, nota_metodologia: null },
     oportunidad: { detectada: false, tipo: null, descripcion: null },
     valorizacion: { var_anual_pct: null, proyeccion_3anos_pct: null, proyeccion_5anos_pct: null, tendencia: null },
+    n_remates_municipio: stats.n_remates_municipio,
   };
 }
 
