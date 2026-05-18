@@ -124,6 +124,37 @@ function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
   return _statsPromise;
 }
 
+// ── Fake-barrio index: maps synthetic IDs → static listing lookup params ─────
+// Populated by makeStatsBarrio; consumed by useListings for non-API municipios.
+const _fakeBarrioIndex = new Map<number, { slug: string; statsNombre: string }>();
+
+// ── Static listings cache per municipio slug ──────────────────────────────────
+type StaticListing = {
+  id: number;
+  tipo_operacion: string;
+  precio_cop: number | null;
+  area_m2: number | null;
+  precio_m2: number | null;
+  estrato: number | null;
+  lat: number | null;
+  lng: number | null;
+  barrio: string;
+};
+
+const _listingsCache = new Map<string, Promise<StaticListing[]>>();
+
+function loadStaticListings(slug: string): Promise<StaticListing[]> {
+  if (!_listingsCache.has(slug)) {
+    _listingsCache.set(
+      slug,
+      fetch(`/data/listings_${slug}.json`)
+        .then((r) => r.json())
+        .catch(() => [] as StaticListing[]),
+    );
+  }
+  return _listingsCache.get(slug)!;
+}
+
 // Derive a 0-100 investment score from yield_anual (p25=5.6 p50=6.5 p75=7.6)
 function yieldToScore(y: number | null): number | null {
   if (y === null) return null;
@@ -136,8 +167,10 @@ function yieldToScore(y: number | null): number | null {
 
 function makeStatsBarrio(f: StaticFeature, stats: BarrioStats): ApiBarrio {
   const score = yieldToScore(stats.yield_anual);
+  const fakeId = 800_000 + stats.id;
+  _fakeBarrioIndex.set(fakeId, { slug: stats.slug_municipio.replace(/-/g, "_"), statsNombre: stats.nombre.toUpperCase() });
   return {
-    barrio_id: 800_000 + stats.id,
+    barrio_id: fakeId,
     nombre: f.properties.nombre,
     comuna: null,
     municipio: f.properties.municipio,
@@ -319,7 +352,31 @@ export function useListings(
 ) {
   return useQuery({
     queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null],
-    queryFn: async () => {
+    queryFn: async (): Promise<ApiListingsResponse> => {
+      // Static path for synthetic barrios (non-API municipalities)
+      const fake = barrioId != null ? _fakeBarrioIndex.get(barrioId) : undefined;
+      if (fake) {
+        const all = await loadStaticListings(fake.slug);
+        const filtered = all.filter(
+          (l) =>
+            l.barrio === fake.statsNombre &&
+            (!tipoOperacion || l.tipo_operacion === tipoOperacion),
+        );
+        const page = filtered.slice(offset, offset + limit);
+        return {
+          total: filtered.length,
+          listings: page.map((l) => ({
+            id: l.id,
+            tipo_operacion: l.tipo_operacion ?? undefined,
+            precio_cop: l.precio_cop,
+            precio_usd: l.precio_cop ? Math.round(l.precio_cop / 4200) : null,
+            area_m2: l.area_m2,
+            precio_m2: l.precio_m2,
+            fuente: "fincaraiz",
+          })),
+        };
+      }
+
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
       const url = `${API_ENDPOINTS.listings(barrioId!)}?${params}`;
