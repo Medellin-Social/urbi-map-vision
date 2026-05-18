@@ -24,6 +24,7 @@ export const API_ENDPOINTS = {
   oportunidades: `${API_BASE_URL}/oportunidades`,
   favoritos: `${API_BASE_URL}/favoritos`,
   historial: `${API_BASE_URL}/historial`,
+  ciudadStats: `${API_BASE_URL}/stats/ciudad`,
 } as const;
 
 export { API_BASE_URL };

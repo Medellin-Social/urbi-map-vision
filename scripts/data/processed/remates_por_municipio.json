@@ -1,0 +1,86 @@
+{
+  "Medellín": {
+    "municipio": "Medellín",
+    "n_remates_activos": 4,
+    "n_listings_referencia": 1445,
+    "remates_por_100_listings": 0.28,
+    "score_salud": 85,
+    "categoria_salud": "MUY SALUDABLE",
+    "n_remates_apto": 1,
+    "precio_base_promedio": 329034905,
+    "nota": "Zona financieramente estable. Baja presión de venta forzada.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "Bello": {
+    "municipio": "Bello",
+    "n_remates_activos": 1,
+    "n_listings_referencia": 1245,
+    "remates_por_100_listings": 0.08,
+    "score_salud": 85,
+    "categoria_salud": "MUY SALUDABLE",
+    "n_remates_apto": 0,
+    "precio_base_promedio": 33468400,
+    "nota": "Zona financieramente estable. Baja presión de venta forzada.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "Sabaneta": {
+    "municipio": "Sabaneta",
+    "n_remates_activos": 0,
+    "n_listings_referencia": 1374,
+    "remates_por_100_listings": null,
+    "score_salud": 100,
+    "categoria_salud": "SIN DATOS",
+    "n_remates_apto": 0,
+    "precio_base_promedio": null,
+    "nota": "Sin remates registrados en Sabaneta. Score neutro.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "Caldas": {
+    "municipio": "Caldas",
+    "n_remates_activos": 2,
+    "n_listings_referencia": 0,
+    "remates_por_100_listings": null,
+    "score_salud": 100,
+    "categoria_salud": "SIN DATOS",
+    "n_remates_apto": 1,
+    "precio_base_promedio": 234635099,
+    "nota": "Sin remates registrados en Caldas. Score neutro.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "La Estrella": {
+    "municipio": "La Estrella",
+    "n_remates_activos": 0,
+    "n_listings_referencia": 883,
+    "remates_por_100_listings": null,
+    "score_salud": 100,
+    "categoria_salud": "SIN DATOS",
+    "n_remates_apto": 0,
+    "precio_base_promedio": null,
+    "nota": "Sin remates registrados en La Estrella. Score neutro.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "Itagüí": {
+    "municipio": "Itagüí",
+    "n_remates_activos": 2,
+    "n_listings_referencia": 1371,
+    "remates_por_100_listings": 0.15,
+    "score_salud": 85,
+    "categoria_salud": "MUY SALUDABLE",
+    "n_remates_apto": 1,
+    "precio_base_promedio": 210671621,
+    "nota": "Zona financieramente estable. Baja presión de venta forzada.",
+    "fuente": "rematesjudiciales.click"
+  },
+  "Envigado": {
+    "municipio": "Envigado",
+    "n_remates_activos": 0,
+    "n_listings_referencia": 1269,
+    "remates_por_100_listings": null,
+    "score_salud": 100,
+    "categoria_salud": "SIN DATOS",
+    "n_remates_apto": 0,
+    "precio_base_promedio": null,
+    "nota": "Sin remates registrados en Envigado. Score neutro.",
+    "fuente": "rematesjudiciales.click"
+  }
+}

@@ -15,4 +15,4 @@ RUN npm run build
 
 EXPOSE 8080
 
-CMD sh -c "cd /app/dist/server && /app/node_modules/.bin/wrangler dev index.js --no-remote --port ${PORT:-8080} --ip 0.0.0.0 --no-bundle"
+CMD ["node", "/app/server.mjs"]

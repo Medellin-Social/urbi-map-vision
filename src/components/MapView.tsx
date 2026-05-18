@@ -2,10 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
-import { NEIGHBORHOODS, type Neighborhood } from "@/data/neighborhoods";
-import { OPPORTUNITIES } from "@/data/marketActivity";
 import { auth, MAP_STYLES } from "@/lib/auth";
-import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio } from "@/lib/adapters";
+import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useBarriosRaw } from "@/hooks/useBarrios";
 import {
   OPP_COLORS,
@@ -100,6 +98,7 @@ export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = f
         source: "barrios",
         paint: {
           "line-color": "#ffffff",
+          "line-opacity": 0.45,
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.5,
@@ -246,9 +245,6 @@ export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = f
       if (n) {
         const nb = barrioToNeighborhood(n);
         map.flyTo({ center: [nb.lng, nb.lat], zoom: 13.4, speed: 0.9 });
-      } else {
-        const fallback = NEIGHBORHOODS.find((x) => x.id === selectedId);
-        if (fallback) map.flyTo({ center: [fallback.lng, fallback.lat], zoom: 13.4, speed: 0.9 });
       }
     }
   }, [selectedId]);

@@ -1,12 +1,10 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Line,
-  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -20,7 +18,9 @@ import {
   ChevronRight,
   Coffee,
   GripVertical,
+  Leaf,
   Minus,
+  Shield,
   Train,
   Trees,
   ShoppingBag,
@@ -31,20 +31,13 @@ import {
   Target,
   X,
 } from "lucide-react";
-import {
-  CITY_STATS,
-  NEIGHBORHOODS,
-  type Neighborhood,
-  listingsFor,
-  priceTrend,
-  valorizacionHistorica,
-} from "@/data/neighborhoods";
-import { liquidityFor, LIQUIDITY_COLORS, opportunityForBarrio } from "@/data/marketActivity";
+import type { Neighborhood } from "@/lib/adapters";
+import { LIQUIDITY_COLORS } from "@/data/marketActivity";
 import { OPP_COLORS } from "@/config/mapColors";
 import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useListings } from "@/hooks/useBarrios";
+import { useListings, useCiudadStats } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 
 type View = "city" | "barrio" | "listings";
@@ -106,7 +99,7 @@ export function FloatingPanel({ selected, onClear }: Props) {
   useEffect(() => { sizeRef.current = size; }, [size]);
   useEffect(() => { posRef.current = pos; }, [pos]);
 
-  useMemo(() => {
+  useEffect(() => {
     if (selected) setView("barrio");
     else setView("city");
   }, [selected?.id]);
@@ -332,9 +325,25 @@ const transition = {
 
 /* ------------- City overview ------------- */
 
-function CityOverview({ goal }: { goal?: ReturnType<typeof auth.get> extends infer U ? (U extends { goal?: infer G } ? G : never) : never }) {
-  const top5 = [...NEIGHBORHOODS].sort((a, b) => b.yield - a.yield).slice(0, 5);
-  const best = top5[0];
+function goalToPerfil(goal?: Goal | null): string | undefined {
+  if (goal === "airbnb") return "airbnb";
+  if (goal === "mixto") return "nomadas";
+  if (goal === "renta-larga" || goal === "valorizacion") return "largo_plazo";
+  return undefined;
+}
+
+function CityOverview({ goal }: { goal?: Goal }) {
+  const perfil = goalToPerfil(goal);
+  const { data: stats } = useCiudadStats(perfil);
+
+  const chartData = stats?.top5.map((b) => ({
+    name: shortName(b.nombre ?? ""),
+    yield: b.yield_bruto_pct ?? 0,
+  })) ?? [];
+
+  const bestName = stats?.top5[0]?.nombre
+    ? stats.top5[0].nombre.split(" ").map((w) => w[0].toUpperCase() + w.slice(1).toLowerCase()).join(" ")
+    : "—";
 
   return (
     <div className="space-y-4">
@@ -348,16 +357,16 @@ function CityOverview({ goal }: { goal?: ReturnType<typeof auth.get> extends inf
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <Metric label="Yield promedio" value={`${CITY_STATS.yield_promedio}%`} accent="cyan" />
-        <Metric label="Barrios analizados" value={String(CITY_STATS.barrios_analizados)} />
-        <Metric label="Precio m² mediana" value={formatCOP(CITY_STATS.precio_m2_mediana)} />
-        <Metric label="Mejor zona perfil" value={best.nombre} accent="green" />
+        <Metric label="Yield promedio" value={stats ? `${stats.yield_promedio ?? "—"}%` : "…"} accent="cyan" />
+        <Metric label="Barrios analizados" value={stats ? String(stats.barrios_analizados) : "…"} />
+        <Metric label="Precio m² mediana" value={stats?.precio_m2_mediana ? formatCOP(stats.precio_m2_mediana) : "…"} />
+        <Metric label="Mejor zona perfil" value={bestName} accent="green" />
       </div>
 
       <Section title="Top 5 barrios por yield">
         <div className="h-40">
           <ResponsiveContainer>
-            <BarChart data={top5.map((n) => ({ name: shortName(n.nombre), yield: n.yield }))} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
+            <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
@@ -376,6 +385,9 @@ function CityOverview({ goal }: { goal?: ReturnType<typeof auth.get> extends inf
             </BarChart>
           </ResponsiveContainer>
         </div>
+        {!stats && (
+          <div className="mt-1 h-1 w-full animate-pulse rounded-full bg-primary/20" />
+        )}
       </Section>
 
       <div className="rounded-xl border border-primary/40 bg-primary/5 p-3">
@@ -398,47 +410,60 @@ function shortName(s: string) {
 
 /* ------------- Barrio detail ------------- */
 
-function mockConnAmenities(n: Neighborhood) {
+// ── Valorización DANE 2015-2025 ────────────────────────────────────────────────
+const DANE_VARS = [11.9, 7.6, 7.8, 10.6, 8.7, 7.0, 7.1, 9.5, 15.9, 10.1, 8.3];
+const VALORIZ_MULT: Record<number, number> = { 5: 1.15, 4: 1.05, 3: 1.0 };
+
+function calcValorizStats(estrato: number) {
+  const mult = VALORIZ_MULT[estrato] ?? 0.9;
+  // Compound growth 2015→2025
+  const acumulado = DANE_VARS.reduce(
+    (acc, v) => (1 + acc / 100) * (1 + (v * mult) / 100) * 100 - 100,
+    0,
+  );
+  const ultimoAnio = DANE_VARS[DANE_VARS.length - 1] * mult;
+  // Compound 5yr projection from last 5yr DANE avg
+  const avg5 = DANE_VARS.slice(-5).reduce((s, v) => s + v, 0) / 5;
+  const proj5 = (Math.pow(1 + (avg5 * mult) / 100, 5) - 1) * 100;
   return {
-    cafes: Math.round(3 + n.estrato * 1.5 + (n.id % 4)),
-    coworks: Math.round(1 + n.estrato * 0.7 + (n.id % 3)),
+    acumulado: Math.round(acumulado),
+    ultimoAnio: parseFloat(ultimoAnio.toFixed(1)),
+    proj5: Math.round(proj5),
   };
 }
 
-const ESTADO_PRECIO_STYLE: Record<string, { bg: string; badge: string }> = {
-  BAJO:   { bg: "#99CDD8", badge: "✅ oportunidad" },
-  NORMAL: { bg: "#DAEBE3", badge: "✅ precio justo" },
-  SOBRE:  { bg: "#F3C3B2", badge: "⚠️ precio alto" },
+const SEGURIDAD_COLORS: Record<string, string> = {
+  "ALTA":     "#10b981",
+  "MEDIA":    "#00d4ff",
+  "BAJA":     "#f59e0b",
+  "MUY BAJA": "#ef4444",
+  "SIN DATOS": "#6b7280",
+};
+
+const VERDE_COLORS: Record<string, string> = {
+  "ALTA":    "#10b981",
+  "MEDIA":   "#22c55e",
+  "BAJA":    "#f59e0b",
+  "MÍNIMA":  "#ef4444",
+  "SIN DATOS": "#6b7280",
+};
+
+const SALUD_COLORS: Record<string, string> = {
+  "MUY SALUDABLE": "#10b981",
+  "SALUDABLE":     "#00d4ff",
+  "PRECAUCIÓN":    "#f59e0b",
+  "ALERTA":        "#ef4444",
 };
 
 function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
-  const trend = useMemo(() => priceTrend(n.id), [n.id]);
-  const last = trend[trend.length - 1].precio;
-  const avg = trend.reduce((a, b) => a + b.precio, 0) / trend.length;
-  const diffPct = ((last - avg) / avg) * 100;
-  const below = diffPct < 0;
-  const varAnual = trend.length >= 2
-    ? ((trend[trend.length - 1].precio - trend[0].precio) / trend[0].precio) * 100
-    : 0;
-  const valoriz = useMemo(() => valorizacionHistorica(n.id, n.estrato), [n.id, n.estrato]);
-  const { cafes, coworks } = mockConnAmenities(n);
   const ylabel = yieldLabel(n.yield);
+  const valoriz = calcValorizStats(n.estrato);
+  const fmtConn = (v: number | null | undefined, suffix: string) =>
+    v != null ? `${v} ${suffix}` : "Sin datos";
 
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
   const apiListings = listingsData?.listings ?? [];
-  const listings: ApiListing[] = apiListings.length > 0
-    ? apiListings.slice(0, 3)
-    : listingsFor(n).slice(0, 3).map((l) => ({
-        id: l.id as unknown as number,
-        tipo_operacion: l.tipo_operacion,
-        tipo_inmueble: l.tipo_inmueble,
-        precio_cop: l.precio,
-        area_m2: l.area_m2,
-        precio_m2: l.precio_m2,
-        habitaciones: l.habitaciones,
-        banos: l.banos,
-        buena_oferta: l.buena_oferta,
-      }));
+  const listings: ApiListing[] = apiListings.slice(0, 3);
   const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
 
   // Log view to history once per neighborhood
@@ -491,18 +516,53 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         <Metric label="Años recupero" value={`${n.anos_recupero.toFixed(1)} años`} />
       </div>
 
+      <Section title="Corrección inmobiliaria">
+        <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Precio publicado:</span>
+            <span>{formatCOP(n.precio_m2)}/m²</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Precio negociación:</span>
+            <span className="text-success">~{formatCOP(Math.round(n.precio_m2 * 0.97))}/m² <span className="text-muted-foreground/60">(-3%)</span></span>
+          </div>
+          <hr className="border-border/40" />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Arriendo publicado:</span>
+            <span>{formatCOP(n.arriendo)}/mes</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Arriendo neto:</span>
+            <span className="text-success">~{formatCOP(Math.round(n.arriendo * 0.90))}/mes <span className="text-muted-foreground/60">(-10%)</span></span>
+          </div>
+          <hr className="border-border/40" />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Yield publicado:</span>
+            <span>{formatPct(n.yield)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Yield real est.:</span>
+            <span className="text-success">{formatPct(Math.round(n.yield * (0.90 / 0.97) * 10) / 10)}</span>
+          </div>
+        </div>
+        <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/70">
+          ℹ️ Precio de negociación estimado descontando comisión inmobiliaria (3% venta, 10% arriendo).
+          Dato real disponible próximamente con escrituras SNR.
+        </p>
+      </Section>
+
       <Section title="Conectividad">
         <div className="space-y-2">
           {goal === "airbnb" ? (
             <>
               <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
               <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
-              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={`${cafes} locales`} />
+              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
             </>
           ) : goal === "mixto" ? (
             <>
-              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={`${cafes} locales`} />
-              <ConnRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Coworking en 1km" value={`${coworks} espacios`} />
+              <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
+              <ConnRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Coworking en 1km" value={fmtConn(n.n_coworking_1km, "espacios")} />
               <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
             </>
           ) : goal === "renta-larga" ? (
@@ -521,75 +581,35 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         </div>
       </Section>
 
+      <SeguridadSection n={n} />
+      <VerdeSection n={n} />
       <LiquiditySection n={n} />
-      <OpportunityBanner n={n} />
 
-      <Section title="Valorización histórica · 2015–2025">
-        <div className="h-36">
-          <ResponsiveContainer>
-            <LineChart data={valoriz} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
-              <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="year" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
-              <YAxis
-                width={44}
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-                domain={[0, "dataMax + 10"]}
-                tickFormatter={(v: number) => `+${Math.round(v)}%`}
-              />
-              <Tooltip
-                contentStyle={tooltipStyle}
-                cursor={{ stroke: "rgba(255,255,255,0.15)", strokeWidth: 1 }}
-                content={({ active, payload, label }) => {
-                  if (!active || !payload?.length) return null;
-                  const row = payload[0].payload as { year: string; acumulado: number; varAnual: number };
-                  if (row.year === "2015") return (
-                    <div style={tooltipStyle} className="px-2.5 py-1.5 text-[11px]">
-                      <div className="font-semibold">2015</div>
-                      <div>Base: 0%</div>
-                    </div>
-                  );
-                  return (
-                    <div style={tooltipStyle} className="px-2.5 py-1.5 text-[11px] space-y-0.5">
-                      <div className="font-semibold">{label}</div>
-                      <div>Acumulado desde 2015: +{row.acumulado.toFixed(1)}%</div>
-                      <div>Ese año: +{row.varAnual.toFixed(1)}%</div>
-                      <div className="text-muted-foreground/70">Fuente: DANE IPVN</div>
-                    </div>
-                  );
-                }}
-              />
-              <Line
-                type="monotone"
-                dataKey="acumulado"
-                stroke="#00d4ff"
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4, fill: "#00d4ff", stroke: "#0f1a1f", strokeWidth: 2 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-        {(() => {
-          const estadoActual = (n.estado_precio ?? (below ? "BAJO" : "SOBRE")).toUpperCase();
-          const ep = ESTADO_PRECIO_STYLE[estadoActual] ?? ESTADO_PRECIO_STYLE.SOBRE;
-          const pct = `${diffPct >= 0 ? "+" : ""}${diffPct.toFixed(1)}%`;
-          return (
-            <div
-              className="mt-2 inline-flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium"
-              style={{ background: ep.bg, color: "#1a2e35" }}
-            >
-              {n.estado_precio
-                ? `${estadoActual} · ${ep.badge}`
-                : `${estadoActual} promedio (${pct}) · ${ep.badge}`}
+      <Section title="📈 Valorización histórica">
+        <div className="rounded-xl border border-border bg-background/30 p-3 space-y-2.5">
+          <div className="grid grid-cols-2 gap-2">
+            <div className="text-center">
+              <div className="font-display text-xl font-bold text-primary">+{valoriz.acumulado}%</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">desde 2015</div>
             </div>
-          );
-        })()}
+            <div className="text-center">
+              <div className="font-display text-xl font-bold text-success">+{valoriz.ultimoAnio}%</div>
+              <div className="text-[10px] text-muted-foreground mt-0.5">último año</div>
+            </div>
+          </div>
+          <div className="border-t border-border/40 pt-2 text-center text-xs text-muted-foreground">
+            Proyección 5 años:{" "}
+            <span className="font-semibold text-foreground">+{valoriz.proj5}%</span>
+          </div>
+        </div>
         <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-          Fuente: DANE IPVN + Banrep IPVU · Base 2015=0% · Ajustado por estrato
+          Fuente: DANE IPVN · Ajustado por estrato {n.estrato}
         </p>
       </Section>
+
+      <SaludFinancieraSection n={n} />
+
+      <OpportunityBanner n={n} />
 
       <Link
         to="/calculadora"
@@ -616,6 +636,96 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
           Ver todos los listings <ArrowRight className="h-3 w-3" />
         </button>
       </Section>
+    </div>
+  );
+}
+
+/* ------------- Seguridad ------------- */
+
+function SeguridadSection({ n }: { n: Neighborhood }) {
+  const cat = n.seguridad_categoria ?? "SIN DATOS";
+  const score = n.seguridad_score;
+  const nota = n.seguridad_nota;
+  const color = SEGURIDAD_COLORS[cat] ?? SEGURIDAD_COLORS["SIN DATOS"];
+  if (score === null || score === undefined) return null;
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        <Shield className="h-3 w-3 text-primary" /> Seguridad
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: `${color}66`, background: `${color}10` }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
+            {cat}
+          </span>
+          <span className="text-[11px] font-semibold" style={{ color }}>{score}/100</span>
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+          <motion.div initial={{ width: 0 }} animate={{ width: `${score}%` }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full rounded-full" style={{ background: color }} />
+        </div>
+        {nota && <p className="mt-2 text-[11px] text-muted-foreground">{nota}</p>}
+      </motion.div>
+    </div>
+  );
+}
+
+/* ------------- Índice verde ------------- */
+
+function VerdeSection({ n }: { n: Neighborhood }) {
+  const pct = n.verde_pct;
+  const cat = n.verde_categoria ?? "SIN DATOS";
+  const color = VERDE_COLORS[cat] ?? VERDE_COLORS["SIN DATOS"];
+  if (pct === null || pct === undefined) return null;
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        <Leaf className="h-3 w-3 text-success" /> Índice verde
+      </div>
+      <div className="rounded-xl border p-3" style={{ borderColor: `${color}66`, background: `${color}10` }}>
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
+            {cat}
+          </span>
+          <span className="text-[11px] font-semibold" style={{ color }}>{pct.toFixed(1)}%</span>
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+          <div className="h-full rounded-full transition-all duration-700" style={{ width: `${Math.min(pct, 100)}%`, background: color }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ------------- Salud financiera ------------- */
+
+function SaludFinancieraSection({ n }: { n: Neighborhood }) {
+  const remates = n.n_remates_municipio ?? 0;
+  const cat = remates === 0 ? "MUY SALUDABLE" : remates <= 3 ? "SALUDABLE" : remates <= 8 ? "PRECAUCIÓN" : "ALERTA";
+  const color = SALUD_COLORS[cat] ?? "#6b7280";
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        🏦 Salud financiera
+      </div>
+      <div className="rounded-xl border p-3" style={{ borderColor: `${color}66`, background: `${color}10` }}>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
+            {cat}
+          </span>
+          <span className="text-xs text-muted-foreground">
+            {remates === 0
+              ? "Sin remates activos ✅"
+              : `${remates} remate${remates !== 1 ? "s" : ""} activo${remates !== 1 ? "s" : ""} en ${n.municipio}`}
+          </span>
+        </div>
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground/70">Fuente: avisos judiciales públicos</p>
     </div>
   );
 }
@@ -665,37 +775,60 @@ function ListingCard({ l }: { l: ApiListing }) {
   );
 }
 
+const PAGE_SIZE = 100;
+
 function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
-  const { data: listingsData, isLoading } = useListings(n.id, 100);
   const [op, setOp] = useState<"venta" | "arriendo">("venta");
-  const [areaMin, setAreaMin] = useState(0);
+  // null = no filter active (show all)
+  const [precioMaxFilter, setPrecioMaxFilter] = useState<number | null>(null);
+  const [areaMinFilter, setAreaMinFilter] = useState<number | null>(null);
+  const [offset, setOffset] = useState(0);
+  const [accumulated, setAccumulated] = useState<ApiListing[]>([]);
 
-  const allApi = listingsData?.listings ?? [];
-  // Fall back to mock only when API returned but empty
-  const source: ApiListing[] = allApi.length > 0
-    ? allApi
-    : listingsFor(n).map((l) => ({
-        id: l.id as unknown as number,
-        tipo_operacion: l.tipo_operacion,
-        tipo_inmueble: l.tipo_inmueble,
-        precio_cop: l.precio,
-        area_m2: l.area_m2,
-        precio_m2: l.precio_m2,
-        habitaciones: l.habitaciones,
-        banos: l.banos,
-        buena_oferta: l.buena_oferta,
-      }));
+  // Fetch filtered by op — prevents arriendo filling first page when on venta tab
+  const { data: listingsData, isLoading, isFetching } = useListings(n.id, PAGE_SIZE, offset, op);
 
-  const inOp = source.filter((l) => l.tipo_operacion === op);
-  const maxPrecio = inOp.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 1);
-  const [precioMax, setPrecioMax] = useState(() => maxPrecio);
+  // Append incoming page
+  useEffect(() => {
+    if (!listingsData?.listings.length) return;
+    if (offset === 0) {
+      setAccumulated(listingsData.listings);
+    } else {
+      setAccumulated((prev) => {
+        const existingIds = new Set(prev.map((l) => l.id));
+        const fresh = listingsData.listings.filter((l) => !existingIds.has(l.id));
+        return [...prev, ...fresh];
+      });
+    }
+  }, [listingsData, offset]);
 
-  // Reset price filter when tab or data changes
-  useMemo(() => { setPrecioMax(maxPrecio); }, [op, maxPrecio]);
+  // Reset on barrio or tab change
+  useEffect(() => {
+    setOffset(0);
+    setAccumulated([]);
+    setPrecioMaxFilter(null);
+    setAreaMinFilter(null);
+  }, [n.id, op]);
 
-  const filtered = inOp.filter(
-    (l) => (l.precio_cop ?? 0) <= precioMax && (l.area_m2 ?? 0) >= areaMin
+  const total = listingsData?.total ?? 0;
+  const hasMore = accumulated.length < total;
+
+  // Derive range bounds from actual data
+  const maxPrecioData = accumulated.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 0);
+  const maxAreaData = Math.ceil(accumulated.reduce((m, l) => Math.max(m, l.area_m2 ?? 0), 50) / 10) * 10;
+
+  // Active slider values — fall back to full range when no filter set
+  const sliderPrecio = precioMaxFilter ?? maxPrecioData;
+  const sliderArea = areaMinFilter ?? 0;
+
+  const filtered = accumulated.filter(
+    (l) =>
+      (precioMaxFilter === null || (l.precio_cop ?? 0) <= precioMaxFilter) &&
+      (areaMinFilter === null || (l.area_m2 ?? 0) >= areaMinFilter)
   );
+
+  // True only during the first fetch — false once query resolves (even with 0 results)
+  const initialLoading = isLoading && accumulated.length === 0;
 
   return (
     <div className="space-y-4">
@@ -709,7 +842,9 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
       <div>
         <h2 className="font-display text-xl font-semibold">Listings · {titleCase(n.nombre)}</h2>
         <p className="mt-0.5 text-xs text-muted-foreground">
-          {isLoading ? "Cargando…" : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}${listingsData ? ` de ${listingsData.total} totales` : ""}`}
+          {isLoading && accumulated.length === 0
+            ? "Cargando…"
+            : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""} · ${accumulated.length} de ${total} cargados`}
         </p>
       </div>
 
@@ -726,42 +861,66 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
       </div>
 
       <div className="space-y-3">
-        <FilterRow label={`Precio máx · ${formatCOP(precioMax)}`}>
+        <FilterRow
+          label={
+            initialLoading
+              ? "Precio máx · cargando…"
+              : maxPrecioData > 0
+              ? `Precio máx · ${formatCOP(sliderPrecio)}`
+              : "Precio máx · sin datos"
+          }
+          onReset={precioMaxFilter !== null ? () => setPrecioMaxFilter(null) : undefined}
+        >
           <input
             type="range"
             min={0}
-            max={maxPrecio}
-            step={Math.max(1_000_000, Math.round(maxPrecio / 50))}
-            value={precioMax}
-            onChange={(e) => setPrecioMax(Number(e.target.value))}
-            className="w-full accent-[#00d4ff]"
+            max={maxPrecioData || 1}
+            step={5_000_000}
+            value={sliderPrecio}
+            disabled={initialLoading || maxPrecioData === 0}
+            onChange={(e) => setPrecioMaxFilter(Number(e.target.value))}
+            className="w-full accent-[#00d4ff] disabled:opacity-40"
           />
         </FilterRow>
-        <FilterRow label={`Área mín · ${areaMin} m²`}>
+        <FilterRow
+          label={`Área mín · ${sliderArea} m²`}
+          onReset={areaMinFilter !== null && areaMinFilter > 0 ? () => setAreaMinFilter(null) : undefined}
+        >
           <input
             type="range"
             min={0}
-            max={200}
+            max={maxAreaData || 200}
             step={5}
-            value={areaMin}
-            onChange={(e) => setAreaMin(Number(e.target.value))}
-            className="w-full accent-[#00d4ff]"
+            value={sliderArea}
+            disabled={initialLoading}
+            onChange={(e) => setAreaMinFilter(Number(e.target.value))}
+            className="w-full accent-[#00d4ff] disabled:opacity-40"
           />
         </FilterRow>
       </div>
 
-      {isLoading && (
+      {(isLoading || isFetching) && (
         <div className="h-1 w-full animate-pulse rounded-full bg-primary/20" />
       )}
 
       <div className="space-y-2">
         {filtered.map((l) => <ListingCard key={l.id} l={l} />)}
-        {!isLoading && filtered.length === 0 && (
+        {!isLoading && filtered.length === 0 && accumulated.length > 0 && (
           <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-muted-foreground">
             No hay listings con estos filtros.
           </div>
         )}
       </div>
+
+      {hasMore && (
+        <button
+          onClick={() => setOffset(accumulated.length)}
+          disabled={isFetching}
+          className="mt-2 inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20 disabled:opacity-50"
+        >
+          {isFetching ? "Cargando…" : `Cargar más · ${total - accumulated.length} restantes`}
+        </button>
+      )}
     </div>
   );
 }
@@ -818,10 +977,17 @@ function ConnRow({ icon, label, value }: { icon: React.ReactNode; label: string;
   );
 }
 
-function FilterRow({ label, children }: { label: string; children: React.ReactNode }) {
+function FilterRow({ label, children, onReset }: { label: string; children: React.ReactNode; onReset?: () => void }) {
   return (
     <div>
-      <div className="mb-1 text-[11px] text-muted-foreground">{label}</div>
+      <div className="mb-1 flex items-center justify-between">
+        <span className="text-[11px] text-muted-foreground">{label}</span>
+        {onReset && (
+          <button onClick={onReset} className="text-[10px] text-primary hover:underline">
+            resetear
+          </button>
+        )}
+      </div>
       {children}
     </div>
   );
@@ -846,14 +1012,11 @@ const tooltipStyle: React.CSSProperties = {
 /* ------------- Liquidity / Opportunity ------------- */
 
 function LiquiditySection({ n }: { n: Neighborhood }) {
-  // Prefer real API liquidez data; fall back to mock lookup
   const apiLiq = n.liquidez_api;
-  const liq = apiLiq ? null : liquidityFor(n);
-  const cat = (apiLiq?.categoria ?? liq?.cat ?? "MEDIA") as import("@/data/marketActivity").LiquidityCat;
+  const cat = (apiLiq?.categoria ?? "MEDIA") as import("@/data/marketActivity").LiquidityCat;
   const colors = LIQUIDITY_COLORS[cat] ?? LIQUIDITY_COLORS["MEDIA"];
-  const score = apiLiq?.score ?? liq?.score ?? 50;
-  const tiempoEstimado = apiLiq?.tiempo_estimado_venta ?? liq?.tiempoEstimado ?? "—";
-  const label = liq?.label ?? cat;
+  const score = apiLiq?.score ?? 50;
+  const tiempoEstimado = apiLiq?.tiempo_estimado_venta ?? "—";
   const [showInfo, setShowInfo] = useState(false);
 
   return (
@@ -880,7 +1043,7 @@ function LiquiditySection({ n }: { n: Neighborhood }) {
       >
         <div className="flex items-center justify-between">
           <div className="text-sm font-bold uppercase tracking-wider" style={{ color: colors.border }}>
-            {cat} — {label}
+            {cat}
           </div>
           <div className="text-[11px] font-semibold" style={{ color: colors.border }}>
             {score}/100
@@ -898,23 +1061,6 @@ function LiquiditySection({ n }: { n: Neighborhood }) {
             style={{ background: colors.border }}
           />
         </div>
-
-        {liq && (
-          <div className="mt-3 grid grid-cols-1 gap-1 text-[11px]">
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">📊 Listings activos</span>
-              <span className="font-semibold">{liq.n}</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">🕐 Tiempo prom. publicado</span>
-              <span className="font-semibold">{liq.dias}d</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">🔄 Listings frescos (&lt;30d)</span>
-              <span className="font-semibold">{liq.frescos}%</span>
-            </div>
-          </div>
-        )}
       </motion.div>
 
       <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/80">
@@ -971,51 +1117,28 @@ const OPP_EMOJIS: Record<string, string> = {
 };
 
 function OpportunityBanner({ n }: { n: Neighborhood }) {
-  // Prefer real API oportunidad; fall back to hardcoded mock
   const apiOpp = n.oportunidad;
-  if (apiOpp !== undefined) {
-    if (!apiOpp?.detectada) return null;
-    const tipo = (apiOpp.tipo ?? "ALTO RENDIMIENTO").toUpperCase();
-    const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#0077B6";
-    const emoji = OPP_EMOJIS[tipo] ?? "📊";
-    return (
-      <motion.div
-        initial={{ opacity: 0, scale: 0.96 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.3 }}
-        className="rounded-xl border p-3"
-        style={{ borderColor: color, background: `${color}15` }}
-      >
-        <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color }}>
-          <Target className="h-3 w-3" /> {emoji} Oportunidad detectada
-        </div>
-        <div className="mt-1 text-sm font-semibold" style={{ color }}>
-          {tipo}
-        </div>
-        {apiOpp.descripcion && (
-          <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{apiOpp.descripcion}"</p>
-        )}
-      </motion.div>
-    );
-  }
-  // Fallback: hardcoded mock for NEIGHBORHOODS without API data
-  const opp = opportunityForBarrio(n);
-  if (!opp) return null;
+  if (!apiOpp?.detectada) return null;
+  const tipo = (apiOpp.tipo ?? "ALTO RENDIMIENTO").toUpperCase();
+  const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#0077B6";
+  const emoji = OPP_EMOJIS[tipo] ?? "📊";
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.96 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.3 }}
       className="rounded-xl border p-3"
-      style={{ borderColor: opp.color, background: `${opp.color}15` }}
+      style={{ borderColor: color, background: `${color}15` }}
     >
-      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color: opp.color }}>
-        <Target className="h-3 w-3" /> {opp.emoji} Oportunidad detectada
+      <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-widest" style={{ color }}>
+        <Target className="h-3 w-3" /> {emoji} Oportunidad detectada
       </div>
-      <div className="mt-1 text-sm font-semibold" style={{ color: opp.color }}>
-        {opp.tipo}
+      <div className="mt-1 text-sm font-semibold" style={{ color }}>
+        {tipo}
       </div>
-      <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{opp.descripcion}"</p>
+      {apiOpp.descripcion && (
+        <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{apiOpp.descripcion}"</p>
+      )}
     </motion.div>
   );
 }

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ChevronDown, Flame, MapPin } from "lucide-react";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";
-import type { Neighborhood } from "@/data/neighborhoods";
+import type { Neighborhood } from "@/lib/adapters";
 import { useOportunidades } from "@/hooks/useOportunidades";
 import { useBarriosRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood } from "@/lib/adapters";

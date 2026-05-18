@@ -1,16 +1,6 @@
 import { createFileRoute, redirect, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  Cell,
-} from "recharts";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -59,6 +49,89 @@ function tipoToApi(t: Tipo): "airbnb" | "renta_larga" | "renta_media" {
   if (t === "larga") return "renta_larga";
   if (t === "media") return "renta_media";
   return "airbnb";
+}
+
+function scoreToRating(score: number): { label: string; stars: number; toneClass: string } {
+  if (score >= 80) return { label: "EXCELENTE", stars: 5, toneClass: "from-success/30 to-success/5 border-success/50 text-success" };
+  if (score >= 60) return { label: "BUENO", stars: 4, toneClass: "from-primary/30 to-primary/5 border-primary/50 text-primary" };
+  if (score >= 40) return { label: "MODERADO", stars: 3, toneClass: "from-warning/30 to-warning/5 border-warning/50 text-warning" };
+  if (score >= 20) return { label: "BAJO", stars: 2, toneClass: "from-orange-500/30 to-orange-500/5 border-orange-500/50 text-orange-400" };
+  return { label: "MUY BAJO", stars: 1, toneClass: "from-danger/30 to-danger/5 border-danger/50 text-danger" };
+}
+
+function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizonte: Horizonte }) {
+  const tasa = r.valorizacion.tasa_anual_pct / 100;
+  const inicial = r.presupuesto_cop;
+  const puntos: { label: string; valor: number }[] = [
+    { label: "Hoy", valor: inicial },
+    { label: "Año 1", valor: Math.round(inicial * (1 + tasa)) },
+    { label: "Año 3", valor: r.valorizacion.valor_3anos_cop },
+    { label: "Año 5", valor: r.valorizacion.valor_5anos_cop },
+  ];
+  if (horizonte === 10) {
+    puntos.push({ label: "Año 10", valor: Math.round(inicial * Math.pow(1 + tasa, 10)) });
+  }
+  const ingresosNetos = r.valorizacion.retorno_total_5anos_cop - r.valorizacion.ganancia_5anos_cop;
+
+  return (
+    <Card>
+      <CardTitle>Valorización proyectada · {r.valorizacion.tasa_anual_pct.toFixed(1)}%/año</CardTitle>
+      <div className="mt-3 overflow-x-auto">
+        <table className="w-full text-center text-sm">
+          <thead>
+            <tr>
+              {puntos.map((p, i) => (
+                <th key={i} className="pb-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                  {p.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              {puntos.map((p, i) => (
+                <td key={i} className="px-1 py-1">
+                  <div
+                    className={`font-display text-sm font-semibold ${
+                      i === puntos.length - 1
+                        ? "text-primary"
+                        : i === 0
+                        ? "text-muted-foreground"
+                        : "text-foreground"
+                    }`}
+                  >
+                    {formatCOP(p.valor)}
+                  </div>
+                </td>
+              ))}
+            </tr>
+            <tr>
+              {puntos.map((p, i) => {
+                if (i === 0) return <td key={i} />;
+                const ganancia = p.valor - inicial;
+                const pct = ((ganancia / inicial) * 100).toFixed(1);
+                return (
+                  <td key={i} className="px-1 pb-1 text-center">
+                    <div className="text-[11px] text-success">+{formatCOP(ganancia)}</div>
+                    <div className="text-[10px] text-muted-foreground">(+{pct}%)</div>
+                  </td>
+                );
+              })}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
+        <TrendingUp className="h-3 w-3 shrink-0" />
+        <span>
+          +{formatCOP(ingresosNetos)} en ingresos netos (5 años) · Retorno total:{" "}
+          <span className="font-semibold text-foreground">
+            {formatCOP(r.valorizacion.retorno_total_5anos_cop)}
+          </span>
+        </span>
+      </div>
+    </Card>
+  );
 }
 
 function CalculadoraPage() {
@@ -295,47 +368,13 @@ function CalculadoraPage() {
 /* ---------- Results ---------- */
 
 function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Horizonte }) {
-  const rating = r.rating_oportunidad;
-
-  const ratingTone =
-    rating === "EXCELENTE"
-      ? "from-success/30 to-success/5 border-success/50 text-success"
-      : rating === "BUENA OPORTUNIDAD"
-      ? "from-primary/30 to-primary/5 border-primary/50 text-primary"
-      : rating === "MODERADA"
-      ? "from-warning/30 to-warning/5 border-warning/50 text-warning"
-      : "from-danger/30 to-danger/5 border-danger/50 text-danger";
-
-  const ratingEmoji =
-    rating === "EXCELENTE"
-      ? "🟢"
-      : rating === "BUENA OPORTUNIDAD"
-      ? "🔵"
-      : rating === "MODERADA"
-      ? "🟡"
-      : "🔴";
+  const { label: ratingLabel, stars, toneClass } = scoreToRating(r.score_oportunidad);
 
   const tipoLabel = {
     airbnb: "Airbnb",
     renta_larga: "Arriendo largo",
     renta_media: "Renta media",
   }[r.tipo_inversion] ?? r.tipo_inversion;
-
-  const valorizacionData = useMemo(() => {
-    const rows = [
-      { label: "Hoy", valor: r.presupuesto_cop },
-      { label: "3 años", valor: r.valorizacion.valor_3anos_cop },
-      { label: "5 años", valor: r.valorizacion.valor_5anos_cop },
-    ];
-    if (horizonte === 10) {
-      const tasa = r.valorizacion.tasa_anual_pct / 100;
-      rows.push({
-        label: "10 años",
-        valor: Math.round(r.presupuesto_cop * Math.pow(1 + tasa, 10)),
-      });
-    }
-    return rows;
-  }, [r, horizonte]);
 
   const ingresosNetosAcum5 =
     r.valorizacion.retorno_total_5anos_cop - r.valorizacion.ganancia_5anos_cop;
@@ -363,13 +402,20 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
         </motion.div>
       )}
 
-      {/* Header */}
-      <div className={`rounded-2xl border bg-gradient-to-br ${ratingTone} p-5`}>
-        <div className="text-[11px] font-bold uppercase tracking-widest opacity-80">
-          {ratingEmoji} {rating}
-        </div>
-        <div className="mt-1 font-display text-xl font-semibold text-foreground">
+      {/* Rating header */}
+      <div className={`rounded-2xl border bg-gradient-to-br ${toneClass} p-5`}>
+        <div className="text-[11px] font-medium uppercase tracking-widest opacity-60">
           {titleCase(r.barrio)} · {tipoLabel} · {formatCOP(r.presupuesto_cop)}
+        </div>
+        <div className="mt-2 flex items-baseline gap-3">
+          <span className="text-2xl tracking-widest">
+            {"★".repeat(stars)}
+            <span className="opacity-20">{"★".repeat(5 - stars)}</span>
+          </span>
+          <span className="font-display text-xl font-bold">{ratingLabel}</span>
+        </div>
+        <div className="mt-1 text-[10px] opacity-60">
+          Calidad de inversión · Mayor score = mejor oportunidad
         </div>
       </div>
 
@@ -402,67 +448,8 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
         />
       </div>
 
-      {/* Row 2 - Valorización */}
-      <Card>
-        <CardTitle>Valorización proyectada</CardTitle>
-        <div className="mt-3 h-40">
-          <ResponsiveContainer>
-            <BarChart
-              data={valorizacionData}
-              margin={{ top: 8, right: 8, left: -16, bottom: 0 }}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                stroke="rgba(255,255,255,0.06)"
-                vertical={false}
-              />
-              <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tick={{ fontSize: 10, fill: "#9ca3af" }}
-                axisLine={false}
-                tickLine={false}
-                tickFormatter={(v) => `${(v / 1_000_000).toFixed(0)}M`}
-              />
-              <Tooltip
-                cursor={{ fill: "rgba(0,212,255,0.06)" }}
-                contentStyle={{
-                  background: "rgba(17,24,39,0.95)",
-                  border: "1px solid rgba(0,212,255,0.3)",
-                  borderRadius: 8,
-                  fontSize: 12,
-                }}
-                formatter={(v: unknown) => [formatCOP(Number(v)), "Valor"]}
-              />
-              <Bar dataKey="valor" radius={[6, 6, 0, 0]}>
-                {valorizacionData.map((_, i) => (
-                  <Cell
-                    key={i}
-                    fill={
-                      i === 0
-                        ? "#374151"
-                        : i === valorizacionData.length - 1
-                        ? "#00d4ff"
-                        : "#7c3aed"
-                    }
-                  />
-                ))}
-              </Bar>
-            </BarChart>
-          </ResponsiveContainer>
-        </div>
-        <div className="mt-2 inline-flex items-center gap-1.5 rounded-md bg-success/10 px-2 py-1 text-xs font-medium text-success">
-          <TrendingUp className="h-3 w-3" /> +{formatCOP(r.valorizacion.ganancia_5anos_cop)} en
-          valorización (5 años)
-        </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">
-          Tasa histórica: {r.valorizacion.tasa_anual_pct.toFixed(1)}%/año
-        </div>
-      </Card>
+      {/* Row 2 - Timeline valorización */}
+      <ValorizacionTimeline r={r} horizonte={horizonte} />
 
       {/* Row 3 - Retorno total */}
       <Card>

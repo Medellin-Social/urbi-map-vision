@@ -1,5 +1,40 @@
-import type { Neighborhood } from "@/data/neighborhoods";
 import type { Opportunity } from "@/data/marketActivity";
+
+export type Neighborhood = {
+  id: number;
+  nombre: string;
+  comuna: string;
+  municipio: string;
+  estrato: number;
+  precio_m2: number;
+  arriendo: number;
+  yield: number;
+  anos_recupero: number;
+  dist_metro: number;
+  dist_parque: number;
+  dist_mall: number;
+  n_venta: number;
+  n_arriendo: number;
+  lat: number;
+  lng: number;
+  score_activo?: number | null;
+  estado_precio?: string | null;
+  oportunidad?: { detectada: boolean | null; tipo: string | null; descripcion: string | null } | null;
+  liquidez_api?: { score: number | null; categoria: string | null; tiempo_estimado_venta: string | null } | null;
+  score_salud?: number;
+  categoria_salud?: string;
+  n_remates_municipio?: number;
+  remates_por_100?: number | null;
+  n_cafes_500m?: number | null;
+  n_coworking_1km?: number | null;
+  n_gimnasios_1km?: number | null;
+  n_yoga_1km?: number | null;
+  seguridad_score?: number | null;
+  seguridad_categoria?: string | null;
+  seguridad_nota?: string | null;
+  verde_pct?: number | null;
+  verde_categoria?: string | null;
+};
 import {
   OPP_COLORS,
   getScoreColor,
@@ -180,9 +215,18 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     score_activo: b.scores.score_activo,
     estado_precio: b.mercado.estado_precio,
     oportunidad: b.oportunidad,
+    n_cafes_500m: b.conectividad.n_cafes_500m,
+    n_coworking_1km: b.conectividad.n_coworking_1km,
+    n_gimnasios_1km: b.conectividad.n_gimnasios_1km,
+    n_yoga_1km: b.conectividad.n_yoga_1km,
     liquidez_api: b.liquidez
       ? { score: b.liquidez.score, categoria: b.liquidez.categoria, tiempo_estimado_venta: b.liquidez.tiempo_estimado_venta }
       : null,
+    seguridad_score: b.seguridad?.score ?? null,
+    seguridad_categoria: b.seguridad?.categoria ?? null,
+    seguridad_nota: b.seguridad?.nota ?? null,
+    verde_pct: b.verde?.indice_verde_pct ?? null,
+    verde_categoria: b.verde?.categoria ?? null,
   };
 }
 

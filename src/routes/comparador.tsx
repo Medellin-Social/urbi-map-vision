@@ -1,19 +1,11 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
 import { getScoreColor } from "@/config/mapColors";
 import { useEffect, useMemo, useState } from "react";
-import {
-  PolarAngleAxis,
-  PolarGrid,
-  PolarRadiusAxis,
-  Radar,
-  RadarChart,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useBarrios, useCompararRaw } from "@/hooks/useBarrios";
+import { auth } from "@/lib/auth";
 import type { ApiBarrio } from "@/lib/adapters";
 
 export const Route = createFileRoute("/comparador")({
@@ -26,6 +18,40 @@ export const Route = createFileRoute("/comparador")({
 });
 
 const COLORS = ["#00d4ff", "#f59e0b", "#a855f7"];
+
+function scoreToCategory(score: number): string {
+  if (score >= 80) return "EXCELENTE";
+  if (score >= 60) return "BUENO";
+  if (score >= 40) return "MODERADO";
+  if (score >= 20) return "BAJO";
+  return "MUY BAJO";
+}
+
+function getProfileScore(b: ApiBarrio, goal?: string): { score: number | null; cat: string | null } {
+  if (goal === "airbnb") return { score: b.scores.corto, cat: b.scores.cat_corto };
+  if (goal === "renta-larga") return { score: b.scores.largo, cat: b.scores.cat_largo };
+  return { score: b.scores.mediano, cat: b.scores.cat_mediano };
+}
+
+function goalToScoreLabel(goal?: string): string {
+  if (goal === "airbnb") return "Score Airbnb";
+  if (goal === "renta-larga") return "Score Arriendo largo";
+  return "Score Nómadas";
+}
+
+const BAR_METRICS: {
+  key: string;
+  label: string;
+  dir: "↑" | "↓";
+  getValue: (b: ApiBarrio) => number | null;
+  fmt: (v: number) => string;
+}[] = [
+  { key: "yield", label: "Yield bruto", dir: "↑", getValue: (b) => b.mercado.yield_bruto_pct, fmt: (v) => `${v.toFixed(1)}%` },
+  { key: "seguridad", label: "Seguridad", dir: "↑", getValue: (b) => b.seguridad.score, fmt: (v) => `${v}/100` },
+  { key: "nomada", label: "Índice nómada", dir: "↑", getValue: (b) => b.conectividad.indice_nomada, fmt: (v) => v.toFixed(1) },
+  { key: "liquidez", label: "Liquidez", dir: "↑", getValue: (b) => b.liquidez.score, fmt: (v) => `${v}/100` },
+  { key: "precio_m2", label: "Precio m²", dir: "↓", getValue: (b) => b.mercado.precio_m2_cop, fmt: (v) => formatCOP(v) },
+];
 
 function ComparadorPage() {
   const { data: barrios = [], isPlaceholderData } = useBarrios();
@@ -45,7 +71,7 @@ function ComparadorPage() {
 
   const { data: items = [], isLoading, isError } = useCompararRaw(ids);
 
-  const radar = useMemo(() => buildRadar(items), [items]);
+  const userGoal = useMemo(() => auth.get()?.goal, []);
 
   return (
     <div className="relative min-h-screen bg-background pb-16">
@@ -134,7 +160,19 @@ function ComparadorPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border/60">
-                    <SectionLabel label="SCORES" colSpan={items.length + 1} />
+                    <SectionLabel label={goalToScoreLabel(userGoal)} colSpan={items.length + 1} />
+                    <tr className="bg-primary/5">
+                      <td className="py-2.5 text-xs font-semibold text-primary">Tu perfil</td>
+                      {items.map((b) => {
+                        const { score, cat } = getProfileScore(b, userGoal);
+                        return (
+                          <td key={b.barrio_id} className="py-2.5 pl-3">
+                            {fmtScore(score, cat)}
+                          </td>
+                        );
+                      })}
+                    </tr>
+                    <SectionLabel label="TODOS LOS SCORES" colSpan={items.length + 1} />
                     <Row
                       label="Corto plazo"
                       items={items}
@@ -189,11 +227,7 @@ function ComparadorPage() {
                     <Row
                       label="Score seguridad"
                       items={items}
-                      render={(b) =>
-                        b.seguridad.score != null
-                          ? `${b.seguridad.score} · ${b.seguridad.categoria ?? ""}`
-                          : "—"
-                      }
+                      render={(b) => fmtScore(b.seguridad.score, b.seguridad.categoria)}
                     />
                     <Row
                       label="Zona turística"
@@ -238,11 +272,7 @@ function ComparadorPage() {
                     <Row
                       label="Score liquidez"
                       items={items}
-                      render={(b) =>
-                        b.liquidez.score != null
-                          ? `${b.liquidez.score} · ${b.liquidez.categoria ?? ""}`
-                          : "—"
-                      }
+                      render={(b) => fmtScore(b.liquidez.score, b.liquidez.categoria)}
                     />
                     <Row
                       label="Tiempo venta est."
@@ -254,52 +284,7 @@ function ComparadorPage() {
               </div>
             </div>
 
-            {/* Radar */}
-            <div className="rounded-2xl border border-border bg-surface/60 p-4 lg:col-span-2">
-              <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
-                Comparativa visual
-              </div>
-              <div className="h-80">
-                <ResponsiveContainer>
-                  <RadarChart data={radar} outerRadius="70%">
-                    <PolarGrid stroke="rgba(255,255,255,0.08)" />
-                    <PolarAngleAxis dataKey="metric" tick={{ fontSize: 11, fill: "#9ca3af" }} />
-                    <PolarRadiusAxis tick={false} axisLine={false} domain={[0, 100]} />
-                    <Tooltip
-                      contentStyle={{
-                        background: "rgba(17,24,39,0.95)",
-                        border: "1px solid rgba(0,212,255,0.4)",
-                        borderRadius: 8,
-                        fontSize: 11,
-                      }}
-                    />
-                    {items.map((b, i) => (
-                      <Radar
-                        key={b.barrio_id}
-                        name={titleCase(b.nombre ?? "")}
-                        dataKey={`v${i}`}
-                        stroke={COLORS[i]}
-                        fill={COLORS[i]}
-                        fillOpacity={0.25}
-                        strokeWidth={2}
-                      />
-                    ))}
-                  </RadarChart>
-                </ResponsiveContainer>
-              </div>
-              <div className="mt-2 flex flex-wrap gap-3 text-xs">
-                {items.map((b, i) => (
-                  <div key={b.barrio_id} className="flex items-center gap-1.5">
-                    <span className="h-2 w-2 rounded-full" style={{ background: COLORS[i] }} />
-                    <span className="text-muted-foreground">{titleCase(b.nombre ?? "")}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="mt-3 space-y-1 text-[10px] text-muted-foreground">
-                <div>Ejes: Yield · Seguridad · Conectividad · Precio justo · Liquidez</div>
-                <div>Normalizado 0–100 entre barrios seleccionados</div>
-              </div>
-            </div>
+            <BarComparison items={items} />
           </div>
         )}
       </main>
@@ -341,35 +326,84 @@ function Row({
   );
 }
 
-function fmtScore(score: number | null, cat?: string | null): React.ReactNode {
+function fmtScore(score: number | null, _cat?: string | null): React.ReactNode {
   if (score == null) return "—";
   const color = getScoreColor(score);
+  const label = scoreToCategory(score);
   return (
-    <span style={{ color }} className="font-semibold">
-      {score}
-      {cat ? <span className="ml-1 text-[10px] font-normal opacity-70">· {cat}</span> : null}
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-flex items-center rounded px-1.5 py-0.5 text-xs font-bold"
+        style={{ color, border: `1px solid ${color}50`, background: `${color}18` }}
+        title="Mayor score = mejor oportunidad para este perfil de inversión"
+      >
+        {score}
+      </span>
+      <span className="text-[10px] font-medium" style={{ color }}>
+        {label}
+      </span>
     </span>
   );
 }
 
-function buildRadar(items: ApiBarrio[]) {
-  const metrics: { key: string; label: string; value: (b: ApiBarrio) => number }[] = [
-    { key: "yield", label: "Yield", value: (b) => b.mercado.yield_bruto_pct ?? 0 },
-    { key: "seguridad", label: "Seguridad", value: (b) => b.seguridad.score ?? 0 },
-    { key: "conectividad", label: "Conectividad", value: (b) => b.conectividad.indice_nomada ?? 0 },
-    { key: "precio_justo", label: "Precio justo", value: (b) => b.mercado.pbn_precio_justo ?? 50 },
-    { key: "liquidez", label: "Liquidez", value: (b) => b.liquidez.score ?? 0 },
-  ];
-  return metrics.map((m) => {
-    const vals = items.map(m.value);
-    const min = Math.min(...vals);
-    const max = Math.max(...vals);
-    const norm = (v: number) =>
-      max === min ? 50 : Math.round(((v - min) / (max - min)) * 100);
-    const row: Record<string, number | string> = { metric: m.label };
-    items.forEach((b, i) => (row[`v${i}`] = norm(m.value(b))));
-    return row;
-  });
+function BarComparison({ items }: { items: ApiBarrio[] }) {
+  return (
+    <div className="rounded-2xl border border-border bg-surface/60 p-4 lg:col-span-2">
+      <div className="mb-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+        Comparativa por dimensión
+      </div>
+      <div className="space-y-5">
+        {BAR_METRICS.map((m) => {
+          const vals = items.map((b) => m.getValue(b));
+          const defined = vals.filter((v): v is number => v != null);
+          if (defined.length === 0) return null;
+          const min = Math.min(...defined);
+          const max = Math.max(...defined);
+          return (
+            <div key={m.key}>
+              <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                {m.label}
+                <span className="text-[9px] opacity-50">{m.dir} mayor es mejor</span>
+              </div>
+              <div className="space-y-1.5">
+                {items.map((b, i) => {
+                  const val = m.getValue(b);
+                  if (val == null) return (
+                    <div key={b.barrio_id} className="flex items-center gap-2 text-[11px] text-muted-foreground">
+                      <span className="w-20 truncate">{titleCase(b.nombre ?? "")}</span>
+                      <span>—</span>
+                    </div>
+                  );
+                  const rawPct = max === min ? 60 : ((val - min) / (max - min)) * 100;
+                  const barPct = m.dir === "↓" ? 100 - rawPct : rawPct;
+                  const finalPct = Math.max(8, barPct);
+                  return (
+                    <div key={b.barrio_id} className="flex items-center gap-2">
+                      <span className="w-20 shrink-0 truncate text-[11px] text-muted-foreground">
+                        {titleCase(b.nombre ?? "")}
+                      </span>
+                      <div className="flex flex-1 items-center gap-2">
+                        <div
+                          className="h-3.5 rounded-sm transition-all"
+                          style={{ width: `${finalPct}%`, background: COLORS[i], opacity: 0.8 }}
+                        />
+                        <span className="shrink-0 text-[11px] font-medium" style={{ color: COLORS[i] }}>
+                          {m.fmt(val)}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+      <div className="mt-4 text-[9px] text-muted-foreground">
+        ↑ Mayor barra = mejor rendimiento · Precio m²: barra más larga = precio más bajo
+      </div>
+    </div>
+  );
 }
 
 function titleCase(s: string) {
