@@ -4,7 +4,6 @@
 builder = "DOCKERFILE"
 
 [deploy]
-startCommand = "node /app/server.mjs"
 healthcheckPath = "/"
 healthcheckTimeout = 60
 restartPolicyType = "on_failure"
