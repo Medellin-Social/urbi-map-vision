@@ -11,6 +11,15 @@ import {
   Sparkles,
   TrendingUp,
 } from "lucide-react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
 import { z } from "zod";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP, formatPct } from "@/lib/format";
@@ -38,9 +47,9 @@ const USD_RATE = 4100;
 const CDT_YIELD = 10.5;
 
 const TIPO_OPTIONS: { id: Tipo; emoji: string; label: string; sub: string }[] = [
-  { id: "airbnb", emoji: "🏖️", label: "Airbnb", sub: "Renta corta" },
-  { id: "larga", emoji: "🏠", label: "Renta larga", sub: "Tradicional" },
-  { id: "media", emoji: "🧳", label: "Renta media", sub: "Nómadas" },
+  { id: "airbnb", emoji: "🏖️", label: "Airbnb", sub: "Short-term rental" },
+  { id: "media", emoji: "🧳", label: "Mid-term rental", sub: "Nomads" },
+  { id: "larga", emoji: "🏠", label: "Long-term rental", sub: "Traditional" },
 ];
 
 const PRESETS = [200, 350, 500, 1000];
@@ -59,67 +68,87 @@ function scoreToRating(score: number): { label: string; stars: number; toneClass
   return { label: "MUY BAJO", stars: 1, toneClass: "from-danger/30 to-danger/5 border-danger/50 text-danger" };
 }
 
+
 function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizonte: Horizonte }) {
+  const [activeIndex, setActiveIndex] = useState<number | null>(null);
   const tasa = r.valorizacion.tasa_anual_pct / 100;
   const inicial = r.presupuesto_cop;
-  const puntos: { label: string; valor: number }[] = [
-    { label: "Hoy", valor: inicial },
-    { label: "Año 1", valor: Math.round(inicial * (1 + tasa)) },
-    { label: "Año 3", valor: r.valorizacion.valor_3anos_cop },
-    { label: "Año 5", valor: r.valorizacion.valor_5anos_cop },
+  const ingresosNetos = r.valorizacion.retorno_total_5anos_cop - r.valorizacion.ganancia_5anos_cop;
+  const rentaAnualNeta = ingresosNetos / 5;
+  const puntos: { label: string; valor: number; rentaAcum: number }[] = [
+    { label: "Hoy",   valor: inicial, rentaAcum: 0 },
+    { label: "Año 1", valor: Math.round(inicial * (1 + tasa)), rentaAcum: Math.round(rentaAnualNeta) },
+    { label: "Año 3", valor: r.valorizacion.valor_3anos_cop, rentaAcum: Math.round(rentaAnualNeta * 3) },
+    { label: "Año 5", valor: r.valorizacion.valor_5anos_cop, rentaAcum: Math.round(rentaAnualNeta * 5) },
   ];
   if (horizonte === 10) {
-    puntos.push({ label: "Año 10", valor: Math.round(inicial * Math.pow(1 + tasa, 10)) });
+    puntos.push({ label: "Año 10", valor: Math.round(inicial * Math.pow(1 + tasa, 10)), rentaAcum: Math.round(rentaAnualNeta * 10) });
   }
-  const ingresosNetos = r.valorizacion.retorno_total_5anos_cop - r.valorizacion.ganancia_5anos_cop;
+  const vals = puntos.map((p) => p.valor);
+  const minVal = Math.min(...vals);
+  const maxVal = Math.max(...vals);
+  const pad = (maxVal - minVal) * 0.15 || inicial * 0.05;
+  const displayIndex = activeIndex ?? puntos.length - 1;
 
   return (
     <Card>
       <CardTitle>Valorización proyectada · {r.valorizacion.tasa_anual_pct.toFixed(1)}%/año</CardTitle>
-      <div className="mt-3 overflow-x-auto">
-        <table className="w-full text-center text-sm">
-          <thead>
-            <tr>
-              {puntos.map((p, i) => (
-                <th key={i} className="pb-1 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
-                  {p.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              {puntos.map((p, i) => (
-                <td key={i} className="px-1 py-1">
-                  <div
-                    className={`font-display text-sm font-semibold ${
-                      i === puntos.length - 1
-                        ? "text-primary"
-                        : i === 0
-                        ? "text-muted-foreground"
-                        : "text-foreground"
-                    }`}
-                  >
-                    {formatCOP(p.valor)}
-                  </div>
-                </td>
-              ))}
-            </tr>
-            <tr>
-              {puntos.map((p, i) => {
-                if (i === 0) return <td key={i} />;
-                const ganancia = p.valor - inicial;
-                const pct = ((ganancia / inicial) * 100).toFixed(1);
+      <div className="mt-3 h-[160px]">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart
+            data={puntos}
+            margin={{ top: 8, right: 12, bottom: 0, left: 12 }}
+            onMouseMove={(e: any) => {
+              if (e?.activeTooltipIndex !== undefined) setActiveIndex(e.activeTooltipIndex);
+            }}
+            onMouseLeave={() => setActiveIndex(null)}
+          >
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#ffffff" }} axisLine={false} tickLine={false} />
+            <YAxis hide domain={[minVal - pad, maxVal + pad]} />
+            <Tooltip
+              active={true}
+              defaultIndex={displayIndex}
+              cursor={{ stroke: "rgba(0,212,255,0.3)", strokeWidth: 1 }}
+              content={({ payload }) => {
+                if (!payload?.length) return null;
+                const d = payload[0].payload as { label: string; valor: number; rentaAcum: number };
+                if (d.label === "Hoy") return null;
+                const apreciacion = d.valor - inicial;
+                const retornoTotal = apreciacion + d.rentaAcum;
+                const roiPct = ((retornoTotal / inicial) * 100).toFixed(1);
                 return (
-                  <td key={i} className="px-1 pb-1 text-center">
-                    <div className="text-[11px] text-success">+{formatCOP(ganancia)}</div>
-                    <div className="text-[10px] text-muted-foreground">(+{pct}%)</div>
-                  </td>
+                  <div className="rounded-lg border border-border bg-surface/95 p-3 shadow-lg backdrop-blur-md text-xs min-w-[150px]">
+                    <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{d.label}</div>
+                    <div className="font-display text-sm font-bold text-foreground">{formatCOP(d.valor)}</div>
+                    <div className="mt-1.5 space-y-0.5">
+                      <div className="flex justify-between gap-3 text-[10px]">
+                        <span className="text-muted-foreground">Valorización</span>
+                        <span className="text-success">+{formatCOP(apreciacion)}</span>
+                      </div>
+                      <div className="flex justify-between gap-3 text-[10px]">
+                        <span className="text-muted-foreground">Ingresos</span>
+                        <span className="text-success">+{formatCOP(d.rentaAcum)}</span>
+                      </div>
+                    </div>
+                    <div className="mt-1.5 border-t border-border/60 pt-1.5 flex justify-between items-center">
+                      <span className="text-[10px] text-muted-foreground">ROI total</span>
+                      <span className="text-[12px] font-bold text-primary">+{roiPct}%</span>
+                    </div>
+                  </div>
                 );
-              })}
-            </tr>
-          </tbody>
-        </table>
+              }}
+            />
+            <Line
+              type="monotone"
+              dataKey="valor"
+              stroke="#00d4ff"
+              strokeWidth={2}
+              dot={{ r: 6, fill: "#00d4ff", stroke: "#00d4ff", strokeWidth: 0 }}
+              activeDot={{ r: 9, fill: "#00d4ff", strokeWidth: 2, stroke: "rgba(0,212,255,0.4)" }}
+            />
+          </LineChart>
+        </ResponsiveContainer>
       </div>
       <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
         <TrendingUp className="h-3 w-3 shrink-0" />
@@ -388,20 +417,6 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
       transition={{ duration: 0.35 }}
       className="space-y-4"
     >
-      {/* Resumen API */}
-      {r.resumen && (
-        <motion.div
-          initial={{ opacity: 0, y: -8 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="rounded-2xl border border-primary/30 bg-primary/5 p-4"
-        >
-          <div className="text-[11px] font-bold uppercase tracking-widest text-primary">
-            Resumen
-          </div>
-          <p className="mt-1 text-xs leading-relaxed text-foreground/90">{r.resumen}</p>
-        </motion.div>
-      )}
-
       {/* Rating header */}
       <div className={`rounded-2xl border bg-gradient-to-br ${toneClass} p-5`}>
         <div className="text-[11px] font-medium uppercase tracking-widest opacity-60">
@@ -430,7 +445,17 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
         <BigMetric
           label="Yield neto"
           value={formatPct(r.yields.neto_pct)}
-          sub={r.yields.mensaje_cdt}
+          sub={
+            <span className="block space-y-0.5">
+              <span className="block">Después de descontar:</span>
+              <span className="block">· 8% costos operativos (vacancia + mantenimiento)</span>
+              <span className="block">· 2.7% predial + adm. + seguros</span>
+              <span className="mt-1 block font-medium text-foreground/70">
+                Ingreso real mensual:{" "}
+                {formatCOP(Math.round((r.presupuesto_cop * r.yields.neto_pct) / 100 / 12))}
+              </span>
+            </span>
+          }
           delay={0.15}
           accent={r.yields.neto_pct >= CDT_YIELD ? "success" : "warning"}
         />
@@ -467,37 +492,19 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
         </div>
       </Card>
 
-      {/* Row 4 - vs CDT */}
-      <Card>
-        <CardTitle>Comparación vs CDT</CardTitle>
-        <div className="mt-3 grid grid-cols-2 gap-3">
-          <div className="rounded-lg border border-primary/40 bg-primary/5 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-primary">
-              Tu inversión
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">
-              Yield {formatPct(r.yields.neto_pct)} + val. {r.valorizacion.tasa_anual_pct.toFixed(1)}%
-            </div>
-            <div className="mt-2 font-display text-xl font-bold">
-              {(r.yields.neto_pct + r.valorizacion.tasa_anual_pct).toFixed(1)}%
-            </div>
-            <div className="text-[10px] text-muted-foreground">retorno anual total</div>
+      {/* Row 4 - Resumen */}
+      {r.resumen && (
+        <motion.div
+          initial={{ opacity: 0, y: -8 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="rounded-2xl border border-primary/30 bg-primary/5 p-4"
+        >
+          <div className="text-[11px] font-bold uppercase tracking-widest text-primary">
+            Resumen
           </div>
-          <div className="rounded-lg border border-border bg-background/40 p-3">
-            <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
-              CDT bancario
-            </div>
-            <div className="mt-1 text-xs text-muted-foreground">Sin valorización</div>
-            <div className="mt-2 font-display text-xl font-bold">{CDT_YIELD}%</div>
-            <div className="text-[10px] text-muted-foreground">retorno anual</div>
-          </div>
-        </div>
-        {r.yields.neto_pct + r.valorizacion.tasa_anual_pct > CDT_YIELD && (
-          <div className="mt-3 rounded-md bg-success/10 px-3 py-2 text-xs text-success">
-            ✓ Tu propiedad supera al CDT en retorno total
-          </div>
-        )}
-      </Card>
+          <p className="mt-1 text-xs leading-relaxed text-foreground/90">{r.resumen}</p>
+        </motion.div>
+      )}
 
       {/* Row 5 - Alertas */}
       {r.alertas.length > 0 && (
@@ -574,7 +581,7 @@ function BigMetric({
 }: {
   label: string;
   value: string;
-  sub?: string;
+  sub?: React.ReactNode;
   delay?: number;
   accent?: "success" | "warning";
 }) {

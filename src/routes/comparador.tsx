@@ -69,7 +69,11 @@ function ComparadorPage() {
     });
   }, [barrios, isPlaceholderData]);
 
-  const { data: items = [], isLoading, isError } = useCompararRaw(ids);
+  const { data: rawItems = [], isLoading, isError } = useCompararRaw(ids);
+  const items = useMemo(
+    () => ids.map((id) => rawItems.find((b) => b.barrio_id === id)).filter(Boolean) as ApiBarrio[],
+    [ids, rawItems]
+  );
 
   const userGoal = useMemo(() => auth.get()?.goal, []);
 

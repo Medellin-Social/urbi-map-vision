@@ -44,7 +44,8 @@ SELECT
     l.habitaciones,
     l.banos,
     l.direccion_raw,
-    l.fuente
+    l.fuente,
+    l.fecha_scraping
 FROM raw.listings_metrocuadrado l
 JOIN raw.barrios b ON b.id = l.barrio_id
 WHERE upper(b.municipio) = %s
@@ -68,7 +69,8 @@ SELECT
     l.habitaciones,
     l.banos,
     l.direccion_raw,
-    l.fuente
+    l.fuente,
+    l.fecha_scraping
 FROM raw.listings_fincaraiz l
 JOIN raw.barrios b ON b.id = l.barrio_id
 WHERE upper(b.municipio) = %s
@@ -81,14 +83,15 @@ ORDER BY fecha_scraping DESC
 
 
 def export_municipio(cur, slug: str, municipio_upper: str) -> int:
-    cur.execute(QUERY, (municipio_upper,))
+    cur.execute(QUERY, (municipio_upper, municipio_upper))
     rows = [dict(r) for r in cur.fetchall()]
 
-    # Convert Decimal to float
+    # Convert Decimal to float; drop internal-only fields
     for r in rows:
         for k in ("precio_cop", "area_m2", "precio_m2", "lat", "lng"):
             if r[k] is not None:
                 r[k] = float(r[k])
+        r.pop("fecha_scraping", None)
 
     out = OUTPUT_DIR / f"listings_{slug}.json"
     with open(out, "w", encoding="utf-8") as f:
