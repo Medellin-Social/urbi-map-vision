@@ -30,3 +30,12 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# Large data files (local only)
+scripts/data/col_adm2.geojson
+scripts/data/raw/
