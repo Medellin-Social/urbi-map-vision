@@ -64,6 +64,82 @@ async function loadStaticFeatures(): Promise<StaticFeature[]> {
   return _featuresPromise;
 }
 
+// ── Scraped stats cache (barrios_stats.json — all Valle de Aburrá) ────────────
+
+type BarrioStats = {
+  id: number;
+  nombre: string;
+  municipio: string;
+  slug_municipio: string;
+  precio_m2: number | null;
+  arriendo: number | null;
+  yield_anual: number | null;
+  anos_recupero: number | null;
+  n_venta: number;
+  n_arriendo: number;
+  lat: number;
+  lng: number;
+  estrato: number;
+  score_salud: number | null;
+  categoria_salud: string | null;
+  n_remates_municipio: number;
+  remates_por_100_listings: number | null;
+};
+
+let _statsPromise: Promise<Map<string, BarrioStats>> | null = null;
+
+function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
+  if (!_statsPromise) {
+    _statsPromise = (async () => {
+      try {
+        const r = await fetch("/data/barrios_stats.json");
+        const list: BarrioStats[] = await r.json();
+        const map = new Map<string, BarrioStats>();
+        for (const b of list) {
+          map.set(geoKey(b.nombre, b.municipio), b);
+        }
+        return map;
+      } catch {
+        return new Map();
+      }
+    })();
+  }
+  return _statsPromise;
+}
+
+// Derive a 0-100 investment score from yield_anual (p25=5.6 p50=6.5 p75=7.6)
+function yieldToScore(y: number | null): number | null {
+  if (y === null) return null;
+  if (y >= 10) return 85;
+  if (y >= 8)  return 70;
+  if (y >= 6.5) return 55;
+  if (y >= 5)  return 40;
+  return 25;
+}
+
+function makeStatsBarrio(f: StaticFeature, stats: BarrioStats): ApiBarrio {
+  const score = yieldToScore(stats.yield_anual);
+  return {
+    barrio_id: 800_000 + stats.id,
+    nombre: f.properties.nombre,
+    comuna: null,
+    municipio: f.properties.municipio,
+    estrato: stats.estrato || null,
+    geometry: f.geometry,
+    color_hex: null,
+    excluir_inversion: false,
+    scores: { corto: null, cat_corto: null, mediano: null, cat_mediano: null, largo: null, cat_largo: null, perfil_recomendado: null, score_activo: score },
+    mercado: { precio_m2_cop: stats.precio_m2, precio_m2_usd: stats.precio_m2 ? Math.round(stats.precio_m2 / 4200) : null, arriendo_p50_cop: stats.arriendo, yield_bruto_pct: stats.yield_anual, anos_recupero: stats.anos_recupero, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null },
+    airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
+    seguridad: { score: null, categoria: null, zona_turistica: null, tendencia: null, nota: null },
+    conectividad: { dist_metro_km: null, dist_parque_km: null, dist_mall_km: null, n_cafes_500m: null, n_coworking_1km: null, n_gimnasios_1km: null, n_yoga_1km: null, indice_nomada: null },
+    verde: { indice_verde_pct: null, categoria: null, score_verde: null },
+    liquidez: { score: stats.score_salud, categoria: stats.categoria_salud, tiempo_estimado_venta: null, nota_metodologia: null },
+    oportunidad: { detectada: false, tipo: null, descripcion: null },
+    valorizacion: { var_anual_pct: null, proyeccion_3anos_pct: null, proyeccion_5anos_pct: null, tendencia: null },
+  };
+}
+
 function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
   return {
     barrio_id: id,
@@ -111,10 +187,11 @@ export function useBarriosRaw(perfil?: string) {
       if (perfil) params.set("perfil", perfil);
       const url = `${API_ENDPOINTS.barrios}?${params}`;
 
-      const [apiData, geoLookup, staticFeatures] = await Promise.all([
+      const [apiData, geoLookup, staticFeatures, statsMap] = await Promise.all([
         apiFetch<ApiBarrio[]>(url).catch(() => [] as ApiBarrio[]),
         loadStaticGeometry(),
         loadStaticFeatures(),
+        loadBarrioStats(),
       ]);
 
       // Patch API barrios that lack geometry
@@ -126,16 +203,20 @@ export function useBarriosRaw(perfil?: string) {
         return { ...b, geometry: geoLookup.get(key) ?? null };
       });
 
-      // Polygons for static barrios not covered by API (shown as "sin datos")
+      // For barrios not in API: use scraped stats if available, else grey fallback
       let synId = 900_000;
-      const greys = staticFeatures
+      const extras = staticFeatures
         .filter((f) => {
           const key = geoKey(f.properties.nombre, f.properties.municipio);
           return !apiKeys.has(key);
         })
-        .map((f) => makeGreyBarrio(f, synId++));
+        .map((f) => {
+          const key = geoKey(f.properties.nombre, f.properties.municipio);
+          const stats = statsMap.get(key);
+          return stats ? makeStatsBarrio(f, stats) : makeGreyBarrio(f, synId++);
+        });
 
-      return [...patched, ...greys];
+      return [...patched, ...extras];
     },
     staleTime: 5 * 60 * 1000,
     retry: 1,
