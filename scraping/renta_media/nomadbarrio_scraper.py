@@ -55,6 +55,22 @@ SEARCH_BARRIOS = [
     "Bello",
     "La Estrella",
 ]
+
+# Maps NomadBarrio search name → DB municipio for scoped barrio matching
+_SEARCH_TO_MUNICIPIO: dict[str, str] = {
+    "El Poblado":   "MEDELLIN",
+    "Laureles":     "MEDELLIN",
+    "Belén":        "MEDELLIN",
+    "Buenos Aires": "MEDELLIN",
+    "Calasanz":     "MEDELLIN",
+    "Guatapé":      "MEDELLIN",
+    "Envigado":     "ENVIGADO",
+    "Sabaneta":     "SABANETA",
+    "Itagüí":       "ITAGUI",
+    "Bello":        "BELLO",
+    "La Estrella":  "LA ESTRELLA",
+}
+
 DELAY = 3.0  # seconds between barrio pages
 
 
@@ -85,7 +101,7 @@ def _get_barrios_from_schema() -> list[tuple[str, str]]:
         return [(b, f"{BASE_URL}/search/rent?barrio={quote(b)}") for b in SEARCH_BARRIOS]
 
 
-def _extract_cards_from_html(html: str, barrios: list[dict]) -> list[dict]:
+def _extract_cards_from_html(html: str, barrios: list[dict], municipio_hint: str = "") -> list[dict]:
     """
     Parse all listing cards from rendered HTML.
     Container: direct parent of <a href="/listing/..."> links.
@@ -150,7 +166,7 @@ def _extract_cards_from_html(html: str, barrios: list[dict]) -> list[dict]:
             "habitaciones": beds,
             "banos": None,
             "barrio_raw": barrio_raw or None,
-            "barrio_id": match_barrio(barrio_raw, barrios),
+            "barrio_id": match_barrio(barrio_raw, barrios, municipio_hint=municipio_hint or None),
             "amoblado": True,
             "incluye_servicios": None,
             "min_noches": 30,
@@ -161,6 +177,13 @@ def _extract_cards_from_html(html: str, barrios: list[dict]) -> list[dict]:
         })
 
     return results
+
+
+def _get_municipio_hint(barrio_name: str) -> str:
+    """Normalize barrio name (handle encoding variants) and return municipio."""
+    import unicodedata
+    normalized = unicodedata.normalize("NFC", barrio_name)
+    return _SEARCH_TO_MUNICIPIO.get(normalized, _SEARCH_TO_MUNICIPIO.get(barrio_name, "MEDELLIN"))
 
 
 def scrape(dry_run: bool = False) -> list[dict]:
@@ -187,7 +210,8 @@ def scrape(dry_run: bool = False) -> list[dict]:
         page = ctx.new_page()
 
         for barrio_name, search_url in barrio_pages:
-            print(f"  → {barrio_name}: {search_url}")
+            municipio_hint = _get_municipio_hint(barrio_name)
+            print(f"  → {barrio_name} [{municipio_hint}]: {search_url}")
             try:
                 page.goto(search_url, wait_until="networkidle", timeout=45000)
                 time.sleep(3)
@@ -197,7 +221,7 @@ def scrape(dry_run: bool = False) -> list[dict]:
                 continue
 
             html = page.content()
-            cards = _extract_cards_from_html(html, barrios)
+            cards = _extract_cards_from_html(html, barrios, municipio_hint=municipio_hint)
 
             # Deduplicate across barrios
             new_cards = [c for c in cards if c["url"] not in seen_urls]

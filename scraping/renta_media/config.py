@@ -58,19 +58,36 @@ def ensure_table(conn) -> None:
 
 def load_barrios(conn) -> list[dict]:
     with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
-        cur.execute("SELECT id, nombre FROM raw.barrios ORDER BY id")
+        cur.execute("SELECT id, nombre, municipio FROM raw.barrios ORDER BY id")
         return [dict(r) for r in cur.fetchall()]
 
 
-def match_barrio(barrio_raw: str, barrios: list[dict]) -> Optional[int]:
+def match_barrio(
+    barrio_raw: str,
+    barrios: list[dict],
+    municipio_hint: Optional[str] = None,
+) -> Optional[int]:
     if not barrio_raw or not barrios:
         return None
+
+    query = barrio_raw.upper()
+
+    # Try municipality-scoped match first (lower cutoff — we already know the city)
+    if municipio_hint:
+        scoped = [b for b in barrios if b.get("municipio", "").upper() == municipio_hint.upper()]
+        if scoped:
+            nombres_s = [b["nombre"] for b in scoped]
+            result = process.extractOne(
+                query, nombres_s, scorer=fuzz.token_set_ratio, score_cutoff=68
+            )
+            if result:
+                idx = nombres_s.index(result[0])
+                return scoped[idx]["id"]
+
+    # Global fallback
     nombres = [b["nombre"] for b in barrios]
     result = process.extractOne(
-        barrio_raw.upper(),
-        nombres,
-        scorer=fuzz.token_set_ratio,
-        score_cutoff=70,
+        query, nombres, scorer=fuzz.token_set_ratio, score_cutoff=70
     )
     if not result:
         return None
