@@ -1,7 +1,6 @@
 """
-Flatio scraper — flatio.com/s/Medellin
+Flatio scraper — flatio.com/s/{City} for all Valle de Aburrá municipalities
 
-- ~20 listings in Medellín
 - JS-rendered (React)
 - Price: EUR/night × 30 = EUR/month → × EUR_TO_COP
 - Listing cards show price but NOT area/beds/baths
@@ -40,22 +39,32 @@ UA = (
 _next = (date.today().replace(day=1) + timedelta(days=32)).replace(day=1)
 DATE_FROM = _next.strftime("%Y-%m-%d")
 DATE_TO = (_next + timedelta(days=30)).strftime("%Y-%m-%d")
-SEARCH_URL = f"{BASE_URL}/s/Medellin?from={DATE_FROM}&to={DATE_TO}"
+
+# Valle de Aburrá municipalities: (display_name, flatio_slug, url_filter_slug)
+SEARCH_CITIES = [
+    ("Medellín",   "Medellin",  "medellin"),
+    ("Envigado",   "Envigado",  "envigado"),
+    ("Itagüí",     "Itagui",    "itagui"),
+    ("Sabaneta",   "Sabaneta",  "sabaneta"),
+    ("Bello",      "Bello",     "bello"),
+    ("La Estrella","La-Estrella","estrella"),
+]
 
 DELAY = 2.0  # seconds between detail page visits
 
 
-def _get_listing_urls(page) -> list[str]:
-    """Extract all unique /rent/*/...medellin listing URLs from search results."""
-    page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
+def _get_listing_urls(page, search_url: str, city_slug: str) -> list[str]:
+    """Extract unique /rent/ listing URLs from one city search page."""
+    page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
     time.sleep(6)
 
+    slug = city_slug.lower()
     hrefs = page.eval_on_selector_all(
         "a[href]",
-        """els => [...new Set(
+        f"""els => [...new Set(
             els
             .map(e => e.href)
-            .filter(h => h.includes('/rent/') && h.toLowerCase().includes('medellin'))
+            .filter(h => h.includes('/rent/') && h.toLowerCase().includes('{slug}'))
         )]""",
     )
     return hrefs
@@ -235,7 +244,7 @@ def _parse_from_dom(page, canonical_url: str, barrios: list[dict]) -> Optional[d
         )
         price_mes_eur = 0.0
         if monthly_prices:
-            # Take minimum (cheapest available 30-day rate)
+            # Take first match = selected-dates pricing window
             vals = []
             for raw in monthly_prices:
                 try:
@@ -243,7 +252,7 @@ def _parse_from_dom(page, canonical_url: str, barrios: list[dict]) -> Optional[d
                 except ValueError:
                     pass
             if vals:
-                price_mes_eur = min(vals)
+                price_mes_eur = vals[0]
 
         # Fallback: total price for selected stay (large number before €)
         if not price_mes_eur:
@@ -286,16 +295,35 @@ def _parse_from_dom(page, canonical_url: str, barrios: list[dict]) -> Optional[d
         if m:
             baths = float(m.group(1))
 
-        # Barrio — text before ", Medellín" or "in <Neighborhood>"
+        # Barrio — try H1 title first (most reliable: "Laureles Penthouse", "Poblado Penthouse")
         barrio_raw = ""
-        for pattern in [
-            r"([A-ZÁÉÍÓÚ][A-Za-záéíóúñÑ\s]+)\s*,\s*Medell[ií]n",
-            r"(?:in|en)\s+([A-ZÁÉÍÓÚ][A-Za-záéíóúñÑ\s]{3,30})\s*[,·]",
-        ]:
-            m = re.search(pattern, body_text)
-            if m:
-                barrio_raw = m.group(1).strip()
-                break
+        _BARRIO_KEYWORDS = [
+            "Laureles", "Poblado", "El Poblado", "Envigado", "Sabaneta",
+            "Belén", "Belen", "Estadio", "Calasanz", "Conquistadores",
+            "Floresta", "Robledo", "Aranjuez", "Manrique", "Buenos Aires",
+            "Guayabal", "Itagüí", "Itagui", "Castilla", "Doce de Octubre",
+            "La America", "América", "San Javier", "Santa Cruz",
+            "Villa Hermosa", "Milla de Oro", "Gold Mile",
+        ]
+        if title:
+            for kw in _BARRIO_KEYWORDS:
+                if re.search(r"\b" + re.escape(kw) + r"\b", title, re.I):
+                    barrio_raw = kw
+                    break
+
+        # Fallback: regex on body text (no \s to avoid newline bleed into amenity lists)
+        if not barrio_raw:
+            _REJECT_PREFIXES = ("Bogotá", "Bogota", "Cali", "Barranquilla", "Medellín", "Medellin", "Colombia")
+            for pattern in [
+                r"([A-ZÁÉÍÓÚ][A-Za-záéíóúñÑ ]{2,30})\s*,\s*Medell[ií]n",
+                r"(?:in|en)\s+([A-ZÁÉÍÓÚ][A-Za-záéíóúñÑ ]{3,25})\s*[,·]",
+            ]:
+                m = re.search(pattern, body_text)
+                if m:
+                    candidate = m.group(1).strip()
+                    if not any(candidate.startswith(r) for r in _REJECT_PREFIXES) and len(candidate) < 35:
+                        barrio_raw = candidate
+                        break
 
         utilities = bool(
             re.search(r"utilities\s+included|all\s+utilities|servicios\s+incluidos", body_text, re.I)
@@ -342,28 +370,37 @@ def scrape(dry_run: bool = False) -> list[dict]:
         )
         page = ctx.new_page()
 
-        print(f"  Searching: {SEARCH_URL}")
-        try:
-            listing_urls = _get_listing_urls(page)
-        except Exception as e:
-            print(f"  Timeout on networkidle — retrying with domcontentloaded: {e}")
+        # Collect listing URLs from all Valle de Aburrá cities
+        all_urls: list[str] = []
+        seen_urls: set[str] = set()
+        for city_name, city_flatio_slug, city_filter_slug in SEARCH_CITIES:
+            search_url = f"{BASE_URL}/s/{city_flatio_slug}?from={DATE_FROM}&to={DATE_TO}"
+            print(f"  Searching {city_name}: {search_url}")
             try:
-                page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=30000)
-                time.sleep(5)
-                listing_urls = page.eval_on_selector_all(
-                    "a[href]",
-                    """els => [...new Set(
-                        els.map(e => e.href)
-                        .filter(h => h.includes('/rent/') && h.toLowerCase().includes('medellin'))
-                    )]""",
-                )
-            except Exception as e2:
-                print(f"  ERROR fetching listing URLs: {e2}")
-                browser.close()
-                conn.close()
-                return []
+                city_urls = _get_listing_urls(page, search_url, city_filter_slug)
+            except Exception as e:
+                print(f"  Retry {city_name} (domcontentloaded): {e}")
+                try:
+                    page.goto(search_url, wait_until="domcontentloaded", timeout=30000)
+                    time.sleep(5)
+                    slug = city_filter_slug.lower()
+                    city_urls = page.eval_on_selector_all(
+                        "a[href]",
+                        f"""els => [...new Set(
+                            els.map(e => e.href)
+                            .filter(h => h.includes('/rent/') && h.toLowerCase().includes('{slug}'))
+                        )]""",
+                    )
+                except Exception as e2:
+                    print(f"  ERROR {city_name}: {e2}")
+                    city_urls = []
+            new_urls = [u for u in city_urls if u.split("?")[0] not in seen_urls]
+            seen_urls.update(u.split("?")[0] for u in new_urls)
+            all_urls.extend(new_urls)
+            print(f"  {city_name}: {len(city_urls)} found, {len(new_urls)} new")
 
-        print(f"  Found {len(listing_urls)} listing URLs")
+        listing_urls = all_urls
+        print(f"  Total unique listing URLs: {len(listing_urls)}")
 
         for i, url in enumerate(listing_urls):
             # Canonical URL = strip query params (dates vary)

@@ -1,5 +1,5 @@
 """
-Booking.com monthly stays scraper — Medellín
+Booking.com monthly stays scraper — Valle de Aburrá
 
 Requires checkin/checkout dates for prices to appear.
 Price shown as total for 30 nights in COP (dot-thousands: "7.278.240").
@@ -45,16 +45,29 @@ _next = (date.today().replace(day=1) + timedelta(days=32)).replace(day=1)
 CHECKIN = _next.strftime("%Y-%m-%d")
 CHECKOUT = (_next + timedelta(days=30)).strftime("%Y-%m-%d")
 
-SEARCH_URL = (
+# Valle de Aburrá municipalities: (display_name, booking_ss_param)
+SEARCH_CITIES = [
+    ("Medellín",    "Medellin%2C+Colombia"),
+    ("Envigado",    "Envigado%2C+Antioquia%2C+Colombia"),
+    ("Itagüí",      "Itagui%2C+Antioquia%2C+Colombia"),
+    ("Sabaneta",    "Sabaneta%2C+Antioquia%2C+Colombia"),
+    ("Bello",       "Bello%2C+Antioquia%2C+Colombia"),
+    ("La Estrella", "La+Estrella%2C+Antioquia%2C+Colombia"),
+]
+
+_BASE_BOOKING_URL = (
     "https://www.booking.com/searchresults.html"
-    "?ss=Medellin%2C+Colombia"
-    "&lang=es-co"
+    "?lang=es-co"
     f"&checkin={CHECKIN}"
     f"&checkout={CHECKOUT}"
     "&nflt=pri_min_nights%3D28"
     "&selected_currency=COP"
     "&rows=25"
 )
+
+
+def _make_search_url(ss_param: str) -> str:
+    return f"{_BASE_BOOKING_URL}&ss={ss_param}"
 
 
 def _parse_cop_dot_thousands(text: str) -> int:
@@ -244,6 +257,63 @@ def _extract_page_listings(page, barrios: list[dict]) -> list[dict]:
     return results
 
 
+def _scrape_city(page, city_name: str, search_url: str, barrios: list[dict], max_pages: int) -> list[dict]:
+    """Scrape one city's Booking search results. Returns raw listings (not deduped)."""
+    print(f"\n  [{city_name}] {search_url[:90]}")
+    try:
+        page.goto(search_url, wait_until="domcontentloaded", timeout=45000)
+    except Exception as e:
+        print(f"  ERROR loading {city_name}: {e}")
+        return []
+
+    time.sleep(PAGE_DELAY)
+    _accept_cookies(page)
+    time.sleep(2)
+
+    if _is_captcha(page):
+        print(f"  CAPTCHA on {city_name} — skipping")
+        return []
+
+    city_results: list[dict] = []
+    for page_num in range(1, max_pages + 1):
+        print(f"  {city_name} page {page_num}/{max_pages}")
+        try:
+            page.wait_for_selector("[data-testid='property-card']", timeout=15000)
+        except Exception:
+            print(f"  No cards on page {page_num}")
+            break
+
+        if _is_captcha(page):
+            print(f"  CAPTCHA on {city_name} page {page_num} — stopping")
+            break
+
+        time.sleep(PAGE_DELAY)
+        page_listings = _extract_page_listings(page, barrios)
+        city_results.extend(page_listings)
+        print(f"  {city_name} p{page_num}: {len(page_listings)} valid | city total: {len(city_results)}")
+
+        if page_num >= max_pages:
+            break
+
+        try:
+            next_btn = page.query_selector(
+                "[data-testid='pagination-next'], "
+                "button[aria-label*='iguiente'], "
+                "a[aria-label*='iguiente']"
+            )
+            if next_btn and next_btn.is_visible():
+                next_btn.click()
+                time.sleep(PAGE_DELAY)
+            else:
+                print(f"  No next-page button for {city_name}")
+                break
+        except Exception as e:
+            print(f"  Pagination error {city_name}: {e}")
+            break
+
+    return city_results
+
+
 def scrape(dry_run: bool = False, max_pages: int = 3) -> list[dict]:
     conn = get_conn()
     ensure_table(conn)
@@ -272,71 +342,18 @@ def scrape(dry_run: bool = False, max_pages: int = 3) -> list[dict]:
         )
         page = ctx.new_page()
 
-        print(f"  Loading Booking.com ({CHECKIN}→{CHECKOUT}): {SEARCH_URL[:80]}")
-        try:
-            page.goto(SEARCH_URL, wait_until="domcontentloaded", timeout=45000)
-        except Exception as e:
-            print(f"  ERROR loading Booking: {e}")
-            browser.close()
-            conn.close()
-            return []
-
-        time.sleep(PAGE_DELAY)
-        _accept_cookies(page)
-        time.sleep(2)
-
-        if _is_captcha(page):
-            print("  CAPTCHA detected — skipping Booking")
-            browser.close()
-            conn.close()
-            return []
-
-        for page_num in range(1, max_pages + 1):
-            print(f"  Page {page_num}/{max_pages}")
-
-            try:
-                page.wait_for_selector(
-                    "[data-testid='property-card']",
-                    timeout=15000,
-                )
-            except Exception:
-                print(f"  No cards on page {page_num}")
-                break
-
-            if _is_captcha(page):
-                print("  CAPTCHA detected — stopping")
-                break
-
-            time.sleep(PAGE_DELAY)
-            page_listings = _extract_page_listings(page, barrios)
-            all_results.extend(page_listings)
-            print(f"  Page {page_num}: {len(page_listings)} valid | cumulative: {len(all_results)}")
-
-            if page_num >= max_pages:
-                break
-
-            try:
-                next_btn = page.query_selector(
-                    "[data-testid='pagination-next'], "
-                    "button[aria-label*='iguiente'], "
-                    "a[aria-label*='iguiente']"
-                )
-                if next_btn and next_btn.is_visible():
-                    next_btn.click()
-                    time.sleep(PAGE_DELAY)
-                else:
-                    print("  No next-page button")
-                    break
-            except Exception as e:
-                print(f"  Pagination error: {e}")
-                break
+        print(f"  Booking.com Valle de Aburrá ({CHECKIN}→{CHECKOUT})")
+        for city_name, ss_param in SEARCH_CITIES:
+            search_url = _make_search_url(ss_param)
+            city_results = _scrape_city(page, city_name, search_url, barrios, max_pages)
+            all_results.extend(city_results)
 
         browser.close()
 
-    # Deduplicate by URL
+    # Deduplicate by URL across all cities
     seen: set[str] = set()
     unique = [r for r in all_results if r["url"] not in seen and not seen.add(r["url"])]  # type: ignore[func-returns-value]
-    print(f"  Booking deduped: {len(unique)} unique")
+    print(f"  Booking deduped: {len(unique)} unique across {len(SEARCH_CITIES)} cities")
 
     saved = 0
     for listing in unique:

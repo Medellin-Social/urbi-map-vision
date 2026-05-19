@@ -52,6 +52,8 @@ SEARCH_BARRIOS = [
     "Buenos Aires",
     "Calasanz",
     "Itagüí",
+    "Bello",
+    "La Estrella",
 ]
 DELAY = 3.0  # seconds between barrio pages
 
