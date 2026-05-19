@@ -1,4 +1,4 @@
-export type Goal = "airbnb" | "renta-larga" | "valorizacion" | "mixto";
+export type Goal = "airbnb" | "renta-larga" | "valorizacion" | "nomadas";
 export type Risk = "conservador" | "moderado" | "agresivo";
 export type Budget = "<200" | "200-500" | "500-1000" | ">1000";
 
@@ -100,11 +100,45 @@ export const auth = {
   },
 };
 
+const TOKEN_KEY = "urbidata.token";
+const REFRESH_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // refresh if < 7 days left
+
+function _decodeJwtExp(token: string): number | null {
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    return typeof payload.exp === "number" ? payload.exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function refreshIfExpiringSoon(): Promise<void> {
+  if (typeof window === "undefined") return;
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) return;
+  const exp = _decodeJwtExp(token);
+  if (!exp) return;
+  if (exp - Date.now() > REFRESH_THRESHOLD_MS) return;
+
+  try {
+    const { API_ENDPOINTS } = await import("@/config/api");
+    const res = await fetch(API_ENDPOINTS.refreshToken, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.token) localStorage.setItem(TOKEN_KEY, data.token);
+  } catch {
+    // silent — old token remains valid until it actually expires
+  }
+}
+
 export const GOAL_LABEL: Record<Goal, string> = {
   airbnb: "Airbnb",
   "renta-larga": "Renta larga",
   valorizacion: "Valorización",
-  mixto: "Mixto",
+  nomadas: "Nómadas",
 };
 
 export const MAP_STYLES: Record<MapStyleId, { label: string; url: string; swatch: string[] }> = {
@@ -143,8 +177,8 @@ export function recommendation(goal?: Goal): string {
       return "🏠 Para renta larga, Robledo y Aranjuez ofrecen el mejor balance precio/arriendo con baja vacancia.";
     case "valorizacion":
       return "📈 Para valorización, El Rodeo y Robledo muestran el mayor potencial de apreciación a 5 años.";
-    case "mixto":
-      return "⚖️ Tu perfil mixto se beneficia de Laureles y Estadio: yield estable y demanda dual venta/arriendo.";
+    case "nomadas":
+      return "🧳 Para nómadas digitales, El Poblado y Laureles tienen la mayor densidad de cafés, coworking y apartamentos amoblados.";
     default:
       return "Selecciona un barrio en el mapa para ver análisis detallado.";
   }

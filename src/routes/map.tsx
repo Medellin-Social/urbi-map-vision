@@ -49,7 +49,7 @@ function MapPage() {
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-background/80 to-transparent" />
       <Navbar />
       <ProfileChipMobile />
-      <FloatingPanel selected={selected} onClear={() => setSelected(null)} />
+      <FloatingPanel selected={selected} onClear={() => setSelected(null)} onSelect={setSelected} />
       <OpportunitiesPanel onSelect={setSelected} perfil={perfil} mostrarOportunidades={mostrarOportunidades} />
     </div>
   );

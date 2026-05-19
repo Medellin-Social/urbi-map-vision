@@ -12,3 +12,10 @@ restartPolicyType = "on_failure"
 # Railway service: urbi-api  →  Dockerfile.api
 # En Railway: Settings → Source → Dockerfile Path = Dockerfile.api
 # startCommand: sh -c 'uvicorn api.main:app --host 0.0.0.0 --port $PORT'
+
+# ── Servicio Cron (datos) ─────────────────────────────────────────────────────
+# Railway service: urbi-cron  →  Dockerfile.cron
+# En Railway: Settings → Source → Dockerfile Path = Dockerfile.cron
+# No public domain needed — servicio interno.
+# Comparte las mismas env vars (DATABASE_URL, SENTRY_DSN).
+# Ejecuta scripts/refresh_data.py diariamente a las 03:00 UTC.

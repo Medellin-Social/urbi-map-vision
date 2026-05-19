@@ -1,8 +1,21 @@
 import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
+import { useEffect } from "react";
 import { LanguageProvider } from "@/lib/i18n";
+import { refreshIfExpiringSoon } from "@/lib/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
+import * as Sentry from "@sentry/react";
+
+const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
+if (SENTRY_DSN) {
+  Sentry.init({
+    dsn: SENTRY_DSN,
+    tracesSampleRate: 0.1,
+    environment: import.meta.env.MODE,
+    sendDefaultPii: false,
+  });
+}
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -45,11 +58,13 @@ export const Route = createRootRoute({
       { property: "og:title", content: "Urbidata — Invierte en Medellín con datos reales" },
       { property: "og:description", content: "Motor de decisión inmobiliaria para el Valle de Aburrá. Yield, seguridad, conectividad y valorización por barrio." },
       { property: "og:image", content: "https://urbidata.co/og-image.png" },
+      { name: "twitter:image", content: "https://urbidata.co/og-image.png" },
       { property: "og:url", content: "https://urbidata.co" },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
     ],
     links: [
+      { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "stylesheet", href: appCss },
       { rel: "stylesheet", href: "https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
@@ -77,6 +92,8 @@ function RootShell({ children }: { children: React.ReactNode }) {
 }
 
 function RootComponent() {
+  useEffect(() => { refreshIfExpiringSoon(); }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>

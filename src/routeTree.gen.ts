@@ -9,15 +9,22 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
 import { Route as IndexRouteImport } from './routes/index'
 
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const RegisterRoute = RegisterRouteImport.update({
   id: '/register',
   path: '/register',
@@ -43,6 +50,11 @@ const LoginRoute = LoginRouteImport.update({
   path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ComparadorRoute = ComparadorRouteImport.update({
   id: '/comparador',
   path: '/comparador',
@@ -63,32 +75,38 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/register': typeof RegisterRoute
+  '/reset-password': typeof ResetPasswordRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -96,46 +114,61 @@ export interface FileRouteTypes {
     | '/'
     | '/calculadora'
     | '/comparador'
+    | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reset-password'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/calculadora'
     | '/comparador'
+    | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reset-password'
   id:
     | '__root__'
     | '/'
     | '/calculadora'
     | '/comparador'
+    | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
     | '/register'
+    | '/reset-password'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
   OnboardingRoute: typeof OnboardingRoute
   PerfilRoute: typeof PerfilRoute
   RegisterRoute: typeof RegisterRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/register': {
       id: '/register'
       path: '/register'
@@ -171,6 +204,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/comparador': {
       id: '/comparador'
       path: '/comparador'
@@ -199,11 +239,13 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,
   OnboardingRoute: OnboardingRoute,
   PerfilRoute: PerfilRoute,
   RegisterRoute: RegisterRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

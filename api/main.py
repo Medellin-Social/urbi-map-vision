@@ -2,16 +2,34 @@ import asyncio
 import os
 import time
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import structlog
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from api.db import create_pool, close_pool, get_pool
 from api.limiter import limiter
-from api.routers import auth, barrios, calculadora, favoritos, historial, oportunidades, stats, usuario
+from api.routers import admin, auth, barrios, calculadora, favoritos, historial, oportunidades, stats, usuario
+
+# Sentry — only active when SENTRY_DSN is set (optional in local/test)
+_SENTRY_DSN = os.getenv("SENTRY_DSN", "")
+if _SENTRY_DSN:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+    from sentry_sdk.integrations.asyncio import AsyncioIntegration
+
+    sentry_sdk.init(
+        dsn=_SENTRY_DSN,
+        integrations=[FastApiIntegration(), AsyncioIntegration()],
+        traces_sample_rate=0.1,
+        environment=os.getenv("RAILWAY_ENVIRONMENT", "development"),
+        send_default_pii=False,
+    )
 
 logger = structlog.get_logger()
 
@@ -21,6 +39,8 @@ _LOCAL_ORIGINS = [
     "http://localhost:8080",
     "http://localhost:8081",
     "http://localhost:8082",
+    "https://urbidata.co",
+    "https://www.urbidata.co",
 ]
 
 def _build_origins() -> list[str]:
@@ -97,11 +117,26 @@ app.include_router(usuario.router,       prefix="/api/v1/usuario",        tags=[
 app.include_router(favoritos.router,     prefix="/api/v1/favoritos",      tags=["favoritos"])
 app.include_router(historial.router,     prefix="/api/v1/historial",      tags=["historial"])
 app.include_router(stats.router,         prefix="/api/v1/stats",           tags=["stats"])
+app.include_router(admin.router,         prefix="/api/v1/admin",           tags=["admin"])
 
 
 @app.get("/", tags=["meta"])
 async def root():
     return {"status": "ok"}
+
+
+# ── Admin panel (SPA) ─────────────────────────────────────────────────────────
+_ADMIN_DIST = Path(__file__).parent / "admin_dist"
+
+if _ADMIN_DIST.exists():
+    _ADMIN_ASSETS = _ADMIN_DIST / "assets"
+    if _ADMIN_ASSETS.exists():
+        app.mount("/admin/assets", StaticFiles(directory=str(_ADMIN_ASSETS)), name="admin-assets")
+
+    @app.get("/admin", include_in_schema=False)
+    @app.get("/admin/{full_path:path}", include_in_schema=False)
+    async def serve_admin(full_path: str = ""):
+        return FileResponse(str(_ADMIN_DIST / "index.html"))
 
 
 @app.get("/health", tags=["meta"])

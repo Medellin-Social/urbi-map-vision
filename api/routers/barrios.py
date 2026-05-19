@@ -32,9 +32,14 @@ def get_score_col(perfil: Optional[str]) -> str:
 
 _USD = USD_TO_COP
 
-def _score_to_hex(score: Optional[int]) -> str:
+def _score_to_hex(score: Optional[int], perfil: Optional[str] = None) -> str:
     if score is None or score == 0:
         return "#00d4ff"
+    if perfil == "nomadas":
+        if score >= 55: return "#10b981"
+        if score >= 40: return "#2BBAA5"
+        if score >= 25: return "#f59e0b"
+        return "#ef4444"
     if score >= 70:
         return "#10b981"
     if score >= 50:
@@ -66,6 +71,17 @@ class Mercado(BaseModel):
     estado_precio: Optional[str] = None
     pbn_precio_justo: Optional[int] = None
     poi_precio_oferta: Optional[int] = None
+    yield_renta_media_pct: Optional[float] = None
+    precio_renta_media_p50: Optional[int] = None
+
+
+class NomadaBreakdown(BaseModel):
+    pts_yield: Optional[int] = None       # /25
+    pts_nomada: Optional[int] = None      # /30
+    pts_pbn: Optional[int] = None         # /18
+    pts_seguridad: Optional[int] = None   # /12
+    pts_verde: Optional[int] = None       # /10
+    pts_equip: Optional[int] = None       # /5
 
 
 class Airbnb(BaseModel):
@@ -139,6 +155,8 @@ class BarrioResponse(BaseModel):
     liquidez: Liquidez
     oportunidad: Oportunidad
     valorizacion: Valorizacion
+    nomada_breakdown: Optional[NomadaBreakdown] = None
+    n_remates_municipio: Optional[int] = None
 
 
 class ListingItem(BaseModel):
@@ -274,7 +292,17 @@ _BARRIO_SQL = """
         sl.var_anual_5anos_pct              AS var_anual_pct,
         pv.proyeccion_3anos_pct,
         pv.proyeccion_5anos_pct,
-        sl.tendencia_valorizacion
+        sl.tendencia_valorizacion,
+        -- renta media (nómadas)
+        bm.yield_renta_media_pct,
+        bm.precio_renta_media_p50,
+        -- nomada score breakdown
+        sm.yield_medio_score                AS pts_yield_nomada,
+        sm.nomada_score                     AS pts_nomada,
+        sm.pbn_score                        AS pts_pbn_nomada,
+        sm.seg_medio_score                  AS pts_seg_nomada,
+        sm.pts_verde                        AS pts_verde_nomada,
+        sm.pts_equip                        AS pts_equip_nomada
     FROM raw.barrios b
     LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
@@ -285,6 +313,7 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.barrios_oportunidades     op  ON b.id = op.barrio_id
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
     LEFT JOIN analytics.proyecciones_valorizacion pv  ON sl.estrato_barrio = pv.estrato_sistema
+    LEFT JOIN analytics.score_mediano_plazo       sm  ON b.id = sm.barrio_id
 """
 
 
@@ -298,7 +327,7 @@ def _i(row: dict, key: str) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def _build_response(row: dict, score_col: str = "score_corto") -> BarrioResponse:
+def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None) -> BarrioResponse:
     raw_geo = row.get("geometry_raw")
     geometry = json.loads(raw_geo) if raw_geo else None
 
@@ -312,7 +341,7 @@ def _build_response(row: dict, score_col: str = "score_corto") -> BarrioResponse
     }
     score_activo = score_map.get(score_col)
     excluir = bool(row.get("excluir_inversion"))
-    color_hex = "#6b7280" if excluir else _score_to_hex(score_activo)
+    color_hex = "#6b7280" if excluir else _score_to_hex(score_activo, perfil)
 
     return BarrioResponse(
         barrio_id=row["barrio_id"],
@@ -342,6 +371,8 @@ def _build_response(row: dict, score_col: str = "score_corto") -> BarrioResponse
             estado_precio=row.get("estado_precio"),
             pbn_precio_justo=_i(row, "pbn_precio_justo"),
             poi_precio_oferta=_i(row, "poi_precio_oferta"),
+            yield_renta_media_pct=_f(row, "yield_renta_media_pct"),
+            precio_renta_media_p50=_i(row, "precio_renta_media_p50"),
         ),
         airbnb=Airbnb(
             ocupacion_pct=_f(row, "ocupacion_airbnb_pct"),
@@ -389,6 +420,15 @@ def _build_response(row: dict, score_col: str = "score_corto") -> BarrioResponse
             proyeccion_5anos_pct=_f(row, "proyeccion_5anos_pct"),
             tendencia=row.get("tendencia_valorizacion"),
         ),
+        nomada_breakdown=NomadaBreakdown(
+            pts_yield=_i(row, "pts_yield_nomada"),
+            pts_nomada=_i(row, "pts_nomada"),
+            pts_pbn=_i(row, "pts_pbn_nomada"),
+            pts_seguridad=_i(row, "pts_seg_nomada"),
+            pts_verde=_i(row, "pts_verde_nomada"),
+            pts_equip=_i(row, "pts_equip_nomada"),
+        ) if row.get("pts_yield_nomada") is not None else None,
+        n_remates_municipio=_i(row, "n_remates_municipio"),
     )
 
 
@@ -424,7 +464,7 @@ async def list_barrios(
         ORDER BY sc.{score_col} DESC NULLS LAST
     """
     rows = await pool.fetch(sql, municipio, estrato, score_min)
-    return [_build_response(dict(r), score_col) for r in rows]
+    return [_build_response(dict(r), score_col, effective_perfil) for r in rows]
 
 
 @router.get("/comparar", response_model=list[BarrioResponse])
@@ -440,7 +480,7 @@ async def comparar_barrios(
     pool = get_pool()
     sql = _BARRIO_SQL + " WHERE b.id = ANY($1::int[])"
     rows = await pool.fetch(sql, id_list)
-    return [_build_response(dict(r), score_col) for r in rows]
+    return [_build_response(dict(r), score_col, perfil) for r in rows]
 
 
 @router.get("/{barrio_id}", response_model=BarrioResponse)
@@ -454,7 +494,7 @@ async def get_barrio(
     row = await pool.fetchrow(sql, barrio_id)
     if row is None:
         raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
-    return _build_response(dict(row), score_col)
+    return _build_response(dict(row), score_col, perfil)
 
 
 @router.get("/{barrio_id}/listings", response_model=ListingsResponse)
@@ -486,30 +526,59 @@ async def get_barrio_listings(
 
     rows = await pool.fetch(
         """
+        WITH med AS (
+            SELECT precio_venta_m2_p50 AS m2_mediana,
+                   precio_arriendo_p50 AS arr_mediana
+            FROM analytics.barrios_mercado
+            WHERE barrio_id = $1
+        )
         SELECT
-            id,
-            fuente,
-            tipo_operacion,
-            tipo_inmueble,
-            precio::bigint          AS precio_cop,
-            (precio / 4100)::bigint AS precio_usd,
-            area_m2::float8,
-            CASE WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int END AS precio_m2,
-            habitaciones,
-            banos::float8,
-            direccion_raw,
-            url,
-            fecha_scraping::text,
-            NULL::boolean           AS buena_oferta,
-            NULL::float8            AS pct_bajo_mediana
-        FROM staging.stg_listings
-        WHERE barrio_id = $1
-          AND ($2::text   IS NULL OR tipo_operacion = $2)
-          AND ($3::bigint IS NULL OR precio >= $3)
-          AND ($4::bigint IS NULL OR precio <= $4)
-          AND ($5::float8 IS NULL OR area_m2 >= $5)
-          AND ($6::int    IS NULL OR habitaciones = $6)
-        ORDER BY precio_m2 ASC NULLS LAST
+            l.id,
+            l.fuente,
+            l.tipo_operacion,
+            l.tipo_inmueble,
+            l.precio::bigint          AS precio_cop,
+            (l.precio / 4100)::bigint AS precio_usd,
+            l.area_m2::float8,
+            CASE WHEN l.precio_m2 > 0 AND l.precio_m2 < 2147483647
+                 THEN l.precio_m2::int END AS precio_m2,
+            l.habitaciones,
+            l.banos::float8,
+            l.direccion_raw,
+            l.url,
+            l.fecha_scraping::text,
+            CASE
+                WHEN l.tipo_operacion = 'venta'
+                     AND l.precio_m2 > 0 AND l.precio_m2 < 2147483647
+                     AND med.m2_mediana > 0
+                     AND (med.m2_mediana - l.precio_m2)::float8 / med.m2_mediana > 0.10
+                THEN TRUE
+                WHEN l.tipo_operacion = 'arriendo'
+                     AND l.precio > 0
+                     AND med.arr_mediana > 0
+                     AND (med.arr_mediana - l.precio)::float8 / med.arr_mediana > 0.10
+                THEN TRUE
+                ELSE FALSE
+            END AS buena_oferta,
+            CASE
+                WHEN l.tipo_operacion = 'venta'
+                     AND l.precio_m2 > 0 AND l.precio_m2 < 2147483647
+                     AND med.m2_mediana > 0
+                THEN round(((med.m2_mediana - l.precio_m2)::float8 / med.m2_mediana * 100)::numeric, 1)::float8
+                WHEN l.tipo_operacion = 'arriendo'
+                     AND l.precio > 0 AND med.arr_mediana > 0
+                THEN round(((med.arr_mediana - l.precio)::float8 / med.arr_mediana * 100)::numeric, 1)::float8
+                ELSE NULL
+            END AS pct_bajo_mediana
+        FROM staging.stg_listings l
+        CROSS JOIN med
+        WHERE l.barrio_id = $1
+          AND ($2::text   IS NULL OR l.tipo_operacion = $2)
+          AND ($3::bigint IS NULL OR l.precio >= $3)
+          AND ($4::bigint IS NULL OR l.precio <= $4)
+          AND ($5::float8 IS NULL OR l.area_m2 >= $5)
+          AND ($6::int    IS NULL OR l.habitaciones = $6)
+        ORDER BY l.precio_m2 ASC NULLS LAST
         LIMIT $7 OFFSET $8
         """,
         *args, limit, offset,

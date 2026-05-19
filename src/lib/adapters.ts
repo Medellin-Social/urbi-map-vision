@@ -1,5 +1,14 @@
 import type { Opportunity } from "@/data/marketActivity";
 
+export type NomadaBreakdown = {
+  pts_yield: number | null;
+  pts_nomada: number | null;
+  pts_pbn: number | null;
+  pts_seguridad: number | null;
+  pts_verde: number | null;
+  pts_equip: number | null;
+};
+
 export type Neighborhood = {
   id: number;
   nombre: string;
@@ -19,6 +28,7 @@ export type Neighborhood = {
   lng: number;
   score_activo?: number | null;
   estado_precio?: string | null;
+  pbn_precio_justo?: number | null;
   oportunidad?: { detectada: boolean | null; tipo: string | null; descripcion: string | null } | null;
   liquidez_api?: { score: number | null; categoria: string | null; tiempo_estimado_venta: string | null } | null;
   score_salud?: number;
@@ -29,6 +39,10 @@ export type Neighborhood = {
   n_coworking_1km?: number | null;
   n_gimnasios_1km?: number | null;
   n_yoga_1km?: number | null;
+  indice_nomada?: number | null;
+  yield_renta_media_pct?: number | null;
+  precio_renta_media_p50?: number | null;
+  nomada_breakdown?: NomadaBreakdown | null;
   seguridad_score?: number | null;
   seguridad_categoria?: string | null;
   seguridad_nota?: string | null;
@@ -73,7 +87,10 @@ export type ApiBarrio = {
     estado_precio: string | null;
     pbn_precio_justo: number | null;
     poi_precio_oferta: number | null;
+    yield_renta_media_pct: number | null;
+    precio_renta_media_p50: number | null;
   };
+  nomada_breakdown?: NomadaBreakdown | null;
   airbnb: {
     ocupacion_pct: number | null;
     adr_usd: number | null;
@@ -220,6 +237,11 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     n_coworking_1km: b.conectividad.n_coworking_1km,
     n_gimnasios_1km: b.conectividad.n_gimnasios_1km,
     n_yoga_1km: b.conectividad.n_yoga_1km,
+    indice_nomada: b.conectividad.indice_nomada,
+    pbn_precio_justo: b.mercado.pbn_precio_justo,
+    yield_renta_media_pct: b.mercado.yield_renta_media_pct,
+    precio_renta_media_p50: b.mercado.precio_renta_media_p50,
+    nomada_breakdown: b.nomada_breakdown ?? null,
     liquidez_api: b.liquidez
       ? { score: b.liquidez.score, categoria: b.liquidez.categoria, tiempo_estimado_venta: b.liquidez.tiempo_estimado_venta }
       : null,

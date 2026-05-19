@@ -9,6 +9,12 @@ import { auth } from "@/lib/auth";
 import type { ApiBarrio } from "@/lib/adapters";
 
 export const Route = createFileRoute("/comparador")({
+  head: () => ({
+    meta: [
+      { title: "Comparador de Barrios · Urbidata" },
+      { name: "description", content: "Compara hasta 3 barrios de Medellín lado a lado. Yield, seguridad, conectividad y precio m² para tomar mejores decisiones de inversión." },
+    ],
+  }),
   beforeLoad: () => {
     if (typeof window === "undefined") return;
     const raw = localStorage.getItem("urbidata.user");

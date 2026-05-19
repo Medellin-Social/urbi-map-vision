@@ -160,6 +160,10 @@ function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
 // Populated by makeStatsBarrio; consumed by useListings for non-API municipios.
 const _fakeBarrioIndex = new Map<number, { slug: string; statsNombre: string }>();
 
+// ── Fake-barrio full data cache: maps synthetic IDs → ApiBarrio ───────────────
+// Populated by makeStatsBarrio; consumed by useCompararRaw to avoid 404 on fake IDs.
+const _fakeBarioData = new Map<number, ApiBarrio>();
+
 // ── Static listings cache per municipio slug ──────────────────────────────────
 type StaticListing = {
   id: number;
@@ -213,7 +217,7 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
   const scoreActivo = pickScoreActivo(stats, perfil);
   const fakeId = 800_000 + stats.id;
   _fakeBarrioIndex.set(fakeId, { slug: stats.slug_municipio.replace(/-/g, "_"), statsNombre: stats.nombre.toUpperCase() });
-  return {
+  const barrio: ApiBarrio = {
     barrio_id: fakeId,
     nombre: f.properties.nombre,
     comuna: null,
@@ -241,6 +245,8 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
       estado_precio: null,
       pbn_precio_justo: null,
       poi_precio_oferta: null,
+      yield_renta_media_pct: null,
+      precio_renta_media_p50: null,
     },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
     seguridad: {
@@ -279,6 +285,8 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
     valorizacion: { var_anual_pct: null, proyeccion_3anos_pct: null, proyeccion_5anos_pct: null, tendencia: null },
     n_remates_municipio: stats.n_remates_municipio,
   };
+  _fakeBarioData.set(fakeId, barrio);
+  return barrio;
 }
 
 function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
@@ -292,7 +300,7 @@ function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
     color_hex: null,
     excluir_inversion: false,
     scores: { corto: null, cat_corto: null, mediano: null, cat_mediano: null, largo: null, cat_largo: null, perfil_recomendado: null, score_activo: null },
-    mercado: { precio_m2_cop: null, precio_m2_usd: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null },
+    mercado: { precio_m2_cop: null, precio_m2_usd: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null, yield_renta_media_pct: null, precio_renta_media_p50: null },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
     seguridad: { score: null, categoria: null, zona_turistica: null, tendencia: null, nota: null },
     conectividad: { dist_metro_km: null, dist_parque_km: null, dist_mall_km: null, n_cafes_500m: null, n_coworking_1km: null, n_gimnasios_1km: null, n_yoga_1km: null, indice_nomada: null },
@@ -392,12 +400,28 @@ export function useComparar(ids: number[]) {
   });
 }
 
+const FAKE_ID_THRESHOLD = 800_000;
+
 export function useCompararRaw(ids: number[]) {
   return useQuery({
     queryKey: ["comparar-raw", ids],
     queryFn: async () => {
-      const url = `${API_ENDPOINTS.comparar}?ids=${ids.join(",")}`;
-      return apiFetch<ApiBarrio[]>(url);
+      const realIds = ids.filter((id) => id < FAKE_ID_THRESHOLD);
+      const fakeIds = ids.filter((id) => id >= FAKE_ID_THRESHOLD);
+
+      const [apiResults] = await Promise.all([
+        realIds.length > 0
+          ? apiFetch<ApiBarrio[]>(`${API_ENDPOINTS.comparar}?ids=${realIds.join(",")}`)
+          : Promise.resolve([] as ApiBarrio[]),
+        // Trigger geometry+stats load so _fakeBarioData gets populated for fake IDs
+        fakeIds.length > 0 ? Promise.all([loadStaticGeometry(), loadBarrioStats()]) : Promise.resolve([]),
+      ]);
+
+      const fakeResults: ApiBarrio[] = fakeIds
+        .map((id) => _fakeBarioData.get(id))
+        .filter((b): b is ApiBarrio => b != null);
+
+      return [...apiResults, ...fakeResults];
     },
     enabled: ids.length > 0,
     staleTime: 5 * 60 * 1000,

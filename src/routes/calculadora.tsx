@@ -31,6 +31,12 @@ const searchSchema = z.object({
 });
 
 export const Route = createFileRoute("/calculadora")({
+  head: () => ({
+    meta: [
+      { title: "Calculadora de Rentabilidad · Urbidata" },
+      { name: "description", content: "Simula el retorno de tu inversión inmobiliaria en Medellín. Calcula yield bruto, flujo de caja y proyección a 10 años por barrio." },
+    ],
+  }),
   validateSearch: searchSchema,
   beforeLoad: () => {
     if (typeof window === "undefined") return;
@@ -385,6 +391,7 @@ function CalculadoraPage() {
                   key={`${barrioId}-${tipo}-${horizonte}-${presupuesto}`}
                   r={simResult}
                   horizonte={horizonte}
+                  barrioId={barrioId}
                 />
               ) : (
                 <motion.div
@@ -413,7 +420,8 @@ function CalculadoraPage() {
 
 /* ---------- Results ---------- */
 
-function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Horizonte }) {
+function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horizonte: Horizonte; barrioId: number }) {
+  const navigate = useNavigate();
   const { label: ratingLabel, stars, toneClass } = scoreToRating(r.score_oportunidad);
 
   const tipoLabel = {
@@ -540,8 +548,11 @@ function ResultsPanel({ r, horizonte }: { r: SimulacionResponse; horizonte: Hori
 
       {/* Row 6 - CTAs */}
       <div className="grid grid-cols-2 gap-2 pt-1">
-        <button className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20">
-          Ver barrios similares <ArrowRight className="h-3 w-3" />
+        <button
+          onClick={() => navigate({ to: "/comparador" })}
+          className="inline-flex items-center justify-center gap-1.5 rounded-md border border-primary/50 bg-primary/10 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+        >
+          Comparar barrios <ArrowRight className="h-3 w-3" />
         </button>
         <button
           onClick={() => {

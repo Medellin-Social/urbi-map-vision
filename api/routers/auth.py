@@ -147,3 +147,102 @@ async def logout(
         "INSERT INTO token_blacklist (token, usuario_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
         credentials.credentials, current_user["id"],
     )
+
+
+@router.post("/refresh", response_model=AuthResponse)
+@limiter.limit("10/minute")
+async def refresh_token(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Depends(_bearer),
+    current_user: dict = Depends(get_current_user),
+):
+    """Exchange a valid token for a fresh 30-day token. Old token is blacklisted."""
+    pool = get_pool()
+    await pool.execute(
+        "INSERT INTO token_blacklist (token, usuario_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
+        credentials.credentials, current_user["id"],
+    )
+    new_token = _make_token(current_user["id"])
+    perfil = await _get_perfil(pool, current_user["id"])
+    return AuthResponse(
+        token=new_token,
+        user=UserBasic(**{k: current_user[k] for k in ("id", "email", "nombre", "apellido")}),
+        perfil_inversor=perfil,
+    )
+
+
+# ── Password reset ─────────────────────────────────────────────────────────────
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str
+
+
+@router.post("/forgot-password", status_code=200)
+@limiter.limit("3/minute")
+async def forgot_password(request: Request, req: ForgotPasswordRequest):
+    """
+    Generates a password-reset token valid for 1 hour.
+    In production this token would be emailed; during beta it is returned
+    directly in the response so the frontend can link straight to the
+    reset form without an SMTP dependency.
+    """
+    import secrets
+    pool = get_pool()
+    user = await pool.fetchrow("SELECT id FROM usuarios WHERE email = $1", req.email)
+    if user is None:
+        # Return 200 regardless to avoid email enumeration
+        return {"message": "Si el correo existe recibirás instrucciones.", "reset_token": None}
+
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(hours=1)
+
+    await pool.execute(
+        """
+        INSERT INTO password_reset_tokens (usuario_id, token, expires_at)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (usuario_id) DO UPDATE
+            SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE
+        """,
+        user["id"], token, expires,
+    )
+    return {
+        "message": "Token generado. En producción se enviaría por email.",
+        "reset_token": token,
+    }
+
+
+@router.post("/reset-password", status_code=200)
+@limiter.limit("5/minute")
+async def reset_password(request: Request, req: ResetPasswordRequest):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT usuario_id, expires_at, used
+        FROM password_reset_tokens
+        WHERE token = $1
+        """,
+        req.token,
+    )
+    if row is None or row["used"]:
+        raise HTTPException(status_code=400, detail="Token inválido o ya utilizado")
+    if row["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Token expirado. Solicita uno nuevo.")
+
+    new_hash = _hash_password(req.new_password)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE usuarios SET password_hash = $1 WHERE id = $2",
+                new_hash, row["usuario_id"],
+            )
+            await conn.execute(
+                "UPDATE password_reset_tokens SET used = TRUE WHERE token = $1",
+                req.token,
+            )
+
+    return {"message": "Contraseña actualizada correctamente"}

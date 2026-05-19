@@ -526,6 +526,17 @@ const PROTECT = new Set([
   "Laureles", "Robledo", "Aranjuez", "El Poblado", "El Rodeo",
   "Mapbox", "Fincaraíz", "Metrocuadrado", "PBN", "ADR", "CDT",
   "Google", "PSE", "Nequi",
+
+  // Panel section labels & API category values — always shown in Spanish
+  "Seguridad", "Salud financiera", "Índice verde", "Valorización",
+  "Actividad de Mercado", "Tiempo estimado", "Listings destacados",
+  "Simular inversión aquí",
+  // Categoria values from the API (returned as Spanish strings from dbt)
+  "MUY SEGURO", "SEGURO", "POCO SEGURO", "PELIGROSO",
+  "MUY VERDE", "VERDE", "POCO VERDE",
+  "ALTA", "MEDIA", "BAJA", "MUY BAJA",
+  "Sin remates activos ✅",
+  "Fuente: avisos judiciales públicos",
 ]);
 
 // Sort once, longest phrases first so substrings don't pre-empt phrases.

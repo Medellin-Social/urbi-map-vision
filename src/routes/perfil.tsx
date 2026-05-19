@@ -27,6 +27,7 @@ import {
   type Risk,
   type UrbiUser,
 } from "@/lib/auth";
+import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
 import {
   SCORE_PALETTES,
   getActivePaletteId,
@@ -445,12 +446,20 @@ function AddPaymentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: P
 
 /* ---------------- Favoritos ---------------- */
 
-function FavoritosTab({ user }: { user: UrbiUser }) {
-  const favs = user.favorites ?? [];
+function FavoritosTab({ user: _user }: { user: UrbiUser }) {
+  const { data: favs = [], isLoading, isError } = useFavoritos();
+  const { remove } = useToggleFavorito();
+
   return (
     <div className="space-y-5">
       <SectionTitle title="Favoritos" hint="Barrios guardados con tu configuración exacta." />
-      {favs.length === 0 ? (
+      {isLoading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">Cargando favoritos...</div>
+      ) : isError ? (
+        <div className="rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">
+          Error al cargar favoritos. Verifica tu conexión.
+        </div>
+      ) : favs.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Sin favoritos aún. Toca el ⭐ en un barrio para guardarlo.
         </div>
@@ -460,25 +469,32 @@ function FavoritosTab({ user }: { user: UrbiUser }) {
             <div key={f.id} className="rounded-xl border border-border bg-background/40 p-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Barrio</div>
-                  <div className="mt-0.5 font-display text-lg font-semibold">{f.nombre}</div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
+                    {f.municipio ?? "Barrio"}
+                  </div>
+                  <div className="mt-0.5 font-display text-lg font-semibold">
+                    {f.nombre ?? `Barrio ${f.barrio_id}`}
+                  </div>
+                  {f.comuna && (
+                    <div className="text-[11px] text-muted-foreground">{f.comuna}</div>
+                  )}
                 </div>
                 <Star className="h-4 w-4 fill-warning text-warning" />
               </div>
               <div className="mt-2 flex items-center justify-between text-xs">
-                <span className="text-muted-foreground">Yield</span>
-                <span className="font-semibold text-primary">{f.yield.toFixed(1)}%</span>
+                <span className="text-muted-foreground">Yield bruto</span>
+                <span className="font-semibold text-primary">
+                  {f.yield_bruto != null ? `${f.yield_bruto.toFixed(1)}%` : "—"}
+                </span>
               </div>
               <div className="mt-3 flex items-center justify-between gap-2">
-                <Link
-                  to="/map"
-                  className="text-[11px] font-semibold text-primary hover:underline"
-                >
+                <Link to="/map" className="text-[11px] font-semibold text-primary hover:underline">
                   Ver en mapa →
                 </Link>
                 <button
-                  onClick={() => auth.toggleFavorite({ id: f.id, nombre: f.nombre, yield: f.yield })}
-                  className="text-[11px] text-muted-foreground hover:text-danger"
+                  onClick={() => remove.mutate(f.barrio_id)}
+                  disabled={remove.isPending}
+                  className="text-[11px] text-muted-foreground hover:text-danger disabled:opacity-50"
                 >
                   Quitar
                 </button>
@@ -493,36 +509,55 @@ function FavoritosTab({ user }: { user: UrbiUser }) {
 
 /* ---------------- Historial ---------------- */
 
-function HistorialTab({ user }: { user: UrbiUser }) {
-  const items = user.history ?? [];
+const HISTORIAL_ICON: Record<string, string> = {
+  simulacion: "💰",
+  vista_barrio: "👁",
+  comparacion: "↔️",
+  favorito: "⭐",
+};
+
+function HistorialTab({ user: _user }: { user: UrbiUser }) {
+  const { data: items = [], isLoading, isError } = useHistorial();
+
   return (
     <div className="space-y-5">
-      <SectionTitle title="Historial" hint="Tus últimas búsquedas, simulaciones y favoritos." />
-      {items.length === 0 ? (
+      <SectionTitle title="Historial" hint="Tus últimas simulaciones y búsquedas (últimas 20)." />
+      {isLoading ? (
+        <div className="py-8 text-center text-sm text-muted-foreground">Cargando historial...</div>
+      ) : isError ? (
+        <div className="rounded-xl border border-danger/40 bg-danger/10 p-4 text-sm text-danger">
+          Error al cargar historial. Verifica tu conexión.
+        </div>
+      ) : items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border p-8 text-center text-sm text-muted-foreground">
           Sin actividad reciente.
         </div>
       ) : (
         <div className="space-y-2">
-          {items.map((h) => (
-            <div key={h.id} className="flex items-center justify-between rounded-lg border border-border bg-background/40 px-3 py-2 text-sm">
-              <div className="flex items-center gap-2">
-                <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/10 text-primary">
-                  {h.type === "view" ? "👁" : h.type === "calc" ? "💰" : h.type === "favorite" ? "⭐" : "↔️"}
-                </span>
-                <span>{h.label}</span>
+          {items.map((h) => {
+            const label =
+              h.tipo === "simulacion"
+                ? `Simuló ${h.barrio_nombre ?? `barrio ${h.barrio_id}`}`
+                : h.tipo === "comparacion"
+                ? "Comparó barrios"
+                : `Vio ${h.barrio_nombre ?? `barrio ${h.barrio_id}`}`;
+            return (
+              <div
+                key={h.id}
+                className="flex items-center justify-between rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/10 text-primary">
+                    {HISTORIAL_ICON[h.tipo] ?? "📋"}
+                  </span>
+                  <span>{label}</span>
+                </div>
+                <time className="text-[11px] text-muted-foreground">
+                  {relativeTime(new Date(h.created_at).getTime())}
+                </time>
               </div>
-              <time className="text-[11px] text-muted-foreground">{relativeTime(h.ts)}</time>
-            </div>
-          ))}
-          <button
-            onClick={() => {
-              if (confirm("¿Borrar todo el historial?")) auth.patch({ history: [] });
-            }}
-            className="mt-3 text-[11px] text-muted-foreground hover:text-danger"
-          >
-            Limpiar historial
-          </button>
+            );
+          })}
         </div>
       )}
     </div>

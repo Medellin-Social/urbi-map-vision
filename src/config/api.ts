@@ -7,6 +7,9 @@ export const API_ENDPOINTS = {
   login: `${API_BASE_URL}/auth/login`,
   me: `${API_BASE_URL}/auth/me`,
   logout: `${API_BASE_URL}/auth/logout`,
+  refreshToken: `${API_BASE_URL}/auth/refresh`,
+  forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
+  resetPassword: `${API_BASE_URL}/auth/reset-password`,
 
   // Barrios
   barrios: `${API_BASE_URL}/barrios`,

@@ -63,12 +63,19 @@ function LoginPage() {
         >
           {login.isPending ? "Entrando…" : "Entrar"}
         </motion.button>
-        <p className="text-center text-xs text-muted-foreground">
-          ¿Sin cuenta?{" "}
-          <Link to="/register" className="text-primary hover:underline">
-            Crear una cuenta
-          </Link>
-        </p>
+        <div className="space-y-1 text-center text-xs text-muted-foreground">
+          <p>
+            <Link to="/forgot-password" className="text-primary hover:underline">
+              ¿Olvidaste tu contraseña?
+            </Link>
+          </p>
+          <p>
+            ¿Sin cuenta?{" "}
+            <Link to="/register" className="text-primary hover:underline">
+              Crear una cuenta
+            </Link>
+          </p>
+        </div>
       </form>
     </AuthShell>
   );

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useCallback } from "react";
 import { Link } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -17,12 +17,14 @@ import {
   Calculator,
   ChevronRight,
   Coffee,
+  Dumbbell,
   GripVertical,
   Leaf,
   Minus,
   Shield,
   Train,
   Trees,
+  Utensils,
   ShoppingBag,
   Sparkles,
   Star,
@@ -31,6 +33,7 @@ import {
   Target,
   X,
 } from "lucide-react";
+import type { NomadaBreakdown } from "@/lib/adapters";
 import type { Neighborhood } from "@/lib/adapters";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";
 import { OPP_COLORS } from "@/config/mapColors";
@@ -38,6 +41,7 @@ import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
+import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
 import type { ApiListing } from "@/lib/adapters";
 
 type View = "city" | "barrio" | "listings";
@@ -83,9 +87,10 @@ function readPanelPos(width: number): { left: number; top: number } {
 type Props = {
   selected: Neighborhood | null;
   onClear: () => void;
+  onSelect?: (n: Neighborhood) => void;
 };
 
-export function FloatingPanel({ selected, onClear }: Props) {
+export function FloatingPanel({ selected, onClear, onSelect }: Props) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<View>("city");
   const [minimized, setMinimized] = useState(false);
@@ -190,7 +195,7 @@ export function FloatingPanel({ selected, onClear }: Props) {
             <div className="h-1.5 w-10 rounded-full bg-border" />
           </div>
           <div className="max-h-[70vh] overflow-y-auto px-4 pb-6">
-            <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} />
+            <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} />
           </div>
         </motion.div>
       </AnimatePresence>
@@ -254,7 +259,7 @@ export function FloatingPanel({ selected, onClear }: Props) {
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
-              <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} />
+              <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} />
             </div>
 
             {/* Resize handle — bottom-right corner */}
@@ -285,18 +290,20 @@ function PanelContent({
   selected,
   onClear,
   user,
+  onSelect,
 }: {
   view: View;
   setView: (v: View) => void;
   selected: Neighborhood | null;
   onClear: () => void;
   user: ReturnType<typeof auth.get>;
+  onSelect?: (n: Neighborhood) => void;
 }) {
   return (
     <AnimatePresence mode="wait">
       {view === "city" && (
         <motion.div key="city" {...transition}>
-          <CityOverview goal={user?.goal} />
+          <CityOverview goal={user?.goal} onSelect={onSelect} />
         </motion.div>
       )}
       {view === "barrio" && selected && (
@@ -332,15 +339,26 @@ const transition = {
 
 function goalToPerfil(goal?: Goal | null): string | undefined {
   if (goal === "airbnb") return "airbnb";
-  if (goal === "mixto") return "nomadas";
+  if (goal === "nomadas") return "nomadas";
   if (goal === "renta-larga" || goal === "valorizacion") return "largo_plazo";
   return undefined;
 }
 
-function CityOverview({ goal }: { goal?: Goal }) {
+function CityOverview({ goal, onSelect }: { goal?: Goal; onSelect?: (n: Neighborhood) => void }) {
   const perfil = goalToPerfil(goal);
   const { data: apiStats } = useCiudadStats(perfil);
   const { data: barriosRaw } = useBarriosRaw(perfil);
+  const { data: allBarriosNeighborhood } = useBarrios(perfil);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchFocused, setSearchFocused] = useState(false);
+
+  const searchResults = useMemo(() => {
+    if (!searchQuery.trim() || !allBarriosNeighborhood) return [];
+    const q = searchQuery.trim().toUpperCase();
+    return allBarriosNeighborhood
+      .filter((n) => n.nombre.toUpperCase().includes(q) || n.comuna?.toUpperCase().includes(q))
+      .slice(0, 8);
+  }, [searchQuery, allBarriosNeighborhood]);
 
   // Fallback: compute stats from all-Valle barrios when API returns nothing
   const computedStats = useMemo(() => {
@@ -396,6 +414,41 @@ function CityOverview({ goal }: { goal?: Goal }) {
           Tu perfil:{" "}
           <span className="text-foreground">{goal ? GOAL_LABEL[goal] : "—"}</span>
         </p>
+      </div>
+
+      {/* Search bar */}
+      <div className="relative">
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
+          placeholder="Buscar barrio…"
+          className="w-full rounded-lg border border-border bg-background/50 px-3 py-2 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary placeholder:text-muted-foreground"
+        />
+        {searchFocused && searchResults.length > 0 && (
+          <div className="absolute left-0 right-0 top-full z-50 mt-1 max-h-48 overflow-y-auto rounded-lg border border-border bg-surface shadow-xl">
+            {searchResults.map((n) => (
+              <button
+                key={n.id}
+                onMouseDown={() => {
+                  setSearchQuery("");
+                  onSelect?.(n);
+                }}
+                className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition hover:bg-primary/10"
+              >
+                <div>
+                  <span className="font-medium">{titleCase(n.nombre)}</span>
+                  <span className="ml-1 text-[11px] text-muted-foreground">{n.comuna}</span>
+                </div>
+                {n.score_activo != null && (
+                  <span className="text-[11px] font-semibold text-primary">{n.score_activo}</span>
+                )}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-2">
@@ -520,18 +573,33 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
     const vals = allBarrios?.map((b) => b.verde_pct ?? 0).filter((v) => v > 0) ?? [];
     return vals.length ? Math.max(...vals) : 40;
   }, [allBarrios]);
-  const [fav, setFav] = useState<boolean>(() => auth.isFavorite(n.id));
+  const { data: apiFavs = [] } = useFavoritos();
+  const { add: addFav, remove: removeFav } = useToggleFavorito();
+  const isRealBarrio = n.id < 800_000;
+  const apiFav = apiFavs.some((f) => f.barrio_id === n.id);
+  const [fav, setFav] = useState<boolean>(() => isRealBarrio ? apiFav : auth.isFavorite(n.id));
+
+  useEffect(() => {
+    setFav(isRealBarrio ? apiFav : auth.isFavorite(n.id));
+  }, [n.id, apiFav, isRealBarrio]);
 
   // Log view to history once per neighborhood
   useEffect(() => {
     auth.pushHistory({ type: "view", label: `Vio ${titleCase(n.nombre)}`, barrioId: n.id });
-    setFav(auth.isFavorite(n.id));
   }, [n.id]);
 
-  const toggleFav = () => {
-    auth.toggleFavorite({ id: n.id, nombre: titleCase(n.nombre), yield: n.yield });
-    setFav(auth.isFavorite(n.id));
-  };
+  const toggleFav = useCallback(() => {
+    if (isRealBarrio) {
+      if (apiFav) {
+        removeFav.mutate(n.id);
+      } else {
+        addFav.mutate(n.id);
+      }
+    } else {
+      auth.toggleFavorite({ id: n.id, nombre: titleCase(n.nombre), yield: n.yield });
+      setFav(auth.isFavorite(n.id));
+    }
+  }, [isRealBarrio, apiFav, n.id, n.nombre, n.yield, addFav, removeFav]);
 
   return (
     <div className="space-y-4">
@@ -615,10 +683,12 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
               <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
               <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
             </>
-          ) : goal === "mixto" ? (
+          ) : goal === "nomadas" ? (
             <>
               <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
               <ConnRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Coworking en 1km" value={fmtConn(n.n_coworking_1km, "espacios")} />
+              <ConnRow icon={<Dumbbell className="h-3.5 w-3.5" />} label="Gimnasios en 1km" value={fmtConn(n.n_gimnasios_1km, "centros")} />
+              <ConnRow icon={<Utensils className="h-3.5 w-3.5" />} label="Yoga studios en 1km" value={fmtConn(n.n_yoga_1km, "estudios")} />
               <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
             </>
           ) : goal === "renta-larga" ? (
@@ -636,6 +706,8 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
           )}
         </div>
       </Section>
+
+      {goal === "nomadas" && <NomadaSection n={n} />}
 
       <SeguridadSection n={n} />
       <VerdeSection n={n} maxVerdePct={maxVerdePct} />
@@ -692,6 +764,221 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
           Ver todos los listings <ArrowRight className="h-3 w-3" />
         </button>
       </Section>
+    </div>
+  );
+}
+
+/* ------------- Nómadas section ------------- */
+
+function nomadaIndexColor(idx: number | null | undefined): string {
+  if (idx == null) return "#6b7280";
+  if (idx >= 70) return "#10b981";
+  if (idx >= 40) return "#f59e0b";
+  return "#ef4444";
+}
+
+function NomadaSection({ n }: { n: Neighborhood }) {
+  const idx = n.indice_nomada;
+  const idxColor = nomadaIndexColor(idx);
+  const idxLabel = idx == null ? "Sin datos" : idx >= 70 ? "ALTO" : idx >= 40 ? "MEDIO" : "BAJO";
+
+  // Renta media
+  const rentaMedia = n.precio_renta_media_p50;
+  const arriendo = n.arriendo;
+  const rentaDisplay = rentaMedia ?? (arriendo > 0 ? Math.round(arriendo * 1.4) : null);
+  const rentaEstimada = !rentaMedia && rentaDisplay != null;
+  const premiumPct = arriendo > 0 && rentaDisplay
+    ? Math.round(((rentaDisplay - arriendo) / arriendo) * 100)
+    : null;
+  const yieldMedia = n.yield_renta_media_pct;
+  const yieldLargo = n.yield;
+
+  // PBN
+  const estadoPrecio = n.estado_precio;
+  const pbnJusto = n.pbn_precio_justo;
+
+  // Score breakdown
+  const bd: NomadaBreakdown | null | undefined = n.nomada_breakdown;
+  const totalScore = bd
+    ? (bd.pts_yield ?? 0) + (bd.pts_nomada ?? 0) + (bd.pts_pbn ?? 0) +
+      (bd.pts_seguridad ?? 0) + (bd.pts_verde ?? 0) + (bd.pts_equip ?? 0)
+    : null;
+
+  const PBN_COLORS: Record<string, string> = {
+    BAJO: "#10b981",
+    NORMAL: "#00d4ff",
+    SOBRE: "#ef4444",
+  };
+  const pbnColor = estadoPrecio ? (PBN_COLORS[estadoPrecio] ?? "#6b7280") : "#6b7280";
+
+  return (
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
+        <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-primary">
+          <Briefcase className="h-3 w-3" /> Perfil Nómadas / Empresarios
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Análisis específico para inversión en renta media (1–6 meses) orientada a profesionales remotos.
+        </p>
+      </div>
+
+      {/* 1. Infraestructura nómada — índice + perfil (POIs ya visibles en Conectividad) */}
+      <Section title="🏢 Infraestructura nómada">
+        {idx != null && (
+          <motion.div
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3 }}
+            className="mt-3 rounded-xl border p-3"
+            style={{ borderColor: `${idxColor}66`, background: `${idxColor}10` }}
+          >
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-semibold" style={{ color: idxColor }}>
+                Índice nómada: {Math.round(idx)}/100
+              </span>
+              <span
+                className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+                style={{ background: `${idxColor}22`, color: idxColor }}
+              >
+                {idxLabel}
+              </span>
+            </div>
+            <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+              <motion.div
+                initial={{ width: 0 }}
+                animate={{ width: `${Math.min(100, idx)}%` }}
+                transition={{ duration: 0.8, ease: "easeOut" }}
+                className="h-full rounded-full"
+                style={{ background: idxColor }}
+              />
+            </div>
+          </motion.div>
+        )}
+
+        {/* Perfil del inquilino objetivo */}
+        <div className="mt-3 rounded-lg border border-border/60 bg-background/30 p-3 text-xs leading-relaxed text-muted-foreground">
+          {(idx ?? 0) >= 70 ? (
+            "✅ Zona ideal para nómadas digitales. Alta densidad de cafés y coworking. Demanda sostenida de profesionales remotos."
+          ) : (idx ?? 0) >= 40 ? (
+            "⚡ Zona con buena infraestructura nómada. Cafés y servicios disponibles. Creciente demanda de renta media."
+          ) : (
+            "⚠️ Infraestructura nómada limitada. Considera zonas con mayor densidad de servicios para este perfil."
+          )}
+        </div>
+      </Section>
+
+      {/* 2. Rentabilidad renta media */}
+      <Section title="💰 Rentabilidad renta media">
+        <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-1.5">
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Arriendo tradicional:</span>
+            <span>{formatCOP(arriendo)}/mes</span>
+          </div>
+          {rentaDisplay != null && (
+            <>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">
+                  Renta media estimada:{rentaEstimada && <span className="ml-0.5 text-warning">*</span>}
+                </span>
+                <span className="text-success font-semibold">{formatCOP(rentaDisplay)}/mes</span>
+              </div>
+              {premiumPct != null && premiumPct > 0 && (
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Premium vs largo plazo:</span>
+                  <span className="text-success font-semibold">+{premiumPct}% más</span>
+                </div>
+              )}
+            </>
+          )}
+          <hr className="border-border/40" />
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Yield renta media:</span>
+            <span className="font-semibold" style={{ color: yieldColor(yieldMedia ?? 0) }}>
+              {yieldMedia != null ? `${yieldMedia.toFixed(1)}%` : "Sin datos"}
+            </span>
+          </div>
+          <div className="flex justify-between">
+            <span className="text-muted-foreground">Yield largo plazo (ref):</span>
+            <span className="text-muted-foreground">{yieldLargo.toFixed(1)}%</span>
+          </div>
+        </div>
+        {rentaEstimada && (
+          <p className="mt-1 text-[10px] text-muted-foreground/60">
+            * Estimado. Sin datos directos de renta media — proyectado como arriendo × 1.4.
+          </p>
+        )}
+      </Section>
+
+      {/* 3. Precio justo PBN */}
+      {estadoPrecio && (
+        <Section title="📊 Precio justo (PBN)">
+          <div
+            className="rounded-xl border p-3"
+            style={{ borderColor: `${pbnColor}66`, background: `${pbnColor}10` }}
+          >
+            <div className="flex items-center justify-between">
+              <span
+                className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+                style={{ background: `${pbnColor}22`, color: pbnColor }}
+              >
+                {estadoPrecio}
+              </span>
+              {pbnJusto && (
+                <span className="text-xs text-muted-foreground">
+                  PBN justo: <span className="font-semibold text-foreground">{formatCOP(pbnJusto)}/m²</span>
+                </span>
+              )}
+            </div>
+            <div className="mt-2 flex justify-between text-xs">
+              <span className="text-muted-foreground">Precio actual:</span>
+              <span className="font-semibold">{formatCOP(n.precio_m2)}/m²</span>
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* 4. Score breakdown */}
+      {bd && totalScore != null && (
+        <Section title="🎯 ¿Por qué este score?">
+          <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-1.5">
+            <ScoreRow label="Yield renta media" pts={bd.pts_yield} max={25} />
+            <ScoreRow label="Infraestructura nómada" pts={bd.pts_nomada} max={30} highlight />
+            <ScoreRow label="Precio justo (PBN)" pts={bd.pts_pbn} max={18} />
+            <ScoreRow label="Seguridad percibida" pts={bd.pts_seguridad} max={12} />
+            <ScoreRow label="Índice verde" pts={bd.pts_verde} max={10} />
+            <ScoreRow label="Equipamiento" pts={bd.pts_equip} max={5} />
+            <hr className="border-border/40" />
+            <div className="flex justify-between font-semibold">
+              <span>Total</span>
+              <span className="text-primary">{totalScore}/100</span>
+            </div>
+          </div>
+        </Section>
+      )}
+    </div>
+  );
+}
+
+function ScoreRow({ label, pts, max, highlight }: { label: string; pts: number | null | undefined; max: number; highlight?: boolean }) {
+  const val = pts ?? 0;
+  return (
+    <div className="flex items-center justify-between gap-2">
+      <span className={`text-muted-foreground ${highlight ? "font-medium text-foreground/80" : ""}`}>{label}</span>
+      <div className="flex items-center gap-1.5 shrink-0">
+        <div className="h-1 w-16 overflow-hidden rounded-full bg-background/60">
+          <div
+            className="h-full rounded-full transition-all"
+            style={{
+              width: `${(val / max) * 100}%`,
+              background: highlight ? "#00d4ff" : "#7c3aed",
+            }}
+          />
+        </div>
+        <span className={`w-10 text-right ${highlight ? "font-semibold text-primary" : ""}`}>
+          {pts != null ? `${pts}/${max}` : `—/${max}`}
+        </span>
+      </div>
     </div>
   );
 }

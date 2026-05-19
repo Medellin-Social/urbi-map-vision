@@ -1,0 +1,116 @@
+"""Shared config for renta_media scrapers."""
+import hashlib
+import os
+from pathlib import Path
+from typing import Optional
+
+import psycopg2
+import psycopg2.extras
+from dotenv import load_dotenv
+from rapidfuzz import fuzz, process
+
+_ROOT = Path(__file__).parent.parent.parent
+load_dotenv(_ROOT / ".env.local")
+load_dotenv(_ROOT / ".env")
+
+DATABASE_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+)
+EUR_TO_COP = float(os.getenv("EUR_TO_COP", "4500"))
+USD_TO_COP = float(os.getenv("USD_TO_COP", "4100"))
+
+CREATE_TABLE_SQL = """
+CREATE TABLE IF NOT EXISTS raw.listings_renta_media (
+    id                SERIAL PRIMARY KEY,
+    fuente            VARCHAR NOT NULL,
+    titulo            VARCHAR,
+    precio_mes_cop    BIGINT,
+    precio_mes_usd    DECIMAL,
+    area_m2           DECIMAL,
+    habitaciones      INTEGER,
+    banos             DECIMAL,
+    barrio_raw        VARCHAR,
+    barrio_id         INTEGER REFERENCES raw.barrios(id),
+    amoblado          BOOLEAN DEFAULT TRUE,
+    incluye_servicios BOOLEAN,
+    min_noches        INTEGER,
+    url               VARCHAR UNIQUE,
+    lat               DECIMAL(10,6),
+    lon               DECIMAL(10,6),
+    fecha_scraping    TIMESTAMP DEFAULT NOW(),
+    dedup_hash        VARCHAR UNIQUE
+);
+CREATE INDEX IF NOT EXISTS idx_lrm_barrio_id ON raw.listings_renta_media(barrio_id);
+CREATE INDEX IF NOT EXISTS idx_lrm_fuente    ON raw.listings_renta_media(fuente);
+"""
+
+
+def get_conn():
+    return psycopg2.connect(DATABASE_URL)
+
+
+def ensure_table(conn) -> None:
+    with conn.cursor() as cur:
+        cur.execute(CREATE_TABLE_SQL)
+    conn.commit()
+
+
+def load_barrios(conn) -> list[dict]:
+    with conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor) as cur:
+        cur.execute("SELECT id, nombre FROM raw.barrios ORDER BY id")
+        return [dict(r) for r in cur.fetchall()]
+
+
+def match_barrio(barrio_raw: str, barrios: list[dict]) -> Optional[int]:
+    if not barrio_raw or not barrios:
+        return None
+    nombres = [b["nombre"] for b in barrios]
+    result = process.extractOne(
+        barrio_raw.upper(),
+        nombres,
+        scorer=fuzz.token_set_ratio,
+        score_cutoff=70,
+    )
+    if not result:
+        return None
+    idx = nombres.index(result[0])
+    return barrios[idx]["id"]
+
+
+def make_dedup_hash(fuente: str, url: str) -> str:
+    return hashlib.md5(f"{fuente}:{url}".encode()).hexdigest()
+
+
+UPSERT_SQL = """
+INSERT INTO raw.listings_renta_media (
+    fuente, titulo, precio_mes_cop, precio_mes_usd, area_m2,
+    habitaciones, banos, barrio_raw, barrio_id, amoblado,
+    incluye_servicios, min_noches, url, lat, lon, dedup_hash
+) VALUES (
+    %(fuente)s, %(titulo)s, %(precio_mes_cop)s, %(precio_mes_usd)s, %(area_m2)s,
+    %(habitaciones)s, %(banos)s, %(barrio_raw)s, %(barrio_id)s, %(amoblado)s,
+    %(incluye_servicios)s, %(min_noches)s, %(url)s, %(lat)s, %(lon)s, %(dedup_hash)s
+)
+ON CONFLICT (url) DO UPDATE SET
+    precio_mes_cop    = EXCLUDED.precio_mes_cop,
+    precio_mes_usd    = EXCLUDED.precio_mes_usd,
+    titulo            = EXCLUDED.titulo,
+    area_m2           = EXCLUDED.area_m2,
+    habitaciones      = EXCLUDED.habitaciones,
+    banos             = EXCLUDED.banos,
+    barrio_raw        = EXCLUDED.barrio_raw,
+    barrio_id         = EXCLUDED.barrio_id,
+    amoblado          = EXCLUDED.amoblado,
+    incluye_servicios = EXCLUDED.incluye_servicios,
+    min_noches        = EXCLUDED.min_noches,
+    lat               = EXCLUDED.lat,
+    lon               = EXCLUDED.lon,
+    fecha_scraping    = NOW()
+"""
+
+
+def upsert_listing(conn, listing: dict) -> None:
+    with conn.cursor() as cur:
+        cur.execute(UPSERT_SQL, listing)
+    conn.commit()
