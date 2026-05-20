@@ -139,10 +139,10 @@ export async function refreshIfExpiringSoon(): Promise<void> {
 }
 
 export const GOAL_LABEL: Record<Goal, string> = {
-  airbnb: "Airbnb",
+  airbnb: "Renta Corta",
+  mediano_plazo: "Renta media",
   "renta-larga": "Renta larga",
   valorizacion: "Valorización",
-  mediano_plazo: "Renta media",
 };
 
 export const MAP_STYLES: Record<MapStyleId, { label: string; url: string; swatch: string[] }> = {

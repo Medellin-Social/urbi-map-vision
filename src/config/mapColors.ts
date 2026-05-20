@@ -91,13 +91,42 @@ export function setActivePalette(id: ScorePaletteId): void {
   window.dispatchEvent(new CustomEvent(PALETTE_EVENT));
 }
 
-export function getScoreColor(score: number | null, paletteId?: ScorePaletteId): string {
+// Dynamic thresholds loaded from /stats/score-thresholds (p75/p50/p25 per score type).
+// Fallbacks match backend _score_to_hex logic in api/routers/barrios.py.
+let _thresholds: Record<string, [number, number, number]> = {
+  airbnb:        [70, 50, 30],
+  mediano_plazo: [55, 40, 25],
+  nomadas:       [55, 40, 25],
+  largo_plazo:   [70, 50, 30],
+};
+const _defaultThreshold: [number, number, number] = [70, 50, 30];
+
+export const THRESHOLDS_EVENT = "urbidata:thresholds";
+
+export function setScoreThresholds(t: Record<string, [number, number, number]>): void {
+  _thresholds = t;
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new CustomEvent(THRESHOLDS_EVENT));
+  }
+}
+
+export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, perfil?: string): string {
   const p = SCORE_PALETTES[paletteId ?? getActivePaletteId()];
   if (score === null) return p.sin_datos;
-  if (score >= 70) return p.alto;
-  if (score >= 50) return p.medio;
-  if (score >= 30) return p.bajo;
+  const [tAlto, tMedio, tBajo] = _thresholds[perfil ?? ""] ?? _defaultThreshold;
+  if (score >= tAlto) return p.alto;
+  if (score >= tMedio) return p.medio;
+  if (score >= tBajo) return p.bajo;
   return p.muy_bajo;
+}
+
+export function getScoreLabel(score: number | null, perfil?: string): string {
+  if (score === null) return "Sin datos";
+  const [tAlto, tMedio, tBajo] = _thresholds[perfil ?? ""] ?? _defaultThreshold;
+  if (score >= tAlto) return "Excelente";
+  if (score >= tMedio) return "Bueno";
+  if (score >= tBajo) return "Moderado";
+  return "Bajo";
 }
 
 export function getScoreFillOpacity(score: number | null, excluir: boolean, paletteId?: ScorePaletteId): number {

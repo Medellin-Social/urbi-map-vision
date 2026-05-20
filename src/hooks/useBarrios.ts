@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { barrioToNeighborhood, type ApiBarrio, type ApiListingsResponse } from "@/lib/adapters";
+import { setScoreThresholds } from "@/config/mapColors";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -239,6 +240,7 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
     mercado: {
       precio_m2_cop: stats.precio_m2,
       precio_m2_usd: stats.precio_m2 ? Math.round(stats.precio_m2 / 4200) : null,
+      precio_venta_promedio: null,
       arriendo_p50_cop: stats.arriendo,
       yield_bruto_pct: stats.yield_anual,
       anos_recupero: stats.anos_recupero,
@@ -300,7 +302,7 @@ function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
     color_hex: null,
     excluir_inversion: false,
     scores: { corto: null, cat_corto: null, mediano: null, cat_mediano: null, largo: null, cat_largo: null, perfil_recomendado: null, score_activo: null },
-    mercado: { precio_m2_cop: null, precio_m2_usd: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null, yield_renta_media_pct: null, precio_renta_media_p50: null },
+    mercado: { precio_m2_cop: null, precio_m2_usd: null, precio_venta_promedio: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null, yield_renta_media_pct: null, precio_renta_media_p50: null },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
     seguridad: { score: null, categoria: null, zona_turistica: null, tendencia: null, nota: null },
     conectividad: { dist_metro_km: null, dist_parque_km: null, dist_mall_km: null, n_cafes_500m: null, n_coworking_1km: null, n_gimnasios_1km: null, n_yoga_1km: null, indice_nomada: null },
@@ -444,6 +446,15 @@ export type CiudadStats = {
     precio_m2_cop: number | null;
   }>;
 };
+
+export function useScoreThresholds() {
+  return useQuery({
+    queryKey: ["score-thresholds"],
+    queryFn: () => apiFetch<Record<string, [number, number, number]>>(API_ENDPOINTS.scoreThresholds),
+    staleTime: 60 * 60 * 1000,
+    retry: 1,
+  });
+}
 
 export function useCiudadStats(perfil?: string) {
   return useQuery({

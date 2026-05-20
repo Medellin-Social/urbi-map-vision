@@ -7,10 +7,10 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 
 const GOAL_TO_OBJETIVO: Record<Goal, string> = {
-  airbnb: "airbnb",
-  "renta-larga": "largo_plazo",
-  valorizacion: "largo_plazo",
-  mediano_plazo: "mediano_plazo",
+  airbnb: "score_corto",
+  "renta-larga": "score_largo",
+  valorizacion: "score_largo", // fallback until SNR data available
+  mediano_plazo: "score_mediano",
 };
 import { Building2, Home, KeyRound, TrendingUp, Briefcase, Shield, ShieldHalf, Flame } from "lucide-react";
 
@@ -113,12 +113,14 @@ function OnboardingPage() {
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
                     [
-                      { v: "airbnb", label: "Airbnb", hint: "Renta corta, alta rotación", Icon: KeyRound },
-                      { v: "renta-larga", label: "Renta larga", hint: "Ingreso mensual estable", Icon: Home },
-                      { v: "valorizacion", label: "Valorización", hint: "Apreciación a 5–10 años", Icon: TrendingUp },
-                      { v: "mediano_plazo", label: "Renta media · 1-6 meses", hint: "Arriendos de 1 a 6 meses para ejecutivos, nómadas digitales y profesionales en movilidad.", Icon: Briefcase },
-                    ] as { v: Goal; label: string; hint: string; Icon: typeof Home }[]
-                  ).map((o) => (
+                      { v: "airbnb", label: "Renta Corta", hint: "Airbnb y renta corta, alta rotación", Icon: KeyRound, visible: true },
+                      { v: "mediano_plazo", label: "Renta media", hint: "1–6 meses: ejecutivos, nómadas digitales y profesionales en movilidad.", Icon: Briefcase, visible: true },
+                      { v: "renta-larga", label: "Renta larga", hint: "Ingreso mensual estable", Icon: Home, visible: true },
+                      // TODO: Activar cuando lleguen datos SNR
+                      // valorizacion → score_valorizacion (score independiente con énfasis en tendencia precio y zonas emergentes)
+                      { v: "valorizacion", label: "Valorización", hint: "Apreciación a 5–10 años", Icon: TrendingUp, visible: false },
+                    ] as { v: Goal; label: string; hint: string; Icon: typeof Home; visible: boolean }[]
+                  ).filter((o) => o.visible).map((o) => (
                     <Choice
                       key={o.v}
                       active={goal === o.v}

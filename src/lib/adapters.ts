@@ -43,6 +43,7 @@ export type Neighborhood = {
   yield_renta_media_pct?: number | null;
   precio_renta_media_p50?: number | null;
   nomada_breakdown?: NomadaBreakdown | null;
+  zona_turistica?: boolean | null;
   seguridad_score?: number | null;
   seguridad_categoria?: string | null;
   seguridad_nota?: string | null;
@@ -52,6 +53,7 @@ export type Neighborhood = {
 import {
   OPP_COLORS,
   getScoreColor,
+  getScoreLabel,
   getScoreFillOpacity,
   type ScorePaletteId,
 } from "@/config/mapColors";
@@ -81,6 +83,7 @@ export type ApiBarrio = {
   mercado: {
     precio_m2_cop: number | null;
     precio_m2_usd: number | null;
+    precio_venta_promedio: number | null;
     arriendo_p50_cop: number | null;
     yield_bruto_pct: number | null;
     anos_recupero: number | null;
@@ -200,13 +203,8 @@ function centroid(geometry: ApiBarrio["geometry"]): [number, number] {
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function scoreLabel(score: number | null): string {
-  if (score === null || score === undefined || score < 20) return "Sin datos suficientes";
-  if (score >= 80) return "Excelente";
-  if (score >= 65) return "Bueno";
-  if (score >= 50) return "Moderado";
-  if (score >= 35) return "Bajo";
-  return "Muy bajo";
+export function scoreLabel(score: number | null, perfil?: string): string {
+  return getScoreLabel(score, perfil);
 }
 
 // ── Converters ────────────────────────────────────────────────────────────────
@@ -245,6 +243,7 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     liquidez_api: b.liquidez
       ? { score: b.liquidez.score, categoria: b.liquidez.categoria, tiempo_estimado_venta: b.liquidez.tiempo_estimado_venta }
       : null,
+    zona_turistica: b.seguridad?.zona_turistica ?? null,
     seguridad_score: b.seguridad?.score ?? null,
     seguridad_categoria: b.seguridad?.categoria ?? null,
     seguridad_nota: b.seguridad?.nota ?? null,
@@ -274,12 +273,32 @@ export function apiOportunidadToOpportunity(o: ApiOportunidad): Opportunity {
   };
 }
 
-export function barriosToGeoJSON(barrios: ApiBarrio[], palette?: ScorePaletteId) {
+export function parseBudgetCop(budget?: string | null): [number, number] | null {
+  if (!budget) return null;
+  const M = 1_000_000;
+  if (budget === "<200") return [0, 200 * M];
+  if (budget === "200-500") return [200 * M, 500 * M];
+  if (budget === "500-1000") return [500 * M, 1_000 * M];
+  if (budget === ">1000") return [1_000 * M, Infinity];
+  return null;
+}
+
+export function barriosToGeoJSON(
+  barrios: ApiBarrio[],
+  palette?: ScorePaletteId,
+  perfil?: string,
+  budgetRange?: [number, number] | null,
+) {
   return {
     type: "FeatureCollection" as const,
     features: barrios.map((b) => {
       const score = b.scores.score_activo;
       const excluir = b.excluir_inversion ?? false;
+      const pvp = b.mercado.precio_venta_promedio;
+      const in_budget =
+        !budgetRange || !pvp
+          ? true
+          : pvp >= budgetRange[0] && pvp <= budgetRange[1];
       return {
         type: "Feature" as const,
         id: b.barrio_id,
@@ -288,12 +307,13 @@ export function barriosToGeoJSON(barrios: ApiBarrio[], palette?: ScorePaletteId)
           nombre: b.nombre ?? "",
           comuna: b.comuna ?? "",
           yield: b.mercado.yield_bruto_pct ?? 6,
-          color_hex: excluir ? "#374151" : getScoreColor(score, palette),
+          color_hex: excluir ? "#374151" : getScoreColor(score, palette, perfil),
           fill_opacity: getScoreFillOpacity(score, excluir, palette),
           has_score: score !== null && !excluir,
           score_activo: score ?? 0,
-          cat_activo: excluir ? "No disponible" : scoreLabel(score),
+          cat_activo: excluir ? "No disponible" : scoreLabel(score, perfil),
           excluir_inversion: excluir,
+          in_budget,
         },
         geometry: b.geometry ?? { type: "Polygon", coordinates: [[]] },
       };

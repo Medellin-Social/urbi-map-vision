@@ -279,8 +279,8 @@ function InversorTab({ user }: { user: UrbiUser }) {
       </Field>
 
       <Field label="Objetivo">
-        <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          {(Object.keys(GOAL_LABEL) as Goal[]).map((g) => (
+        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {(Object.keys(GOAL_LABEL) as Goal[]).filter((g) => g !== "valorizacion").map((g) => (
             <Pill key={g} active={goal === g} onClick={() => setGoal(g)}>{GOAL_LABEL[g]}</Pill>
           ))}
         </div>

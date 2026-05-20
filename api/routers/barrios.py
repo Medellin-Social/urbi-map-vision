@@ -66,6 +66,7 @@ class Scores(BaseModel):
 class Mercado(BaseModel):
     precio_m2_cop: Optional[int] = None
     precio_m2_usd: Optional[int] = None
+    precio_venta_promedio: Optional[int] = None
     arriendo_p50_cop: Optional[int] = None
     yield_bruto_pct: Optional[float] = None
     anos_recupero: Optional[float] = None
@@ -251,6 +252,7 @@ _BARRIO_SQL = """
         sc.perfil_recomendado,
         -- mercado
         bm.precio_venta_m2_p50              AS precio_m2_cop,
+        bm.precio_venta_promedio,
         bm.precio_arriendo_p50              AS arriendo_p50_cop,
         bm.yield_bruto                      AS yield_bruto_pct,
         bm.ratio_precio_arriendo            AS anos_recupero,
@@ -370,6 +372,7 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         mercado=Mercado(
             precio_m2_cop=int(precio_m2_cop) if precio_m2_cop else None,
             precio_m2_usd=int(precio_m2_cop / _USD) if precio_m2_cop else None,
+            precio_venta_promedio=_i(row, "precio_venta_promedio"),
             arriendo_p50_cop=_i(row, "arriendo_p50_cop"),
             yield_bruto_pct=_f(row, "yield_bruto_pct"),
             anos_recupero=_f(row, "anos_recupero"),

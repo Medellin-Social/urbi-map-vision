@@ -81,3 +81,23 @@ async def get_ciudad_stats(
         oportunidades_activas=summary["oportunidades_activas"] or 0,
         top5=[TopBarrio(**dict(r)) for r in top5_rows],
     )
+
+
+@router.get("/score-thresholds")
+async def get_score_thresholds():
+    """Return calibrated score thresholds per perfil for map coloring.
+
+    Thresholds match the backend _score_to_hex logic so map colors are consistent
+    with the server-side coloring. Served via API so the frontend doesn't hardcode them
+    and any future recalibration only requires a backend deploy.
+
+    alto  → green  (score >= tAlto)
+    medio → teal   (score >= tMedio)
+    bajo  → amber  (score >= tBajo)
+    """
+    return {
+        "airbnb":        [70, 50, 30],
+        "mediano_plazo": [55, 40, 25],
+        "nomadas":       [55, 40, 25],
+        "largo_plazo":   [70, 50, 30],
+    }

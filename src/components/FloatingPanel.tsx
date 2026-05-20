@@ -36,9 +36,9 @@ import {
 import type { NomadaBreakdown } from "@/lib/adapters";
 import type { Neighborhood } from "@/lib/adapters";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";
-import { OPP_COLORS } from "@/config/mapColors";
+import { OPP_COLORS, getScoreColor, getScoreLabel } from "@/config/mapColors";
 import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
-import { formatCOP, formatPct, yieldColor, yieldLabel } from "@/lib/format";
+import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
 import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
@@ -562,8 +562,17 @@ function fmtConn(v: number | null | undefined, suffix: string): string {
   return v != null ? `${v} ${suffix}` : "Sin datos";
 }
 
+const _GOAL_TO_PERFIL: Record<string, string> = {
+  airbnb: "airbnb",
+  "renta-larga": "largo_plazo",
+  valorizacion: "largo_plazo",
+  mediano_plazo: "mediano_plazo",
+};
+
 function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
-  const ylabel = yieldLabel(n.yield);
+  const perfil = _GOAL_TO_PERFIL[goal ?? ""];
+  const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil);
+  const scoreLbl = getScoreLabel(n.score_activo ?? null, perfil);
   const valoriz = calcValorizStats(n.estrato);
 
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
@@ -631,7 +640,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Badge>Estrato {n.estrato}</Badge>
           <Badge>{n.municipio}</Badge>
-          <Badge color={yieldColor(n.yield)}>{ylabel}</Badge>
+          <Badge color={scoreColor}>{scoreLbl}</Badge>
         </div>
       </div>
 
@@ -681,9 +690,9 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         <div className="space-y-2">
           {goal === "airbnb" ? (
             <>
-              <ConnRow icon={<ShoppingBag className="h-3.5 w-3.5" />} label="Mall más cercano" value={`${n.dist_mall.toFixed(1)} km`} />
-              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
               <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
+              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
+              <ConnRow icon={<Sparkles className="h-3.5 w-3.5" />} label="Zona turística" value={n.zona_turistica === true ? "Sí" : n.zona_turistica === false ? "No" : "Sin datos"} />
             </>
           ) : goal === "mediano_plazo" ? (
             <>

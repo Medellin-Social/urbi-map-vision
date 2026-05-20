@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
   favoritos: `${API_BASE_URL}/favoritos`,
   historial: `${API_BASE_URL}/historial`,
   ciudadStats: `${API_BASE_URL}/stats/ciudad`,
+  scoreThresholds: `${API_BASE_URL}/stats/score-thresholds`,
 } as const;
 
 export { API_BASE_URL };

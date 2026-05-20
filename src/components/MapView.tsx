@@ -4,11 +4,13 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
-import { useBarriosRaw } from "@/hooks/useBarrios";
+import { useBarriosRaw, useScoreThresholds } from "@/hooks/useBarrios";
 import {
   OPP_COLORS,
   PALETTE_EVENT,
+  THRESHOLDS_EVENT,
   getActivePaletteId,
+  setScoreThresholds,
   type ScorePaletteId,
 } from "@/config/mapColors";
 
@@ -17,11 +19,12 @@ type Props = {
   selectedId: number | null;
   perfil?: string;
   mostrarOportunidades?: boolean;
+  budgetRange?: [number, number] | null;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
 
-export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = false }: Props) {
+export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = false, budgetRange }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
   const mapLoadedRef = useRef(false);
@@ -30,20 +33,30 @@ export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = f
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
 
   const [scorePalette, setScorePalette] = useState<ScorePaletteId>(getActivePaletteId);
+  const [thresholdVersion, setThresholdVersion] = useState(0);
 
   useEffect(() => {
     const onPalette = () => setScorePalette(getActivePaletteId());
+    const onThresholds = () => setThresholdVersion((v) => v + 1);
     window.addEventListener(PALETTE_EVENT, onPalette);
-    return () => window.removeEventListener(PALETTE_EVENT, onPalette);
+    window.addEventListener(THRESHOLDS_EVENT, onThresholds);
+    return () => {
+      window.removeEventListener(PALETTE_EVENT, onPalette);
+      window.removeEventListener(THRESHOLDS_EVENT, onThresholds);
+    };
   }, []);
 
+  const { data: thresholdsData } = useScoreThresholds();
+  useEffect(() => {
+    if (thresholdsData) setScoreThresholds(thresholdsData);
+  }, [thresholdsData]);
   const { data: barriosRaw } = useBarriosRaw(perfil);
 
   const geoJsonData = useMemo(() => {
     if (!barriosRaw?.length) return null;
     barriosRef.current = barriosRaw;
-    return barriosToGeoJSON(barriosRaw, scorePalette);
-  }, [barriosRaw, scorePalette]);
+    return barriosToGeoJSON(barriosRaw, scorePalette, perfil, budgetRange);
+  }, [barriosRaw, scorePalette, perfil, budgetRange, thresholdVersion]);
 
   // Map initialization
   useEffect(() => {
@@ -85,6 +98,7 @@ export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = f
             "case",
             ["boolean", ["feature-state", "selected"], false], 0.85,
             ["boolean", ["feature-state", "hover"], false], 0.75,
+            ["==", ["get", "in_budget"], false], 0.07,
             ["==", ["get", "color_hex"], "#00d4ff"], 0.2,
             0.5,
           ],
@@ -201,7 +215,7 @@ export function MapView({ onSelect, selectedId, perfil, mostrarOportunidades = f
       // Populate source if data already arrived
       if (barriosRef.current.length > 0) {
         (map.getSource("barrios") as mapboxgl.GeoJSONSource).setData(
-          barriosToGeoJSON(barriosRef.current, getActivePaletteId()) as unknown as GeoJSON.FeatureCollection
+          barriosToGeoJSON(barriosRef.current, getActivePaletteId(), perfil, budgetRange) as unknown as GeoJSON.FeatureCollection
         );
         if (mostrarOportunidades) addOpportunityMarkers(map);
       }
