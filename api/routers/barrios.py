@@ -16,7 +16,8 @@ router = APIRouter()
 # ever be one of these three known column names. Never accept user input directly.
 _PERFIL_SCORE = {
     "airbnb": "score_corto",
-    "nomadas": "score_mediano",
+    "nomadas": "score_mediano",       # legacy alias — keep for existing sessions
+    "mediano_plazo": "score_mediano", # canonical new name
     "largo_plazo": "score_largo",
 }
 
@@ -35,7 +36,7 @@ _USD = USD_TO_COP
 def _score_to_hex(score: Optional[int], perfil: Optional[str] = None) -> str:
     if score is None or score == 0:
         return "#00d4ff"
-    if perfil == "nomadas":
+    if perfil in ("nomadas", "mediano_plazo"):
         if score >= 55: return "#10b981"
         if score >= 40: return "#2BBAA5"
         if score >= 25: return "#f59e0b"
@@ -436,7 +437,7 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
 
 @router.get("", response_model=list[BarrioResponse])
 async def list_barrios(
-    perfil: Optional[str] = Query(default=None, description="airbnb | nomadas | largo_plazo"),
+    perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
     score_min: int = Query(default=0, ge=0, le=100),
     municipio: Optional[str] = Query(default=None),
     estrato: Optional[int] = Query(default=None),
@@ -470,7 +471,7 @@ async def list_barrios(
 @router.get("/comparar", response_model=list[BarrioResponse])
 async def comparar_barrios(
     ids: str = Query(description="IDs separados por coma: 1,2,3 (máx 3)"),
-    perfil: Optional[str] = Query(default=None, description="airbnb | nomadas | largo_plazo"),
+    perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
 ):
     id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()][:3]
     if not id_list:
@@ -486,7 +487,7 @@ async def comparar_barrios(
 @router.get("/{barrio_id}", response_model=BarrioResponse)
 async def get_barrio(
     barrio_id: int,
-    perfil: Optional[str] = Query(default=None, description="airbnb | nomadas | largo_plazo"),
+    perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
 ):
     score_col = get_score_col(perfil)
     pool = get_pool()

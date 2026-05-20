@@ -48,7 +48,7 @@ describe("auth.toggleFavorite", () => {
 });
 
 describe("recommendation()", () => {
-  const goals: Goal[] = ["airbnb", "renta-larga", "valorizacion", "nomadas"];
+  const goals: Goal[] = ["airbnb", "renta-larga", "valorizacion", "mediano_plazo"];
 
   it.each(goals)("returns non-empty string for goal %s", (goal) => {
     expect(recommendation(goal).length).toBeGreaterThan(10);

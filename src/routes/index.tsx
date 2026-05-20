@@ -224,7 +224,7 @@ function Problem() {
 
 function Solution() {
   const steps = [
-    { icon: User, title: "Define tu perfil", body: "Presupuesto, objetivo (Airbnb, renta larga, nómadas) y perfil de riesgo. El mapa se personaliza para ti." },
+    { icon: User, title: "Define tu perfil", body: "Presupuesto, objetivo (Airbnb, renta larga, renta media) y perfil de riesgo. El mapa se personaliza para ti." },
     { icon: MapIcon, title: "Explora el mapa", body: "Cada barrio muestra su score de inversión según TU perfil. Verde = oportunidad. Rojo = evitar." },
     { icon: BarChart3, title: "Toma decisiones con datos", body: "Yield real, precio justo (PBN), años de recupero, proyección a 5 años y comparación vs CDT bancario." },
   ];
@@ -353,8 +353,8 @@ function Profiles() {
       highlight: false,
     },
     {
-      icon: Briefcase, term: "Mediano plazo", title: "Nómadas digitales",
-      body: "Apunta al mercado de nómadas y ejecutivos. Medimos cafés, coworking, zonas verdes, seguridad percibida y disponibilidad de apartamentos amoblados.",
+      icon: Briefcase, term: "Mediano plazo", title: "Renta media · 1-6 meses",
+      body: "Arriendos de 1 a 6 meses para ejecutivos, nómadas digitales y profesionales en movilidad. Yield renta media como driver principal.",
       metric: "Demanda creciendo 151% anual",
       tags: "El Poblado · Laureles · Estadio",
       highlight: true,

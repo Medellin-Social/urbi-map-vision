@@ -66,7 +66,7 @@ async def dashboard(admin: dict = Depends(require_admin)):
     objetivo_rows = await pool.fetch(
         "SELECT objetivo, COUNT(*) AS n FROM perfil_inversor WHERE objetivo IS NOT NULL GROUP BY objetivo"
     )
-    por_objetivo = {"airbnb": 0, "nomadas": 0, "largo_plazo": 0, "mixto": 0}
+    por_objetivo = {"airbnb": 0, "nomadas": 0, "mediano_plazo": 0, "largo_plazo": 0, "mixto": 0}
     for r in objetivo_rows:
         k = r["objetivo"]
         if k in por_objetivo:

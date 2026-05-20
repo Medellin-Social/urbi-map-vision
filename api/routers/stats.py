@@ -11,7 +11,8 @@ router = APIRouter()
 
 _PERFIL_SCORE = {
     "airbnb": "score_corto",
-    "nomadas": "score_mediano",
+    "nomadas": "score_mediano",       # legacy alias
+    "mediano_plazo": "score_mediano", # canonical new name
     "largo_plazo": "score_largo",
 }
 
@@ -35,7 +36,7 @@ class CiudadStats(BaseModel):
 
 @router.get("/ciudad", response_model=CiudadStats)
 async def get_ciudad_stats(
-    perfil: Optional[str] = Query(default=None, description="airbnb | nomadas | largo_plazo"),
+    perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
 ):
     score_col = _PERFIL_SCORE.get(perfil or "", "score_corto")
     pool = get_pool()

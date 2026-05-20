@@ -42,7 +42,7 @@ function getProfileScore(b: ApiBarrio, goal?: string): { score: number | null; c
 function goalToScoreLabel(goal?: string): string {
   if (goal === "airbnb") return "Score Airbnb";
   if (goal === "renta-larga") return "Score Arriendo largo";
-  return "Score Nómadas";
+  return "Score Renta media";
 }
 
 const BAR_METRICS: {
@@ -54,7 +54,7 @@ const BAR_METRICS: {
 }[] = [
   { key: "yield", label: "Yield bruto", dir: "↑", getValue: (b) => b.mercado.yield_bruto_pct, fmt: (v) => `${v.toFixed(1)}%` },
   { key: "seguridad", label: "Seguridad", dir: "↑", getValue: (b) => b.seguridad.score, fmt: (v) => `${v}/100` },
-  { key: "nomada", label: "Índice nómada", dir: "↑", getValue: (b) => b.conectividad.indice_nomada, fmt: (v) => v.toFixed(1) },
+  { key: "nomada", label: "Demanda de zona", dir: "↑", getValue: (b) => b.conectividad.indice_nomada, fmt: (v) => v.toFixed(1) },
   { key: "liquidez", label: "Liquidez", dir: "↑", getValue: (b) => b.liquidez.score, fmt: (v) => `${v}/100` },
   { key: "precio_m2", label: "Precio m²", dir: "↓", getValue: (b) => b.mercado.precio_m2_cop, fmt: (v) => formatCOP(v) },
 ];
@@ -261,7 +261,7 @@ function ComparadorPage() {
                       }
                     />
                     <Row
-                      label="Índice nómada"
+                      label="Demanda de zona"
                       items={items}
                       render={(b) =>
                         b.conectividad.indice_nomada != null

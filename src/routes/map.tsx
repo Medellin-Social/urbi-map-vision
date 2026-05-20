@@ -20,7 +20,8 @@ const GOAL_TO_PERFIL: Record<string, string> = {
   airbnb: "airbnb",
   "renta-larga": "largo_plazo",
   valorizacion: "largo_plazo",
-  nomadas: "nomadas",
+  mediano_plazo: "mediano_plazo",
+  nomadas: "mediano_plazo", // legacy alias
 };
 
 function MapPage() {

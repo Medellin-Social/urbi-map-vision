@@ -208,7 +208,7 @@ function yieldToScore(y: number | null): number | null {
 
 function pickScoreActivo(stats: BarrioStats, perfil?: string): number | null {
   if (perfil === "airbnb")     return stats.score_corto  ?? yieldToScore(stats.yield_anual);
-  if (perfil === "nomadas")    return stats.score_mediano ?? yieldToScore(stats.yield_anual);
+  if (perfil === "mediano_plazo" || perfil === "nomadas")    return stats.score_mediano ?? yieldToScore(stats.yield_anual);
   // largo_plazo, valorizacion, or no perfil — score_largo is most fair for non-Airbnb municipalities
   return stats.score_largo ?? stats.score_mediano ?? yieldToScore(stats.yield_anual);
 }

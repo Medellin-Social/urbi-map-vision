@@ -14,7 +14,8 @@ router = APIRouter()
 # ever be one of these three known column names. Never accept user input directly.
 _PERFIL_SCORE = {
     "airbnb": "score_corto",
-    "nomadas": "score_mediano",
+    "nomadas": "score_mediano",       # legacy alias
+    "mediano_plazo": "score_mediano", # canonical new name
     "largo_plazo": "score_largo",
 }
 
@@ -41,7 +42,7 @@ class Oportunidad(BaseModel):
 
 @router.get("", response_model=list[Oportunidad])
 async def list_oportunidades(
-    perfil: Optional[str] = Query(default=None, description="airbnb | nomadas | largo_plazo"),
+    perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
     limit: int = Query(default=10, ge=1, le=50),
     current_user: Optional[dict] = Depends(get_optional_user),
 ):

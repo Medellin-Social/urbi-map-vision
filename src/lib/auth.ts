@@ -1,4 +1,4 @@
-export type Goal = "airbnb" | "renta-larga" | "valorizacion" | "nomadas";
+export type Goal = "airbnb" | "renta-larga" | "valorizacion" | "mediano_plazo";
 export type Risk = "conservador" | "moderado" | "agresivo";
 export type Budget = "<200" | "200-500" | "500-1000" | ">1000";
 
@@ -50,7 +50,11 @@ export const auth = {
     if (typeof window === "undefined") return null;
     try {
       const raw = localStorage.getItem(KEY);
-      return raw ? (JSON.parse(raw) as UrbiUser) : null;
+      if (!raw) return null;
+      const u = JSON.parse(raw) as UrbiUser;
+      // Migrate legacy goal value
+      if ((u.goal as string) === "nomadas") u.goal = "mediano_plazo";
+      return u;
     } catch {
       return null;
     }
@@ -138,7 +142,7 @@ export const GOAL_LABEL: Record<Goal, string> = {
   airbnb: "Airbnb",
   "renta-larga": "Renta larga",
   valorizacion: "Valorización",
-  nomadas: "Nómadas",
+  mediano_plazo: "Renta media",
 };
 
 export const MAP_STYLES: Record<MapStyleId, { label: string; url: string; swatch: string[] }> = {
@@ -177,8 +181,8 @@ export function recommendation(goal?: Goal): string {
       return "🏠 Para renta larga, Robledo y Aranjuez ofrecen el mejor balance precio/arriendo con baja vacancia.";
     case "valorizacion":
       return "📈 Para valorización, El Rodeo y Robledo muestran el mayor potencial de apreciación a 5 años.";
-    case "nomadas":
-      return "🧳 Para nómadas digitales, El Poblado y Laureles tienen la mayor densidad de cafés, coworking y apartamentos amoblados.";
+    case "mediano_plazo":
+      return "📅 Para renta media (1-6 meses), El Poblado y Laureles lideran en yield renta media y demanda de ejecutivos y profesionales en movilidad.";
     default:
       return "Selecciona un barrio en el mapa para ver análisis detallado.";
   }

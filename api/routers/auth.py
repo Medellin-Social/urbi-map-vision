@@ -1,11 +1,9 @@
-from __future__ import annotations
-
 import os
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
 from pydantic import BaseModel, EmailStr
@@ -79,7 +77,7 @@ async def _get_perfil(pool, user_id: int) -> Optional[dict]:
 
 @router.post("/register", response_model=AuthResponse, status_code=201)
 @limiter.limit("3/minute")
-async def register(request: Request, req: RegisterRequest):
+async def register(request: Request, req: RegisterRequest = Body(...)):
     pool = get_pool()
     existing = await pool.fetchval("SELECT id FROM usuarios WHERE email = $1", req.email)
     if existing:
@@ -103,7 +101,7 @@ async def register(request: Request, req: RegisterRequest):
 
 @router.post("/login", response_model=AuthResponse)
 @limiter.limit("5/minute")
-async def login(request: Request, req: LoginRequest):
+async def login(request: Request, req: LoginRequest = Body(...)):
     pool = get_pool()
     row = await pool.fetchrow(
         "SELECT id, email, password_hash, nombre, apellido, activo FROM usuarios WHERE email = $1",
@@ -184,7 +182,7 @@ class ResetPasswordRequest(BaseModel):
 
 @router.post("/forgot-password", status_code=200)
 @limiter.limit("3/minute")
-async def forgot_password(request: Request, req: ForgotPasswordRequest):
+async def forgot_password(request: Request, req: ForgotPasswordRequest = Body(...)):
     """
     Generates a password-reset token valid for 1 hour.
     In production this token would be emailed; during beta it is returned
@@ -218,7 +216,7 @@ async def forgot_password(request: Request, req: ForgotPasswordRequest):
 
 @router.post("/reset-password", status_code=200)
 @limiter.limit("5/minute")
-async def reset_password(request: Request, req: ResetPasswordRequest):
+async def reset_password(request: Request, req: ResetPasswordRequest = Body(...)):
     pool = get_pool()
     row = await pool.fetchrow(
         """

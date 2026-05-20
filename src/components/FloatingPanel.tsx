@@ -339,7 +339,7 @@ const transition = {
 
 function goalToPerfil(goal?: Goal | null): string | undefined {
   if (goal === "airbnb") return "airbnb";
-  if (goal === "nomadas") return "nomadas";
+  if (goal === "mediano_plazo") return "mediano_plazo";
   if (goal === "renta-larga" || goal === "valorizacion") return "largo_plazo";
   return undefined;
 }
@@ -558,11 +558,13 @@ const SALUD_COLORS: Record<string, string> = {
   "ALERTA":        "#ef4444",
 };
 
+function fmtConn(v: number | null | undefined, suffix: string): string {
+  return v != null ? `${v} ${suffix}` : "Sin datos";
+}
+
 function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
   const ylabel = yieldLabel(n.yield);
   const valoriz = calcValorizStats(n.estrato);
-  const fmtConn = (v: number | null | undefined, suffix: string) =>
-    v != null ? `${v} ${suffix}` : "Sin datos";
 
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
   const apiListings = listingsData?.listings ?? [];
@@ -683,13 +685,11 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
               <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
               <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
             </>
-          ) : goal === "nomadas" ? (
+          ) : goal === "mediano_plazo" ? (
             <>
               <ConnRow icon={<Coffee className="h-3.5 w-3.5" />} label="Cafés en 500m" value={fmtConn(n.n_cafes_500m, "locales")} />
               <ConnRow icon={<Briefcase className="h-3.5 w-3.5" />} label="Coworking en 1km" value={fmtConn(n.n_coworking_1km, "espacios")} />
               <ConnRow icon={<Dumbbell className="h-3.5 w-3.5" />} label="Gimnasios en 1km" value={fmtConn(n.n_gimnasios_1km, "centros")} />
-              <ConnRow icon={<Utensils className="h-3.5 w-3.5" />} label="Yoga studios en 1km" value={fmtConn(n.n_yoga_1km, "estudios")} />
-              <ConnRow icon={<Trees className="h-3.5 w-3.5" />} label="Parque más cercano" value={`${n.dist_parque.toFixed(1)} km`} />
             </>
           ) : goal === "renta-larga" ? (
             <>
@@ -707,7 +707,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         </div>
       </Section>
 
-      {goal === "nomadas" && <NomadaSection n={n} />}
+      {goal === "mediano_plazo" && <NomadaSection n={n} />}
 
       <SeguridadSection n={n} />
       <VerdeSection n={n} maxVerdePct={maxVerdePct} />
@@ -768,9 +768,9 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
   );
 }
 
-/* ------------- Nómadas section ------------- */
+/* ------------- Renta media section ------------- */
 
-function nomadaIndexColor(idx: number | null | undefined): string {
+function demandaIndexColor(idx: number | null | undefined): string {
   if (idx == null) return "#6b7280";
   if (idx >= 70) return "#10b981";
   if (idx >= 40) return "#f59e0b";
@@ -779,8 +779,8 @@ function nomadaIndexColor(idx: number | null | undefined): string {
 
 function NomadaSection({ n }: { n: Neighborhood }) {
   const idx = n.indice_nomada;
-  const idxColor = nomadaIndexColor(idx);
-  const idxLabel = idx == null ? "Sin datos" : idx >= 70 ? "ALTO" : idx >= 40 ? "MEDIO" : "BAJO";
+  const idxColor = demandaIndexColor(idx);
+  const idxLabel = idx == null ? "Sin datos" : idx >= 70 ? "ALTA" : idx >= 40 ? "MEDIA" : "BAJA";
 
   // Renta media
   const rentaMedia = n.precio_renta_media_p50;
@@ -797,11 +797,10 @@ function NomadaSection({ n }: { n: Neighborhood }) {
   const estadoPrecio = n.estado_precio;
   const pbnJusto = n.pbn_precio_justo;
 
-  // Score breakdown
+  // Score breakdown (new weights: yield 45, demanda 20, pbn 25, seg 10)
   const bd: NomadaBreakdown | null | undefined = n.nomada_breakdown;
   const totalScore = bd
-    ? (bd.pts_yield ?? 0) + (bd.pts_nomada ?? 0) + (bd.pts_pbn ?? 0) +
-      (bd.pts_seguridad ?? 0) + (bd.pts_verde ?? 0) + (bd.pts_equip ?? 0)
+    ? (bd.pts_yield ?? 0) + (bd.pts_nomada ?? 0) + (bd.pts_pbn ?? 0) + (bd.pts_seguridad ?? 0)
     : null;
 
   const PBN_COLORS: Record<string, string> = {
@@ -816,15 +815,15 @@ function NomadaSection({ n }: { n: Neighborhood }) {
       {/* Header */}
       <div className="rounded-xl border border-primary/30 bg-primary/5 p-3">
         <div className="mb-1 flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-primary">
-          <Briefcase className="h-3 w-3" /> Perfil Nómadas / Empresarios
+          <Briefcase className="h-3 w-3" /> Perfil Renta Media
         </div>
         <p className="text-xs text-muted-foreground">
-          Análisis específico para inversión en renta media (1–6 meses) orientada a profesionales remotos.
+          Arriendos de 1 a 6 meses · Ejecutivos y profesionales en movilidad.
         </p>
       </div>
 
-      {/* 1. Infraestructura nómada — índice + perfil (POIs ya visibles en Conectividad) */}
-      <Section title="🏢 Infraestructura nómada">
+      {/* 1. Demanda de zona */}
+      <Section title="📍 Demanda de la zona">
         {idx != null && (
           <motion.div
             initial={{ opacity: 0, y: 6 }}
@@ -835,7 +834,7 @@ function NomadaSection({ n }: { n: Neighborhood }) {
           >
             <div className="flex items-center justify-between">
               <span className="text-xs font-semibold" style={{ color: idxColor }}>
-                Índice nómada: {Math.round(idx)}/100
+                Demanda de zona: {Math.round(idx)}/100
               </span>
               <span
                 className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
@@ -855,21 +854,19 @@ function NomadaSection({ n }: { n: Neighborhood }) {
             </div>
           </motion.div>
         )}
-
-        {/* Perfil del inquilino objetivo */}
         <div className="mt-3 rounded-lg border border-border/60 bg-background/30 p-3 text-xs leading-relaxed text-muted-foreground">
           {(idx ?? 0) >= 70 ? (
-            "✅ Zona ideal para nómadas digitales. Alta densidad de cafés y coworking. Demanda sostenida de profesionales remotos."
+            "✅ Alta demanda de renta media. Cafés, coworking y servicios consolidados. Zona con flujo sostenido de ejecutivos y profesionales remotos."
           ) : (idx ?? 0) >= 40 ? (
-            "⚡ Zona con buena infraestructura nómada. Cafés y servicios disponibles. Creciente demanda de renta media."
+            "⚡ Demanda de zona moderada. Infraestructura disponible. Potencial creciente para arriendos de 1 a 6 meses."
           ) : (
-            "⚠️ Infraestructura nómada limitada. Considera zonas con mayor densidad de servicios para este perfil."
+            "⚠️ Demanda limitada en esta zona. Considera zonas con mayor densidad de servicios para renta media."
           )}
         </div>
       </Section>
 
-      {/* 2. Rentabilidad renta media */}
-      <Section title="💰 Rentabilidad renta media">
+      {/* 2. Rendimiento estimado */}
+      <Section title="💰 Rendimiento estimado">
         <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-1.5">
           <div className="flex justify-between">
             <span className="text-muted-foreground">Arriendo tradicional:</span>
@@ -938,16 +935,14 @@ function NomadaSection({ n }: { n: Neighborhood }) {
         </Section>
       )}
 
-      {/* 4. Score breakdown */}
+      {/* 4. Score breakdown (new weights) */}
       {bd && totalScore != null && (
         <Section title="🎯 ¿Por qué este score?">
           <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-1.5">
-            <ScoreRow label="Yield renta media" pts={bd.pts_yield} max={25} />
-            <ScoreRow label="Infraestructura nómada" pts={bd.pts_nomada} max={30} highlight />
-            <ScoreRow label="Precio justo (PBN)" pts={bd.pts_pbn} max={18} />
-            <ScoreRow label="Seguridad percibida" pts={bd.pts_seguridad} max={12} />
-            <ScoreRow label="Índice verde" pts={bd.pts_verde} max={10} />
-            <ScoreRow label="Equipamiento" pts={bd.pts_equip} max={5} />
+            <ScoreRow label="Yield renta media" pts={bd.pts_yield} max={45} highlight />
+            <ScoreRow label="Precio justo (PBN)" pts={bd.pts_pbn} max={25} />
+            <ScoreRow label="Demanda de zona" pts={bd.pts_nomada} max={20} />
+            <ScoreRow label="Seguridad percibida" pts={bd.pts_seguridad} max={10} />
             <hr className="border-border/40" />
             <div className="flex justify-between font-semibold">
               <span>Total</span>
