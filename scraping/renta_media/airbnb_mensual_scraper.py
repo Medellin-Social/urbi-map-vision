@@ -6,15 +6,16 @@ Strategy:
   - Cards expose COP prices directly (already monthly)
   - Take discounted price (last $ amount on card) if two shown, else only price
   - 18 listings per page; paginate via items_offset
-  - Barrio matched from listing-card-title + listing-card-name
+  - Coordinates extracted from page's embedded GraphQL cache (demandStayListing base64 ID)
+  - Barrio assigned via PostGIS ST_Contains; fuzzy match as fallback
 
 Price pattern: "$4,419,000 COP" → take last amount for monthly total.
 """
+import base64
 import re
 import sys
 import time
 from pathlib import Path
-from urllib.parse import quote
 
 from bs4 import BeautifulSoup
 from playwright.sync_api import sync_playwright
@@ -54,6 +55,45 @@ SEARCH_LOCATIONS = [
     ("Medellín",     "Medell%C3%ADn--Antioquia--Colombia",                "MEDELLIN"),
 ]
 
+_COORD_PATTERN = re.compile(
+    r'"demandStayListing"\s*:\s*\{[^}]{0,50}"id"\s*:\s*"([A-Za-z0-9+/=]+)"'
+    r'[^}]{0,300}"latitude"\s*:\s*([-\d.]+)[^}]{0,100}"longitude"\s*:\s*([-\d.]+)',
+    re.DOTALL,
+)
+
+
+def _extract_coords_from_html(html: str) -> dict[str, tuple[float, float]]:
+    """Returns {room_id: (lat, lon)} from page HTML via demandStayListing base64 ID."""
+    coords: dict[str, tuple[float, float]] = {}
+    for m in _COORD_PATTERN.finditer(html):
+        b64_id, lat_s, lon_s = m.group(1), m.group(2), m.group(3)
+        try:
+            decoded = base64.b64decode(b64_id + "==").decode("utf-8", errors="ignore")
+            room_m = re.search(r":(\d+)$", decoded)
+            if room_m:
+                coords[room_m.group(1)] = (float(lat_s), float(lon_s))
+        except Exception:
+            pass
+    return coords
+
+
+def barrio_from_coords(conn, lat: float, lon: float) -> int | None:
+    """PostGIS point-in-polygon lookup against raw.barrios geometry."""
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id FROM raw.barrios
+                WHERE ST_Contains(geometry, ST_SetSRID(ST_Point(%s, %s), 4326))
+                LIMIT 1
+                """,
+                (lon, lat),
+            )
+            row = cur.fetchone()
+            return row[0] if row else None
+    except Exception:
+        return None
+
 
 def _make_url(slug: str, offset: int = 0) -> str:
     return (
@@ -71,10 +111,8 @@ def _make_url(slug: str, offset: int = 0) -> str:
 
 
 def _parse_cop(text: str) -> int:
-    """Extract COP monthly price. Takes last $X,XXX,XXX amount (discounted)."""
     amounts = re.findall(r'\$([\d,]+)\s*COP', text)
     if not amounts:
-        # fallback: any large $ amount
         amounts = re.findall(r'\$([\d,]+)', text)
     for raw in reversed(amounts):
         val = int(raw.replace(",", ""))
@@ -83,38 +121,35 @@ def _parse_cop(text: str) -> int:
     return 0
 
 
-def _parse_card(card, barrios: list[dict], municipio_hint: str) -> dict | None:
+def _parse_card(
+    card,
+    barrios: list[dict],
+    municipio_hint: str,
+    coords_map: dict[str, tuple[float, float]],
+    conn,
+) -> dict | None:
     try:
-        # URL and room ID
         link = card.find("a", href=re.compile(r"/rooms/"))
         if not link:
             return None
         href = link.get("href", "")
-        room_match = re.search(r"/rooms/(\d+)", href)
-        if not room_match:
+        room_m = re.search(r"/rooms/(\d+)", href)
+        if not room_m:
             return None
-        room_id = room_match.group(1)
+        room_id = room_m.group(1)
         url = f"{BASE_URL}/rooms/{room_id}"
 
         text = card.get_text(separator="|", strip=True)
-
-        # Price (COP monthly)
         price_cop = _parse_cop(text)
         if not price_cop:
             return None
 
-        # Title elements
         title_el = card.find(attrs={"data-testid": "listing-card-name"})
         title = title_el.get_text(strip=True) if title_el else ""
-
-        # Location subtitle (e.g. "Apartamento en Medellín")
         loc_el = card.find(attrs={"data-testid": "listing-card-title"})
         location = loc_el.get_text(strip=True) if loc_el else ""
-
-        # barrio_raw: try name first, then location
         barrio_raw = title or location
 
-        # Beds
         beds = None
         m_beds = re.search(r"(\d+)\s*habitaci[oó]n", text, re.I)
         if m_beds:
@@ -122,11 +157,20 @@ def _parse_card(card, barrios: list[dict], municipio_hint: str) -> dict | None:
         elif re.search(r"estudio|studio", text, re.I):
             beds = 0
 
-        # Baths
         baths = None
         m_baths = re.search(r"(\d+)\s*ba[ñn]o", text, re.I)
         if m_baths:
             baths = float(m_baths.group(1))
+
+        lat, lon = None, None
+        barrio_id = None
+
+        if room_id in coords_map:
+            lat, lon = coords_map[room_id]
+            barrio_id = barrio_from_coords(conn, lat, lon)
+
+        if not barrio_id:
+            barrio_id = match_barrio(barrio_raw, barrios, municipio_hint=municipio_hint)
 
         return {
             "fuente": FUENTE,
@@ -137,13 +181,13 @@ def _parse_card(card, barrios: list[dict], municipio_hint: str) -> dict | None:
             "habitaciones": beds,
             "banos": baths,
             "barrio_raw": barrio_raw[:200] or None,
-            "barrio_id": match_barrio(barrio_raw, barrios, municipio_hint=municipio_hint),
+            "barrio_id": barrio_id,
             "amoblado": True,
             "incluye_servicios": None,
             "min_noches": 28,
             "url": url[:500],
-            "lat": None,
-            "lon": None,
+            "lat": lat,
+            "lon": lon,
             "dedup_hash": make_dedup_hash(FUENTE, url),
         }
     except Exception as e:
@@ -151,7 +195,13 @@ def _parse_card(card, barrios: list[dict], municipio_hint: str) -> dict | None:
         return None
 
 
-def _extract_cards(html: str, barrios: list[dict], municipio_hint: str) -> list[dict]:
+def _extract_cards(
+    html: str,
+    barrios: list[dict],
+    municipio_hint: str,
+    coords_map: dict[str, tuple[float, float]],
+    conn,
+) -> list[dict]:
     soup = BeautifulSoup(html, "lxml")
     links = soup.find_all("a", href=re.compile(r"/rooms/"))
     seen_ids: set[str] = set()
@@ -164,7 +214,6 @@ def _extract_cards(html: str, barrios: list[dict], municipio_hint: str) -> list[
             continue
         seen_ids.add(m.group(1))
 
-        # Walk up to card container (has price-availability-row)
         card = link
         for _ in range(8):
             card = card.parent
@@ -176,7 +225,7 @@ def _extract_cards(html: str, barrios: list[dict], municipio_hint: str) -> list[
         if not card:
             continue
 
-        listing = _parse_card(card, barrios, municipio_hint)
+        listing = _parse_card(card, barrios, municipio_hint, coords_map, conn)
         if listing:
             results.append(listing)
 
@@ -224,7 +273,8 @@ def scrape(dry_run: bool = False) -> list[dict]:
                     break
 
                 html = page.content()
-                cards = _extract_cards(html, barrios, municipio_hint)
+                coords_map = _extract_coords_from_html(html)
+                cards = _extract_cards(html, barrios, municipio_hint, coords_map, conn)
 
                 new = [c for c in cards if c["url"] not in seen_urls]
                 for c in new:
@@ -232,9 +282,14 @@ def scrape(dry_run: bool = False) -> list[dict]:
                 all_results.extend(new)
                 loc_total += len(new)
 
-                print(f"    p{page_num+1}: {len(new)} new | loc total: {loc_total} | cumulative: {len(all_results)}")
+                with_coords = sum(1 for c in new if c.get("lat"))
+                with_barrio = sum(1 for c in new if c.get("barrio_id"))
+                print(
+                    f"    p{page_num+1}: {len(new)} new | coords={with_coords} "
+                    f"| barrio={with_barrio} | cumulative: {len(all_results)}"
+                )
 
-                if len(cards) < 16:  # last page (fewer than full 18)
+                if len(cards) < 16:
                     break
 
                 time.sleep(2)
@@ -245,9 +300,9 @@ def scrape(dry_run: bool = False) -> list[dict]:
     for listing in all_results:
         if dry_run:
             print(
-                f"    DRY: {listing.get('titulo','?')[:50]} | "
+                f"    DRY: {listing.get('titulo','?')[:45]} | "
                 f"COP {listing.get('precio_mes_cop',0):,} | "
-                f"{listing.get('barrio_raw','?')[:40]}"
+                f"lat={listing.get('lat')} | barrio_id={listing.get('barrio_id')}"
             )
         else:
             try:
