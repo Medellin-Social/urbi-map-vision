@@ -94,21 +94,23 @@ def main() -> None:
     parser.add_argument("--dry-run", action="store_true", help="Parse only, no DB writes")
     parser.add_argument(
         "--only",
-        choices=["nomadbarrio", "flatio", "booking"],
+        choices=["nomadbarrio", "airbnb_mensual", "flatio", "booking"],
         help="Run only one scraper",
     )
     parser.add_argument("--max-pages", type=int, default=3, help="Booking: max pages (default 3)")
     args = parser.parse_args()
 
     import nomadbarrio_scraper
+    import airbnb_mensual_scraper
     import flatio_scraper
     import booking_scraper
 
-    # Priority order: NomadBarrio → Flatio → Booking
+    # Priority order: NomadBarrio → Airbnb → Flatio → Booking
     scrapers = [
-        ("nomadbarrio", nomadbarrio_scraper.scrape, {"dry_run": args.dry_run}),
-        ("flatio",      flatio_scraper.scrape,      {"dry_run": args.dry_run}),
-        ("booking",     booking_scraper.scrape,     {"dry_run": args.dry_run, "max_pages": args.max_pages}),
+        ("nomadbarrio",     nomadbarrio_scraper.scrape,     {"dry_run": args.dry_run}),
+        ("airbnb_mensual",  airbnb_mensual_scraper.scrape,  {"dry_run": args.dry_run}),
+        ("flatio",          flatio_scraper.scrape,          {"dry_run": args.dry_run}),
+        ("booking",         booking_scraper.scrape,         {"dry_run": args.dry_run, "max_pages": args.max_pages}),
     ]
 
     if args.only:

@@ -74,6 +74,8 @@ class Mercado(BaseModel):
     poi_precio_oferta: Optional[int] = None
     yield_renta_media_pct: Optional[float] = None
     precio_renta_media_p50: Optional[int] = None
+    premium_vs_largo_pct: Optional[float] = None
+    n_listings_renta_media: Optional[int] = None
 
 
 class NomadaBreakdown(BaseModel):
@@ -297,6 +299,8 @@ _BARRIO_SQL = """
         -- renta media (nómadas)
         bm.yield_renta_media_pct,
         bm.precio_renta_media_p50,
+        bm.premium_vs_largo_pct,
+        bm.n_listings_renta_media,
         -- nomada score breakdown
         sm.yield_medio_score                AS pts_yield_nomada,
         sm.nomada_score                     AS pts_nomada,
@@ -374,6 +378,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             poi_precio_oferta=_i(row, "poi_precio_oferta"),
             yield_renta_media_pct=_f(row, "yield_renta_media_pct"),
             precio_renta_media_p50=_i(row, "precio_renta_media_p50"),
+            premium_vs_largo_pct=_f(row, "premium_vs_largo_pct"),
+            n_listings_renta_media=_i(row, "n_listings_renta_media"),
         ),
         airbnb=Airbnb(
             ocupacion_pct=_f(row, "ocupacion_airbnb_pct"),
