@@ -1,6 +1,7 @@
 export type Goal = "airbnb" | "renta-larga" | "valorizacion" | "mediano_plazo";
 export type Risk = "conservador" | "moderado" | "agresivo";
 export type Budget = "<200" | "200-500" | "500-1000" | ">1000";
+export type UserType = "investor" | "explorer";
 
 export type PaymentMethod = {
   id: string;
@@ -33,9 +34,19 @@ export type UrbiUser = {
   email: string;
   avatar?: string;          // data URL or remote URL
   password?: string;        // mock only — never do this in production
+  userType?: UserType;
   budget?: Budget;
   goal?: Goal;
   risk?: Risk;
+  // Extended onboarding profile fields
+  nUnidades?: string;
+  tipoGestion?: string;
+  targetInquilino?: string;
+  amoblado?: string;
+  tipoPago?: string;
+  horizonteInversion?: string;
+  primeraPropiedad?: boolean;
+  wantsAgent?: boolean;
   payments?: PaymentMethod[];
   favorites?: FavoriteBarrio[];
   history?: HistoryEntry[];

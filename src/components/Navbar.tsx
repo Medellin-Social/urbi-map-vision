@@ -1,9 +1,16 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
+import { ArrowLeft, Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
 import { auth, GOAL_LABEL } from "@/lib/auth";
 import { LanguageToggle } from "@/lib/i18n";
+import type { Neighborhood } from "@/lib/adapters";
 
-export function Navbar() {
+type NavbarProps = {
+  mlsBarrio?: Neighborhood | null;
+  mlsTotal?: number;
+  onBack?: () => void;
+};
+
+export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
   const user = typeof window !== "undefined" ? auth.get() : null;
   const navigate = useNavigate();
 
@@ -26,27 +33,45 @@ export function Navbar() {
       </Link>
 
       <div className="flex items-center gap-2">
-        <LanguageToggle />
-        <Link
-          to="/calculadora"
-          className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md transition hover:bg-primary/20"
-        >
-          <Calculator className="h-3.5 w-3.5" />
-          Calculadora 💰
-        </Link>
-        <Link
-          to="/comparador"
-          className="hidden items-center gap-1.5 rounded-md border border-border bg-surface/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-md transition hover:text-foreground sm:inline-flex"
-        >
-          <GitCompare className="h-3.5 w-3.5" />
-          Comparador
-        </Link>
+        {/* Breadcrumb en Vista 2 (listings) */}
+        {mlsBarrio ? (
+          <button
+            onClick={onBack}
+            className="flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-1.5 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
+          >
+            <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+            <span>{mlsBarrio.nombre}</span>
+            {mlsTotal != null && mlsTotal > 0 && (
+              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary">
+                {mlsTotal}
+              </span>
+            )}
+          </button>
+        ) : (
+          <>
+            <LanguageToggle />
+            <Link
+              to="/calculadora"
+              className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md transition hover:bg-primary/20"
+            >
+              <Calculator className="h-3.5 w-3.5" />
+              Calculadora 💰
+            </Link>
+            <Link
+              to="/comparador"
+              className="hidden items-center gap-1.5 rounded-md border border-border bg-surface/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-md transition hover:text-foreground sm:inline-flex"
+            >
+              <GitCompare className="h-3.5 w-3.5" />
+              Comparador
+            </Link>
 
-        {user?.goal && (
-          <span className="hidden items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-primary md:inline-flex">
-            <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-            {GOAL_LABEL[user.goal]}
-          </span>
+            {user?.goal && (
+              <span className="hidden items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-primary md:inline-flex">
+                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+                {GOAL_LABEL[user.goal]}
+              </span>
+            )}
+          </>
         )}
 
         <Link

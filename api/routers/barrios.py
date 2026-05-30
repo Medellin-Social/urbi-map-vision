@@ -141,6 +141,20 @@ class Valorizacion(BaseModel):
     tendencia: Optional[str] = None
 
 
+# Mediana de (precio_m2_mercado / avaluo_m2_catastro) a nivel commune, Medellín 2026.
+# Actualizar anualmente cuando se recargue catastro.
+_CIUDAD_RATIO_MEDIANA: float = 58.8
+
+
+class CatastroComuna(BaseModel):
+    total_predios: Optional[int] = None
+    pct_apartamento: Optional[float] = None
+    area_mediana_apto_m2: Optional[int] = None
+    avaluo_m2: Optional[int] = None
+    ratio_mercado_catastro: Optional[float] = None
+    ratio_vs_ciudad: Optional[float] = None
+
+
 class BarrioResponse(BaseModel):
     barrio_id: int
     nombre: Optional[str] = None
@@ -161,6 +175,7 @@ class BarrioResponse(BaseModel):
     valorizacion: Valorizacion
     nomada_breakdown: Optional[NomadaBreakdown] = None
     n_remates_municipio: Optional[int] = None
+    catastro_comuna: Optional[CatastroComuna] = None
 
 
 class ListingItem(BaseModel):
@@ -179,6 +194,8 @@ class ListingItem(BaseModel):
     fecha_scraping: Optional[str] = None
     buena_oferta: Optional[bool] = None
     pct_bajo_mediana: Optional[float] = None
+    lat: Optional[float] = None
+    lon: Optional[float] = None
 
 
 class ListingsResponse(BaseModel):
@@ -309,7 +326,12 @@ _BARRIO_SQL = """
         sm.pbn_score                        AS pts_pbn_nomada,
         sm.seg_medio_score                  AS pts_seg_nomada,
         sm.pts_verde                        AS pts_verde_nomada,
-        sm.pts_equip                        AS pts_equip_nomada
+        sm.pts_equip                        AS pts_equip_nomada,
+        -- catastro comunal (solo Medellín; NULL para otros municipios)
+        cat.total_predios                   AS cat_total_predios,
+        cat.pct_apartamento                 AS cat_pct_apartamento,
+        cat.area_mediana_apto_m2            AS cat_area_mediana_m2,
+        cat.avaluo_m2                       AS cat_avaluo_m2
     FROM raw.barrios b
     LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
@@ -321,6 +343,38 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
     LEFT JOIN analytics.proyecciones_valorizacion pv  ON sl.estrato_barrio = pv.estrato_sistema
     LEFT JOIN analytics.score_mediano_plazo       sm  ON b.id = sm.barrio_id
+    LEFT JOIN LATERAL (
+        SELECT
+            COUNT(*)::int                                                   AS total_predios,
+            ROUND(
+                SUM(CASE WHEN ds_uso_tipo ILIKE '%4 O M_S%'
+                         OR  ds_uso_tipo ILIKE '%4 O MAS%'
+                    THEN 1 ELSE 0 END)
+                * 100.0 / NULLIF(COUNT(*), 0), 1
+            )                                                               AS pct_apartamento,
+            ROUND(
+                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nm_ar_constru)
+                FILTER (
+                    WHERE nm_ar_constru BETWEEN 30 AND 10000
+                      AND (   ds_uso_tipo ILIKE '%4 O M_S%'
+                           OR ds_uso_tipo ILIKE '%4 O MAS%')
+                      AND ds_uso_tipo ILIKE '%RESIDENCIAL%'
+                )
+            )::int                                                          AS area_mediana_apto_m2,
+            ROUND(
+                PERCENTILE_CONT(0.5) WITHIN GROUP (
+                    ORDER BY vl_av_constru::float / nm_ar_constru
+                ) FILTER (
+                    WHERE nm_ar_constru > 20
+                      AND ds_uso_tipo ILIKE '%RESIDENCIAL%'
+                      AND (   ds_uso_tipo ILIKE '%4 O M_S%'
+                           OR ds_uso_tipo ILIKE '%4 O MAS%')
+                )
+            )::int                                                          AS avaluo_m2
+        FROM raw.catastro_medellin
+        WHERE UPPER(TRIM(ds_comuna)) = UPPER(TRIM(b.comuna))
+          AND cd_ind_ru_ur = 'U'
+    ) cat ON true
 """
 
 
@@ -439,6 +493,32 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             pts_equip=_i(row, "pts_equip_nomada"),
         ) if row.get("pts_yield_nomada") is not None else None,
         n_remates_municipio=_i(row, "n_remates_municipio"),
+        catastro_comuna=_build_catastro(row, precio_m2_cop),
+    )
+
+
+def _build_catastro(row: dict, precio_m2_cop: Optional[float]) -> Optional[CatastroComuna]:
+    total = _i(row, "cat_total_predios")
+    if total is None:
+        return None
+    avaluo = _i(row, "cat_avaluo_m2")
+    ratio = (
+        round(float(precio_m2_cop) / avaluo, 1)
+        if avaluo and avaluo > 0 and precio_m2_cop
+        else None
+    )
+    ratio_vs_ciudad = (
+        round(ratio / _CIUDAD_RATIO_MEDIANA, 2)
+        if ratio is not None
+        else None
+    )
+    return CatastroComuna(
+        total_predios=total,
+        pct_apartamento=_f(row, "cat_pct_apartamento"),
+        area_mediana_apto_m2=_i(row, "cat_area_mediana_m2"),
+        avaluo_m2=avaluo,
+        ratio_mercado_catastro=ratio,
+        ratio_vs_ciudad=ratio_vs_ciudad,
     )
 
 
@@ -557,6 +637,8 @@ async def get_barrio_listings(
             l.direccion_raw,
             l.url,
             l.fecha_scraping::text,
+            l.lat,
+            l.lon,
             CASE
                 WHEN l.tipo_operacion = 'venta'
                      AND l.precio_m2 > 0 AND l.precio_m2 < 2147483647

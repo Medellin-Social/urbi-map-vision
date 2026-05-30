@@ -14,7 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.db import create_pool, close_pool, get_pool
 from api.limiter import limiter
-from api.routers import admin, auth, barrios, calculadora, favoritos, historial, oportunidades, stats, usuario
+from api.routers import admin, auth, barrios, calculadora, favoritos, historial, listings, oportunidades, stats, usuario
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -42,6 +42,8 @@ _LOCAL_ORIGINS = [
     "http://localhost:8082",
     "https://urbidata.co",
     "https://www.urbidata.co",
+    "https://medellinsocial.com",
+    "https://www.medellinsocial.com",
 ]
 
 def _build_origins() -> list[str]:
@@ -112,6 +114,7 @@ app.add_middleware(
 
 app.include_router(auth.router,          prefix="/api/v1/auth",          tags=["auth"])
 app.include_router(barrios.router,       prefix="/api/v1/barrios",        tags=["barrios"])
+app.include_router(listings.router,      prefix="/api/v1/listings",       tags=["listings"])
 app.include_router(calculadora.router,   prefix="/api/v1/calculadora",    tags=["calculadora"])
 app.include_router(oportunidades.router, prefix="/api/v1/oportunidades",  tags=["oportunidades"])
 app.include_router(usuario.router,       prefix="/api/v1/usuario",        tags=["usuario"])

@@ -57,10 +57,6 @@ TARGET_MUNICIPIOS = {
     "sabaneta": "Sabaneta",
     "la estrella": "La Estrella",
     "la-estrella": "La Estrella",
-    "copacabana": "Copacabana",
-    "girardota": "Girardota",
-    "barbosa": "Barbosa",
-    "caldas": "Caldas",
 }
 
 # Category seeds to crawl

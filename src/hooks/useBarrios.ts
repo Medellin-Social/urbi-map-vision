@@ -36,11 +36,21 @@ function statsKey(nombre: string, municipio: string): string {
 // so the query returns complete data on first render.
 
 type StaticFeature = {
-  properties: { nombre: string; municipio: string };
+  properties: { nombre: string; municipio: string; cd_comuna?: number | null; nombre_comuna?: string | null };
   geometry: ApiBarrio["geometry"];
 };
 
 const ALL_MUNICIPIOS = ["medellin", "bello", "envigado", "itagui", "sabaneta", "la_estrella"] as const;
+
+// Maps GeoJSON "municipio" property (uppercase, no accents) → static listings slug
+const MUNICIPIO_TO_SLUG: Record<string, string> = {
+  MEDELLIN: "medellin",
+  BELLO: "bello",
+  ENVIGADO: "envigado",
+  ITAGUI: "itagui",
+  SABANETA: "sabaneta",
+  "LA ESTRELLA": "la_estrella",
+};
 
 async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature[]> {
   try {
@@ -53,6 +63,7 @@ async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature
 }
 
 const _geoMap = new Map<string, ApiBarrio["geometry"]>();
+const _comunaMap = new Map<string, number | null>();
 let _geoPromise: Promise<Map<string, ApiBarrio["geometry"]>> | null = null;
 
 function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
@@ -61,7 +72,9 @@ function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
       const all = await Promise.all(ALL_MUNICIPIOS.map(_fetchMunicipioFeatures));
       for (const features of all) {
         for (const f of features) {
-          _geoMap.set(geoKey(f.properties.nombre, f.properties.municipio), f.geometry);
+          const key = geoKey(f.properties.nombre, f.properties.municipio);
+          _geoMap.set(key, f.geometry);
+          _comunaMap.set(key, f.properties.cd_comuna ?? null);
         }
       }
       return _geoMap;
@@ -158,8 +171,18 @@ function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
 }
 
 // ── Fake-barrio index: maps synthetic IDs → static listing lookup params ─────
-// Populated by makeStatsBarrio; consumed by useListings for non-API municipios.
-const _fakeBarrioIndex = new Map<number, { slug: string; statsNombre: string }>();
+// Populated by makeStatsBarrio/makeGreyBarrio; consumed by useListings.
+const _fakeBarrioIndex = new Map<number, { slug: string; statsNombre: string; cd_comuna: number | null }>();
+
+// ── Commune names index: "slug:cd_comuna" → set of normalized barrio names ───
+const _communeNamesIndex = new Map<string, Set<string>>();
+
+function _registerCommune(slug: string, cdComuna: number | null, sn: string) {
+  if (cdComuna == null) return;
+  const key = `${slug}:${cdComuna}`;
+  if (!_communeNamesIndex.has(key)) _communeNamesIndex.set(key, new Set());
+  _communeNamesIndex.get(key)!.add(sn);
+}
 
 // ── Fake-barrio full data cache: maps synthetic IDs → ApiBarrio ───────────────
 // Populated by makeStatsBarrio; consumed by useCompararRaw to avoid 404 on fake IDs.
@@ -169,6 +192,7 @@ const _fakeBarioData = new Map<number, ApiBarrio>();
 type StaticListing = {
   id: number;
   tipo_operacion: string;
+  tipo_inmueble?: string | null;
   precio_cop: number | null;
   area_m2: number | null;
   precio_m2: number | null;
@@ -217,13 +241,18 @@ function pickScoreActivo(stats: BarrioStats, perfil?: string): number | null {
 function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string): ApiBarrio {
   const scoreActivo = pickScoreActivo(stats, perfil);
   const fakeId = 800_000 + stats.id;
-  _fakeBarrioIndex.set(fakeId, { slug: stats.slug_municipio.replace(/-/g, "_"), statsNombre: stats.nombre.toUpperCase() });
+  const _slug = stats.slug_municipio.replace(/-/g, "_");
+  const _sn = stripAccents(stats.nombre.toUpperCase());
+  const _cdComuna = f.properties.cd_comuna ?? null;
+  _fakeBarrioIndex.set(fakeId, { slug: _slug, statsNombre: _sn, cd_comuna: _cdComuna });
+  _registerCommune(_slug, _cdComuna, _sn);
   const barrio: ApiBarrio = {
     barrio_id: fakeId,
     nombre: f.properties.nombre,
-    comuna: null,
+    comuna: f.properties.nombre_comuna ?? null,
     municipio: f.properties.municipio,
     estrato: stats.estrato || null,
+    cd_comuna: _cdComuna,
     geometry: f.geometry,
     color_hex: null,
     excluir_inversion: false,
@@ -249,6 +278,7 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
       poi_precio_oferta: null,
       yield_renta_media_pct: null,
       precio_renta_media_p50: null,
+      premium_vs_largo_pct: null,
     },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
     seguridad: {
@@ -292,17 +322,25 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
 }
 
 function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
+  const _slug = MUNICIPIO_TO_SLUG[stripAccents(f.properties.municipio.toUpperCase())];
+  const _sn = stripAccents(f.properties.nombre.toUpperCase());
+  const _cdComuna = f.properties.cd_comuna ?? null;
+  if (_slug) {
+    _fakeBarrioIndex.set(id, { slug: _slug, statsNombre: _sn, cd_comuna: _cdComuna });
+    _registerCommune(_slug, _cdComuna, _sn);
+  }
   return {
     barrio_id: id,
     nombre: f.properties.nombre,
-    comuna: null,
+    comuna: f.properties.nombre_comuna ?? null,
     municipio: f.properties.municipio,
     estrato: null,
+    cd_comuna: _cdComuna,
     geometry: f.geometry,
     color_hex: null,
     excluir_inversion: false,
     scores: { corto: null, cat_corto: null, mediano: null, cat_mediano: null, largo: null, cat_largo: null, perfil_recomendado: null, score_activo: null },
-    mercado: { precio_m2_cop: null, precio_m2_usd: null, precio_venta_promedio: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null, yield_renta_media_pct: null, precio_renta_media_p50: null },
+    mercado: { precio_m2_cop: null, precio_m2_usd: null, precio_venta_promedio: null, arriendo_p50_cop: null, yield_bruto_pct: null, anos_recupero: null, estado_precio: null, pbn_precio_justo: null, poi_precio_oferta: null, yield_renta_media_pct: null, precio_renta_media_p50: null, premium_vs_largo_pct: null },
     airbnb: { ocupacion_pct: null, adr_usd: null, adr_cop: null, yield_airbnb_pct: null, n_listings: null },
     seguridad: { score: null, categoria: null, zona_turistica: null, tendencia: null, nota: null },
     conectividad: { dist_metro_km: null, dist_parque_km: null, dist_mall_km: null, n_cafes_500m: null, n_coworking_1km: null, n_gimnasios_1km: null, n_yoga_1km: null, indice_nomada: null },
@@ -345,13 +383,14 @@ export function useBarriosRaw(perfil?: string) {
         loadBarrioStats(),
       ]);
 
-      // Patch API barrios that lack geometry
+      // Patch API barrios that lack geometry, and attach cd_comuna from static GeoJSON
       const apiKeys = new Set<string>();
       const patched = apiData.map((b) => {
         const key = geoKey(b.nombre ?? "", b.municipio ?? "");
         apiKeys.add(key);
-        if (b.geometry) return b;
-        return { ...b, geometry: geoLookup.get(key) ?? null };
+        const cd_comuna = _comunaMap.get(key) ?? null;
+        if (b.geometry) return { ...b, cd_comuna };
+        return { ...b, geometry: geoLookup.get(key) ?? null, cd_comuna };
       });
 
       // For barrios not in API: use scraped stats if available, else grey fallback
@@ -470,30 +509,107 @@ export function useCiudadStats(perfil?: string) {
   });
 }
 
+export type AllListingsFilters = {
+  municipio?: string | null;
+  barrio_id?: number | null;
+  tipo_operacion?: string | null;
+  tipo_inmueble?: string | null;
+  precio_min?: number | null;
+  precio_max?: number | null;
+  area_min?: number | null;
+  habitaciones?: number | null;
+  limit?: number;
+  offset?: number;
+};
+
+export type ListingFull = {
+  id: number;
+  fuente?: string | null;
+  tipo_operacion?: string | null;
+  tipo_inmueble?: string | null;
+  precio_cop?: number | null;
+  precio_usd?: number | null;
+  area_m2?: number | null;
+  precio_m2?: number | null;
+  habitaciones?: number | null;
+  banos?: number | null;
+  direccion_raw?: string | null;
+  url?: string | null;
+  lat?: number | null;
+  lon?: number | null;
+  barrio_id?: number | null;
+  barrio_nombre?: string | null;
+  municipio?: string | null;
+  buena_oferta?: boolean | null;
+  pct_bajo_mediana?: number | null;
+};
+
+export type AllListingsResponse = {
+  total: number;
+  listings: ListingFull[];
+};
+
+export function useAllListings(filters: AllListingsFilters) {
+  return useQuery({
+    queryKey: ["all-listings", filters],
+    queryFn: async (): Promise<AllListingsResponse> => {
+      const params = new URLSearchParams();
+      if (filters.municipio) params.set("municipio", filters.municipio);
+      if (filters.barrio_id != null) params.set("barrio_id", String(filters.barrio_id));
+      if (filters.tipo_operacion) params.set("tipo_operacion", filters.tipo_operacion);
+      if (filters.tipo_inmueble) params.set("tipo_inmueble", filters.tipo_inmueble);
+      if (filters.precio_min != null) params.set("precio_min", String(filters.precio_min));
+      if (filters.precio_max != null) params.set("precio_max", String(filters.precio_max));
+      if (filters.area_min != null) params.set("area_min", String(filters.area_min));
+      if (filters.habitaciones != null) params.set("habitaciones", String(filters.habitaciones));
+      params.set("limit", String(filters.limit ?? 200));
+      params.set("offset", String(filters.offset ?? 0));
+      const url = `${API_ENDPOINTS.allListings}?${params}`;
+      return apiFetch<AllListingsResponse>(url);
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
 export function useListings(
   barrioId: number | null,
   limit = 50,
   offset = 0,
   tipoOperacion?: "venta" | "arriendo",
+  communeId?: number | null,
 ) {
   return useQuery({
-    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null],
+    queryKey: ["listings", barrioId, communeId ?? null, limit, offset, tipoOperacion ?? null],
     queryFn: async (): Promise<ApiListingsResponse> => {
       // Static path for synthetic barrios (non-API municipalities)
       const fake = barrioId != null ? _fakeBarrioIndex.get(barrioId) : undefined;
       if (fake) {
         const all = await loadStaticListings(fake.slug);
-        const filtered = all.filter(
-          (l) =>
-            l.barrio === fake.statsNombre &&
-            (!tipoOperacion || l.tipo_operacion === tipoOperacion),
-        );
+
+        // Commune scope: filter by all barrios sharing the same cd_comuna
+        let communeNames: Set<string> | null = null;
+        const effectiveCd = communeId ?? fake.cd_comuna;
+        if (effectiveCd != null) {
+          communeNames = _communeNamesIndex.get(`${fake.slug}:${effectiveCd}`) ?? null;
+        }
+
+        const filtered = all.filter((l) => {
+          const lb = stripAccents((l.barrio ?? "").toUpperCase());
+          // Non-Medellín municipalities are shown as a single block on the map;
+          // show all their listings. For Medellín, respect commune grouping.
+          const barrioMatch = fake.slug !== "medellin"
+            ? true
+            : (communeNames ? communeNames.has(lb) : lb === fake.statsNombre);
+          return barrioMatch && (!tipoOperacion || l.tipo_operacion === tipoOperacion);
+        });
         const page = filtered.slice(offset, offset + limit);
         return {
           total: filtered.length,
           listings: page.map((l) => ({
             id: l.id,
             tipo_operacion: l.tipo_operacion ?? undefined,
+            tipo_inmueble: l.tipo_inmueble ?? null,
             precio_cop: l.precio_cop,
             precio_usd: l.precio_cop ? Math.round(l.precio_cop / 4200) : null,
             area_m2: l.area_m2,
@@ -503,13 +619,22 @@ export function useListings(
             direccion_raw: l.direccion_raw ?? null,
             url: l.url ?? null,
             fuente: l.fuente ?? "metrocuadrado",
+            lat: l.lat,
+            lon: l.lng,
+            barrio_nombre: l.barrio ?? null,
           })),
         };
       }
 
+      // API path — send both barrio_id and cd_comuna when available.
+      // SQL uses OR logic: listings match if barrio_id matches OR cd_comuna matches.
+      // Sending barrio_id as fallback guarantees the clicked barrio's listings always
+      // appear even when the barrio_cd CTE JOIN on catastro_medellin misses some entries.
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
-      const url = `${API_ENDPOINTS.listings(barrioId!)}?${params}`;
+      if (barrioId != null) params.set("barrio_id", String(barrioId));
+      if (communeId != null) params.set("cd_comuna", String(communeId));
+      const url = `${API_ENDPOINTS.allListings}?${params}`;
       return apiFetch<ApiListingsResponse>(url);
     },
     enabled: barrioId != null,

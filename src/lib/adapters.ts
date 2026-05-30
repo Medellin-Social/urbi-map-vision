@@ -13,6 +13,7 @@ export type Neighborhood = {
   id: number;
   nombre: string;
   comuna: string;
+  cd_comuna?: number | null;
   municipio: string;
   estrato: number;
   precio_m2: number;
@@ -49,6 +50,12 @@ export type Neighborhood = {
   seguridad_nota?: string | null;
   verde_pct?: number | null;
   verde_categoria?: string | null;
+  // GAP fixes
+  airbnb_data?: { ocupacion_pct: number | null; adr_cop: number | null; yield_airbnb_pct: number | null; n_listings: number | null } | null;
+  valorizacion_api?: { var_anual_pct: number | null; proyeccion_3anos_pct: number | null; proyeccion_5anos_pct: number | null; tendencia: string | null } | null;
+  seguridad_tendencia?: string | null;
+  premium_vs_largo_pct?: number | null;
+  catastro_comuna?: { total_predios: number | null; pct_apartamento: number | null; area_mediana_apto_m2: number | null; avaluo_m2: number | null; ratio_mercado_catastro: number | null; ratio_vs_ciudad: number | null } | null;
 };
 import {
   OPP_COLORS,
@@ -66,6 +73,7 @@ export type ApiBarrio = {
   comuna: string | null;
   municipio: string | null;
   estrato: number | null;
+  cd_comuna?: number | null;
   geometry: { type: string; coordinates: unknown } | null;
   color_hex: string | null;
   excluir_inversion: boolean | null;
@@ -92,6 +100,7 @@ export type ApiBarrio = {
     poi_precio_oferta: number | null;
     yield_renta_media_pct: number | null;
     precio_renta_media_p50: number | null;
+    premium_vs_largo_pct: number | null;
   };
   nomada_breakdown?: NomadaBreakdown | null;
   airbnb: {
@@ -140,6 +149,14 @@ export type ApiBarrio = {
     proyeccion_5anos_pct: number | null;
     tendencia: string | null;
   };
+  catastro_comuna?: {
+    total_predios: number | null;
+    pct_apartamento: number | null;
+    area_mediana_apto_m2: number | null;
+    avaluo_m2: number | null;
+    ratio_mercado_catastro: number | null;
+    ratio_vs_ciudad: number | null;
+  } | null;
 };
 
 export type ApiListing = {
@@ -151,6 +168,7 @@ export type ApiListing = {
   precio_usd?: number | null;
   area_m2?: number | null;
   precio_m2?: number | null;
+  precio_m2_mediana_barrio?: number | null;
   habitaciones?: number | null;
   banos?: number | null;
   direccion_raw?: string | null;
@@ -158,6 +176,19 @@ export type ApiListing = {
   fecha_scraping?: string | null;
   buena_oferta?: boolean | null;
   pct_bajo_mediana?: number | null;
+  lat?: number | null;
+  lon?: number | null;
+  barrio_id?: number | null;
+  barrio_nombre?: string | null;
+  cd_comuna?: number | null;
+  // URL availability — present after validate_listings_urls.py has run
+  disponible_actualmente?: boolean | null;
+  dias_en_mercado?: number | null;
+  fecha_ultima_verificacion?: string | null;
+  // Personalization — present when user is authenticated with a perfil
+  relevancia_score?: number | null;
+  match_label?: string | null;
+  match_razones?: string[] | null;
 };
 
 export type ApiListingsResponse = {
@@ -182,7 +213,7 @@ export type ApiOportunidad = {
 
 // ── Geometry helpers ──────────────────────────────────────────────────────────
 
-function centroid(geometry: ApiBarrio["geometry"]): [number, number] {
+export function centroid(geometry: ApiBarrio["geometry"]): [number, number] {
   if (!geometry) return [-75.58, 6.24];
   const g = geometry as { type: string; coordinates: number[][][] | number[][][][] };
   if (g.type === "Point") {
@@ -201,10 +232,31 @@ function centroid(geometry: ApiBarrio["geometry"]): [number, number] {
   return [lng, lat];
 }
 
+export type BarrioOption = {
+  id: number;
+  nombre: string;
+  municipio: string;
+  lat: number;
+  lng: number;
+  cd_comuna: number | null;
+};
+
+export function barrioToOption(b: ApiBarrio): BarrioOption {
+  const [lng, lat] = centroid(b.geometry);
+  return {
+    id: b.barrio_id,
+    nombre: b.nombre ?? "—",
+    municipio: b.municipio ?? "—",
+    lat,
+    lng,
+    cd_comuna: b.cd_comuna ?? null,
+  };
+}
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-export function scoreLabel(score: number | null, perfil?: string): string {
-  return getScoreLabel(score, perfil);
+export function scoreLabel(score: number | null, perfil?: string, risk?: string): string {
+  return getScoreLabel(score, perfil, risk);
 }
 
 // ── Converters ────────────────────────────────────────────────────────────────
@@ -215,6 +267,7 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     id: b.barrio_id,
     nombre: (b.nombre ?? "").toUpperCase(),
     comuna: b.comuna ?? "",
+    cd_comuna: b.cd_comuna ?? null,
     municipio: b.municipio ?? "Medellín",
     estrato: b.estrato ?? 3,
     precio_m2: b.mercado.precio_m2_cop ?? 5_000_000,
@@ -247,9 +300,18 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     seguridad_score: b.seguridad?.score ?? null,
     seguridad_categoria: b.seguridad?.categoria ?? null,
     seguridad_nota: b.seguridad?.nota ?? null,
+    seguridad_tendencia: b.seguridad?.tendencia ?? null,
     verde_pct: b.verde?.indice_verde_pct ?? null,
     verde_categoria: b.verde?.categoria ?? null,
     n_remates_municipio: b.n_remates_municipio ?? undefined,
+    airbnb_data: (b.airbnb?.n_listings != null || b.airbnb?.ocupacion_pct != null)
+      ? { ocupacion_pct: b.airbnb.ocupacion_pct, adr_cop: b.airbnb.adr_cop, yield_airbnb_pct: b.airbnb.yield_airbnb_pct, n_listings: b.airbnb.n_listings }
+      : null,
+    valorizacion_api: (b.valorizacion?.var_anual_pct != null || b.valorizacion?.proyeccion_5anos_pct != null)
+      ? b.valorizacion
+      : null,
+    premium_vs_largo_pct: b.mercado.premium_vs_largo_pct ?? null,
+    catastro_comuna: b.catastro_comuna ?? null,
   };
 }
 
@@ -288,6 +350,7 @@ export function barriosToGeoJSON(
   palette?: ScorePaletteId,
   perfil?: string,
   budgetRange?: [number, number] | null,
+  risk?: string,
 ) {
   return {
     type: "FeatureCollection" as const,
@@ -306,12 +369,14 @@ export function barriosToGeoJSON(
           id: b.barrio_id,
           nombre: b.nombre ?? "",
           comuna: b.comuna ?? "",
+          municipio: (b.municipio ?? "").toUpperCase(),
+          cd_comuna: b.cd_comuna ?? null,
           yield: b.mercado.yield_bruto_pct ?? 6,
-          color_hex: excluir ? "#374151" : getScoreColor(score, palette, perfil),
+          color_hex: excluir ? "#374151" : getScoreColor(score, palette, perfil, risk),
           fill_opacity: getScoreFillOpacity(score, excluir, palette),
           has_score: score !== null && !excluir,
           score_activo: score ?? 0,
-          cat_activo: excluir ? "No disponible" : scoreLabel(score, perfil),
+          cat_activo: excluir ? "No disponible" : scoreLabel(score, perfil, risk),
           excluir_inversion: excluir,
           in_budget,
         },

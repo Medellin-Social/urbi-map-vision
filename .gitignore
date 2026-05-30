@@ -42,3 +42,7 @@ __pycache__/
 # Large data files (local only)
 scripts/data/col_adm2.geojson
 scripts/data/raw/
+
+# Datos catastrales sensibles
+*.csv
+*.Zone.Identifier

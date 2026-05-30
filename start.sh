@@ -9,6 +9,14 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 LOG_DIR="$SCRIPT_DIR/.logs"
 mkdir -p "$LOG_DIR"
 
+# Cargar variables de entorno desde .env (sin sobreescribir las ya exportadas)
+if [ -f "$SCRIPT_DIR/.env" ]; then
+  set -a
+  # shellcheck disable=SC1091
+  source "$SCRIPT_DIR/.env"
+  set +a
+fi
+
 BACKEND_LOG="$LOG_DIR/backend.log"
 FRONTEND_LOG="$LOG_DIR/frontend.log"
 
@@ -45,16 +53,20 @@ else
 fi
 
 # ── 2. Backend (FastAPI + uvicorn) ────────────────────────────────────────────
-echo "Iniciando backend  → http://localhost:8000"
+# Resolve uvicorn: prefer ~/.local/bin (pip install --user) then system PATH
+UVICORN=$(command -v uvicorn 2>/dev/null \
+  || echo "$HOME/.local/bin/uvicorn")
+
+echo "Iniciando backend  → http://localhost:8001"
 : > "$BACKEND_LOG"
-uvicorn api.main:app --reload --host 0.0.0.0 --port 8000 \
+"$UVICORN" api.main:app --host 0.0.0.0 --port 8001 \
   > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
 
 # Esperar a que el backend levante
 echo -n "Esperando backend"
 for i in $(seq 1 20); do
-  if curl -sf http://localhost:8000/docs >/dev/null 2>&1; then
+  if curl -sf http://localhost:8001/docs >/dev/null 2>&1; then
     echo " OK"
     break
   fi
@@ -69,7 +81,7 @@ if [ ! -d node_modules ]; then
   echo "Instalando dependencias del frontend..."
   npm install
 fi
-npm run dev -- --host --port 5173 \
+VITE_API_URL=http://localhost:8001/api/v1 npm run dev -- --host --port 5173 \
   > "$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
 
@@ -82,8 +94,8 @@ echo "────────────────────────�
 echo "  Backend PID  : $BACKEND_PID"
 echo "  Frontend PID : $FRONTEND_PID"
 echo ""
-echo "  API          : http://localhost:8000/api/v1"
-echo "  API docs     : http://localhost:8000/docs"
+echo "  API          : http://localhost:8001/api/v1"
+echo "  API docs     : http://localhost:8001/docs"
 echo "  Mapa         : $FRONTEND_URL"
 echo "────────────────────────────────────────────────────"
 echo "Logs: .logs/backend.log | .logs/frontend.log"

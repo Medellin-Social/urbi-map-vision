@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -622,3 +623,118 @@ async def barrios_stats(admin: dict = Depends(require_admin)):
         })
 
     return {"barrios": barrios}
+
+
+# ── Endpoint 6: Leads ─────────────────────────────────────────────────────────
+
+class LeadUpdate(BaseModel):
+    estado: Optional[str] = None
+    asignado_a: Optional[str] = None
+    notas: Optional[str] = None
+
+
+@router.get("/leads")
+async def list_leads(admin: dict = Depends(require_admin)):
+    pool = get_pool()
+
+    try:
+        rows = await pool.fetch(
+            """
+            SELECT
+                l.id            AS lead_id,
+                l.estado,
+                l.asignado_a,
+                l.notas,
+                l.created_at    AS lead_created_at,
+                u.id            AS usuario_id,
+                u.nombre,
+                u.apellido,
+                u.email,
+                p.presupuesto,
+                p.objetivo,
+                p.perfil_riesgo,
+                p.n_unidades,
+                p.tipo_gestion,
+                p.target_inquilino,
+                p.amoblado,
+                p.tipo_pago,
+                p.horizonte_inversion,
+                p.primera_propiedad,
+                p.wants_agent
+            FROM leads l
+            JOIN usuarios u ON u.id = l.usuario_id
+            LEFT JOIN perfil_inversor p ON p.usuario_id = l.usuario_id
+            ORDER BY l.created_at DESC
+            """
+        )
+    except Exception:
+        return {"leads": [], "total": 0, "detail": "migration 0002 not yet applied"}
+
+    leads = []
+    for r in rows:
+        leads.append({
+            "lead_id": r["lead_id"],
+            "estado": r["estado"],
+            "asignado_a": r["asignado_a"],
+            "notas": r["notas"],
+            "registrado": _hace_cuanto(r["lead_created_at"]) if r["lead_created_at"] else "",
+            "usuario": {
+                "id": r["usuario_id"],
+                "nombre": f'{r["nombre"] or ""} {r["apellido"] or ""}'.strip(),
+                "email": r["email"],
+            },
+            "perfil": {
+                "presupuesto": r["presupuesto"],
+                "objetivo": r["objetivo"],
+                "perfil_riesgo": r["perfil_riesgo"],
+                "n_unidades": r["n_unidades"],
+                "tipo_gestion": r["tipo_gestion"],
+                "target_inquilino": r["target_inquilino"],
+                "amoblado": r["amoblado"],
+                "tipo_pago": r["tipo_pago"],
+                "horizonte_inversion": r["horizonte_inversion"],
+                "primera_propiedad": r["primera_propiedad"],
+                "wants_agent": r["wants_agent"],
+            },
+        })
+
+    return {"leads": leads, "total": len(leads)}
+
+
+@router.put("/leads/{lead_id}")
+async def update_lead(
+    lead_id: int,
+    body: LeadUpdate,
+    admin: dict = Depends(require_admin),
+):
+    pool = get_pool()
+
+    row = await pool.fetchrow("SELECT id FROM leads WHERE id = $1", lead_id)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Lead no encontrado")
+
+    updates = []
+    params: list = []
+    idx = 1
+    if body.estado is not None:
+        updates.append(f"estado = ${idx}")
+        params.append(body.estado)
+        idx += 1
+    if body.asignado_a is not None:
+        updates.append(f"asignado_a = ${idx}")
+        params.append(body.asignado_a)
+        idx += 1
+    if body.notas is not None:
+        updates.append(f"notas = ${idx}")
+        params.append(body.notas)
+        idx += 1
+
+    if not updates:
+        return {"detail": "Sin cambios"}
+
+    params.append(lead_id)
+    updated = await pool.fetchrow(
+        f"UPDATE leads SET {', '.join(updates)} WHERE id = ${idx} RETURNING *",
+        *params,
+    )
+    return dict(updated)

@@ -44,8 +44,7 @@ MIN_LISTINGS_ARRIENDO = 1
 # Generic city-level names to exclude (listings that didn't specify a barrio)
 _CITY_NAMES = {m["nombre"].upper() for m in MUNICIPIOS}
 _CITY_NAMES.update({"MEDELLÍN", "BELLO", "ITAGÜÍ", "ENVIGADO", "SABANETA",
-                     "LA ESTRELLA", "CALDAS", "COPACABANA", "GIRARDOTA", "BARBOSA",
-                     "ANTIOQUIA", "COLOMBIA"})
+                     "LA ESTRELLA", "ANTIOQUIA", "COLOMBIA"})
 
 # Reasonable price ranges (filter outliers)
 MIN_PRECIO_M2 = 500_000       # 500k COP/m²

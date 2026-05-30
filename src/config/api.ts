@@ -16,11 +16,16 @@ export const API_ENDPOINTS = {
   barrio: (id: number) => `${API_BASE_URL}/barrios/${id}`,
   comparar: `${API_BASE_URL}/barrios/comparar`,
   listings: (id: number) => `${API_BASE_URL}/barrios/${id}/listings`,
+  allListings: `${API_BASE_URL}/listings`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,
   perfil: `${API_BASE_URL}/usuario/perfil`,
   configMapa: `${API_BASE_URL}/usuario/configuracion_mapa`,
+
+  // Admin
+  adminLeads: `${API_BASE_URL}/admin/leads`,
+  adminLead: (id: number) => `${API_BASE_URL}/admin/leads/${id}`,
 
   // Features
   calculadora: `${API_BASE_URL}/calculadora/simular`,

@@ -80,10 +80,27 @@ export const SCORE_PALETTES: Record<ScorePaletteId, ScorePalette> = {
 export const PALETTE_STORAGE_KEY = "urbidata.score_palette";
 export const PALETTE_EVENT = "urbidata:palette";
 
-export function getActivePaletteId(): ScorePaletteId {
-  if (typeof window === "undefined") return "suave";
+const RISK_DEFAULT_PALETTE: Record<string, ScorePaletteId> = {
+  conservador: "suave",
+  moderado:    "urbi",
+  agresivo:    "contraste",
+};
+
+// Explicit per-risk thresholds [alto, medio, bajo] — replaces offset approach.
+const RISK_THRESHOLDS: Record<string, [number, number, number]> = {
+  conservador: [75, 55, 35],
+  moderado:    [70, 50, 30],
+  agresivo:    [60, 42, 25],
+};
+const _defaultRiskThreshold: [number, number, number] = [70, 50, 30];
+
+export function getActivePaletteId(risk?: string): ScorePaletteId {
+  if (typeof window === "undefined") {
+    return (RISK_DEFAULT_PALETTE[risk ?? "moderado"] ?? "urbi") as ScorePaletteId;
+  }
   const raw = localStorage.getItem(PALETTE_STORAGE_KEY);
-  return (raw && raw in SCORE_PALETTES ? raw : "urbi") as ScorePaletteId;
+  if (raw && raw in SCORE_PALETTES) return raw as ScorePaletteId;
+  return (RISK_DEFAULT_PALETTE[risk ?? "moderado"] ?? "urbi") as ScorePaletteId;
 }
 
 export function setActivePalette(id: ScorePaletteId): void {
@@ -91,17 +108,10 @@ export function setActivePalette(id: ScorePaletteId): void {
   window.dispatchEvent(new CustomEvent(PALETTE_EVENT));
 }
 
-// Dynamic thresholds loaded from /stats/score-thresholds (p75/p50/p25 per score type).
-// Fallbacks match backend _score_to_hex logic in api/routers/barrios.py.
-let _thresholds: Record<string, [number, number, number]> = {
-  airbnb:        [70, 50, 30],
-  mediano_plazo: [55, 40, 25],
-  nomadas:       [55, 40, 25],
-  largo_plazo:   [70, 50, 30],
-};
-const _defaultThreshold: [number, number, number] = [70, 50, 30];
-
 export const THRESHOLDS_EVENT = "urbidata:thresholds";
+
+// Kept for backward compat — no longer affects score coloring.
+let _thresholds: Record<string, [number, number, number]> = {};
 
 export function setScoreThresholds(t: Record<string, [number, number, number]>): void {
   _thresholds = t;
@@ -110,19 +120,19 @@ export function setScoreThresholds(t: Record<string, [number, number, number]>):
   }
 }
 
-export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, perfil?: string): string {
-  const p = SCORE_PALETTES[paletteId ?? getActivePaletteId()];
+export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, perfil?: string, risk?: string): string {
+  const p = SCORE_PALETTES[paletteId ?? getActivePaletteId(risk)];
   if (score === null) return p.sin_datos;
-  const [tAlto, tMedio, tBajo] = _thresholds[perfil ?? ""] ?? _defaultThreshold;
+  const [tAlto, tMedio, tBajo] = RISK_THRESHOLDS[risk ?? "moderado"] ?? _defaultRiskThreshold;
   if (score >= tAlto) return p.alto;
   if (score >= tMedio) return p.medio;
   if (score >= tBajo) return p.bajo;
   return p.muy_bajo;
 }
 
-export function getScoreLabel(score: number | null, perfil?: string): string {
+export function getScoreLabel(score: number | null, perfil?: string, risk?: string): string {
   if (score === null) return "Sin datos";
-  const [tAlto, tMedio, tBajo] = _thresholds[perfil ?? ""] ?? _defaultThreshold;
+  const [tAlto, tMedio, tBajo] = RISK_THRESHOLDS[risk ?? "moderado"] ?? _defaultRiskThreshold;
   if (score >= tAlto) return "Excelente";
   if (score >= tMedio) return "Bueno";
   if (score >= tBajo) return "Moderado";

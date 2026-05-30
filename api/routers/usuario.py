@@ -14,11 +14,21 @@ router = APIRouter()
 # ── Models ────────────────────────────────────────────────────────────────────
 
 class OnboardingRequest(BaseModel):
-    presupuesto: Optional[str] = None          # "$200M-$500M COP"
+    presupuesto: Optional[str] = None
     presupuesto_min_cop: Optional[int] = None
     presupuesto_max_cop: Optional[int] = None
-    objetivo: Optional[str] = None             # airbnb/nomadas/largo_plazo/mixto
-    perfil_riesgo: Optional[str] = None        # conservador/moderado/agresivo
+    objetivo: Optional[str] = None
+    perfil_riesgo: Optional[str] = None
+    # Extended onboarding fields
+    tipo_usuario: Optional[str] = None
+    n_unidades: Optional[str] = None
+    tipo_gestion: Optional[str] = None
+    target_inquilino: Optional[str] = None
+    amoblado: Optional[str] = None
+    tipo_pago: Optional[str] = None
+    horizonte_inversion: Optional[str] = None
+    primera_propiedad: Optional[bool] = None
+    wants_agent: Optional[bool] = None
 
 
 class MapConfigRequest(BaseModel):
@@ -67,22 +77,54 @@ async def onboarding(req: OnboardingRequest, current_user: dict = Depends(get_cu
     if req.presupuesto and (pmin is None or pmax is None):
         pmin, pmax = _parse_presupuesto(req.presupuesto)
 
+    # Base INSERT — always works, pre- and post-migration
     row = await pool.fetchrow(
         """
         INSERT INTO perfil_inversor
             (usuario_id, presupuesto, presupuesto_min_cop, presupuesto_max_cop, objetivo, perfil_riesgo)
         VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (usuario_id) DO UPDATE SET
-            presupuesto      = EXCLUDED.presupuesto,
+            presupuesto         = EXCLUDED.presupuesto,
             presupuesto_min_cop = EXCLUDED.presupuesto_min_cop,
             presupuesto_max_cop = EXCLUDED.presupuesto_max_cop,
-            objetivo         = EXCLUDED.objetivo,
-            perfil_riesgo    = EXCLUDED.perfil_riesgo,
-            updated_at       = NOW()
+            objetivo            = EXCLUDED.objetivo,
+            perfil_riesgo       = EXCLUDED.perfil_riesgo,
+            updated_at          = NOW()
         RETURNING *
         """,
         current_user["id"], req.presupuesto, pmin, pmax, req.objetivo, req.perfil_riesgo,
     )
+
+    # Extended fields — only available after migration 0002; silently skipped if not yet applied
+    try:
+        await pool.execute(
+            """
+            UPDATE perfil_inversor SET
+                tipo_usuario             = $2,
+                n_unidades               = $3,
+                tipo_gestion             = $4,
+                target_inquilino         = $5,
+                amoblado                 = $6,
+                tipo_pago                = $7,
+                horizonte_inversion      = $8,
+                primera_propiedad        = $9,
+                wants_agent              = $10,
+                onboarding_completado_at = NOW()
+            WHERE usuario_id = $1
+            """,
+            current_user["id"],
+            req.tipo_usuario, req.n_unidades, req.tipo_gestion, req.target_inquilino,
+            req.amoblado, req.tipo_pago, req.horizonte_inversion,
+            req.primera_propiedad, req.wants_agent,
+        )
+        if req.wants_agent:
+            await pool.execute(
+                "INSERT INTO leads (usuario_id) VALUES ($1) ON CONFLICT (usuario_id) DO NOTHING",
+                current_user["id"],
+            )
+    except Exception:
+        pass  # migration 0002 not yet applied in this environment
+
     return dict(row)
 
 

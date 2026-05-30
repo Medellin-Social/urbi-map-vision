@@ -35,18 +35,6 @@
     "nota": "Sin remates registrados en Sabaneta. Score neutro.",
     "fuente": "rematesjudiciales.click"
   },
-  "Caldas": {
-    "municipio": "Caldas",
-    "n_remates_activos": 2,
-    "n_listings_referencia": 0,
-    "remates_por_100_listings": null,
-    "score_salud": 100,
-    "categoria_salud": "SIN DATOS",
-    "n_remates_apto": 1,
-    "precio_base_promedio": 234635099,
-    "nota": "Sin remates registrados en Caldas. Score neutro.",
-    "fuente": "rematesjudiciales.click"
-  },
   "La Estrella": {
     "municipio": "La Estrella",
     "n_remates_activos": 0,

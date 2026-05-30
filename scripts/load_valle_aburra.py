@@ -138,7 +138,7 @@ def load_real_listings(cur, db_features: list[dict], dry_run: bool):
 
     # Existing URLs to avoid re-insert
     cur.execute(
-        "SELECT url FROM raw.listings_fincaraiz WHERE url LIKE 'https://www.fincaraiz.com.co/ficha/%'"
+        "SELECT url FROM raw.listings_metrocuadrado WHERE url LIKE 'https://www.fincaraiz.com.co/ficha/%'"
     )
     existing_urls = {row["url"] for row in cur.fetchall()}
 
@@ -228,17 +228,21 @@ def load_real_listings(cur, db_features: list[dict], dry_run: bool):
             if not dry_run:
                 cur.execute(
                     """
-                    INSERT INTO raw.listings_fincaraiz
-                        (tipo_operacion, tipo_inmueble, precio, area_m2,
-                         barrio_id, url, barrio_raw, raw_data, activo)
-                    VALUES (%s,'apartamento',%s,%s,%s,%s,%s,%s::jsonb,true)
+                    INSERT INTO raw.listings_metrocuadrado
+                        (fuente, tipo_operacion, tipo_inmueble, precio, area_m2,
+                         barrio_id, url, barrio_raw, raw_data, activo,
+                         lat, lon, estrato)
+                    VALUES ('fincaraiz',%s,'apartamento',%s,%s,%s,%s,%s,%s::jsonb,true,%s,%s,%s)
                     ON CONFLICT (url) DO NOTHING
                     """,
                     (
                         tipo, precio, area if area > 0 else None,
                         barrio_id, url,
                         (lst.get("barrio") or "").upper(),
-                        json.dumps({"id": listing_id, "estrato": lst.get("estrato")}),
+                        json.dumps({"id": listing_id}),
+                        float(lat) if lat else None,
+                        float(lng) if lng else None,
+                        lst.get("estrato"),
                     ),
                 )
 

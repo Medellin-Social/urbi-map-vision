@@ -88,13 +88,47 @@ type Props = {
   selected: Neighborhood | null;
   onClear: () => void;
   onSelect?: (n: Neighborhood) => void;
+  perfil?: string;
+  risk?: string;
 };
 
-export function FloatingPanel({ selected, onClear, onSelect }: Props) {
+const GOAL_TO_PERFIL: Record<string, string> = {
+  airbnb: "airbnb",
+  "renta-larga": "largo_plazo",
+  valorizacion: "largo_plazo",
+  mediano_plazo: "mediano_plazo",
+};
+
+type SortKey = "relevancia" | "precio_asc" | "precio_desc" | "area";
+
+function sortListings(listings: ApiListing[], key: SortKey): ApiListing[] {
+  const s = [...listings];
+  if (key === "relevancia") {
+    s.sort((a, b) => (b.relevancia_score ?? 0) - (a.relevancia_score ?? 0));
+  } else if (key === "precio_asc") {
+    s.sort((a, b) => (a.precio_cop ?? 0) - (b.precio_cop ?? 0));
+  } else if (key === "precio_desc") {
+    s.sort((a, b) => (b.precio_cop ?? 0) - (a.precio_cop ?? 0));
+  } else if (key === "area") {
+    s.sort((a, b) => (b.area_m2 ?? 0) - (a.area_m2 ?? 0));
+  }
+  return s;
+}
+
+function matchColor(score: number): string {
+  if (score >= 75) return "#10b981";
+  if (score >= 55) return "#00d4ff";
+  if (score >= 35) return "#f59e0b";
+  return "#6b7280";
+}
+
+export function FloatingPanel({ selected, onClear, onSelect, perfil: perfilProp, risk: riskProp }: Props) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<View>("city");
-  const [minimized, setMinimized] = useState(false);
+  const [minimized, setMinimized] = useState(true);
   const user = typeof window !== "undefined" ? auth.get() : null;
+  const perfil = perfilProp ?? GOAL_TO_PERFIL[user?.goal ?? ""];
+  const risk = riskProp ?? user?.risk;
 
   const [size, setSize] = useState<{ width: number; height: number }>(() =>
     typeof window !== "undefined" ? readPanelSize() : { width: 380, height: 520 }
@@ -321,7 +355,12 @@ function PanelContent({
       )}
       {view === "listings" && selected && (
         <motion.div key={`l-${selected.id}`} {...transition}>
-          <ListingsView n={selected} onBack={() => setView("barrio")} />
+          <ListingsView
+            n={selected}
+            onBack={() => setView("barrio")}
+            perfil={GOAL_TO_PERFIL[user?.goal ?? ""]}
+            risk={user?.risk}
+          />
         </motion.div>
       )}
     </AnimatePresence>
@@ -571,9 +610,9 @@ const _GOAL_TO_PERFIL: Record<string, string> = {
 
 function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
   const perfil = _GOAL_TO_PERFIL[goal ?? ""];
-  const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil);
-  const scoreLbl = getScoreLabel(n.score_activo ?? null, perfil);
-  const valoriz = calcValorizStats(n.estrato);
+  const risk = auth.get()?.risk;
+  const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil, risk);
+  const scoreLbl = getScoreLabel(n.score_activo ?? null, perfil, risk);
 
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
   const apiListings = listingsData?.listings ?? [];
@@ -716,33 +755,15 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         </div>
       </Section>
 
+      {goal === "airbnb" && n.airbnb_data && <AirbnbSection n={n} />}
+
       {goal === "mediano_plazo" && <NomadaSection n={n} />}
 
       <SeguridadSection n={n} />
       <VerdeSection n={n} maxVerdePct={maxVerdePct} />
       <LiquiditySection n={n} />
 
-      <Section title="📈 Valorización histórica">
-        <div className="rounded-xl border border-border bg-background/30 p-3 space-y-2.5">
-          <div className="grid grid-cols-2 gap-2">
-            <div className="text-center">
-              <div className="font-display text-xl font-bold text-primary">+{valoriz.acumulado}%</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">desde 2015</div>
-            </div>
-            <div className="text-center">
-              <div className="font-display text-xl font-bold text-success">+{valoriz.ultimoAnio}%</div>
-              <div className="text-[10px] text-muted-foreground mt-0.5">último año</div>
-            </div>
-          </div>
-          <div className="border-t border-border/40 pt-2 text-center text-xs text-muted-foreground">
-            Proyección 5 años:{" "}
-            <span className="font-semibold text-foreground">+{valoriz.proj5}%</span>
-          </div>
-        </div>
-        <p className="mt-1.5 text-[10px] text-muted-foreground/70">
-          Fuente: DANE IPVN · Ajustado por estrato {n.estrato}
-        </p>
-      </Section>
+      <ValorizacionSection n={n} />
 
       <SaludFinancieraSection n={n} />
 
@@ -756,6 +777,8 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         <Calculator className="h-3.5 w-3.5" />
         Simular inversión aquí <ArrowRight className="h-3 w-3" />
       </Link>
+
+      <CatastroSection n={n} />
 
       <Section title="Listings destacados">
         {listingsLoading && apiListings.length === 0 && (
@@ -796,9 +819,11 @@ function NomadaSection({ n }: { n: Neighborhood }) {
   const arriendo = n.arriendo;
   const rentaDisplay = rentaMedia ?? (arriendo > 0 ? Math.round(arriendo * 1.4) : null);
   const rentaEstimada = !rentaMedia && rentaDisplay != null;
-  const premiumPct = arriendo > 0 && rentaDisplay
-    ? Math.round(((rentaDisplay - arriendo) / arriendo) * 100)
-    : null;
+  const premiumPct = n.premium_vs_largo_pct != null
+    ? Math.round(n.premium_vs_largo_pct)
+    : (arriendo > 0 && rentaDisplay
+        ? Math.round(((rentaDisplay - arriendo) / arriendo) * 100)
+        : null);
   const yieldMedia = n.yield_renta_media_pct;
   const yieldLargo = n.yield;
 
@@ -987,6 +1012,49 @@ function ScoreRow({ label, pts, max, highlight }: { label: string; pts: number |
   );
 }
 
+/* ------------- Airbnb rendimiento ------------- */
+
+function AirbnbSection({ n }: { n: Neighborhood }) {
+  const ab = n.airbnb_data!;
+  const fewData = (ab.n_listings ?? 0) < 5;
+  return (
+    <Section title="📊 Rendimiento Airbnb">
+      {fewData && (
+        <p className="mb-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning">
+          ⚠️ Pocos datos Airbnb en esta zona ({ab.n_listings ?? 0} listings)
+        </p>
+      )}
+      <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-2">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="rounded-lg border border-border/60 bg-background/40 p-2 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ocupación</div>
+            <div className="mt-0.5 font-display text-base font-semibold text-primary">
+              {ab.ocupacion_pct != null ? `${ab.ocupacion_pct.toFixed(0)}%` : "—"}
+            </div>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-background/40 p-2 text-center">
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">ADR / noche</div>
+            <div className="mt-0.5 font-display text-base font-semibold">
+              {ab.adr_cop != null ? formatCOP(ab.adr_cop) : "—"}
+            </div>
+          </div>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-muted-foreground">Yield Airbnb:</span>
+          <span className="font-semibold" style={{ color: ab.yield_airbnb_pct != null ? yieldColor(ab.yield_airbnb_pct) : undefined }}>
+            {ab.yield_airbnb_pct != null ? `${ab.yield_airbnb_pct.toFixed(1)}%` : "Sin datos"}
+          </span>
+        </div>
+        {ab.n_listings != null && (
+          <div className="text-[10px] text-right text-muted-foreground/70">
+            Basado en {ab.n_listings} listings activos
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 /* ------------- Seguridad ------------- */
 
 function SeguridadSection({ n }: { n: Neighborhood }) {
@@ -995,6 +1063,16 @@ function SeguridadSection({ n }: { n: Neighborhood }) {
   const nota = n.seguridad_nota;
   const color = SEGURIDAD_COLORS[cat] ?? SEGURIDAD_COLORS["SIN DATOS"];
   if (score === null || score === undefined) return null;
+
+  const tend = n.seguridad_tendencia;
+  const tendInfo = tend
+    ? tend.toLowerCase().includes("mejor")
+      ? { label: "↑ Mejorando", color: "#10b981" }
+      : tend.toLowerCase().includes("empeor")
+      ? { label: "↓ Empeorando", color: "#ef4444" }
+      : { label: "→ Estable", color: "#9ca3af" }
+    : null;
+
   return (
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
@@ -1011,7 +1089,14 @@ function SeguridadSection({ n }: { n: Neighborhood }) {
           <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
             {cat}
           </span>
-          <span className="text-[11px] font-semibold" style={{ color }}>{score}/100</span>
+          <div className="flex items-center gap-2">
+            {tendInfo && (
+              <span className="text-[11px] font-semibold" style={{ color: tendInfo.color }}>
+                {tendInfo.label}
+              </span>
+            )}
+            <span className="text-[11px] font-semibold" style={{ color }}>{score}/100</span>
+          </div>
         </div>
         <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
           <motion.div initial={{ width: 0 }} animate={{ width: `${score}%` }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full rounded-full" style={{ background: color }} />
@@ -1094,9 +1179,151 @@ function SaludFinancieraSection({ n }: { n: Neighborhood }) {
   );
 }
 
+/* ------------- Catastro ------------- */
+
+// Thresholds sobre ratio_vs_ciudad (ratio barrio / mediana Medellín = 58.8x)
+const RATIO_VS_CIUDAD_BADGE: Array<{ min: number; label: string; color: string }> = [
+  { min: 3.0, label: "BRECHA MUY ALTA",  color: "#ef4444" },
+  { min: 1.5, label: "BRECHA ALTA",      color: "#f59e0b" },
+  { min: 0.7, label: "BRECHA NORMAL",    color: "#00d4ff" },
+  { min: 0,   label: "BRECHA BAJA",      color: "#10b981" },
+];
+
+function CatastroSection({ n }: { n: Neighborhood }) {
+  const cat = n.catastro_comuna;
+  if (!cat || cat.total_predios == null) return null;
+
+  const ratio = cat.ratio_mercado_catastro;
+  const rvc = cat.ratio_vs_ciudad;
+  const badge = rvc != null
+    ? RATIO_VS_CIUDAD_BADGE.find((b) => rvc >= b.min) ?? RATIO_VS_CIUDAD_BADGE[RATIO_VS_CIUDAD_BADGE.length - 1]
+    : null;
+
+  return (
+    <Section title={`🏛️ Catastro · ${n.comuna}`}>
+      <div className="rounded-xl border border-border bg-background/30 p-3 space-y-2.5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Total predios</div>
+            <div className="mt-0.5 font-semibold">{cat.total_predios.toLocaleString()}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">% Apartamentos</div>
+            <div className="mt-0.5 font-semibold">
+              {cat.pct_apartamento != null ? `${cat.pct_apartamento}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Área mediana apto</div>
+            <div className="mt-0.5 font-semibold">
+              {cat.area_mediana_apto_m2 != null ? `${cat.area_mediana_apto_m2} m²` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ratio mercado/catastro</div>
+            <div className="mt-0.5 font-semibold">{ratio != null ? `${ratio}x` : "—"}</div>
+          </div>
+        </div>
+        {badge && rvc != null && (
+          <div className="border-t border-border/40 pt-2 flex items-center justify-between">
+            <span
+              className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{ background: `${badge.color}22`, color: badge.color }}
+            >
+              {badge.label}
+            </span>
+            <span className="text-[10px] text-muted-foreground">
+              {rvc.toFixed(1)}x la mediana de Medellín
+            </span>
+          </div>
+        )}
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground/70">
+        Brecha mercado/catastro vs. mediana ciudad · Medellín 2026
+      </p>
+    </Section>
+  );
+}
+
+/* ------------- Valorización ------------- */
+
+const TEND_MAP: Record<string, { label: string; color: string }> = {
+  aceler:    { label: "↑ Acelerando",    color: "#10b981" },
+  estable:   { label: "→ Estable",       color: "#00d4ff" },
+  desacel:   { label: "↓ Desacelerando", color: "#f59e0b" },
+};
+
+function tendBadge(tendencia: string | null | undefined): { label: string; color: string } | null {
+  if (!tendencia) return null;
+  const t = tendencia.toLowerCase();
+  if (t.includes("aceler") && !t.includes("desacel")) return TEND_MAP.aceler;
+  if (t.includes("desacel")) return TEND_MAP.desacel;
+  if (t.includes("estable")) return TEND_MAP.estable;
+  return null;
+}
+
+function ValorizacionSection({ n }: { n: Neighborhood }) {
+  const api = n.valorizacion_api;
+  const fallback = calcValorizStats(n.estrato);
+  const isReal = api?.var_anual_pct != null;
+
+  const varAnual = api?.var_anual_pct ?? fallback.ultimoAnio;
+  const proy5 = api?.proyeccion_5anos_pct != null ? Math.round(api.proyeccion_5anos_pct) : fallback.proj5;
+  const proy3 = api?.proyeccion_3anos_pct;
+  const badge = tendBadge(api?.tendencia);
+
+  return (
+    <Section title="📈 Valorización histórica">
+      <div className="rounded-xl border border-border bg-background/30 p-3 space-y-2.5">
+        <div className="grid grid-cols-2 gap-2">
+          <div className="text-center">
+            <div className="font-display text-xl font-bold text-primary">
+              +{isReal ? varAnual.toFixed(1) : Math.round(varAnual)}%
+            </div>
+            <div className="text-[10px] text-muted-foreground mt-0.5">último año</div>
+          </div>
+          <div className="text-center">
+            {proy3 != null ? (
+              <>
+                <div className="font-display text-xl font-bold text-success">+{Math.round(proy3)}%</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">proy. 3 años</div>
+              </>
+            ) : (
+              <>
+                <div className="font-display text-xl font-bold text-success">+{fallback.acumulado}%</div>
+                <div className="text-[10px] text-muted-foreground mt-0.5">desde 2015</div>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="border-t border-border/40 pt-2 flex items-center justify-between text-xs text-muted-foreground">
+          <span>
+            Proyección 5 años:{" "}
+            <span className="font-semibold text-foreground">+{proy5}%</span>
+          </span>
+          {badge && (
+            <span
+              className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
+              style={{ color: badge.color, background: `${badge.color}20` }}
+            >
+              {badge.label}
+            </span>
+          )}
+        </div>
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground/70">
+        {isReal
+          ? "Fuente: datos reales del barrio"
+          : `Fuente: DANE IPVN · Ajustado por estrato ${n.estrato}`}
+      </p>
+    </Section>
+  );
+}
+
 /* ------------- Listings view ------------- */
 
 function ListingCard({ l }: { l: ApiListing }) {
+  const mc = l.relevancia_score != null ? matchColor(l.relevancia_score) : null;
   return (
     <div className="rounded-lg border border-border bg-background/40 p-3">
       <div className="flex items-start justify-between gap-2">
@@ -1113,10 +1340,27 @@ function ListingCard({ l }: { l: ApiListing }) {
           {l.direccion_raw && (
             <div className="mt-0.5 truncate text-[10px] text-muted-foreground/70">{l.direccion_raw}</div>
           )}
+          {l.match_razones && l.match_razones.length > 0 && (
+            <div className="mt-1.5 flex flex-wrap gap-1">
+              {l.match_razones.map((r, i) => (
+                <span key={i} className="rounded bg-border/40 px-1 py-0.5 text-[9px] text-muted-foreground">
+                  {r}
+                </span>
+              ))}
+            </div>
+          )}
         </div>
         <div className="shrink-0 text-right">
+          {mc != null && l.match_label && (
+            <span
+              className="inline-block rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase"
+              style={{ backgroundColor: mc + "25", color: mc }}
+            >
+              {l.match_label}
+            </span>
+          )}
           {l.buena_oferta && (
-            <span className="inline-block rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
+            <span className="mt-0.5 inline-block rounded-md bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase text-success">
               Buena oferta
             </span>
           )}
@@ -1139,29 +1383,46 @@ function ListingCard({ l }: { l: ApiListing }) {
   );
 }
 
-function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
-  const [op, setOp] = useState<"venta" | "arriendo">("venta");
+function ListingsView({
+  n,
+  onBack,
+  perfil,
+  risk,
+}: {
+  n: Neighborhood;
+  onBack: () => void;
+  perfil?: string;
+  risk?: string;
+}) {
+  const defaultOp: "venta" | "arriendo" = perfil === "mediano_plazo" ? "arriendo" : "venta";
+  const [op, setOp] = useState<"venta" | "arriendo">(defaultOp);
   const [precioMax, setPrecioMax] = useState<number | null>(null);
   const [areaMin, setAreaMin] = useState(0);
+  const [sortKey, setSortKey] = useState<SortKey>("relevancia");
 
   // Server-side op filter — avoids client-side case-mismatch, separate cached query per tab
   const { data: listingsData, isLoading, isFetching } = useListings(n.id, 100, 0, op);
   const listings = listingsData?.listings ?? [];
+  const isPersonalized = listings.length > 0 && listings[0].relevancia_score != null;
 
   const maxPrecioData = listings.reduce((m, l) => Math.max(m, l.precio_cop ?? 0), 0);
   const maxAreaData = Math.ceil(listings.reduce((m, l) => Math.max(m, l.area_m2 ?? 0), 50) / 10) * 10;
   const sliderPrecio = precioMax ?? maxPrecioData;
 
-  // Reset filters on tab change
+  // Reset filters and sort on tab change
   useEffect(() => {
     setPrecioMax(null);
     setAreaMin(0);
+    setSortKey("relevancia");
   }, [op]);
 
-  const filtered = listings.filter(
-    (l) =>
-      (precioMax === null || (l.precio_cop ?? 0) <= precioMax) &&
-      (l.area_m2 ?? 0) >= areaMin
+  const filtered = sortListings(
+    listings.filter(
+      (l) =>
+        (precioMax === null || (l.precio_cop ?? 0) <= precioMax) &&
+        (l.area_m2 ?? 0) >= areaMin,
+    ),
+    sortKey,
   );
 
   return (
@@ -1232,6 +1493,25 @@ function ListingsView({ n, onBack }: { n: Neighborhood; onBack: () => void }) {
           />
         </FilterRow>
       </div>
+
+      {isPersonalized && (
+        <div className="flex items-center justify-between gap-2">
+          <span className="text-[10px] text-primary/80 font-medium tracking-wide">
+            Ordenado por relevancia para tu perfil
+          </span>
+          <div className="inline-flex gap-0.5 rounded border border-border p-0.5">
+            {([["relevancia", "Match"], ["precio_asc", "Precio ↑"], ["precio_desc", "Precio ↓"], ["area", "m²"]] as [SortKey, string][]).map(([k, label]) => (
+              <button
+                key={k}
+                onClick={() => setSortKey(k)}
+                className={`rounded px-1.5 py-0.5 text-[9px] font-medium uppercase tracking-wide transition ${sortKey === k ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       {(isLoading || isFetching) && (
         <div className="h-1 w-full animate-pulse rounded-full bg-primary/20" />

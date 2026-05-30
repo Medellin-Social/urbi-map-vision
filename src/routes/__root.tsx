@@ -32,7 +32,7 @@ function NotFoundComponent() {
         <h1 className="text-7xl font-bold text-foreground">404</h1>
         <h2 className="mt-4 text-xl font-semibold">Página no encontrada</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Esta ruta no existe en Urbidata.
+          This page doesn't exist on Medellín Social.
         </p>
         <div className="mt-6">
           <Link
@@ -52,11 +52,11 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Urbidata · Inteligencia inmobiliaria de Medellín" },
-      { name: "description", content: "Plataforma de analítica geoespacial para inversión inmobiliaria en Medellín. Yields, precios y oportunidades por barrio en tiempo real." },
-      { name: "author", content: "Urbidata" },
-      { property: "og:title", content: "Urbidata — Invierte en Medellín con datos reales" },
-      { property: "og:description", content: "Motor de decisión inmobiliaria para el Valle de Aburrá. Yield, seguridad, conectividad y valorización por barrio." },
+      { title: "Medellín Social · Where Smart Investors Meet Local Culture" },
+      { name: "description", content: "The only platform that combines real estate intelligence with authentic local experiences in Medellín and the Aburrá Valley." },
+      { name: "author", content: "Medellín Social" },
+      { property: "og:title", content: "Medellín Social · Where Smart Investors Meet Local Culture" },
+      { property: "og:description", content: "Real estate intelligence meets local culture in Medellín and the Aburrá Valley." },
       { property: "og:image", content: "https://urbidata.co/og-image.png" },
       { name: "twitter:image", content: "https://urbidata.co/og-image.png" },
       { property: "og:url", content: "https://urbidata.co" },

@@ -22,6 +22,7 @@ DB_URL = os.getenv("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:
 OUTPUT_DIR = Path(__file__).parent.parent / "public" / "data"
 
 MUNICIPIOS = {
+    "medellin":    "MEDELLIN",
     "bello":       "BELLO",
     "envigado":    "ENVIGADO",
     "itagui":      "ITAGUI",
@@ -33,6 +34,7 @@ QUERY = """
 SELECT
     l.id,
     l.tipo_operacion,
+    l.tipo_inmueble,
     l.precio                        AS precio_cop,
     l.area_m2,
     CASE WHEN l.area_m2 > 0 THEN ROUND(l.precio / l.area_m2) ELSE NULL END AS precio_m2,
@@ -58,6 +60,7 @@ UNION ALL
 SELECT
     l.id,
     l.tipo_operacion,
+    l.tipo_inmueble,
     l.precio                        AS precio_cop,
     l.area_m2,
     CASE WHEN l.area_m2 > 0 THEN ROUND(l.precio / l.area_m2) ELSE NULL END AS precio_m2,
