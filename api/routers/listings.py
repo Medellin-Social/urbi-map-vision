@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from api.config import USD_TO_COP
 from api.db import get_pool
 from api.dependencies import get_optional_user
-from api.services.personalizacion import calcular_relevancia, get_match_label
+from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
 
@@ -42,6 +42,8 @@ class ListingFull(BaseModel):
     disponible_actualmente: Optional[bool] = None
     dias_en_mercado: Optional[int] = None
     fecha_ultima_verificacion: Optional[datetime] = None
+    estrato_real: Optional[int] = None
+    tier: Optional[str] = None
     # Personalization fields — populated when user is authenticated with a perfil
     relevancia_score: Optional[float] = None
     match_label: Optional[str] = None
@@ -51,6 +53,8 @@ class ListingFull(BaseModel):
 class ListingsAllResponse(BaseModel):
     total: int
     listings: list[ListingFull]
+    barrios_incluidos: Optional[list[str]] = None
+    radio_usado_metros: Optional[int] = None
 
 
 # Barrio context CTE — joins analytics tables for personalization scoring.
@@ -85,42 +89,64 @@ bctx AS (
     SELECT
         bm.barrio_id,
         bm.yield_bruto                AS yield_bruto_pct,
+        bm.airbnb_n_listings          AS n_listings_airbnb,
         sc.score_corto,
         sc.score_mediano,
         sc.score_largo,
         lq.liquidez_score,
         poi.indice_nomada,
         seg.score_seguridad_residente AS seguridad_score,
-        sl.var_anual_5anos_pct        AS var_anual_pct
+        sl.var_anual_5anos_pct        AS var_anual_pct,
+        am.pct_wifi
     FROM analytics.barrios_mercado bm
     LEFT JOIN analytics.barrios_score_consolidado sc  ON sc.barrio_id = bm.barrio_id
     LEFT JOIN analytics.barrios_liquidez          lq  ON lq.barrio_id = bm.barrio_id
     LEFT JOIN analytics.barrios_pois_distancia    poi ON poi.barrio_id = bm.barrio_id
     LEFT JOIN analytics.barrios_seguridad         seg ON seg.barrio_id = bm.barrio_id
     LEFT JOIN analytics.score_largo_plazo         sl  ON sl.barrio_id = bm.barrio_id
+    LEFT JOIN analytics.barrios_amenities         am  ON am.barrio_id = bm.barrio_id
 ),
 barrio_cd AS (
     SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
     FROM raw.barrios b2
-    JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
+    JOIN raw.catastro_medellin c ON unaccent(UPPER(c.ds_comuna)) = unaccent(UPPER(b2.comuna))
     ORDER BY b2.id
 ),
 lraw AS (
-    SELECT *,
-        CASE
-            WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
-            WHEN area_m2 > 0                               THEN ROUND(precio::float8 / area_m2)::int
-            ELSE NULL
-        END AS pm2
+    SELECT id, fuente, tipo_operacion, tipo_inmueble,
+           precio, area_m2, habitaciones, banos,
+           direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
+           CASE
+               WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
+               WHEN area_m2 > 0 THEN ROUND(precio::float8 / area_m2)::int
+               ELSE NULL
+           END AS pm2
     FROM staging.stg_listings
     WHERE activo = TRUE
       AND precio >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
+
+    UNION ALL
+
+    SELECT id, fuente, tipo_operacion, tipo_inmueble,
+           precio_cop AS precio, area_m2, habitaciones, banos,
+           NULL AS direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
+           CASE WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
+                ELSE NULL END AS pm2
+    FROM raw.listings_premium
+    WHERE precio_cop >= 500000
+      AND tipo_operacion IS NOT NULL
 )
 SELECT
     l.id,
     l.fuente,
+    CASE l.fuente
+        WHEN 'medellinliving' THEN 'agencia_premium'
+        WHEN 'booking_mensual' THEN 'renta_media'
+        WHEN 'flatio' THEN 'renta_media'
+        ELSE 'standard'
+    END AS tier,
     l.tipo_operacion,
     l.tipo_inmueble,
     l.precio::bigint            AS precio_cop,
@@ -131,8 +157,8 @@ SELECT
     l.banos::float8,
     l.direccion_raw,
     l.url,
-    COALESCE(lm.lat, lf.lat)    AS lat,
-    COALESCE(lm.lon, lf.lon)    AS lon,
+    COALESCE(lm.lat, lf.lat, lp.lat)    AS lat,
+    COALESCE(lm.lon, lf.lon, lp.lon)    AS lon,
     l.barrio_id,
     b.nombre    AS barrio_nombre,
     b.municipio AS municipio,
@@ -161,94 +187,197 @@ SELECT
         ELSE NULL
     END AS pct_bajo_mediana,
     m.m2_mediana::int             AS precio_m2_mediana_barrio,
-    -- url_activa columns: populated after running scripts/sql/add_url_validation_columns.sql
-    TRUE::boolean                 AS disponible_actualmente,
+    -- url_activa: set by validate_listings_urls.py; NULL = not yet validated
+    COALESCE(lm.url_activa, lf.url_activa) AS disponible_actualmente,
     NULL::int                     AS dias_en_mercado,
     NULL::timestamp               AS fecha_ultima_verificacion,
     ctx.yield_bruto_pct,
+    ctx.n_listings_airbnb,
     ctx.score_corto,
     ctx.score_mediano,
     ctx.score_largo,
     ctx.liquidez_score,
     ctx.indice_nomada,
     ctx.seguridad_score,
-    ctx.var_anual_pct
+    ctx.var_anual_pct,
+    ctx.pct_wifi,
+    COALESCE(lm.estrato_real, lf.estrato_real) AS estrato_real
 FROM lraw l
 JOIN raw.barrios b ON b.id = l.barrio_id
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
+LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
 LEFT JOIN med m ON m.barrio_id = l.barrio_id
               AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN barrio_cd bc ON bc.barrio_id = b.id
 LEFT JOIN bctx ctx ON ctx.barrio_id = l.barrio_id
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
-  AND (
-      -- barrio_id OR cd_comuna; if both provided use OR so commune listings
-      -- still appear even when barrio_cd CTE misses some barrios
-      ($2::int IS NOT NULL AND l.barrio_id = $2)
-      OR ($9::int IS NOT NULL AND bc.cd_comuna = $9 AND UPPER(b.municipio) = 'MEDELLIN')
-      OR ($2::int IS NULL AND $9::int IS NULL)
-  )
+  AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text    IS NULL OR l.tipo_operacion = $3)
   AND ($4::text    IS NULL OR LOWER(l.tipo_inmueble) LIKE '%' || LOWER($4) || '%')
   AND ($5::bigint  IS NULL OR l.precio >= $5)
   AND ($6::bigint  IS NULL OR l.precio <= $6)
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
   AND ($8::int     IS NULL OR l.habitaciones = $8)
-  AND COALESCE(lm.lat, lf.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat) != 0
-ORDER BY l.pm2 ASC NULLS LAST
+  AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
+  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
+  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
+ORDER BY
+    CASE WHEN $9::boolean IS TRUE THEN 0
+         WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
+         ELSE 2 END,
+    l.pm2 ASC NULLS LAST
 """.format(usd=int(_USD))
 
 _COUNT_SQL = """
-WITH barrio_cd AS (
-    SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
-    FROM raw.barrios b2
-    JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
-    ORDER BY b2.id
-),
-lraw AS (
-    SELECT *
+WITH lraw AS (
+    SELECT id, fuente, tipo_operacion, tipo_inmueble,
+           precio, area_m2, habitaciones, banos, barrio_id, url
     FROM staging.stg_listings
     WHERE activo = TRUE
       AND precio >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
+
+    UNION ALL
+
+    SELECT id, fuente, tipo_operacion, tipo_inmueble,
+           precio_cop AS precio, area_m2, habitaciones, banos, barrio_id, url
+    FROM raw.listings_premium
+    WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL
 )
 SELECT COUNT(*)
 FROM lraw l
 JOIN raw.barrios b ON b.id = l.barrio_id
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN barrio_cd bc ON bc.barrio_id = b.id
+LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
-  AND (
-      ($2::int IS NOT NULL AND l.barrio_id = $2)
-      OR ($9::int IS NOT NULL AND bc.cd_comuna = $9 AND UPPER(b.municipio) = 'MEDELLIN')
-      OR ($2::int IS NULL AND $9::int IS NULL)
-  )
+  AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text   IS NULL OR l.tipo_operacion = $3)
   AND ($4::text   IS NULL OR LOWER(l.tipo_inmueble) LIKE '%' || LOWER($4) || '%')
   AND ($5::bigint IS NULL OR l.precio >= $5)
   AND ($6::bigint IS NULL OR l.precio <= $6)
-  AND ($7::float8 IS NULL OR l.area_m2 >= $7)
-  AND ($8::int    IS NULL OR l.habitaciones = $8)
-  AND COALESCE(lm.lat, lf.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat) != 0
+  AND ($7::float8  IS NULL OR l.area_m2 >= $7)
+  AND ($8::int     IS NULL OR l.habitaciones = $8)
+  AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
+  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
+  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
 """
 
 _BARRIO_CTX_KEYS = (
     "score_corto", "score_mediano", "score_largo",
     "yield_bruto_pct", "liquidez_score", "indice_nomada",
     "seguridad_score", "var_anual_pct",
+    "n_listings_airbnb", "pct_wifi",
 )
+
+_NEARBY_BARRIOS_SQL = """
+    SELECT b.id, b.nombre
+    FROM raw.barrios b, raw.barrios base
+    WHERE base.id = $1
+      AND b.id != base.id
+      AND b.municipio = base.municipio
+      AND ST_DWithin(
+          b.geometry::geography,
+          base.geometry::geography,
+          $2
+      )
+    ORDER BY ST_Distance(b.geometry::geography, base.geometry::geography)
+    LIMIT 8
+"""
+
+_LISTINGS_COUNT_BY_IDS = """
+    WITH lraw AS (
+        SELECT * FROM staging.stg_listings
+        WHERE activo = TRUE AND precio >= 500000
+          AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
+          AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
+    )
+    SELECT COUNT(*)
+    FROM lraw l
+    JOIN raw.barrios b ON b.id = l.barrio_id
+    LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
+    LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
+    WHERE l.barrio_id = ANY($1::int[])
+      AND COALESCE(lm.lat, lf.lat) IS NOT NULL
+      AND COALESCE(lm.lat, lf.lat) != 0
+"""
+
+_PREMIUM_COUNT_BY_IDS = """
+    SELECT COUNT(*)
+    FROM raw.listings_premium lp
+    JOIN raw.barrios b ON b.id = lp.barrio_id
+    WHERE lp.barrio_id = ANY($1::int[])
+      AND lp.lat IS NOT NULL AND lp.lat != 0
+"""
+
+
+def _get_prefiltros(perfil: dict) -> dict:
+    filtros: dict = {}
+    objetivo = perfil.get("objetivo", "")
+
+    if objetivo == "airbnb":
+        filtros["tipo_operacion"] = "venta"
+        filtros["tipo_inmueble_pref"] = "apartamento"
+    elif objetivo == "mediano_plazo":
+        target = perfil.get("target_inquilino")
+        if target == "ejecutivo":
+            filtros["min_seguridad"] = 60
+    elif objetivo in ("renta_larga", "largo_plazo"):
+        filtros["tipo_operacion"] = "venta"
+        horizonte = perfil.get("horizonte_inversion")
+        pago = perfil.get("tipo_pago")
+        if horizonte == "5" and pago == "credito":
+            filtros["min_yield"] = 6.0
+        if horizonte == "20+":
+            filtros["prefer_estado_precio"] = "BAJO"
+
+    pmax = PRESUPUESTO_MAX.get(perfil.get("presupuesto", ""))
+    if pmax and pmax < 9_999_999_999:
+        filtros["precio_max_soft"] = pmax
+
+    return filtros
+
+
+async def _expand_neighbors(
+    pool: Any,
+    barrio_id: int,
+    radios: tuple[int, ...] = (0, 500, 1000),
+    min_listings: int = 15,
+    only_premium: bool = False,
+) -> tuple[list[int], list[str], int]:
+    """Cascade-expand barrio → neighbors until min_listings reached.
+    Returns (barrio_ids, barrio_names, radio_usado_metros).
+    When only_premium=True, expansion is driven by premium listing count.
+    """
+    ids = [barrio_id]
+    names: list[str] = []
+
+    base = await pool.fetchrow("SELECT nombre FROM raw.barrios WHERE id = $1", barrio_id)
+    if base:
+        names = [base["nombre"]]
+
+    count_sql = _PREMIUM_COUNT_BY_IDS if only_premium else _LISTINGS_COUNT_BY_IDS
+
+    for radio in radios:
+        count = await pool.fetchval(count_sql, ids)
+        if (count or 0) >= min_listings:
+            return ids, names, radio if radio == 0 else radios[radios.index(radio) - 1]
+        if radio == 0:
+            continue
+        nearby = await pool.fetch(_NEARBY_BARRIOS_SQL, barrio_id, float(radio))
+        ids = [barrio_id] + [r["id"] for r in nearby]
+        names = [names[0]] + [r["nombre"] for r in nearby]
+
+    return ids, names, radios[-1]
 
 
 @router.get("", response_model=ListingsAllResponse)
 async def get_all_listings(
     municipio: Optional[str] = Query(default=None),
     barrio_id: Optional[int] = Query(default=None),
-    cd_comuna: Optional[int] = Query(default=None),
+    only_premium: bool = Query(default=False),
     tipo_operacion: Optional[str] = Query(default=None),
     tipo_inmueble: Optional[str] = Query(default=None),
     precio_min: Optional[int] = Query(default=None),
@@ -260,16 +389,29 @@ async def get_all_listings(
     current_user: Optional[dict] = Depends(get_optional_user),
 ):
     pool = get_pool()
-    args = (municipio, barrio_id, tipo_operacion, tipo_inmueble,
-            precio_min, precio_max, area_min, habitaciones, cd_comuna)
+
+    # Neighbor expansion when barrio_id is given
+    barrio_ids: Optional[list[int]] = None
+    barrios_incluidos: Optional[list[str]] = None
+    radio_usado: Optional[int] = None
+
+    if barrio_id is not None:
+        barrio_ids, barrios_incluidos, radio_usado = await _expand_neighbors(
+            pool, barrio_id, only_premium=only_premium
+        )
+
+    args = (municipio, barrio_ids, tipo_operacion, tipo_inmueble,
+            precio_min, precio_max, area_min, habitaciones, only_premium)
 
     # Fetch investor profile if authenticated
     perfil_dict: Optional[dict] = None
     if current_user:
         try:
             prow = await pool.fetchrow(
-                "SELECT objetivo, perfil_riesgo FROM perfil_inversor "
-                "WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1",
+                """SELECT objetivo, perfil_riesgo, presupuesto, n_unidades, tipo_gestion,
+                          target_inquilino, amoblado, tipo_pago, horizonte_inversion
+                   FROM perfil_inversor
+                   WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1""",
                 current_user["id"],
             )
             if prow and prow["objetivo"]:
@@ -279,7 +421,6 @@ async def get_all_listings(
 
     total = await pool.fetchval(_COUNT_SQL, *args)
 
-    # When personalized: over-fetch so Python sort+slice is correct across pages
     if perfil_dict:
         fetch_limit = min(500, max(limit * 3, 200))
         fetch_offset = 0
@@ -298,6 +439,19 @@ async def get_all_listings(
         if perfil_dict:
             barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS}
             score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
+
+            # Apply prefiltro penalties (soft — bias sort, don't hard-remove)
+            prefiltros = _get_prefiltros(perfil_dict)
+            if "tipo_operacion" in prefiltros:
+                if row_d.get("tipo_operacion") != prefiltros["tipo_operacion"]:
+                    score = round(score * 0.3, 1)
+            if "min_yield" in prefiltros:
+                if float(barrio_ctx.get("yield_bruto_pct") or 0) < prefiltros["min_yield"]:
+                    score = round(score * 0.7, 1)
+            if "min_seguridad" in prefiltros:
+                if float(barrio_ctx.get("seguridad_score") or 0) < prefiltros["min_seguridad"]:
+                    score = round(score * 0.8, 1)
+
             row_d["relevancia_score"] = score
             row_d["match_label"] = get_match_label(score)
             row_d["match_razones"] = razones
@@ -307,4 +461,9 @@ async def get_all_listings(
         items.sort(key=lambda x: x.relevancia_score or 0.0, reverse=True)
         items = items[offset: offset + limit]
 
-    return ListingsAllResponse(total=total or 0, listings=items)
+    return ListingsAllResponse(
+        total=total or 0,
+        listings=items,
+        barrios_incluidos=barrios_incluidos,
+        radio_usado_metros=radio_usado,
+    )

@@ -14,7 +14,7 @@ export type PaymentMethod = {
 export type FavoriteBarrio = {
   id: number;
   nombre: string;
-  yield: number;
+  yield: number | null;
   savedAt: number;
   note?: string;
 };

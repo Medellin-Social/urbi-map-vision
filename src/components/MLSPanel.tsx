@@ -16,24 +16,23 @@ type Props = {
   allBarrios?: BarrioOption[];
   onBarrioNavigate?: (opt: BarrioOption) => void;
   onFilteredListingsChange?: (listings: ApiListing[]) => void;
+  radioUsadoMetros?: number | null;
+  barriosIncluidos?: string[] | null;
+  premiumExpanded?: ApiListing[];
+  premiumIsLoading?: boolean;
+  premiumRadio?: number | null;
+  premiumBarriosIncluidos?: string[] | null;
+  onPremiumExpand?: (v: boolean) => void;
 };
 
 type Filters = {
   tipoOp: "todos" | "venta" | "arriendo";
+  soloPromium: boolean;
   precioMax: number | null;
   areaMin: number | null;
   habitaciones: number | null;
   tipoInmueble: string | null;
 };
-
-const PRECIO_MAX_OPTIONS = [
-  { label: "Sin límite", value: null },
-  { label: "$500M", value: 500_000_000 },
-  { label: "$800M", value: 800_000_000 },
-  { label: "$1,500M", value: 1_500_000_000 },
-  { label: "$3,000M", value: 3_000_000_000 },
-  { label: "$5,000M", value: 5_000_000_000 },
-];
 
 const TIPO_INMUEBLE_OPTIONS = [
   { label: "Todos", value: null },
@@ -93,6 +92,11 @@ function ListingCard({
       }`}
     >
       <div className="mb-2 flex items-center gap-2 flex-wrap">
+        {listing.tier === "agencia_premium" && (
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30">
+            ✦ Premium
+          </span>
+        )}
         {listing.disponible_actualmente === false && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 border border-border">
             YA NO DISPONIBLE
@@ -176,23 +180,64 @@ export function MLSPanel({
   allBarrios,
   onBarrioNavigate,
   onFilteredListingsChange,
+  radioUsadoMetros,
+  barriosIncluidos,
+  premiumExpanded = [],
+  premiumIsLoading = false,
+  premiumRadio,
+  premiumBarriosIncluidos,
+  onPremiumExpand,
 }: Props) {
   const [filters, setFilters] = useState<Filters>({
     tipoOp: "todos",
+    soloPromium: false,
     precioMax: null,
     areaMin: null,
     habitaciones: null,
     tipoInmueble: null,
   });
+  // 2-level navigation state
+  const [navComuna, setNavComuna] = useState<string | null>(null);
 
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const listContainerRef = useRef<HTMLDivElement>(null);
 
-  const barrioNames = useMemo(() => {
-    const names = new Set<string>();
-    listings.forEach((l) => { if (l.barrio_nombre) names.add(l.barrio_nombre); });
-    return [...names].sort();
+  // Max price of loaded listings — slider ceiling
+  const maxPrecioReal = useMemo(() => {
+    const max = Math.max(0, ...listings.map((l) => l.precio_cop ?? 0));
+    // Round up to nearest 100M
+    return Math.ceil(max / 100_000_000) * 100_000_000 || 5_000_000_000;
   }, [listings]);
+
+  // Reset precioMax when max changes (new barrio loaded)
+  useEffect(() => {
+    setFilters((f) => ({ ...f, precioMax: null }));
+  }, [maxPrecioReal]);
+
+  // Build comunas structure for the 2-level navigation selector
+  const navComunasMap = useMemo(() => {
+    const map = new Map<string, BarrioOption[]>();
+    (allBarrios ?? []).forEach((b) => {
+      const key = b.municipio.toUpperCase() === "MEDELLIN" && b.comuna
+        ? toTitleCase(b.comuna)
+        : toTitleCase(b.municipio);
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(b);
+    });
+    return map;
+  }, [allBarrios]);
+
+  const navComunasSorted = useMemo(
+    () => [...navComunasMap.keys()].sort(),
+    [navComunasMap],
+  );
+
+  const navBarriosDeComuna = useMemo(
+    () => navComuna
+      ? (navComunasMap.get(navComuna) ?? []).sort((a, b) => a.nombre.localeCompare(b.nombre))
+      : [],
+    [navComuna, navComunasMap],
+  );
 
   const nVenta = useMemo(
     () => listings.filter((l) => l.tipo_operacion === "venta").length,
@@ -203,10 +248,18 @@ export function MLSPanel({
     [listings],
   );
 
-  // Listings that pass the type/price/area/rooms/tipo filters (no barrio_nombre filter)
-  // — used for updating the map GeoJSON
-  const filteredForMap = useMemo(() => {
-    return listings.filter((l) => {
+  // Premium state — must be declared before filtered useMemo
+  const premiumFilterActive = filters.soloPromium;
+  const premiumInCurrent = useMemo(
+    () => listings.filter((l) => l.tier === "agencia_premium").length,
+    [listings],
+  );
+
+  // Full filter logic — uses premiumExpanded when active + no local premium
+  const filtered = useMemo(() => {
+    const src = (premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0)
+      ? premiumExpanded : listings;
+    return src.filter((l) => {
       if (filters.tipoOp !== "todos" && l.tipo_operacion !== filters.tipoOp) return false;
       if (filters.precioMax !== null && (l.precio_cop ?? 0) > filters.precioMax) return false;
       if (filters.areaMin !== null && (l.area_m2 ?? 0) < filters.areaMin) return false;
@@ -221,20 +274,32 @@ export function MLSPanel({
         const ti = (l.tipo_inmueble ?? "").toLowerCase();
         if (!ti.includes(filters.tipoInmueble)) return false;
       }
+      if (filters.soloPromium && l.tier !== "agencia_premium") return false;
       return true;
     });
-  }, [listings, filters]);
-
-  // Panel list also respects the barrio name button filter
-  const filtered = useMemo(() => {
-    if (!activeBarrioName) return filteredForMap;
-    return filteredForMap.filter((l) => l.barrio_nombre === activeBarrioName);
-  }, [filteredForMap, activeBarrioName]);
-
-  // Notify parent when map-relevant filters change so it can update the GeoJSON
+  }, [listings, filters, premiumFilterActive, premiumInCurrent, premiumExpanded]);
   useEffect(() => {
-    onFilteredListingsChange?.(filteredForMap);
-  }, [filteredForMap]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (premiumFilterActive && premiumInCurrent === 0) {
+      onPremiumExpand?.(true);
+    } else {
+      onPremiumExpand?.(false);
+    }
+  }, [premiumFilterActive, premiumInCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Source: use premiumExpanded when premium filter active and no local premium
+  const effectiveListings = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
+    ? premiumExpanded
+    : listings;
+  const effectiveRadio = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
+    ? premiumRadio
+    : radioUsadoMetros;
+  const effectiveBarrios = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
+    ? premiumBarriosIncluidos
+    : barriosIncluidos;
+
+  useEffect(() => {
+    onFilteredListingsChange?.(filtered);
+  }, [filtered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll highlighted card into view
   useEffect(() => {
@@ -252,7 +317,7 @@ export function MLSPanel({
         : "bg-surface/60 text-muted-foreground border border-border hover:text-foreground"
     }`;
 
-  const headerName = toTitleCase(activeBarrioName ?? barrio.comuna ?? barrio.nombre);
+  const headerName = toTitleCase(barrio.nombre);
 
   return (
     <AnimatePresence>
@@ -275,57 +340,67 @@ export function MLSPanel({
           </button>
           <div className="flex items-baseline gap-2">
             <h2 className="font-display text-base font-semibold">{headerName}</h2>
-            <span className="text-[11px] text-muted-foreground">(comuna)</span>
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {isLoading
               ? "Cargando…"
               : listings.length === 0
               ? "Sin propiedades"
-              : `${filtered.length} propiedades · ${nVenta} venta · ${nArriendo} arriendo`}
+              : filtered.length < listings.length
+              ? `${filtered.length} de ${listings.length} propiedades`
+              : `${listings.length} propiedades · ${nVenta} venta · ${nArriendo} arriendo`}
           </p>
+          {!isLoading && !premiumIsLoading && effectiveRadio != null && effectiveRadio > 0 && (
+            <p className="mt-0.5 text-[10px] text-muted-foreground/70">
+              {premiumFilterActive && premiumInCurrent === 0
+                ? `✦ Premium más cercano — ${effectiveBarrios?.slice(0,3).join(", ")}`
+                : effectiveRadio === 500
+                ? "+ barrios cercanos (500 m)"
+                : "+ zona amplia (1 km)"}
+            </p>
+          )}
         </div>
 
-        {/* Navegación a otro barrio/municipio */}
+        {/* Navegación 2 niveles: comuna → barrio */}
         {allBarrios && allBarrios.length > 0 && (
-          <div className="border-b border-border px-4 py-2">
+          <div className="border-b border-border px-4 py-2 space-y-1.5">
             <select
               className="w-full rounded-md border border-border bg-background/80 px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-              value=""
+              value={navComuna ?? ""}
               onChange={(e) => {
-                const id = Number(e.target.value);
-                const opt = allBarrios.find((b) => b.id === id);
-                if (opt) onBarrioNavigate?.(opt);
+                setNavComuna(e.target.value || null);
               }}
             >
-              <option value="" disabled>Ir a barrio…</option>
-              {Object.entries(
-                allBarrios.reduce<Record<string, BarrioOption[]>>((acc, b) => {
-                  const m = toTitleCase(b.municipio);
-                  if (!acc[m]) acc[m] = [];
-                  acc[m].push(b);
-                  return acc;
-                }, {})
-              )
-                .sort(([a], [b]) => a.localeCompare(b))
-                .map(([municipio, opts]) => (
-                  <optgroup key={municipio} label={municipio}>
-                    {opts
-                      .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                      .map((opt) => (
-                        <option key={opt.id} value={opt.id}>
-                          {toTitleCase(opt.nombre)}
-                        </option>
-                      ))}
-                  </optgroup>
-                ))}
+              <option value="">Seleccionar comuna…</option>
+              {navComunasSorted.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
             </select>
+            {navComuna && navBarriosDeComuna.length > 0 && (
+              <select
+                className="w-full rounded-md border border-primary/40 bg-background/80 px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                value=""
+                onChange={(e) => {
+                  const id = Number(e.target.value);
+                  const opt = allBarrios.find((b) => b.id === id);
+                  if (opt) { onBarrioNavigate?.(opt); setNavComuna(null); }
+                }}
+              >
+                <option value="" disabled>Seleccionar barrio…</option>
+                {navBarriosDeComuna.map((opt) => (
+                  <option key={opt.id} value={opt.id}>
+                    {toTitleCase(opt.nombre)}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
         )}
 
         {/* Filtros */}
         <div className="border-b border-border px-4 py-3 space-y-3">
-          <div className="flex gap-2">
+          {/* Tipo operación + Premium */}
+          <div className="flex gap-2 flex-wrap">
             {(["todos", "venta", "arriendo"] as const).map((t) => (
               <button
                 key={t}
@@ -335,21 +410,51 @@ export function MLSPanel({
                 {t === "todos" ? "Todos" : t.charAt(0).toUpperCase() + t.slice(1)}
               </button>
             ))}
+            <button
+              onClick={() => setFilters((f) => ({ ...f, soloPromium: !f.soloPromium }))}
+              className={`rounded-md px-2.5 py-1 text-xs font-medium transition border ${
+                filters.soloPromium
+                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                  : "bg-surface/60 text-muted-foreground border-border hover:text-foreground"
+              }`}
+            >
+              ✦ Premium
+            </button>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-[11px] text-muted-foreground shrink-0">Precio máx:</span>
-            {PRECIO_MAX_OPTIONS.map((o) => (
-              <button
-                key={String(o.value)}
-                onClick={() => setFilters((f) => ({ ...f, precioMax: o.value }))}
-                className={btnFilter(filters.precioMax === o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
+          {/* Precio slider */}
+          <div className="space-y-1">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] text-muted-foreground">Precio máx:</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-medium text-foreground">
+                  {filters.precioMax === null ? "Sin límite" : formatCOP(filters.precioMax)}
+                </span>
+                {filters.precioMax !== null && (
+                  <button
+                    onClick={() => setFilters((f) => ({ ...f, precioMax: null }))}
+                    className="text-[10px] text-primary hover:text-primary/80 transition"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={maxPrecioReal}
+              step={50_000_000}
+              value={filters.precioMax ?? maxPrecioReal}
+              onChange={(e) => {
+                const v = Number(e.target.value);
+                setFilters((f) => ({ ...f, precioMax: v >= maxPrecioReal ? null : v }));
+              }}
+              className="w-full accent-cyan-400 cursor-pointer"
+            />
           </div>
 
+          {/* Habitaciones */}
           <div className="flex items-center gap-2">
             <span className="text-[11px] text-muted-foreground">Habs:</span>
             {([null, 1, 2, 3, 4] as (number | null)[]).map((h) => (
@@ -363,6 +468,7 @@ export function MLSPanel({
             ))}
           </div>
 
+          {/* Tipo inmueble */}
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-muted-foreground shrink-0">Tipo:</span>
             {TIPO_INMUEBLE_OPTIONS.map((o) => (
@@ -375,27 +481,6 @@ export function MLSPanel({
               </button>
             ))}
           </div>
-
-          {barrioNames.length > 1 && (
-            <div className="flex items-center gap-2 overflow-x-auto pb-0.5">
-              <span className="text-[11px] text-muted-foreground shrink-0">Barrio:</span>
-              <button
-                onClick={() => onBarrioFilter?.(null)}
-                className={`${btnFilter(activeBarrioName == null)} shrink-0`}
-              >
-                Todos
-              </button>
-              {barrioNames.map((b) => (
-                <button
-                  key={b}
-                  onClick={() => onBarrioFilter?.(b)}
-                  className={`${btnFilter(activeBarrioName === b)} shrink-0`}
-                >
-                  {toTitleCase(b)}
-                </button>
-              ))}
-            </div>
-          )}
         </div>
 
         {/* Leyenda */}
@@ -430,7 +515,7 @@ export function MLSPanel({
           )}
           {filtered.map((l) => (
             <ListingCard
-              key={l.id}
+              key={`${l.fuente ?? "x"}-${l.id}`}
               listing={l}
               highlighted={highlightedListingId === l.id}
               onSelect={() => onListingSelect(l)}

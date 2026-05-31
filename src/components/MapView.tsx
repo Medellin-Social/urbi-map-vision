@@ -98,6 +98,7 @@ function _scoreLabel(s: number): string {
 function buildListingPopupHTML(
   props: Record<string, unknown>,
   barrio: ApiBarrio | undefined,
+  _perfil?: string,
 ): string {
   const precio_cop   = (props.precio_cop   as number | null) ?? null;
   const precio_usd   = (props.precio_usd   as number | null) ?? null;
@@ -112,60 +113,42 @@ function buildListingPopupHTML(
   const fuente       = ((props.fuente      as string) ?? "").toLowerCase();
   const url          = (props.url          as string) ?? "";
 
-  // Type badges
   const tipoOpColor  = tipo_op === "arriendo" ? "#3b82f6" : "#00d4ff";
   const tipoBadge    = `<span style="background:${tipoOpColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em;">${tipo_op.toUpperCase()}</span>`;
   const inmBadge     = tipo_inmueble
     ? `<span style="background:rgba(255,255,255,.1);color:#d1d5db;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;">${tipo_inmueble}</span>`
     : "";
 
-  // Specs row
   const specs = [
     area_m2      ? `📐 ${area_m2}m²`        : null,
     habitaciones ? `🛏️ ${habitaciones}hab`  : null,
     banos        ? `🚿 ${banos}baños`        : null,
   ].filter(Boolean).join("&nbsp;&nbsp;");
 
-  // Price badge
   let badgeHTML = "";
   if (tipo_op === "venta" && precio_m2 && mediana && mediana > 0) {
     const diff = (precio_m2 - mediana) / mediana * 100;
-    if (diff < -10) {
-      badgeHTML = `<div style="margin-top:8px;">
-        <div style="color:#10b981;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div>
-        <div style="color:#6b7280;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div>
-      </div>`;
-    } else if (diff > 15) {
-      badgeHTML = `<div style="margin-top:8px;">
-        <div style="color:#ef4444;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div>
-        <div style="color:#6b7280;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div>
-      </div>`;
-    } else {
-      badgeHTML = `<div style="margin-top:8px;">
-        <div style="color:#9ca3af;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div>
-        <div style="color:#6b7280;font-size:11px;">Dentro del rango del barrio</div>
-      </div>`;
-    }
+    if (diff < -10)
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#10b981;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div><div style="color:#6b7280;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div></div>`;
+    else if (diff > 15)
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#ef4444;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div><div style="color:#6b7280;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div></div>`;
+    else
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#9ca3af;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div><div style="color:#6b7280;font-size:11px;">Dentro del rango del barrio</div></div>`;
   }
 
-  // Yield (venta only)
   let yieldHTML = "";
   if (tipo_op === "venta" && precio_cop && barrio?.mercado?.arriendo_p50_cop) {
     const y = barrio.mercado.arriendo_p50_cop * 12 / precio_cop * 100;
-    if (y > 0 && y < 30) {
+    if (y > 0 && y < 30)
       yieldHTML = `<div style="color:#9ca3af;font-size:11px;">Yield estimado: <strong style="color:#f0f9ff;">${y.toFixed(1)}%</strong></div>`;
-    }
   }
 
-  // Score zona
   let scoreHTML = "";
   if (barrio?.scores?.score_activo != null) {
-    const s   = barrio.scores.score_activo;
-    const cat = _scoreLabel(s);
-    scoreHTML = `<div style="color:#9ca3af;font-size:11px;">Score zona: <strong style="color:#00d4ff;">${s}</strong> · ${cat}</div>`;
+    const s = barrio.scores.score_activo;
+    scoreHTML = `<div style="color:#9ca3af;font-size:11px;">Score zona: <strong style="color:#00d4ff;">${s}</strong> · ${_scoreLabel(s)}</div>`;
   }
 
-  // Action buttons
   const sourceMap: Record<string, string> = {
     fincaraiz:      "Ver en Fincaraíz →",
     metrocuadrado:  "Ver en Metrocuadrado →",
@@ -227,7 +210,7 @@ export function MapView({
 
   // Nivel de vista actual — ref para acceso dentro de closures de Mapbox
   const viewLevelRef = useRef<"comunas" | "barrios">("comunas");
-  const activeComunaRef = useRef<{ cd: number; nombre: string } | null>(null);
+  const activeComunaRef = useRef<{ cd: number; nombre: string; municipioFilter?: string | null } | null>(null);
 
   // Refs estables para callbacks (evita stale closures)
   const onViewLevelChangeRef = useRef(onViewLevelChange);
@@ -310,7 +293,7 @@ export function MapView({
     // Ajustar cámara a los límites de la comuna
     map.fitBounds(bounds, { padding: 60, maxZoom: 14, speed: 0.85 });
     viewLevelRef.current = "barrios";
-    activeComunaRef.current = { cd, nombre };
+    activeComunaRef.current = { cd, nombre, municipioFilter };
     onViewLevelChangeRef.current?.("barrios", nombre);
   }
 
@@ -546,12 +529,9 @@ export function MapView({
         popup.remove();
       });
 
-      // Popup de acción para barrio (dos botones)
-      let barrioActionPopup: mapboxgl.Popup | null = null;
-
       map.on("click", "barrios-fill", (e) => {
         if (!e.features?.length) return;
-        // Skip barrio popup when clicking on a listing point or cluster
+        // Skip when clicking on a listing point or cluster
         if (map.queryRenderedFeatures(e.point, { layers: ["listings-mls-unclustered", "listings-mls-clusters"] }).length > 0) return;
         const f = e.features[0];
         if (f.properties?.excluir_inversion === true) return;
@@ -578,42 +558,8 @@ export function MapView({
           };
         }
 
-        // Cerrar popup anterior si existe
-        barrioActionPopup?.remove();
-
-        const btnBase = "display:inline-flex;align-items:center;gap:6px;width:100%;padding:8px 12px;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;border:1px solid;transition:opacity .15s";
-        const btnComunidad = `${btnBase};background:rgba(0,212,255,0.12);border-color:rgba(0,212,255,0.35);color:#00d4ff`;
-        const btnMLS = `${btnBase};background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.35);color:#10b981;margin-top:6px`;
-
-        barrioActionPopup = new mapboxgl.Popup({
-          closeButton: true,
-          closeOnClick: true,
-          offset: 10,
-          maxWidth: "240px",
-        })
-          .setLngLat([n.lng, n.lat])
-          .setHTML(
-            `<div style="font-family:system-ui,sans-serif;padding:2px 0">
-              <div style="font-weight:700;font-size:14px;letter-spacing:.02em;margin-bottom:2px">${n.nombre}</div>
-              <div style="color:#9ca3af;font-size:11px;margin-bottom:12px">${n.municipio} · Estrato ${n.estrato}</div>
-              <button data-action="community" style="${btnComunidad}">🏘️ Ver comunidad</button>
-              <button data-action="mls" style="${btnMLS}">🏠 Ver inversiones</button>
-            </div>`,
-          )
-          .addTo(map);
-
-        const el = barrioActionPopup.getElement();
-        el?.querySelector('[data-action="community"]')?.addEventListener("click", () => {
-          barrioActionPopup?.remove();
-          barrioActionPopup = null;
-          map.flyTo({ center: [n.lng, n.lat], zoom: 14.5, speed: 0.8 });
-          onSelect(n);
-        });
-        el?.querySelector('[data-action="mls"]')?.addEventListener("click", () => {
-          barrioActionPopup?.remove();
-          barrioActionPopup = null;
-          onGoToMLSRef.current?.(n);
-        });
+        map.flyTo({ center: [n.lng, n.lat], zoom: 14.5, speed: 0.8 });
+        onSelect(n);
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
@@ -696,7 +642,7 @@ export function MapView({
         );
         listingPopup
           .setLngLat(lngLat)
-          .setHTML(buildListingPopupHTML(props, barrio))
+          .setHTML(buildListingPopupHTML(props, barrio, perfil))
           .addTo(map);
       };
 
@@ -817,7 +763,7 @@ export function MapView({
       map.setTerrain(null);
       map.easeTo({ pitch: 0, duration: 500 });
     } else {
-      // Vista 1: ocultar MLS, limpiar datos y volver a comunas
+      // Vista 1: ocultar MLS layers
       mlsLastFlyToRef.current = null;
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
@@ -826,7 +772,32 @@ export function MapView({
       if (map.getSource("mapbox-dem")) {
         map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
       }
-      switchToComunas(map);
+      // If we were in barrios view before entering MLS, restore it; otherwise go to comunas
+      if (viewLevelRef.current === "barrios" && activeComunaRef.current) {
+        const { cd, nombre, municipioFilter } = activeComunaRef.current;
+        const filter: mapboxgl.FilterSpecification = municipioFilter
+          ? ["==", ["get", "municipio"], municipioFilter]
+          : ["==", ["get", "cd_comuna"], cd];
+        map.setFilter("barrios-fill",  filter);
+        map.setFilter("barrios-line",  filter);
+        map.setFilter("barrios-label", filter);
+        for (const id of ["barrios-fill", "barrios-line", "barrios-label"] as const) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
+        }
+        for (const id of ["comunas-fill", "comunas-line", "comunas-label"] as const) {
+          if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+        }
+        // Smooth zoom-out so the whole commune is visible
+        map.easeTo({
+          zoom: Math.max(map.getZoom() - 1.8, 11),
+          pitch: 0,
+          duration: 750,
+          easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
+        });
+        onViewLevelChangeRef.current?.("barrios", nombre);
+      } else {
+        switchToComunas(map);
+      }
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView]);
@@ -987,21 +958,19 @@ export function MapView({
   return (
     <>
       <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />
-      {perfil && (
-        <div className="absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm">
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-          <span>
-            Personalizado para:{" "}
-            <strong className="text-foreground">{_PERFIL_BADGE_LABEL[perfil] ?? perfil}</strong>
-            {risk && (
-              <>
-                <span className="mx-1 opacity-40">·</span>
-                <strong className="text-foreground">{_RISK_BADGE_LABEL[risk] ?? risk}</strong>
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <div className={`absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm${perfil ? "" : " hidden"}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+        <span>
+          Personalizado para:{" "}
+          <strong className="text-foreground">{_PERFIL_BADGE_LABEL[perfil ?? ""] ?? perfil}</strong>
+          {risk && (
+            <>
+              <span className="mx-1 opacity-40">·</span>
+              <strong className="text-foreground">{_RISK_BADGE_LABEL[risk] ?? risk}</strong>
+            </>
+          )}
+        </span>
+      </div>
     </>
   );
 }

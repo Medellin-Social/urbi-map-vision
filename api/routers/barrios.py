@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from api.config import USD_TO_COP
 from api.db import get_pool
 from api.dependencies import get_optional_user
+from api.services.personalizacion import PRESUPUESTO_MAX
 
 router = APIRouter()
 
@@ -77,6 +78,8 @@ class Mercado(BaseModel):
     precio_renta_media_p50: Optional[int] = None
     premium_vs_largo_pct: Optional[float] = None
     n_listings_renta_media: Optional[int] = None
+    precio_accesible: Optional[bool] = None
+    presupuesto_max: Optional[int] = None
 
 
 class NomadaBreakdown(BaseModel):
@@ -90,10 +93,31 @@ class NomadaBreakdown(BaseModel):
 
 class Airbnb(BaseModel):
     ocupacion_pct: Optional[float] = None
+    ocupacion_p25_pct: Optional[float] = None
+    ocupacion_p75_pct: Optional[float] = None
     adr_usd: Optional[float] = None
     adr_cop: Optional[int] = None
     yield_airbnb_pct: Optional[float] = None
+    yield_airbnb_real_pct: Optional[float] = None
     n_listings: Optional[int] = None
+    n_entire_home: Optional[int] = None
+    n_private_room: Optional[int] = None
+    n_superhosts: Optional[int] = None
+    ingresos_anuales_p50_usd: Optional[float] = None
+    ingresos_anuales_p50_cop: Optional[int] = None
+    rating_promedio: Optional[float] = None
+    reviews_promedio: Optional[float] = None
+    diff_ocupacion_pct: Optional[float] = None
+    diff_adr_cop: Optional[float] = None
+
+
+class Amenidades(BaseModel):
+    pct_wifi: Optional[float] = None
+    pct_ac: Optional[float] = None
+    pct_kitchen: Optional[float] = None
+    pct_washer: Optional[float] = None
+    score_equipamiento: Optional[int] = None
+    n_listings_base: Optional[int] = None
 
 
 class Seguridad(BaseModel):
@@ -164,6 +188,8 @@ class BarrioResponse(BaseModel):
     geometry: Optional[dict[str, Any]] = None
     color_hex: Optional[str] = None
     excluir_inversion: Optional[bool] = None
+    uso_suelo_dominante: Optional[str] = None
+    uso_suelo_score: Optional[int] = None
     scores: Scores
     mercado: Mercado
     airbnb: Airbnb
@@ -176,6 +202,7 @@ class BarrioResponse(BaseModel):
     nomada_breakdown: Optional[NomadaBreakdown] = None
     n_remates_municipio: Optional[int] = None
     catastro_comuna: Optional[CatastroComuna] = None
+    amenidades: Optional[Amenidades] = None
 
 
 class ListingItem(BaseModel):
@@ -228,6 +255,8 @@ _BARRIO_MAP_SQL = """
         bm.pbn_precio_justo,
         bm.poi_precio_oferta,
         b.excluir_inversion,
+        b.uso_suelo_dominante,
+        b.uso_suelo_score,
         op.oportunidad_detectada,
         op.tipo_oportunidad,
         op.descripcion_oportunidad,
@@ -280,6 +309,7 @@ _BARRIO_SQL = """
         bm.ocupacion_airbnb_pct,
         bm.adr_noche_cop,
         bm.airbnb_n_listings                AS n_listings_airbnb,
+        bm.yield_airbnb_pct,
         -- seguridad
         seg.score_seguridad_residente       AS score_seguridad,
         seg.categoria_seguridad,
@@ -306,6 +336,8 @@ _BARRIO_SQL = """
         lq.nota_metodologia,
         -- zona
         b.excluir_inversion,
+        b.uso_suelo_dominante,
+        b.uso_suelo_score,
         -- oportunidad
         op.oportunidad_detectada,
         op.tipo_oportunidad,
@@ -327,6 +359,26 @@ _BARRIO_SQL = """
         sm.seg_medio_score                  AS pts_seg_nomada,
         sm.pts_verde                        AS pts_verde_nomada,
         sm.pts_equip                        AS pts_equip_nomada,
+        -- airbnb real (solo Medellín; NULL para otros municipios)
+        ab.n_entire_home,
+        ab.n_private_room,
+        ab.n_superhosts,
+        ab.ocupacion_p25_pct,
+        ab.ocupacion_p75_pct,
+        ab.ingresos_anuales_p50_usd,
+        ab.ingresos_anuales_p50_cop,
+        ab.yield_airbnb_real_pct,
+        ab.rating_promedio,
+        ab.reviews_promedio,
+        ab.diff_ocupacion_pct,
+        ab.diff_adr_cop,
+        -- amenidades (solo Medellín; NULL para otros municipios)
+        am.pct_wifi,
+        am.pct_ac,
+        am.pct_kitchen,
+        am.pct_washer,
+        am.score_equipamiento,
+        am.n_listings                       AS am_n_listings,
         -- catastro comunal (solo Medellín; NULL para otros municipios)
         cat.total_predios                   AS cat_total_predios,
         cat.pct_apartamento                 AS cat_pct_apartamento,
@@ -340,9 +392,14 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.barrios_verde             vd  ON b.id = vd.barrio_id
     LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
     LEFT JOIN analytics.barrios_oportunidades     op  ON b.id = op.barrio_id
+    -- estrato_barrio (score_largo_plazo): mode estrato of listings in barrio — used for filters + projections join
+    -- estrato_sistema (proyecciones_valorizacion): same 1-6 scale, different name — always equal to estrato_barrio
+    -- estrato_real (raw.listings_*): per-listing estrato from scraper — used only in listings display
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
     LEFT JOIN analytics.proyecciones_valorizacion pv  ON sl.estrato_barrio = pv.estrato_sistema
     LEFT JOIN analytics.score_mediano_plazo       sm  ON b.id = sm.barrio_id
+    LEFT JOIN analytics.barrios_airbnb_real       ab  ON b.id = ab.barrio_id
+    LEFT JOIN analytics.barrios_amenities         am  ON b.id = am.barrio_id
     LEFT JOIN LATERAL (
         SELECT
             COUNT(*)::int                                                   AS total_predios,
@@ -371,8 +428,11 @@ _BARRIO_SQL = """
                            OR ds_uso_tipo ILIKE '%4 O MAS%')
                 )
             )::int                                                          AS avaluo_m2
+        -- Constraint: raw.catastro_medellin.ds_comuna must match raw.barrios.comuna exactly
+        -- (after UPPER+TRIM). 20 comunas in Medellín — all-caps, no accents. Verified: 0 mismatches.
+        -- Run scripts/validate_catastro_join.py to check coverage before adding new barrio data.
         FROM raw.catastro_medellin
-        WHERE UPPER(TRIM(ds_comuna)) = UPPER(TRIM(b.comuna))
+        WHERE unaccent(UPPER(TRIM(ds_comuna))) = unaccent(UPPER(TRIM(b.comuna)))
           AND cd_ind_ru_ur = 'U'
     ) cat ON true
 """
@@ -388,12 +448,20 @@ def _i(row: dict, key: str) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None) -> BarrioResponse:
+def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None) -> BarrioResponse:
     raw_geo = row.get("geometry_raw")
     geometry = json.loads(raw_geo) if raw_geo else None
 
     precio_m2_cop = _f(row, "precio_m2_cop")
     adr_cop = _f(row, "adr_noche_cop")
+
+    precio_accesible: Optional[bool] = None
+    presupuesto_max_val: Optional[int] = None
+    if perfil_dict and perfil_dict.get("presupuesto"):
+        pmax = PRESUPUESTO_MAX.get(perfil_dict["presupuesto"])
+        if pmax:
+            presupuesto_max_val = pmax if pmax < 9_999_999_999 else None
+            precio_accesible = (precio_m2_cop or 0) * 40 <= pmax
 
     score_map = {
         "score_corto": _i(row, "score_corto"),
@@ -413,6 +481,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         geometry=geometry,
         color_hex=color_hex,
         excluir_inversion=excluir,
+        uso_suelo_dominante=row.get("uso_suelo_dominante"),
+        uso_suelo_score=row.get("uso_suelo_score"),
         scores=Scores(
             corto=_i(row, "score_corto"),
             cat_corto=row.get("cat_corto"),
@@ -437,13 +507,27 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             precio_renta_media_p50=_i(row, "precio_renta_media_p50"),
             premium_vs_largo_pct=_f(row, "premium_vs_largo_pct"),
             n_listings_renta_media=_i(row, "n_listings_renta_media"),
+            precio_accesible=precio_accesible,
+            presupuesto_max=presupuesto_max_val,
         ),
         airbnb=Airbnb(
             ocupacion_pct=_f(row, "ocupacion_airbnb_pct"),
+            ocupacion_p25_pct=_f(row, "ocupacion_p25_pct"),
+            ocupacion_p75_pct=_f(row, "ocupacion_p75_pct"),
             adr_usd=round(adr_cop / _USD, 2) if adr_cop else None,
             adr_cop=int(adr_cop) if adr_cop else None,
-            yield_airbnb_pct=None,
+            yield_airbnb_pct=_f(row, "yield_airbnb_pct"),
+            yield_airbnb_real_pct=_f(row, "yield_airbnb_real_pct"),
             n_listings=_i(row, "n_listings_airbnb"),
+            n_entire_home=_i(row, "n_entire_home"),
+            n_private_room=_i(row, "n_private_room"),
+            n_superhosts=_i(row, "n_superhosts"),
+            ingresos_anuales_p50_usd=_f(row, "ingresos_anuales_p50_usd"),
+            ingresos_anuales_p50_cop=_i(row, "ingresos_anuales_p50_cop"),
+            rating_promedio=_f(row, "rating_promedio"),
+            reviews_promedio=_f(row, "reviews_promedio"),
+            diff_ocupacion_pct=_f(row, "diff_ocupacion_pct"),
+            diff_adr_cop=_f(row, "diff_adr_cop"),
         ),
         seguridad=Seguridad(
             score=_i(row, "score_seguridad"),
@@ -494,6 +578,7 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         ) if row.get("pts_yield_nomada") is not None else None,
         n_remates_municipio=_i(row, "n_remates_municipio"),
         catastro_comuna=_build_catastro(row, precio_m2_cop),
+        amenidades=_build_amenidades(row),
     )
 
 
@@ -522,6 +607,21 @@ def _build_catastro(row: dict, precio_m2_cop: Optional[float]) -> Optional[Catas
     )
 
 
+def _build_amenidades(row: dict) -> Optional[Amenidades]:
+    score = _i(row, "score_equipamiento")
+    n = _i(row, "am_n_listings")
+    if score is None and n is None:
+        return None
+    return Amenidades(
+        pct_wifi=_f(row, "pct_wifi"),
+        pct_ac=_f(row, "pct_ac"),
+        pct_kitchen=_f(row, "pct_kitchen"),
+        pct_washer=_f(row, "pct_washer"),
+        score_equipamiento=score,
+        n_listings_base=n,
+    )
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("", response_model=list[BarrioResponse])
@@ -536,13 +636,26 @@ async def list_barrios(
     pool = get_pool()
 
     effective_perfil = perfil
+    perfil_full: Optional[dict] = None
     if not effective_perfil and current_user:
         prow = await pool.fetchrow(
-            "SELECT objetivo FROM perfil_inversor WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1",
+            """SELECT objetivo, perfil_riesgo, presupuesto, n_unidades, tipo_gestion,
+                      target_inquilino, amoblado, tipo_pago, horizonte_inversion
+               FROM perfil_inversor WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1""",
             current_user["id"],
         )
         if prow and prow["objetivo"]:
             effective_perfil = prow["objetivo"]
+            perfil_full = dict(prow)
+    elif current_user and effective_perfil:
+        prow = await pool.fetchrow(
+            """SELECT objetivo, perfil_riesgo, presupuesto, n_unidades, tipo_gestion,
+                      target_inquilino, amoblado, tipo_pago, horizonte_inversion
+               FROM perfil_inversor WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1""",
+            current_user["id"],
+        )
+        if prow:
+            perfil_full = dict(prow)
 
     score_col = get_score_col(effective_perfil)
     base_sql = _BARRIO_MAP_SQL if fields == "map" else _BARRIO_SQL
@@ -554,7 +667,7 @@ async def list_barrios(
         ORDER BY sc.{score_col} DESC NULLS LAST
     """
     rows = await pool.fetch(sql, municipio, estrato, score_min)
-    return [_build_response(dict(r), score_col, effective_perfil) for r in rows]
+    return [_build_response(dict(r), score_col, effective_perfil, perfil_full) for r in rows]
 
 
 @router.get("/comparar", response_model=list[BarrioResponse])

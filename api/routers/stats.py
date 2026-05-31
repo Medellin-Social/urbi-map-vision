@@ -32,6 +32,7 @@ class CiudadStats(BaseModel):
     precio_m2_mediana: Optional[int] = None
     oportunidades_activas: int
     top5: list[TopBarrio]
+    ultima_actualizacion_listings: Optional[str] = None
 
 
 @router.get("/ciudad", response_model=CiudadStats)
@@ -49,7 +50,11 @@ async def get_ciudad_stats(
             PERCENTILE_CONT(0.5) WITHIN GROUP (
                 ORDER BY bm.precio_venta_m2_p50
             )::int                                                     AS precio_m2_mediana,
-            COUNT(CASE WHEN op.oportunidad_detectada THEN 1 END)::int  AS oportunidades_activas
+            COUNT(CASE WHEN op.oportunidad_detectada THEN 1 END)::int  AS oportunidades_activas,
+            GREATEST(
+                (SELECT MAX(fecha_scraping) FROM raw.listings_fincaraiz),
+                (SELECT MAX(fecha_scraping) FROM raw.listings_metrocuadrado)
+            )                                                          AS ultima_actualizacion_listings
         FROM analytics.barrios_mercado bm
         LEFT JOIN analytics.barrios_oportunidades op ON bm.barrio_id = op.barrio_id
         WHERE bm.yield_bruto IS NOT NULL
@@ -74,12 +79,14 @@ async def get_ciudad_stats(
     """
     top5_rows = await pool.fetch(top5_sql)
 
+    ultima_act = summary["ultima_actualizacion_listings"]
     return CiudadStats(
         barrios_analizados=summary["barrios_analizados"] or 0,
         yield_promedio=float(summary["yield_promedio"]) if summary["yield_promedio"] else None,
         precio_m2_mediana=summary["precio_m2_mediana"],
         oportunidades_activas=summary["oportunidades_activas"] or 0,
         top5=[TopBarrio(**dict(r)) for r in top5_rows],
+        ultima_actualizacion_listings=ultima_act.strftime("%Y-%m-%d") if ultima_act else None,
     )
 
 

@@ -34,8 +34,10 @@ function MapPage() {
   const [mostrarOportunidades, setMostrarOportunidades] = useState(
     () => auth.get()?.mostrarOportunidades ?? false
   );
-  const perfil = GOAL_TO_PERFIL[auth.get()?.goal ?? ""] as string | undefined;
-  const risk = auth.get()?.risk as string | undefined;
+  const [perfil, setPerfil] = useState<string | undefined>(
+    () => GOAL_TO_PERFIL[auth.get()?.goal ?? ""] as string | undefined,
+  );
+  const [risk, setRisk] = useState<string | undefined>(() => auth.get()?.risk as string | undefined);
 
   // Vista 1 / Vista 2 toggle
   const [mapView, setMapView] = useState<"zonas" | "listings">("zonas");
@@ -48,16 +50,29 @@ function MapPage() {
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
-  // Fetch all listings for the commune of the selected barrio
+  // Fetch listings for selected barrio — server expands to neighbors if needed
   const { data: mlsData, isLoading: mlsIsLoading } = useListings(
     mlsBarrio?.id ?? null,
     500,
     0,
-    undefined,
-    mlsBarrio?.cd_comuna ?? null,
   );
   const mlsListings: ApiListing[] = mlsData?.listings ?? [];
   const mlsTotal = mlsData?.total ?? 0;
+  const mlsRadio = mlsData?.radio_usado_metros ?? null;
+  const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
+
+  // Premium-expansion fetch — fires when premium filter is active to find nearby premium
+  const [premiumExpand, setPremiumExpand] = useState(false);
+  const { data: premiumData, isLoading: premiumIsLoading } = useListings(
+    premiumExpand ? (mlsBarrio?.id ?? null) : null,
+    500,
+    0,
+    undefined,
+    true,
+  );
+  const premiumExpanded: ApiListing[] = premiumData?.listings ?? [];
+  const premiumRadio = premiumData?.radio_usado_metros ?? null;
+  const premiumBarriosIncluidos = premiumData?.barrios_incluidos ?? null;
 
   // Reset filtered listings when raw data changes (new barrio/commune loaded)
   useEffect(() => {
@@ -82,6 +97,15 @@ function MapPage() {
     return () => window.removeEventListener("urbidata:user", sync);
   }, []);
 
+  useEffect(() => {
+    const onPerfilUpdated = () => {
+      setPerfil(GOAL_TO_PERFIL[auth.get()?.goal ?? ""] as string | undefined);
+      setRisk(auth.get()?.risk as string | undefined);
+    };
+    window.addEventListener("perfil-updated", onPerfilUpdated);
+    return () => window.removeEventListener("perfil-updated", onPerfilUpdated);
+  }, []);
+
   function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null) {
     setViewLevel(level);
     setActiveComuna(comunaNombre);
@@ -94,7 +118,6 @@ function MapPage() {
 
   // Called from barrio popup "Ver inversiones"
   function handleGoToMLS(barrio: Neighborhood) {
-    // Defensive: some code paths may produce objects with barrio_id instead of id
     const resolvedId = (barrio as Neighborhood & { barrio_id?: number }).barrio_id ?? barrio.id;
     if (!resolvedId) return;
     setSelected(null);
@@ -210,7 +233,7 @@ function MapPage() {
       {/* Vista 1: paneles normales */}
       {mapView === "zonas" && (
         <>
-          <FloatingPanel selected={selected} onClear={() => setSelected(null)} onSelect={setSelected} />
+          <FloatingPanel selected={selected} onClear={() => setSelected(null)} onSelect={setSelected} onGoToMLS={handleGoToMLS} />
           <OpportunitiesPanel onSelect={setSelected} perfil={perfil} mostrarOportunidades={mostrarOportunidades} />
         </>
       )}
@@ -229,6 +252,13 @@ function MapPage() {
           allBarrios={allBarrioOptions}
           onBarrioNavigate={handleBarrioNavigate}
           onFilteredListingsChange={handleFilteredListingsChange}
+          radioUsadoMetros={mlsRadio}
+          barriosIncluidos={mlsBarriosIncluidos}
+          premiumExpanded={premiumExpanded}
+          premiumIsLoading={premiumIsLoading}
+          premiumRadio={premiumRadio}
+          premiumBarriosIncluidos={premiumBarriosIncluidos}
+          onPremiumExpand={setPremiumExpand}
         />
       )}
     </div>

@@ -81,9 +81,21 @@ SELECT
     sg.score_seguridad_residente    AS score_seguridad,
     sg.categoria_seguridad,
     sg.nota_seguridad,
-    -- remates
-    0::int                          AS n_remates_municipio,
-    NULL::float                     AS remates_por_100_listings
+    -- remates (from raw.remates_judiciales; 0 if table empty / scraper not run yet)
+    COALESCE(
+        (SELECT COUNT(*)::int FROM raw.remates_judiciales rj
+         WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo'),
+        0
+    ) AS n_remates_municipio,
+    CASE
+        WHEN COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0) > 0
+        THEN ROUND(
+            (SELECT COUNT(*)::float FROM raw.remates_judiciales rj
+             WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo')
+            / (COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0)) * 100, 2
+        )
+        ELSE NULL
+    END AS remates_por_100_listings
 FROM raw.barrios b
 LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
 LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id

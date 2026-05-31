@@ -18,8 +18,8 @@ export type Neighborhood = {
   estrato: number;
   precio_m2: number;
   arriendo: number;
-  yield: number;
-  anos_recupero: number;
+  yield: number | null;
+  anos_recupero: number | null;
   dist_metro: number;
   dist_parque: number;
   dist_mall: number;
@@ -51,7 +51,31 @@ export type Neighborhood = {
   verde_pct?: number | null;
   verde_categoria?: string | null;
   // GAP fixes
-  airbnb_data?: { ocupacion_pct: number | null; adr_cop: number | null; yield_airbnb_pct: number | null; n_listings: number | null } | null;
+  airbnb_data?: {
+    ocupacion_pct: number | null;
+    ocupacion_p25_pct: number | null;
+    ocupacion_p75_pct: number | null;
+    adr_cop: number | null;
+    yield_airbnb_pct: number | null;
+    yield_airbnb_real_pct: number | null;
+    n_listings: number | null;
+    n_entire_home: number | null;
+    n_private_room: number | null;
+    n_superhosts: number | null;
+    ingresos_anuales_p50_cop: number | null;
+    rating_promedio: number | null;
+    reviews_promedio: number | null;
+    diff_ocupacion_pct: number | null;
+    diff_adr_cop: number | null;
+  } | null;
+  amenidades?: {
+    pct_wifi: number | null;
+    pct_ac: number | null;
+    pct_kitchen: number | null;
+    pct_washer: number | null;
+    score_equipamiento: number | null;
+    n_listings_base: number | null;
+  } | null;
   valorizacion_api?: { var_anual_pct: number | null; proyeccion_3anos_pct: number | null; proyeccion_5anos_pct: number | null; tendencia: string | null } | null;
   seguridad_tendencia?: string | null;
   premium_vs_largo_pct?: number | null;
@@ -101,15 +125,38 @@ export type ApiBarrio = {
     yield_renta_media_pct: number | null;
     precio_renta_media_p50: number | null;
     premium_vs_largo_pct: number | null;
+    n_listings_renta_media: number | null;
+    precio_accesible: boolean | null;
+    presupuesto_max: number | null;
   };
   nomada_breakdown?: NomadaBreakdown | null;
   airbnb: {
     ocupacion_pct: number | null;
+    ocupacion_p25_pct: number | null;
+    ocupacion_p75_pct: number | null;
     adr_usd: number | null;
     adr_cop: number | null;
     yield_airbnb_pct: number | null;
+    yield_airbnb_real_pct: number | null;
     n_listings: number | null;
+    n_entire_home: number | null;
+    n_private_room: number | null;
+    n_superhosts: number | null;
+    ingresos_anuales_p50_usd: number | null;
+    ingresos_anuales_p50_cop: number | null;
+    rating_promedio: number | null;
+    reviews_promedio: number | null;
+    diff_ocupacion_pct: number | null;
+    diff_adr_cop: number | null;
   };
+  amenidades?: {
+    pct_wifi: number | null;
+    pct_ac: number | null;
+    pct_kitchen: number | null;
+    pct_washer: number | null;
+    score_equipamiento: number | null;
+    n_listings_base: number | null;
+  } | null;
   seguridad: {
     score: number | null;
     categoria: string | null;
@@ -181,6 +228,7 @@ export type ApiListing = {
   barrio_id?: number | null;
   barrio_nombre?: string | null;
   cd_comuna?: number | null;
+  tier?: string | null;
   // URL availability — present after validate_listings_urls.py has run
   disponible_actualmente?: boolean | null;
   dias_en_mercado?: number | null;
@@ -194,6 +242,8 @@ export type ApiListing = {
 export type ApiListingsResponse = {
   total: number;
   listings: ApiListing[];
+  barrios_incluidos?: string[] | null;
+  radio_usado_metros?: number | null;
 };
 
 export type ApiOportunidad = {
@@ -236,6 +286,7 @@ export type BarrioOption = {
   id: number;
   nombre: string;
   municipio: string;
+  comuna: string | null;
   lat: number;
   lng: number;
   cd_comuna: number | null;
@@ -247,6 +298,7 @@ export function barrioToOption(b: ApiBarrio): BarrioOption {
     id: b.barrio_id,
     nombre: b.nombre ?? "—",
     municipio: b.municipio ?? "—",
+    comuna: b.comuna ?? null,
     lat,
     lng,
     cd_comuna: b.cd_comuna ?? null,
@@ -272,8 +324,8 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     estrato: b.estrato ?? 3,
     precio_m2: b.mercado.precio_m2_cop ?? 5_000_000,
     arriendo: b.mercado.arriendo_p50_cop ?? 2_000_000,
-    yield: b.mercado.yield_bruto_pct ?? 6,
-    anos_recupero: b.mercado.anos_recupero ?? 15,
+    yield: b.mercado.yield_bruto_pct ?? null,
+    anos_recupero: b.mercado.anos_recupero ?? null,
     dist_metro: b.conectividad.dist_metro_km ?? 1,
     dist_parque: b.conectividad.dist_parque_km ?? 0.5,
     dist_mall: b.conectividad.dist_mall_km ?? 1.5,
@@ -305,8 +357,25 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     verde_categoria: b.verde?.categoria ?? null,
     n_remates_municipio: b.n_remates_municipio ?? undefined,
     airbnb_data: (b.airbnb?.n_listings != null || b.airbnb?.ocupacion_pct != null)
-      ? { ocupacion_pct: b.airbnb.ocupacion_pct, adr_cop: b.airbnb.adr_cop, yield_airbnb_pct: b.airbnb.yield_airbnb_pct, n_listings: b.airbnb.n_listings }
+      ? {
+          ocupacion_pct: b.airbnb.ocupacion_pct,
+          ocupacion_p25_pct: b.airbnb.ocupacion_p25_pct,
+          ocupacion_p75_pct: b.airbnb.ocupacion_p75_pct,
+          adr_cop: b.airbnb.adr_cop,
+          yield_airbnb_pct: b.airbnb.yield_airbnb_pct,
+          yield_airbnb_real_pct: b.airbnb.yield_airbnb_real_pct,
+          n_listings: b.airbnb.n_listings,
+          n_entire_home: b.airbnb.n_entire_home,
+          n_private_room: b.airbnb.n_private_room,
+          n_superhosts: b.airbnb.n_superhosts,
+          ingresos_anuales_p50_cop: b.airbnb.ingresos_anuales_p50_cop,
+          rating_promedio: b.airbnb.rating_promedio,
+          reviews_promedio: b.airbnb.reviews_promedio,
+          diff_ocupacion_pct: b.airbnb.diff_ocupacion_pct,
+          diff_adr_cop: b.airbnb.diff_adr_cop,
+        }
       : null,
+    amenidades: b.amenidades ?? null,
     valorizacion_api: (b.valorizacion?.var_anual_pct != null || b.valorizacion?.proyeccion_5anos_pct != null)
       ? b.valorizacion
       : null,
@@ -358,10 +427,14 @@ export function barriosToGeoJSON(
       const score = b.scores.score_activo;
       const excluir = b.excluir_inversion ?? false;
       const pvp = b.mercado.precio_venta_promedio;
+      // Use API-computed precio_accesible when available (authenticated user with presupuesto),
+      // otherwise fall back to client-side budget range check.
       const in_budget =
-        !budgetRange || !pvp
-          ? true
-          : pvp >= budgetRange[0] && pvp <= budgetRange[1];
+        b.mercado.precio_accesible !== null && b.mercado.precio_accesible !== undefined
+          ? b.mercado.precio_accesible
+          : !budgetRange || !pvp
+            ? true
+            : pvp >= budgetRange[0] && pvp <= budgetRange[1];
       return {
         type: "Feature" as const,
         id: b.barrio_id,

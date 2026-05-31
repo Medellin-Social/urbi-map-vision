@@ -1,59 +1,196 @@
 from __future__ import annotations
 
-# Weights per (objetivo, riesgo) combination — must sum to 100 per key.
-# Factors:
-#   score_activo   – barrio score for the goal (0-100)
-#   indice_nomada  – nomadic-friendly amenities index (0-100)
-#   pct_bajo_mediana – how far below median price (positive = cheaper)
-#   liquidez       – barrio liquidity score (0-100)
-#   seguridad      – safety score (0-100)
-#   yield_bruto    – gross rental yield % (typically 4-12)
-#   var_anual      – annual appreciation % (typically 0-12)
-#   buena_oferta   – listing is below market median by >10% (bool bonus)
-PESOS: dict[tuple[str, str], dict[str, float]] = {
-    ("airbnb", "conservador"): {
-        "score_activo": 30, "indice_nomada": 20, "pct_bajo_mediana": 10,
-        "liquidez": 15, "seguridad": 20, "buena_oferta": 5,
+PRESUPUESTO_MAX: dict[str, int] = {
+    '<200':     200_000_000,
+    '200-500':  500_000_000,
+    '500-1000': 1_000_000_000,
+    '>1000':    9_999_999_999,
+}
+
+# Base weights + per-field modificadores per (objetivo, perfil_riesgo).
+# base values are fractions summing to 1.0; aplicar_modificadores re-normalises.
+# Factors: score_zona, yield, liquidez, buena_oferta, indice_nomada, valorizacion, seguridad
+PESOS_EXTENDIDOS: dict[tuple[str, str], dict] = {
+    # ━━━ AIRBNB ━━━
+    ('airbnb', 'conservador'): {
+        'base': {
+            'score_zona': 0.35, 'yield': 0.25,
+            'liquidez': 0.30, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'n_unidades_1':    {'liquidez': +0.10, 'yield': -0.10},
+            'n_unidades_5+':   {'yield': +0.10, 'liquidez': -0.10},
+            'gestion_self':    {'liquidez': +0.05},
+            'gestion_manager': {'yield': +0.05},
+        }
     },
-    ("airbnb", "moderado"): {
-        "score_activo": 30, "indice_nomada": 25, "pct_bajo_mediana": 20,
-        "liquidez": 10, "seguridad": 10, "buena_oferta": 5,
+    ('airbnb', 'moderado'): {
+        'base': {
+            'score_zona': 0.25, 'yield': 0.45,
+            'liquidez': 0.20, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'n_unidades_1':    {'liquidez': +0.05},
+            'n_unidades_5+':   {'yield': +0.10, 'score_zona': -0.10},
+            'gestion_manager': {'yield': +0.05},
+        }
     },
-    ("airbnb", "agresivo"): {
-        "score_activo": 25, "indice_nomada": 30, "pct_bajo_mediana": 30,
-        "liquidez": 5, "seguridad": 5, "buena_oferta": 5,
+    ('airbnb', 'agresivo'): {
+        'base': {
+            'score_zona': 0.15, 'yield': 0.60,
+            'liquidez': 0.15, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'n_unidades_5+': {'yield': +0.05, 'liquidez': -0.05},
+        }
     },
-    ("mediano_plazo", "conservador"): {
-        "score_activo": 30, "yield_bruto": 20, "pct_bajo_mediana": 15,
-        "liquidez": 20, "seguridad": 10, "buena_oferta": 5,
+
+    # ━━━ RENTA MEDIA ━━━
+    ('mediano_plazo', 'conservador'): {
+        'base': {
+            'score_zona': 0.40, 'yield': 0.25,
+            'indice_nomada': 0.25, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'target_nomada':    {'indice_nomada': +0.15, 'yield': -0.15},
+            'target_ejecutivo': {'seguridad': +0.15, 'indice_nomada': -0.15},
+            'target_estudiante':{'buena_oferta': +0.10, 'score_zona': -0.10},
+            'amoblado_si':      {'yield': +0.05},
+        }
     },
-    ("mediano_plazo", "moderado"): {
-        "score_activo": 30, "yield_bruto": 25, "pct_bajo_mediana": 25,
-        "liquidez": 10, "seguridad": 5, "buena_oferta": 5,
+    ('mediano_plazo', 'moderado'): {
+        'base': {
+            'score_zona': 0.25, 'yield': 0.35,
+            'indice_nomada': 0.30, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'target_nomada':    {'indice_nomada': +0.10, 'score_zona': -0.10},
+            'target_ejecutivo': {'seguridad': +0.10, 'indice_nomada': -0.10},
+            'target_estudiante':{'buena_oferta': +0.10, 'yield': -0.10},
+            'amoblado_si':      {'yield': +0.05},
+        }
     },
-    ("mediano_plazo", "agresivo"): {
-        "score_activo": 25, "yield_bruto": 30, "pct_bajo_mediana": 30,
-        "liquidez": 5, "seguridad": 5, "buena_oferta": 5,
+    ('mediano_plazo', 'agresivo'): {
+        'base': {
+            'score_zona': 0.15, 'yield': 0.50,
+            'indice_nomada': 0.25, 'buena_oferta': 0.10
+        },
+        'modificadores': {
+            'target_nomada':    {'indice_nomada': +0.10, 'score_zona': -0.10},
+            'target_ejecutivo': {'yield': +0.05},
+        }
     },
-    ("largo_plazo", "conservador"): {
-        "score_activo": 25, "var_anual": 20, "pct_bajo_mediana": 15,
-        "liquidez": 20, "seguridad": 15, "buena_oferta": 5,
+
+    # ━━━ RENTA LARGA ━━━
+    ('renta_larga', 'conservador'): {
+        'base': {
+            'score_zona': 0.40, 'yield': 0.20,
+            'liquidez': 0.20, 'valorizacion': 0.20
+        },
+        'modificadores': {
+            'pago_contado':  {'valorizacion': +0.10, 'liquidez': -0.10},
+            'pago_credito':  {'yield': +0.15, 'valorizacion': -0.15},
+            'horizonte_20+': {'valorizacion': +0.15, 'yield': -0.15},
+            'horizonte_5':   {'yield': +0.15, 'valorizacion': -0.15},
+        }
     },
-    ("largo_plazo", "moderado"): {
-        "score_activo": 30, "var_anual": 25, "pct_bajo_mediana": 20,
-        "liquidez": 15, "seguridad": 5, "buena_oferta": 5,
+    ('renta_larga', 'moderado'): {
+        'base': {
+            'score_zona': 0.30, 'yield': 0.35,
+            'liquidez': 0.15, 'valorizacion': 0.20
+        },
+        'modificadores': {
+            'pago_contado':  {'valorizacion': +0.10, 'yield': -0.10},
+            'pago_credito':  {'yield': +0.20, 'valorizacion': -0.20},
+            'horizonte_20+': {'valorizacion': +0.15, 'score_zona': -0.15},
+            'horizonte_5':   {'yield': +0.20, 'liquidez': +0.05, 'valorizacion': -0.25},
+        }
     },
-    ("largo_plazo", "agresivo"): {
-        "score_activo": 25, "var_anual": 30, "pct_bajo_mediana": 30,
-        "liquidez": 5, "seguridad": 5, "buena_oferta": 5,
+    ('renta_larga', 'agresivo'): {
+        'base': {
+            'score_zona': 0.20, 'yield': 0.50,
+            'liquidez': 0.10, 'valorizacion': 0.20
+        },
+        'modificadores': {
+            'pago_contado':  {'valorizacion': +0.10, 'yield': -0.10},
+            'pago_credito':  {'yield': +0.15, 'valorizacion': -0.15},
+            'horizonte_20+': {'valorizacion': +0.20, 'yield': -0.20},
+            'horizonte_5':   {'yield': +0.20, 'valorizacion': -0.20},
+        }
     },
 }
 
+# largo_plazo kept as alias for backward compatibility
+for _riesgo in ('conservador', 'moderado', 'agresivo'):
+    PESOS_EXTENDIDOS[('largo_plazo', _riesgo)] = PESOS_EXTENDIDOS[('renta_larga', _riesgo)]
+
 _OBJETIVO_SCORE_KEY: dict[str, str] = {
-    "airbnb": "score_corto",
-    "mediano_plazo": "score_mediano",
-    "largo_plazo": "score_largo",
+    "airbnb":       "score_corto",
+    "mediano_plazo":"score_mediano",
+    "renta_larga":  "score_largo",
+    "largo_plazo":  "score_largo",
 }
+
+
+def aplicar_modificadores(base: dict[str, float], perfil: dict) -> dict[str, float]:
+    pesos = base.copy()
+
+    mods: list[str] = []
+
+    n = perfil.get('n_unidades')
+    if n == '1':
+        mods.append('n_unidades_1')
+    elif n == '5+':
+        mods.append('n_unidades_5+')
+
+    gestion = perfil.get('tipo_gestion')
+    if gestion == 'self':
+        mods.append('gestion_self')
+    elif gestion == 'manager':
+        mods.append('gestion_manager')
+
+    target = perfil.get('target_inquilino')
+    if target == 'nomada':
+        mods.append('target_nomada')
+    elif target == 'ejecutivo':
+        mods.append('target_ejecutivo')
+    elif target == 'estudiante':
+        mods.append('target_estudiante')
+
+    if perfil.get('amoblado') == 'si':
+        mods.append('amoblado_si')
+
+    pago = perfil.get('tipo_pago')
+    if pago == 'contado':
+        mods.append('pago_contado')
+    elif pago == 'credito':
+        mods.append('pago_credito')
+
+    horizonte = perfil.get('horizonte_inversion')
+    if horizonte == '20+':
+        mods.append('horizonte_20+')
+    elif horizonte == '5':
+        mods.append('horizonte_5')
+
+    objetivo = (perfil.get('objetivo') or 'renta_larga').lower()
+    riesgo   = (perfil.get('perfil_riesgo') or 'moderado').lower()
+    config = PESOS_EXTENDIDOS.get((objetivo, riesgo))
+    if not config:
+        return pesos
+
+    modificadores = config.get('modificadores', {})
+    for mod_key in mods:
+        if mod_key in modificadores:
+            for campo, delta in modificadores[mod_key].items():
+                pesos[campo] = pesos.get(campo, 0.0) + delta
+
+    # Clamp negatives (stacked modifiers can push a dimension below zero)
+    pesos = {k: max(v, 0.0) for k, v in pesos.items()}
+    total = sum(pesos.values())
+    if total > 0:
+        pesos = {k: round(v / total, 4) for k, v in pesos.items()}
+
+    return pesos
 
 
 def calcular_relevancia(
@@ -62,18 +199,20 @@ def calcular_relevancia(
     perfil: dict,
 ) -> tuple[float, list[str]]:
     """Return (score_0_100, razones[:3]) for a listing+barrio given an investor profile."""
-    objetivo = (perfil.get("objetivo") or "largo_plazo").lower()
-    riesgo = (perfil.get("perfil_riesgo") or "moderado").lower()
-    pesos = PESOS.get((objetivo, riesgo), PESOS[("largo_plazo", "moderado")])
+    objetivo = (perfil.get("objetivo") or "renta_larga").lower()
+    riesgo   = (perfil.get("perfil_riesgo") or "moderado").lower()
+
+    config = PESOS_EXTENDIDOS.get((objetivo, riesgo)) or PESOS_EXTENDIDOS.get(("renta_larga", "moderado"), {"base": {}, "modificadores": {}})
+    pesos = aplicar_modificadores(config["base"], perfil)
 
     total = 0.0
     razones: list[str] = []
 
-    # 1. score_activo (barrio-level, 0–100)
-    if "score_activo" in pesos:
+    # 1. score_zona (barrio-level, 0–100)
+    if "score_zona" in pesos:
         score_key = _OBJETIVO_SCORE_KEY.get(objetivo, "score_largo")
-        score = barrio.get(score_key) or 0
-        total += (score / 100) * pesos["score_activo"]
+        score = float(barrio.get(score_key) or 0)
+        total += (score / 100) * pesos["score_zona"]
         if score >= 70:
             razones.append(f"Barrio top ({score}pts)")
 
@@ -84,52 +223,61 @@ def calcular_relevancia(
         if nomada >= 60:
             razones.append("Alto índice nómada")
 
-    # 3. pct_bajo_mediana (listing-level; negative = above median)
-    if "pct_bajo_mediana" in pesos:
-        pct = float(listing.get("pct_bajo_mediana") or 0)
-        # >20% below → full score; at median → 50%; above median → 0–50%
-        normalized = min(max((pct + 20) / 40, 0.0), 1.0)
-        total += normalized * pesos["pct_bajo_mediana"]
-        if pct > 10:
-            razones.append(f"{pct:.0f}% bajo la mediana")
-
-    # 4. liquidez (barrio-level, 0–100)
+    # 3. liquidez (barrio-level, 0–100)
     if "liquidez" in pesos:
         liq = float(barrio.get("liquidez_score") or 0)
         total += (liq / 100) * pesos["liquidez"]
         if liq >= 70:
             razones.append("Alta liquidez")
 
-    # 5. seguridad (barrio-level, 0–100)
+    # 4. seguridad (barrio-level, 0–100)
     if "seguridad" in pesos:
         seg = float(barrio.get("seguridad_score") or 0)
         total += (seg / 100) * pesos["seguridad"]
         if seg >= 70:
             razones.append("Zona segura")
 
-    # 6. yield_bruto (barrio-level, %; normalize 4–12%)
-    if "yield_bruto" in pesos:
+    # 5. yield (barrio-level, %; normalize 4–12%)
+    if "yield" in pesos:
         y = float(barrio.get("yield_bruto_pct") or 0)
         normalized = min(max((y - 4.0) / 8.0, 0.0), 1.0)
-        total += normalized * pesos["yield_bruto"]
+        total += normalized * pesos["yield"]
         if y >= 8:
             razones.append(f"Yield {y:.1f}%")
 
-    # 7. var_anual (barrio-level, %; normalize 0–12%)
-    if "var_anual" in pesos:
+    # 6. valorizacion (barrio-level, %; normalize 0–12%)
+    if "valorizacion" in pesos:
         v = float(barrio.get("var_anual_pct") or 0)
         normalized = min(max(v / 12.0, 0.0), 1.0)
-        total += normalized * pesos["var_anual"]
+        total += normalized * pesos["valorizacion"]
         if v >= 6:
             razones.append(f"Valor +{v:.1f}%/año")
 
-    # 8. buena_oferta (listing-level, boolean)
+    # 7. buena_oferta (listing-level, boolean)
     if "buena_oferta" in pesos and listing.get("buena_oferta"):
         total += pesos["buena_oferta"]
         if not any("mediana" in r for r in razones):
             razones.append("Precio bajo mercado")
 
-    return min(round(total, 1), 100.0), razones[:3]
+    # ── Extended match reasons ────────────────────────────────────────────────
+    target = perfil.get("target_inquilino")
+    if target == "nomada" and float(barrio.get("indice_nomada") or 0) > 100:
+        if "Zona ideal para nómadas digitales" not in razones:
+            razones.append("Zona ideal para nómadas digitales")
+
+    if perfil.get("tipo_pago") == "credito" and float(barrio.get("yield_bruto_pct") or 0) > 7:
+        razones.append("Yield suficiente para cubrir cuota")
+
+    if perfil.get("horizonte_inversion") == "20+" and float(barrio.get("var_anual_pct") or 0) > 10:
+        razones.append("Alta valorización histórica")
+
+    if perfil.get("n_unidades") == "5+" and (barrio.get("n_listings_airbnb") or 0) > 20:
+        razones.append("Demanda Airbnb probada en la zona")
+
+    if perfil.get("amoblado") == "si" and (barrio.get("pct_wifi") or 0) > 80:
+        razones.append("Zona con alta demanda de amoblados")
+
+    return min(round(total * 100, 1), 100.0), razones[:3]
 
 
 def get_match_label(score: float) -> str:

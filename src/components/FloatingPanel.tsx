@@ -88,6 +88,7 @@ type Props = {
   selected: Neighborhood | null;
   onClear: () => void;
   onSelect?: (n: Neighborhood) => void;
+  onGoToMLS?: (n: Neighborhood) => void;
   perfil?: string;
   risk?: string;
 };
@@ -122,7 +123,7 @@ function matchColor(score: number): string {
   return "#6b7280";
 }
 
-export function FloatingPanel({ selected, onClear, onSelect, perfil: perfilProp, risk: riskProp }: Props) {
+export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: perfilProp, risk: riskProp }: Props) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<View>("city");
   const [minimized, setMinimized] = useState(true);
@@ -144,8 +145,12 @@ export function FloatingPanel({ selected, onClear, onSelect, perfil: perfilProp,
   useEffect(() => { posRef.current = pos; }, [pos]);
 
   useEffect(() => {
-    if (selected) setView("barrio");
-    else setView("city");
+    if (selected) {
+      setView("barrio");
+      setMinimized(false);
+    } else {
+      setView("city");
+    }
   }, [selected?.id]);
 
   const startDrag = (e: React.MouseEvent) => {
@@ -229,7 +234,7 @@ export function FloatingPanel({ selected, onClear, onSelect, perfil: perfilProp,
             <div className="h-1.5 w-10 rounded-full bg-border" />
           </div>
           <div className="max-h-[70vh] overflow-y-auto px-4 pb-6">
-            <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} />
+            <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} onGoToMLS={onGoToMLS} />
           </div>
         </motion.div>
       </AnimatePresence>
@@ -293,7 +298,7 @@ export function FloatingPanel({ selected, onClear, onSelect, perfil: perfilProp,
 
             {/* Scrollable content */}
             <div className="flex-1 overflow-y-auto px-4 py-4">
-              <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} />
+              <PanelContent view={view} setView={setView} selected={selected} onClear={onClear} user={user} onSelect={onSelect} onGoToMLS={onGoToMLS} />
             </div>
 
             {/* Resize handle — bottom-right corner */}
@@ -325,6 +330,7 @@ function PanelContent({
   onClear,
   user,
   onSelect,
+  onGoToMLS,
 }: {
   view: View;
   setView: (v: View) => void;
@@ -332,6 +338,7 @@ function PanelContent({
   onClear: () => void;
   user: ReturnType<typeof auth.get>;
   onSelect?: (n: Neighborhood) => void;
+  onGoToMLS?: (n: Neighborhood) => void;
 }) {
   return (
     <AnimatePresence mode="wait">
@@ -350,6 +357,7 @@ function PanelContent({
               setView("city");
             }}
             onListings={() => setView("listings")}
+            onGoToMLS={onGoToMLS}
           />
         </motion.div>
       )}
@@ -531,6 +539,14 @@ function CityOverview({ goal, onSelect }: { goal?: Goal; onSelect?: (n: Neighbor
         <p className="text-sm leading-relaxed">{recommendation(goal as never)}</p>
       </div>
 
+      {apiStats?.ultima_actualizacion_listings && (() => {
+        const days = Math.round((Date.now() - new Date(apiStats.ultima_actualizacion_listings!).getTime()) / 86_400_000);
+        return (
+          <p className="text-center text-[10px] text-muted-foreground/50">
+            Datos actualizados hace {days === 0 ? "hoy" : `${days} día${days === 1 ? "" : "s"}`}
+          </p>
+        );
+      })()}
       <p className="pt-1 text-center text-[11px] text-muted-foreground">
         Haz clic en un barrio del mapa para ver su análisis →
       </p>
@@ -608,7 +624,7 @@ const _GOAL_TO_PERFIL: Record<string, string> = {
   mediano_plazo: "mediano_plazo",
 };
 
-function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal }) {
+function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal; onGoToMLS?: (n: Neighborhood) => void }) {
   const perfil = _GOAL_TO_PERFIL[goal ?? ""];
   const risk = auth.get()?.risk;
   const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil, risk);
@@ -687,7 +703,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
         <Metric label="Precio m² (venta)" value={formatCOP(n.precio_m2)} />
         <Metric label="Arriendo prom." value={`${formatCOP(n.arriendo)}/mes`} />
         <Metric label="Yield bruto" value={formatPct(n.yield)} accent="cyan" />
-        <Metric label="Años recupero" value={`${n.anos_recupero.toFixed(1)} años`} />
+        <Metric label="Años recupero" value={n.anos_recupero != null ? `${n.anos_recupero.toFixed(1)} años` : "—"} />
       </div>
 
       <Section title="Corrección inmobiliaria">
@@ -716,7 +732,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Yield real est.:</span>
-            <span className="text-success">{formatPct(Math.round(n.yield * (0.90 / 0.97) * 10) / 10)}</span>
+            <span className="text-success">{n.yield != null ? formatPct(Math.round(n.yield * (0.90 / 0.97) * 10) / 10) : "—"}</span>
           </div>
         </div>
         <p className="mt-1.5 text-[10px] leading-snug text-muted-foreground/70">
@@ -756,6 +772,7 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
       </Section>
 
       {goal === "airbnb" && n.airbnb_data && <AirbnbSection n={n} />}
+      {goal === "airbnb" && n.amenidades && <AmenadidsSection n={n} />}
 
       {goal === "mediano_plazo" && <NomadaSection n={n} />}
 
@@ -769,14 +786,24 @@ function BarrioDetail({ n, onBack, onListings, goal }: { n: Neighborhood; onBack
 
       <OpportunityBanner n={n} />
 
-      <Link
-        to="/calculadora"
-        search={{ barrio: n.id }}
-        className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-primary to-accent py-2.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
-      >
-        <Calculator className="h-3.5 w-3.5" />
-        Simular inversión aquí <ArrowRight className="h-3 w-3" />
-      </Link>
+      <div className="flex flex-col gap-2">
+        <Link
+          to="/calculadora"
+          search={{ barrio: n.id }}
+          className="inline-flex w-full items-center justify-center gap-1.5 rounded-md bg-gradient-to-r from-primary to-accent py-2.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
+        >
+          <Calculator className="h-3.5 w-3.5" />
+          Simular inversión aquí <ArrowRight className="h-3 w-3" />
+        </Link>
+        {onGoToMLS && (
+          <button
+            onClick={() => onGoToMLS(n)}
+            className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+          >
+            🏠 Ver inversiones en el mapa
+          </button>
+        )}
+      </div>
 
       <CatastroSection n={n} />
 
@@ -931,7 +958,7 @@ function NomadaSection({ n }: { n: Neighborhood }) {
           </div>
           <div className="flex justify-between">
             <span className="text-muted-foreground">Yield largo plazo (ref):</span>
-            <span className="text-muted-foreground">{yieldLargo.toFixed(1)}%</span>
+            <span className="text-muted-foreground">{yieldLargo != null ? `${yieldLargo.toFixed(1)}%` : "Sin datos"}</span>
           </div>
         </div>
         {rentaEstimada && (
@@ -1017,6 +1044,13 @@ function ScoreRow({ label, pts, max, highlight }: { label: string; pts: number |
 function AirbnbSection({ n }: { n: Neighborhood }) {
   const ab = n.airbnb_data!;
   const fewData = (ab.n_listings ?? 0) < 5;
+  const yieldReal = ab.yield_airbnb_real_pct;
+  const yieldEst = ab.yield_airbnb_pct;
+  const yieldMostrar = yieldReal ?? yieldEst;
+  const esReal = yieldReal != null;
+  const gapGrande =
+    yieldReal != null && yieldEst != null && Math.abs(yieldEst - yieldReal) > 2;
+
   return (
     <Section title="📊 Rendimiento Airbnb">
       {fewData && (
@@ -1024,30 +1058,142 @@ function AirbnbSection({ n }: { n: Neighborhood }) {
           ⚠️ Pocos datos Airbnb en esta zona ({ab.n_listings ?? 0} listings)
         </p>
       )}
-      <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-2">
-        <div className="grid grid-cols-2 gap-2">
-          <div className="rounded-lg border border-border/60 bg-background/40 p-2 text-center">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ocupación</div>
-            <div className="mt-0.5 font-display text-base font-semibold text-primary">
-              {ab.ocupacion_pct != null ? `${ab.ocupacion_pct.toFixed(0)}%` : "—"}
-            </div>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-background/40 p-2 text-center">
-            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">ADR / noche</div>
-            <div className="mt-0.5 font-display text-base font-semibold">
-              {ab.adr_cop != null ? formatCOP(ab.adr_cop) : "—"}
-            </div>
-          </div>
-        </div>
-        <div className="flex justify-between items-center">
+      <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-2.5">
+
+        {/* Yield con badge */}
+        <div className="flex items-center justify-between">
           <span className="text-muted-foreground">Yield Airbnb:</span>
-          <span className="font-semibold" style={{ color: ab.yield_airbnb_pct != null ? yieldColor(ab.yield_airbnb_pct) : undefined }}>
-            {ab.yield_airbnb_pct != null ? `${ab.yield_airbnb_pct.toFixed(1)}%` : "Sin datos"}
-          </span>
+          <div className="flex items-center gap-2">
+            <span
+              className="font-semibold text-sm"
+              style={{ color: yieldMostrar != null ? yieldColor(yieldMostrar) : undefined }}
+            >
+              {yieldMostrar != null ? `${yieldMostrar.toFixed(1)}%` : "Sin datos"}
+            </span>
+            {esReal ? (
+              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                ✅ Dato real AirROI
+              </span>
+            ) : yieldEst != null ? (
+              <span className="rounded px-1.5 py-0.5 text-[10px] font-medium bg-warning/15 text-warning border border-warning/30">
+                ⚠️ Estimado
+              </span>
+            ) : null}
+          </div>
         </div>
+
+        {/* Gap warning */}
+        {gapGrande && (
+          <p className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-[11px] text-warning leading-snug">
+            ⚠️ El yield real ({yieldReal!.toFixed(1)}%) es menor al estimado ({yieldEst!.toFixed(1)}%). Los datos de AirROI son más precisos.
+          </p>
+        )}
+
+        {/* Ocupación con percentiles */}
+        <div>
+          <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-1">Ocupación</div>
+          {ab.ocupacion_p25_pct != null && ab.ocupacion_p75_pct != null ? (
+            <div className="text-center font-semibold text-primary text-sm">
+              {ab.ocupacion_p25_pct.toFixed(0)}% — {ab.ocupacion_pct != null ? `${ab.ocupacion_pct.toFixed(0)}%` : "—"} — {ab.ocupacion_p75_pct.toFixed(0)}%
+              <div className="text-[10px] font-normal text-muted-foreground mt-0.5">p25 · mediana · p75</div>
+            </div>
+          ) : ab.ocupacion_pct != null ? (
+            <div className="text-center font-semibold text-primary text-sm">{ab.ocupacion_pct.toFixed(0)}%</div>
+          ) : (
+            <div className="text-center text-muted-foreground text-[11px]">Sin datos reales de ocupación en esta zona</div>
+          )}
+        </div>
+
+        {/* ADR */}
+        {ab.adr_cop != null && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Precio por noche:</span>
+            <span className="font-semibold">{formatCOP(ab.adr_cop)}</span>
+          </div>
+        )}
+
+        {/* Ingresos anuales */}
+        {ab.ingresos_anuales_p50_cop != null && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Ingresos anuales estimados:</span>
+            <span className="font-semibold text-emerald-400">
+              ${(ab.ingresos_anuales_p50_cop / 1_000_000).toFixed(1)}M COP
+            </span>
+          </div>
+        )}
+
+        {/* Rating */}
+        {ab.rating_promedio != null && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Calidad:</span>
+            <span className="font-medium">
+              ⭐ {ab.rating_promedio.toFixed(2)}
+              {ab.reviews_promedio != null && (
+                <span className="text-muted-foreground"> · {Math.round(ab.reviews_promedio)} reseñas</span>
+              )}
+            </span>
+          </div>
+        )}
+
+        {/* Room types */}
+        {(ab.n_entire_home != null || ab.n_private_room != null) && (
+          <div className="flex justify-between items-center">
+            <span className="text-muted-foreground">Tipo de anuncio:</span>
+            <span className="text-right">
+              {ab.n_entire_home != null && <span>{ab.n_entire_home} casa entera</span>}
+              {ab.n_entire_home != null && ab.n_private_room != null && <span className="text-muted-foreground"> · </span>}
+              {ab.n_private_room != null && <span>{ab.n_private_room} hab. privada</span>}
+            </span>
+          </div>
+        )}
+
         {ab.n_listings != null && (
           <div className="text-[10px] text-right text-muted-foreground/70">
             Basado en {ab.n_listings} listings activos
+          </div>
+        )}
+      </div>
+    </Section>
+  );
+}
+
+/* ------------- Amenidades Airbnb ------------- */
+
+function AmeBar({ label, pct }: { label: string; pct: number | null }) {
+  const val = pct ?? 0;
+  return (
+    <div className="flex items-center gap-2 text-xs">
+      <span className="w-16 shrink-0 text-muted-foreground text-[11px]">{label}</span>
+      <div className="flex-1 h-1.5 rounded-full bg-border/60 overflow-hidden">
+        <div
+          className="h-full rounded-full bg-primary/60 transition-all"
+          style={{ width: `${Math.min(val, 100)}%` }}
+        />
+      </div>
+      <span className="w-8 text-right shrink-0 font-medium">{val.toFixed(0)}%</span>
+    </div>
+  );
+}
+
+function AmenadidsSection({ n }: { n: Neighborhood }) {
+  const am = n.amenidades!;
+  return (
+    <Section title="🏠 Amenidades del mercado">
+      <div className="rounded-xl border border-border bg-background/30 p-3 text-xs space-y-2">
+        <p className="text-[11px] text-muted-foreground mb-2">% de propiedades en la zona con:</p>
+        <AmeBar label="WiFi" pct={am.pct_wifi != null ? am.pct_wifi * 100 : null} />
+        <AmeBar label="AC" pct={am.pct_ac != null ? am.pct_ac * 100 : null} />
+        <AmeBar label="Cocina" pct={am.pct_kitchen != null ? am.pct_kitchen * 100 : null} />
+        <AmeBar label="Lavadora" pct={am.pct_washer != null ? am.pct_washer * 100 : null} />
+        {am.score_equipamiento != null && (
+          <div className="flex justify-between items-center pt-1 border-t border-border/40">
+            <span className="text-muted-foreground">Score equipamiento:</span>
+            <span className="font-semibold">{am.score_equipamiento}/100</span>
+          </div>
+        )}
+        {am.n_listings_base != null && (
+          <div className="text-[10px] text-right text-muted-foreground/70">
+            Basado en {am.n_listings_base} listings de Airbnb en la zona
           </div>
         )}
       </div>

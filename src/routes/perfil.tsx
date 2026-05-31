@@ -1,5 +1,7 @@
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
@@ -252,17 +254,101 @@ function CuentaTab({ user }: { user: UrbiUser }) {
 
 /* ---------------- Inversor ---------------- */
 
+const N_UNIDADES_OPTS = [
+  { v: "1 unit — personal", label: "1 unidad" },
+  { v: "2-5 units — small portfolio", label: "2-5 unidades" },
+  { v: "5+ units — full portfolio", label: "5+ unidades" },
+];
+const TIPO_GESTION_OPTS = [
+  { v: "Self-managed", label: "Self-managed" },
+  { v: "Hire property manager", label: "Con administrador" },
+  { v: "Not sure yet", label: "No sé aún" },
+];
+const TARGET_INQUILINO_OPTS = [
+  { v: "Digital nomads & remote workers", label: "Nómadas digitales" },
+  { v: "Local executives & professionals", label: "Ejecutivos locales" },
+  { v: "Students", label: "Estudiantes" },
+  { v: "Flexible — any", label: "Flexible" },
+];
+const AMOBLADO_OPTS = [
+  { v: "Fully furnished (higher rent)", label: "Amoblado (renta premium)" },
+  { v: "Unfurnished (easier to find)", label: "Sin amueblar" },
+  { v: "Flexible", label: "Flexible" },
+];
+const TIPO_PAGO_OPTS = [
+  { v: "Cash — full payment", label: "Contado" },
+  { v: "Mortgage/financing", label: "Crédito hipotecario" },
+  { v: "Not sure yet", label: "No sé aún" },
+];
+const HORIZONTE_OPTS = [
+  { v: "5 years", label: "5 años" },
+  { v: "10 years", label: "10 años" },
+  { v: "20+ years — long term", label: "20+ años" },
+];
+
 function InversorTab({ user }: { user: UrbiUser }) {
   const [budget, setBudget] = useState<Budget | undefined>(user.budget);
   const [goal, setGoal] = useState<Goal | undefined>(user.goal);
   const [risk, setRisk] = useState<Risk | undefined>(user.risk);
-  const [saved, setSaved] = useState(false);
+  const [nUnidades, setNUnidades] = useState(user.nUnidades ?? "");
+  const [tipoGestion, setTipoGestion] = useState(user.tipoGestion ?? "");
+  const [targetInquilino, setTargetInquilino] = useState(user.targetInquilino ?? "");
+  const [amoblado, setAmoblado] = useState(user.amoblado ?? "");
+  const [tipoPago, setTipoPago] = useState(user.tipoPago ?? "");
+  const [horizonteInversion, setHorizonteInversion] = useState(user.horizonteInversion ?? "");
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<"ok" | "err" | null>(null);
 
-  const save = () => {
-    auth.patch({ budget, goal, risk });
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1500);
-  };
+  function changeGoal(g: Goal) {
+    setGoal(g);
+    setNUnidades("");
+    setTipoGestion("");
+    setTargetInquilino("");
+    setAmoblado("");
+    setTipoPago("");
+    setHorizonteInversion("");
+    setDirty(true);
+  }
+
+  async function save() {
+    setSaving(true);
+    try {
+      await apiFetch(API_ENDPOINTS.perfil, {
+        method: "PUT",
+        body: JSON.stringify({
+          objetivo: goal ?? null,
+          perfil_riesgo: risk ?? null,
+          presupuesto: budget ?? null,
+          n_unidades: goal === "airbnb" ? nUnidades || null : null,
+          tipo_gestion: goal === "airbnb" ? tipoGestion || null : null,
+          target_inquilino: goal === "mediano_plazo" ? targetInquilino || null : null,
+          amoblado: goal === "mediano_plazo" ? amoblado || null : null,
+          tipo_pago: goal === "renta-larga" ? tipoPago || null : null,
+          horizonte_inversion: goal === "renta-larga" ? horizonteInversion || null : null,
+        }),
+      });
+      auth.patch({
+        budget,
+        goal,
+        risk,
+        nUnidades: goal === "airbnb" ? nUnidades || undefined : undefined,
+        tipoGestion: goal === "airbnb" ? tipoGestion || undefined : undefined,
+        targetInquilino: goal === "mediano_plazo" ? targetInquilino || undefined : undefined,
+        amoblado: goal === "mediano_plazo" ? amoblado || undefined : undefined,
+        tipoPago: goal === "renta-larga" ? tipoPago || undefined : undefined,
+        horizonteInversion: goal === "renta-larga" ? horizonteInversion || undefined : undefined,
+      });
+      window.dispatchEvent(new CustomEvent("perfil-updated", { detail: auth.get() }));
+      setDirty(false);
+      setToast("ok");
+    } catch {
+      setToast("err");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -271,7 +357,7 @@ function InversorTab({ user }: { user: UrbiUser }) {
       <Field label="Presupuesto">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
           {(["<200", "200-500", "500-1000", ">1000"] as Budget[]).map((b) => (
-            <Pill key={b} active={budget === b} onClick={() => setBudget(b)}>
+            <Pill key={b} active={budget === b} onClick={() => { setBudget(b); setDirty(true); }}>
               {b === "<200" ? "< $200M" : b === "200-500" ? "$200–500M" : b === "500-1000" ? "$500M–1.000M" : "> $1.000M"}
             </Pill>
           ))}
@@ -281,26 +367,92 @@ function InversorTab({ user }: { user: UrbiUser }) {
       <Field label="Objetivo">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {(Object.keys(GOAL_LABEL) as Goal[]).filter((g) => g !== "valorizacion").map((g) => (
-            <Pill key={g} active={goal === g} onClick={() => setGoal(g)}>{GOAL_LABEL[g]}</Pill>
+            <Pill key={g} active={goal === g} onClick={() => changeGoal(g as Goal)}>{GOAL_LABEL[g]}</Pill>
           ))}
         </div>
       </Field>
 
+      {goal === "airbnb" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Unidades">
+            <select className={inputCls} value={nUnidades} onChange={(e) => { setNUnidades(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {N_UNIDADES_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Gestión">
+            <select className={inputCls} value={tipoGestion} onChange={(e) => { setTipoGestion(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {TIPO_GESTION_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+        </div>
+      )}
+
+      {goal === "mediano_plazo" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Inquilino objetivo">
+            <select className={inputCls} value={targetInquilino} onChange={(e) => { setTargetInquilino(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {TARGET_INQUILINO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Amoblado">
+            <select className={inputCls} value={amoblado} onChange={(e) => { setAmoblado(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {AMOBLADO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+        </div>
+      )}
+
+      {goal === "renta-larga" && (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Field label="Forma de pago">
+            <select className={inputCls} value={tipoPago} onChange={(e) => { setTipoPago(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {TIPO_PAGO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+          <Field label="Horizonte de inversión">
+            <select className={inputCls} value={horizonteInversion} onChange={(e) => { setHorizonteInversion(e.target.value); setDirty(true); }}>
+              <option value="">Seleccionar…</option>
+              {HORIZONTE_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+            </select>
+          </Field>
+        </div>
+      )}
+
       <Field label="Perfil de riesgo">
         <div className="grid grid-cols-3 gap-2">
           {(["conservador", "moderado", "agresivo"] as Risk[]).map((r) => (
-            <Pill key={r} active={risk === r} onClick={() => setRisk(r)}>
+            <Pill key={r} active={risk === r} onClick={() => { setRisk(r); setDirty(true); }}>
               <span className="capitalize">{r}</span>
             </Pill>
           ))}
         </div>
       </Field>
 
-      <div className="flex items-center gap-3">
-        <button onClick={save} className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan">
-          Guardar perfil
-        </button>
-        {saved && <span className="text-xs text-success">✓ Actualizado</span>}
+      <div className="flex flex-wrap items-center gap-3">
+        {dirty && (
+          <button
+            onClick={save}
+            disabled={saving}
+            className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan disabled:opacity-50"
+          >
+            {saving ? "Guardando…" : "Guardar cambios"}
+          </button>
+        )}
+        {toast === "ok" && (
+          <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-success">
+            ✅ Perfil actualizado
+          </motion.span>
+        )}
+        {toast === "err" && (
+          <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-danger">
+            ❌ Error al guardar. Intenta de nuevo.
+          </motion.span>
+        )}
       </div>
     </div>
   );
