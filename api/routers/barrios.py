@@ -432,7 +432,7 @@ _BARRIO_SQL = """
         -- (after UPPER+TRIM). 20 comunas in Medellín — all-caps, no accents. Verified: 0 mismatches.
         -- Run scripts/validate_catastro_join.py to check coverage before adding new barrio data.
         FROM raw.catastro_medellin
-        WHERE unaccent(UPPER(TRIM(ds_comuna))) = unaccent(UPPER(TRIM(b.comuna)))
+        WHERE UPPER(TRIM(ds_comuna)) = UPPER(TRIM(b.comuna))
           AND cd_ind_ru_ur = 'U'
     ) cat ON true
 """

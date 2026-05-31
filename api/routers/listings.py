@@ -109,7 +109,7 @@ bctx AS (
 barrio_cd AS (
     SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
     FROM raw.barrios b2
-    JOIN raw.catastro_medellin c ON unaccent(UPPER(c.ds_comuna)) = unaccent(UPPER(b2.comuna))
+    JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
     ORDER BY b2.id
 ),
 lraw AS (
@@ -226,6 +226,7 @@ ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
          WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
          ELSE 2 END,
+    CASE WHEN l.fuente = 'medellinliving' THEN 0 ELSE 1 END,
     l.pm2 ASC NULLS LAST
 """.format(usd=int(_USD))
 
@@ -347,6 +348,9 @@ async def _expand_neighbors(
     min_listings: int = 15,
     only_premium: bool = False,
 ) -> tuple[list[int], list[str], int]:
+    # Premium listings are few by nature; expand only if barrio has none at all
+    if only_premium:
+        min_listings = 1
     """Cascade-expand barrio → neighbors until min_listings reached.
     Returns (barrio_ids, barrio_names, radio_usado_metros).
     When only_premium=True, expansion is driven by premium listing count.
