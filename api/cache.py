@@ -80,7 +80,7 @@ ON CONFLICT (barrio_id) DO UPDATE SET
 
 _INSERT_LISTINGS_GEOREF = """
 INSERT INTO analytics.listings_georef (url, lat, lon, url_activa, estrato_real, refreshed_at)
-SELECT
+SELECT DISTINCT ON (l.url)
     l.url,
     COALESCE(lm.lat, lf.lat, lp.lat)          AS lat,
     COALESCE(lm.lon, lf.lon, lp.lon)          AS lon,
@@ -101,12 +101,7 @@ LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincar
 LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
 WHERE COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
   AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
-ON CONFLICT (url) DO UPDATE SET
-    lat          = EXCLUDED.lat,
-    lon          = EXCLUDED.lon,
-    url_activa   = EXCLUDED.url_activa,
-    estrato_real = EXCLUDED.estrato_real,
-    refreshed_at = EXCLUDED.refreshed_at
+ORDER BY l.url
 """
 
 
@@ -125,8 +120,10 @@ async def refresh_listings_cache(pool: Any) -> None:
             await conn.execute(_INSERT_BARRIOS_CONTEXTO)
             logger.info("[cache] barrios_contexto refreshed")
 
-            # listings_georef: upsert — adds new listings, updates changed lat/lon
-            await conn.execute(_INSERT_LISTINGS_GEOREF)
+            # listings_georef: TRUNCATE+INSERT — source may have duplicate URLs
+            async with conn.transaction():
+                await conn.execute("TRUNCATE analytics.listings_georef")
+                await conn.execute(_INSERT_LISTINGS_GEOREF)
             logger.info("[cache] listings_georef refreshed")
 
     except Exception as exc:
