@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { Navbar, ProfileChipMobile } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
+import { ListingPanel } from "@/components/ListingPanel";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
 import { MLSPanel } from "@/components/MLSPanel";
 import type { Neighborhood } from "@/lib/adapters";
@@ -45,21 +46,24 @@ function MapPage() {
   const [highlightedListingId, setHighlightedListingId] = useState<number | null>(null);
   const [activeBarrioInComune, setActiveBarrioInComune] = useState<string | null>(null);
   const flyToListingRef = useRef<((lat: number, lng: number) => void) | null>(null);
-  const triggerListingPopupRef = useRef<((listing: ApiListing) => void) | null>(null);
+  const [selectedListing, setSelectedListing] = useState<ApiListing | null>(null);
+  const [listingPanelPos, setListingPanelPos] = useState<{ x: number; y: number } | null>(null);
 
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
-  // Fetch listings for selected barrio — server expands to neighbors if needed
-  const { data: mlsData, isLoading: mlsIsLoading } = useListings(
-    mlsBarrio?.id ?? null,
-    500,
-    0,
+  // Fetch venta + arriendo separately — ORDER BY pm2 ASC puts arriendo before venta,
+  // so a single unfiltered call of 500 returns ~498 arriendo and ~2 venta.
+  const { data: ventaData,    isLoading: ventaLoading    } = useListings(mlsBarrio?.id ?? null, 250, 0, "venta");
+  const { data: arrendoData,  isLoading: arrendoLoading  } = useListings(mlsBarrio?.id ?? null, 250, 0, "arriendo");
+  const mlsListings: ApiListing[] = useMemo(
+    () => [...(ventaData?.listings ?? []), ...(arrendoData?.listings ?? [])],
+    [ventaData, arrendoData],
   );
-  const mlsListings: ApiListing[] = mlsData?.listings ?? [];
-  const mlsTotal = mlsData?.total ?? 0;
-  const mlsRadio = mlsData?.radio_usado_metros ?? null;
-  const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
+  const mlsIsLoading = ventaLoading || arrendoLoading;
+  const mlsTotal = mlsListings.length;
+  const mlsRadio = ventaData?.radio_usado_metros ?? arrendoData?.radio_usado_metros ?? null;
+  const mlsBarriosIncluidos = ventaData?.barrios_incluidos ?? arrendoData?.barrios_incluidos ?? null;
 
   // Premium-expansion fetch — fires when premium filter is active to find nearby premium
   const [premiumExpand, setPremiumExpand] = useState(false);
@@ -164,18 +168,25 @@ function MapPage() {
     }
   }
 
-  // Card click in MLSPanel → flyTo + highlight + popup
-  function handleListingSelect(listing: ApiListing) {
+  // Card click in MLSPanel → flyTo + highlight + panel at click pos
+  function handleListingSelect(listing: ApiListing, screenX: number, screenY: number) {
     setHighlightedListingId(listing.id ?? null);
+    setSelectedListing(listing);
+    setListingPanelPos({ x: screenX, y: screenY });
     if (listing.lat && listing.lon) {
       flyToListingRef.current?.(listing.lat, listing.lon);
-      triggerListingPopupRef.current?.(listing);
     }
   }
 
-  // Point click on map → highlight card in panel
-  function handleListingClickFromMap(id: number) {
+  // Point click on map → highlight card + show ListingPanel at click pos
+  function handleListingClickFromMap(id: number, screenX: number, screenY: number) {
     setHighlightedListingId(id);
+    // Use full mlsListings (not filtered mapListings) so venta listings work when arriendo tab is active
+    const listing = mlsListings.find((l) => l.id === id);
+    if (listing) {
+      setSelectedListing(listing);
+      setListingPanelPos({ x: screenX, y: screenY });
+    }
   }
 
   // MLSPanel reports which listings pass its filters → update map GeoJSON
@@ -204,7 +215,6 @@ function MapPage() {
         flyToListingRef={flyToListingRef}
         onListingClickFromMap={handleListingClickFromMap}
         activeBarrioName={activeBarrioInComune}
-        triggerListingPopupRef={triggerListingPopupRef}
       />
 
       {/* Gradiente superior */}
@@ -236,6 +246,16 @@ function MapPage() {
           <FloatingPanel selected={selected} onClear={() => setSelected(null)} onSelect={setSelected} onGoToMLS={handleGoToMLS} />
           <OpportunitiesPanel onSelect={setSelected} perfil={perfil} mostrarOportunidades={mostrarOportunidades} />
         </>
+      )}
+
+      {/* Panel de listing seleccionado */}
+      {selectedListing && (
+        <ListingPanel
+          listing={selectedListing}
+          barrio={barriosRaw?.find((b) => b.barrio_id === selectedListing.barrio_id) ?? null}
+          initialPos={listingPanelPos ?? undefined}
+          onClose={() => { setSelectedListing(null); setListingPanelPos(null); }}
+        />
       )}
 
       {/* Vista 2: panel de listings */}

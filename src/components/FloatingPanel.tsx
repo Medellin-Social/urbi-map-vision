@@ -219,6 +219,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
 
   // ---- Mobile bottom sheet ----
   if (isMobile) {
+    if (!selected) return null;
     return (
       <AnimatePresence>
         <motion.div
@@ -246,6 +247,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
     <div className="pointer-events-none absolute inset-0 z-20">
       <AnimatePresence mode="wait">
         {minimized ? (
+          selected ? (
           <motion.button
             key="min"
             initial={{ opacity: 0, x: 20 }}
@@ -259,6 +261,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
               Panel
             </span>
           </motion.button>
+          ) : null
         ) : (
           <motion.div
             key="panel"
@@ -699,6 +702,23 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
         </div>
       </div>
 
+      <div className="flex gap-2">
+        {onGoToMLS && (
+          <button
+            onClick={() => onGoToMLS(n)}
+            className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+          >
+            🏠 Ver listings en el mapa
+          </button>
+        )}
+        <Link
+          to="/comunidad"
+          className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
+        >
+          💬 Ir a comunidad
+        </Link>
+      </div>
+
       <div className="grid grid-cols-2 gap-2">
         <Metric label="Precio m² (venta)" value={formatCOP(n.precio_m2)} />
         <Metric label="Arriendo prom." value={`${formatCOP(n.arriendo)}/mes`} />
@@ -795,34 +815,9 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
           <Calculator className="h-3.5 w-3.5" />
           Simular inversión aquí <ArrowRight className="h-3 w-3" />
         </Link>
-        {onGoToMLS && (
-          <button
-            onClick={() => onGoToMLS(n)}
-            className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-emerald-500/40 bg-emerald-500/10 py-2.5 text-xs font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
-          >
-            🏠 Ver inversiones en el mapa
-          </button>
-        )}
       </div>
 
       <CatastroSection n={n} />
-
-      <Section title="Listings destacados">
-        {listingsLoading && apiListings.length === 0 && (
-          <div className="mb-2 h-1 w-full animate-pulse rounded-full bg-primary/20" />
-        )}
-        <div className="space-y-2">
-          {listings.map((l) => (
-            <ListingCard key={l.id} l={l} />
-          ))}
-        </div>
-        <button
-          onClick={onListings}
-          className="mt-3 inline-flex w-full items-center justify-center gap-1 rounded-md border border-primary/50 bg-primary/10 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20"
-        >
-          Ver todos los listings <ArrowRight className="h-3 w-3" />
-        </button>
-      </Section>
     </div>
   );
 }

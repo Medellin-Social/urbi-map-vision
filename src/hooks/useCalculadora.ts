@@ -7,6 +7,13 @@ export type SimulacionRequest = {
   presupuesto_cop: number;
   tipo_inversion: "airbnb" | "renta_larga" | "renta_media";
   perfil_riesgo?: "conservador" | "moderado" | "agresivo";
+  // Extended profile fields
+  n_unidades?: string;
+  tipo_gestion?: string;
+  target_inquilino?: string;
+  amoblado?: string;
+  tipo_pago?: string;
+  horizonte_inversion?: string;
 };
 
 export type SimulacionResponse = {
@@ -24,8 +31,6 @@ export type SimulacionResponse = {
   yields: {
     bruto_pct: number;
     neto_pct: number;
-    vs_cdt: number;
-    mensaje_cdt: string;
   };
   recupero: {
     bruto_anos: number;
@@ -33,6 +38,7 @@ export type SimulacionResponse = {
   };
   valorizacion: {
     tasa_anual_pct: number;
+    fuente_tasa: string;
     valor_3anos_cop: number;
     valor_5anos_cop: number;
     ganancia_5anos_cop: number;
@@ -43,6 +49,22 @@ export type SimulacionResponse = {
   estado_precio: string | null;
   resumen: string;
   alertas: string[];
+  datos_insuficientes: boolean;
+  // Profile desglose (optional)
+  ingreso_bruto_mensual?: number | null;
+  costo_gestion_mensual?: number | null;
+  ingreso_neto_gestion_mensual?: number | null;
+  n_unidades_efectivo?: number | null;
+  down_payment_cop?: number | null;
+  monto_credito_cop?: number | null;
+  cuota_mensual?: number | null;
+  flujo_neto_mensual?: number | null;
+  yield_coc_pct?: number | null;
+  recupero_credito_anos?: number | null;
+  nota_hipoteca?: string | null;
+  costo_amoblado?: number | null;
+  presupuesto_efectivo?: number | null;
+  valor_20anos_cop?: number | null;
 };
 
 export function useSimular() {

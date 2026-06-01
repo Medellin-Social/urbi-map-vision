@@ -1,4 +1,4 @@
-import { createFileRoute, redirect, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -23,6 +23,7 @@ import {
 import { z } from "zod";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP, formatPct } from "@/lib/format";
+import { auth } from "@/lib/auth";
 import { useBarrios } from "@/hooks/useBarrios";
 import { useSimular, type SimulacionResponse } from "@/hooks/useCalculadora";
 
@@ -47,10 +48,31 @@ export const Route = createFileRoute("/calculadora")({
 });
 
 type Tipo = "airbnb" | "larga" | "media";
-type Horizonte = 3 | 5 | 10;
+type Horizonte = 3 | 5 | 10 | 20;
+
+type PerfilExtra = {
+  n_unidades?: string;
+  tipo_gestion?: string;
+  target_inquilino?: string;
+  amoblado?: string;
+  tipo_pago?: string;
+  horizonte_inversion?: string;
+};
+
+const PRESUPUESTO_FROM_BUDGET: Record<string, number> = {
+  "<200": 150,
+  "200-500": 350,
+  "500-1000": 750,
+  ">1000": 1200,
+};
+
+const GOAL_TO_TIPO: Record<string, Tipo> = {
+  airbnb: "airbnb",
+  mediano_plazo: "media",
+  "renta-larga": "larga",
+};
 
 const USD_RATE = 4100;
-const CDT_YIELD = 10.5;
 
 const TIPO_OPTIONS: { id: Tipo; emoji: string; label: string; sub: string }[] = [
   { id: "airbnb", emoji: "🏖️", label: "Airbnb", sub: "Short-term rental" },
@@ -87,8 +109,11 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
     { label: "Año 3", valor: r.valorizacion.valor_3anos_cop, rentaAcum: Math.round(rentaAnualNeta * 3) },
     { label: "Año 5", valor: r.valorizacion.valor_5anos_cop, rentaAcum: Math.round(rentaAnualNeta * 5) },
   ];
-  if (horizonte === 10) {
+  if (horizonte >= 10) {
     puntos.push({ label: "Año 10", valor: Math.round(inicial * Math.pow(1 + tasa, 10)), rentaAcum: Math.round(rentaAnualNeta * 10) });
+  }
+  if (horizonte === 20) {
+    puntos.push({ label: "Año 20", valor: r.valor_20anos_cop ?? Math.round(inicial * Math.pow(1 + tasa, 20)), rentaAcum: Math.round(rentaAnualNeta * 20) });
   }
   const vals = puntos.map((p) => p.valor);
   const minVal = Math.min(...vals);
@@ -141,6 +166,14 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
                       <span className="text-[10px] text-muted-foreground">ROI total</span>
                       <span className="text-[12px] font-bold text-primary">+{roiPct}%</span>
                     </div>
+                    {r.down_payment_cop != null && apreciacion > 0 && (
+                      <div className="mt-1 flex justify-between items-center border-t border-primary/20 pt-1">
+                        <span className="text-[10px] text-primary/70">Apreciación / entrada</span>
+                        <span className="text-[12px] font-bold text-accent">
+                          +{Math.round((apreciacion / r.down_payment_cop) * 100)}%
+                        </span>
+                      </div>
+                    )}
                   </div>
                 );
               }}
@@ -165,6 +198,25 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
           </span>
         </span>
       </div>
+      {r.down_payment_cop != null && r.down_payment_cop > 0 && (
+        <div className="mt-1.5 flex items-start gap-1 rounded-md border border-primary/20 bg-primary/5 px-2.5 py-2 text-[11px]">
+          <TrendingUp className="h-3 w-3 mt-0.5 shrink-0 text-primary" />
+          <span>
+            <span className="text-muted-foreground">
+              Tu entrada de{" "}
+              <span className="font-semibold text-foreground">{formatCOP(r.down_payment_cop)}</span>{" "}
+              controla un inmueble que aprecia{" "}
+              <span className="font-semibold text-foreground">
+                {formatCOP(r.valorizacion.ganancia_5anos_cop)}
+              </span>{" "}
+              en 5 años —{" "}
+            </span>
+            <span className="font-bold text-primary">
+              +{Math.round((r.valorizacion.ganancia_5anos_cop / r.down_payment_cop) * 100)}% sobre tu entrada
+            </span>
+          </span>
+        </div>
+      )}
     </Card>
   );
 }
@@ -190,6 +242,31 @@ function CalculadoraPage() {
   const [presupuestoStr, setPresupuestoStr] = useState<string>("350");
   const [tipo, setTipo] = useState<Tipo>("airbnb");
   const [horizonte, setHorizonte] = useState<Horizonte>(5);
+  const [perfilExtra, setPerfilExtra] = useState<PerfilExtra>({});
+
+  // Load profile from localStorage once on mount
+  useEffect(() => {
+    const u = auth.get();
+    if (!u) return;
+    if (u.goal && GOAL_TO_TIPO[u.goal]) setTipo(GOAL_TO_TIPO[u.goal]);
+    if (u.budget && PRESUPUESTO_FROM_BUDGET[u.budget]) {
+      const p = PRESUPUESTO_FROM_BUDGET[u.budget];
+      setPresupuesto(p);
+      setPresupuestoStr(String(p));
+    }
+    const hz = u.horizonteInversion ?? "";
+    if (hz.includes("20")) setHorizonte(20);
+    else if (hz.includes("10")) setHorizonte(10);
+    else if (hz.includes("5")) setHorizonte(5);
+    setPerfilExtra({
+      n_unidades: u.nUnidades,
+      tipo_gestion: u.tipoGestion,
+      target_inquilino: u.targetInquilino,
+      amoblado: u.amoblado,
+      tipo_pago: u.tipoPago,
+      horizonte_inversion: u.horizonteInversion,
+    });
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const { mutate, isPending, isError, error, data: simResult, reset } = useSimular();
 
@@ -199,6 +276,7 @@ function CalculadoraPage() {
       presupuesto_cop: presupuesto * 1_000_000,
       tipo_inversion: tipoToApi(tipo),
       perfil_riesgo: "moderado",
+      ...perfilExtra,
     });
   };
 
@@ -227,6 +305,17 @@ function CalculadoraPage() {
                 Resultados basados en datos reales del mercado
               </p>
             </div>
+
+            {/* Profile badge */}
+            {buildPerfilBadge(tipo, perfilExtra) && (
+              <div className="mb-4 flex items-center justify-between rounded-lg border border-primary/20 bg-primary/5 px-3 py-2">
+                <div>
+                  <div className="text-[10px] uppercase tracking-widest text-muted-foreground">Perfil activo</div>
+                  <div className="mt-0.5 text-xs text-foreground">{buildPerfilBadge(tipo, perfilExtra)}</div>
+                </div>
+                <Link to="/perfil" className="text-[10px] text-primary hover:underline">Cambiar</Link>
+              </div>
+            )}
 
             {/* Barrio */}
             <Field label="Zona / Barrio">
@@ -344,7 +433,7 @@ function CalculadoraPage() {
             {/* Horizonte */}
             <Field label="Horizonte">
               <div className="inline-flex w-full rounded-md border border-border p-0.5">
-                {([3, 5, 10] as const).map((h) => (
+                {([3, 5, 10, 20] as const).map((h) => (
                   <button
                     key={h}
                     onClick={() => setHorizonte(h)}
@@ -468,21 +557,22 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
           delay={0.1}
         />
         <BigMetric
-          label="Yield neto"
+          label="Yield neto / año"
           value={formatPct(r.yields.neto_pct)}
           sub={
             <span className="block space-y-0.5">
-              <span className="block">Después de descontar:</span>
-              <span className="block">· 8% costos operativos (vacancia + mantenimiento)</span>
-              <span className="block">· 2.7% predial + adm. + seguros</span>
+              {{
+                airbnb:      <span className="block">−38% opex (plataforma + limpieza + vacancia + suministros)</span>,
+                renta_larga: <span className="block">−28% opex (admin edificio + predial + seguros + mant. + vacancia)</span>,
+                renta_media: <span className="block">−22% opex (admin + predial + seguros + mant. + vacancia)</span>,
+              }[r.tipo_inversion] ?? <span className="block">Después de descontar costos operativos</span>}
               <span className="mt-1 block font-medium text-foreground/70">
-                Ingreso real mensual:{" "}
+                Ingreso neto mensual:{" "}
                 {formatCOP(Math.round((r.presupuesto_cop * r.yields.neto_pct) / 100 / 12))}
               </span>
             </span>
           }
           delay={0.15}
-          accent={r.yields.neto_pct >= CDT_YIELD ? "success" : "warning"}
         />
         <BigMetric
           label="Área estim."
@@ -492,8 +582,8 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
         />
         <BigMetric
           label="Recupero"
-          value={`${r.recupero.neto_anos.toFixed(1)} años`}
-          sub="neto"
+          value={r.recupero.neto_anos < 50 ? `${r.recupero.neto_anos.toFixed(1)} años` : "> 50 años"}
+          sub={r.recupero.neto_anos < 50 ? "neto / año" : "yield bajo para recuperar"}
           delay={0.25}
         />
       </div>
@@ -530,6 +620,9 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
           <p className="mt-1 text-xs leading-relaxed text-foreground/90">{r.resumen}</p>
         </motion.div>
       )}
+
+      {/* Profile desglose */}
+      <PerfilDesgloseCard r={r} />
 
       {/* Row 5 - Alertas */}
       {r.alertas.length > 0 && (
@@ -569,6 +662,132 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
       </div>
     </motion.div>
   );
+}
+
+/* ---------- Profile desglose ---------- */
+
+function PerfilDesgloseCard({ r }: { r: SimulacionResponse }) {
+  if (r.ingreso_bruto_mensual != null && r.costo_gestion_mensual != null && r.ingreso_neto_gestion_mensual != null) {
+    return (
+      <Card>
+        <CardTitle>Desglose gestión</CardTitle>
+        <div className="mt-2 space-y-1.5 text-xs">
+          {r.n_unidades_efectivo != null && r.n_unidades_efectivo > 1 && (
+            <div className="mb-2 text-[11px] font-semibold text-primary">
+              Simulación para {r.n_unidades_efectivo} unidades
+            </div>
+          )}
+          <RowItem label="Ingreso bruto Airbnb" value={formatCOP(r.ingreso_bruto_mensual) + "/mes"} />
+          <RowItem label="Costo gestión (−25%)" value={`−${formatCOP(r.costo_gestion_mensual)}/mes`} />
+          <div className="border-t border-border/60 pt-1.5">
+            <RowItem label="Ingreso neto" value={formatCOP(r.ingreso_neto_gestion_mensual) + "/mes"} bold />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  if (r.cuota_mensual != null && r.flujo_neto_mensual != null) {
+    const positive = r.flujo_neto_mensual >= 0;
+    return (
+      <Card>
+        <CardTitle>Análisis crédito hipotecario · 70% LTV</CardTitle>
+        <div className="mt-2 space-y-1.5 text-xs">
+          {/* Estructura de capital */}
+          {r.down_payment_cop != null && r.monto_credito_cop != null && (
+            <div className="mb-2.5 rounded-md border border-border/60 bg-background/40 px-3 py-2 space-y-1">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Estructura de capital</div>
+              <RowItem label="Entrada (30%)" value={formatCOP(r.down_payment_cop)} />
+              <RowItem label="Crédito banco (70%)" value={formatCOP(r.monto_credito_cop)} />
+            </div>
+          )}
+          {/* Flujo mensual */}
+          <RowItem label="Arriendo neto (−10%)" value={formatCOP(Math.round(r.ingresos.mensual_cop * 0.9)) + "/mes"} />
+          <RowItem label="Cuota hipoteca (est.)" value={`−${formatCOP(r.cuota_mensual)}/mes`} />
+          <div className="border-t border-border/60 pt-1.5">
+            <RowItem
+              label="Flujo neto mensual"
+              value={`${positive ? "+" : ""}${formatCOP(r.flujo_neto_mensual)}/mes`}
+              bold
+            />
+          </div>
+          <div className={`rounded-md px-3 py-2 text-[11px] ${positive ? "bg-success/10 text-success" : "bg-warning/10 text-warning"}`}>
+            {positive
+              ? `✅ Flujo positivo: +${formatCOP(r.flujo_neto_mensual)}/mes sobre la cuota`
+              : `⚠️ Flujo negativo: necesitas aportar ${formatCOP(Math.abs(r.flujo_neto_mensual))}/mes`}
+          </div>
+          {/* Retorno sobre capital propio */}
+          {r.yield_coc_pct != null && r.recupero_credito_anos != null && (
+            <div className="mt-1 rounded-md border border-primary/20 bg-primary/5 px-3 py-2 space-y-1">
+              <div className="text-[10px] font-semibold uppercase tracking-widest text-muted-foreground mb-1">Sobre capital propio (entrada)</div>
+              <RowItem
+                label="Cash-on-cash yield"
+                value={`${r.yield_coc_pct.toFixed(1)}%/año`}
+                bold={r.yield_coc_pct > 0}
+              />
+              {r.yield_coc_pct > 0 && (
+                <RowItem
+                  label="Recupero entrada"
+                  value={r.recupero_credito_anos < 100 ? `${r.recupero_credito_anos.toFixed(1)} años` : "N/A"}
+                />
+              )}
+            </div>
+          )}
+          {r.nota_hipoteca && (
+            <div className="mt-1 flex items-start gap-1.5 text-[11px] text-muted-foreground">
+              <span className="shrink-0">ℹ️</span>
+              <span>{r.nota_hipoteca}</span>
+            </div>
+          )}
+        </div>
+      </Card>
+    );
+  }
+  if (r.costo_amoblado != null && r.presupuesto_efectivo != null) {
+    return (
+      <Card>
+        <CardTitle>Desglose presupuesto</CardTitle>
+        <div className="mt-2 space-y-1.5 text-xs">
+          <RowItem label="Presupuesto total" value={formatCOP(r.presupuesto_cop)} />
+          <RowItem label="Costo amoblado est." value={`−${formatCOP(r.costo_amoblado)}`} />
+          <div className="border-t border-border/60 pt-1.5">
+            <RowItem label="Presupuesto efectivo" value={formatCOP(r.presupuesto_efectivo)} bold />
+          </div>
+        </div>
+      </Card>
+    );
+  }
+  return null;
+}
+
+function buildPerfilBadge(tipo: Tipo, extra: PerfilExtra): string {
+  const parts: string[] = [];
+  if (tipo === "airbnb") {
+    const u = extra.n_unidades ?? "";
+    if (u.includes("2-5")) parts.push("3 unidades");
+    else if (u.includes("5+")) parts.push("6 unidades");
+    else if (u) parts.push("1 unidad");
+    const g = (extra.tipo_gestion ?? "").toLowerCase();
+    if (g.includes("manager")) parts.push("Con administrador");
+    else if (g.includes("self")) parts.push("Self-managed");
+  } else if (tipo === "media") {
+    const t = (extra.target_inquilino ?? "").toLowerCase();
+    if (t.includes("nomad")) parts.push("Nómadas");
+    else if (t.includes("student")) parts.push("Estudiantes");
+    else if (t.includes("exec") || t.includes("prof")) parts.push("Ejecutivos");
+    else if (t) parts.push("Flexible");
+    const a = (extra.amoblado ?? "").toLowerCase();
+    if (a.includes("furnished") || a.includes("fully")) parts.push("Amoblado");
+    else if (a.includes("unfurnished")) parts.push("Sin amueblar");
+  } else if (tipo === "larga") {
+    const p = (extra.tipo_pago ?? "").toLowerCase();
+    if (p.includes("mortgage") || p.includes("financing")) parts.push("Crédito hipotecario");
+    else if (p.includes("cash")) parts.push("Contado");
+    const h = extra.horizonte_inversion ?? "";
+    if (h.includes("20")) parts.push("20+ años");
+    else if (h.includes("10")) parts.push("10 años");
+    else if (h.includes("5")) parts.push("5 años");
+  }
+  return parts.join(" · ");
 }
 
 /* ---------- Helpers / UI ---------- */

@@ -6,15 +6,38 @@ from typing import Literal, Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from api.config import USD_TO_COP
+from api import parametros
 from api.db import get_pool
 from api.dependencies import get_optional_user
 
 router = APIRouter()
 
-_TCA_USD = USD_TO_COP
-_CDT_PCT = 10.5      # % anual CDT Colombia
+_NOTA_HIPOTECA = (
+    "Tasa referencial 14% EA. "
+    "Consulta con tu banco — puede variar según perfil crediticio y entidad."
+)
 
+# Loan-to-value estándar Colombia (Ley 546 / reglamentación Superfinanciera).
+# Bancos financian hasta 70% para vivienda NO VIS; comprador aporta mínimo 30%.
+_LTV = 0.70
+
+# Opex como % del ingreso bruto anual (no del valor del inmueble — evita absurdos de escala).
+# Incluye todo: predial proporcional, admin edificio, seguros, mantenimiento, vacancia.
+_OPEX: dict[str, float] = {
+    "airbnb":      0.38,  # comisión plataforma 3% + limpieza 5% + vacancia estacional 20% + suministros 10%
+    "renta_media": 0.22,  # vacancia baja + admin parcial + predial + seguros + mant. variable
+    "renta_larga": 0.28,  # admin edificio ~12% + predial ~5% + seguros ~2% + mant. ~4% + vacancia ~5%
+}
+
+# Etiqueta legible por tipo para mostrar en alertas/resumen
+_OPEX_LABEL: dict[str, str] = {
+    "airbnb":      "38% (plataforma + limpieza + vacancia + suministros)",
+    "renta_media": "22% (admin + predial + seguros + mant. + vacancia)",
+    "renta_larga": "28% (admin edificio + predial + seguros + mant. + vacancia)",
+}
+
+# LEFT JOIN barrios_airbnb_real to prefer real observed income over projected ADR×ocupacion.
+# LEFT JOIN LATERAL ipvn_dane to get the latest DANE appreciation rate as var_anual fallback.
 _SQL = """
     SELECT
         sc.nombre_barrio,
@@ -29,10 +52,20 @@ _SQL = """
         bm.precio_renta_media_p50,
         bm.n_venta,
         bm.zona_turistica,
-        sl.var_anual_5anos_pct
+        sl.var_anual_5anos_pct,
+        bar.ingresos_anuales_p50_cop   AS ingreso_anual_airbnb_real_cop,
+        ipvn.variacion_anual           AS ipvn_variacion_anual
     FROM analytics.barrios_score_consolidado sc
-    JOIN  analytics.barrios_mercado    bm ON sc.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.score_largo_plazo sl ON sc.barrio_id = sl.barrio_id
+    JOIN  analytics.barrios_mercado          bm   ON sc.barrio_id = bm.barrio_id
+    LEFT JOIN analytics.score_largo_plazo    sl   ON sc.barrio_id = sl.barrio_id
+    LEFT JOIN analytics.barrios_airbnb_real  bar  ON sc.barrio_id = bar.barrio_id
+    LEFT JOIN LATERAL (
+        SELECT variacion_anual
+        FROM raw.ipvn_dane
+        WHERE año = (SELECT MAX(año) FROM raw.ipvn_dane)
+        ORDER BY periodo DESC
+        LIMIT 1
+    ) ipvn ON TRUE
     WHERE sc.barrio_id = $1
 """
 
@@ -44,6 +77,13 @@ class SimulacionRequest(BaseModel):
     presupuesto_cop: float = Field(gt=0)
     tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"]
     perfil_riesgo: Literal["conservador", "moderado", "agresivo"] = "moderado"
+    # Extended profile fields (all optional)
+    n_unidades: Optional[str] = None
+    tipo_gestion: Optional[str] = None
+    target_inquilino: Optional[str] = None
+    amoblado: Optional[str] = None
+    tipo_pago: Optional[str] = None
+    horizonte_inversion: Optional[str] = None
 
 
 class Ingresos(BaseModel):
@@ -56,8 +96,6 @@ class Ingresos(BaseModel):
 class Yields(BaseModel):
     bruto_pct: float
     neto_pct: float
-    vs_cdt: float
-    mensaje_cdt: str
 
 
 class Recupero(BaseModel):
@@ -80,6 +118,7 @@ class YieldsCorregidos(BaseModel):
 
 class Valorizacion(BaseModel):
     tasa_anual_pct: float
+    fuente_tasa: str
     valor_3anos_cop: float
     valor_5anos_cop: float
     ganancia_5anos_cop: float
@@ -107,6 +146,24 @@ class SimulacionResponse(BaseModel):
 
     resumen: str
     alertas: list[str]
+    datos_insuficientes: bool = False
+
+    # Profile desglose (optional — only present when profile fields sent)
+    ingreso_bruto_mensual: Optional[float] = None
+    costo_gestion_mensual: Optional[float] = None
+    ingreso_neto_gestion_mensual: Optional[float] = None
+    n_unidades_efectivo: Optional[int] = None
+    # Crédito hipotecario
+    down_payment_cop: Optional[float] = None
+    monto_credito_cop: Optional[float] = None
+    cuota_mensual: Optional[float] = None
+    flujo_neto_mensual: Optional[float] = None
+    yield_coc_pct: Optional[float] = None       # cash-on-cash sobre capital propio
+    recupero_credito_anos: Optional[float] = None  # recupero sobre capital propio
+    nota_hipoteca: Optional[str] = None
+    costo_amoblado: Optional[float] = None
+    presupuesto_efectivo: Optional[float] = None
+    valor_20anos_cop: Optional[float] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -125,34 +182,69 @@ def _rating(score: int) -> str:
     return "NO RECOMENDADA"
 
 
-def _cdt_diff(yield_neto: float) -> tuple[float, str]:
-    diff = round(yield_neto - _CDT_PCT, 1)
-    if diff >= 0:
-        msg = f"Tu inversión supera un CDT en {diff}%"
-    else:
-        msg = f"Un CDT daría {abs(diff)}% más — considera el potencial de valorización"
-    return diff, msg
+def _resolve_var_anual(data: dict, alertas: list[str]) -> tuple[float, str]:
+    """
+    Cascade: score_largo_plazo → raw.ipvn_dane → raw.parametros_sistema → 10.1
+    Returns (var_anual, fuente_label).
+    """
+    # 1) Barrio-specific 5-year IPVN estimate (from score_largo_plazo)
+    v = data.get("var_anual_5anos_pct")
+    if v is not None:
+        return float(v), "IPVN estrato"
+
+    # 2) Latest DANE national figure (joined from raw.ipvn_dane)
+    ipvn = data.get("ipvn_variacion_anual")
+    if ipvn is not None:
+        return float(ipvn), "IPVN DANE (nacional)"
+
+    # 3) Stored parameter (daily-updated from raw.ipvn_dane via DAG)
+    stored = parametros.get("VAR_ANUAL_DANE")
+    if stored != 10.1:
+        alertas.append(
+            "Valorización basada en dato DANE almacenado — sin IPVN específico para este barrio"
+        )
+        return stored, "DANE almacenado"
+
+    # 4) Hardcoded fallback
+    alertas.append(
+        "Tasa de valorización estimada (10.1%) — sin datos IPVN para este barrio"
+    )
+    return 10.1, "estimado"
 
 
 def calcular(
     presupuesto: float,
     tipo: str,
     data: dict,
-) -> tuple[float, float, float, list[str]]:
+    alertas: list[str],
+) -> tuple[float, float]:
     """
-    Devuelve (ingreso_mensual, score_val, var_anual, alertas).
+    Devuelve (ingreso_mensual, score_val).
     Raises ValueError si faltan datos críticos.
+    Appends data-quality alertas in place.
     """
-    alertas: list[str] = []
-
     if tipo == "airbnb":
+        ingreso_anual_real = data.get("ingreso_anual_airbnb_real_cop")
         adr = float(data.get("adr_noche_cop") or 0)
         ocupacion = float(data.get("ocupacion_airbnb_pct") or 0)
-        if not adr or not ocupacion:
-            raise ValueError("Sin datos Airbnb para este barrio")
-        ingreso_mensual = adr * (ocupacion / 100.0) * 30
+
+        if ingreso_anual_real:
+            # Prefer real scraped Airbnb income over ADR×ocupacion projection
+            ingreso_mensual = float(ingreso_anual_real) / 12
+            alertas.append("Ingreso Airbnb basado en datos reales del barrio (mediana P50)")
+        elif adr and ocupacion:
+            ingreso_mensual = adr * (ocupacion / 100.0) * 30
+        else:
+            raise ValueError(
+                "Este barrio no tiene datos Airbnb suficientes (sin ADR ni ingresos reales). "
+                "Prueba con renta_larga o elige un barrio con actividad turística "
+                "(Poblado, Laureles, Envigado)."
+            )
+
         if data.get("zona_turistica") is False:
-            alertas.append("Barrio no clasificado como zona turística — demanda Airbnb puede ser menor")
+            alertas.append(
+                "Barrio no clasificado como zona turística — demanda Airbnb puede ser menor"
+            )
         alertas.append("Considera gestión profesional para Airbnb")
         score_val = float(data.get("score_corto") or 0)
 
@@ -170,16 +262,14 @@ def calcular(
             ingreso_mensual = float(renta_media)
         elif arriendo:
             ingreso_mensual = float(arriendo) * 1.4
-            alertas.append("Precio renta media estimado — sin datos directos, se usó arriendo × 1.4")
+            alertas.append(
+                "Precio renta media estimado — sin datos directos, se usó arriendo × 1.4"
+            )
         else:
             raise ValueError("Sin datos de renta para este barrio")
         score_val = float(data.get("score_mediano") or 0)
 
-    var_anual = float(data.get("var_anual_5anos_pct") or 10.1)
-    if data.get("var_anual_5anos_pct") is None:
-        alertas.append("Tasa de valorización estimada — sin datos IPVN para este estrato")
-
-    return ingreso_mensual, score_val, var_anual, alertas
+    return ingreso_mensual, score_val
 
 
 # ── Endpoint ──────────────────────────────────────────────────────────────────
@@ -201,28 +291,119 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
             detail="Este barrio no tiene suficientes datos de precio para simular. Prueba con El Poblado, Laureles o Estadio.",
         )
 
+    # Fix #4: flag before simulation, not after
+    datos_insuficientes = (data.get("n_venta") or 0) < 5
+    if datos_insuficientes:
+        alertas.insert(0, (
+            "⚠️ DATOS INSUFICIENTES — menos de 5 transacciones de venta registradas en este barrio. "
+            "Los precios son poco representativos; usa los resultados como referencia aproximada."
+        ))
+
     try:
-        ingreso_mensual, score_val, var_anual, extra_alertas = calcular(
-            req.presupuesto_cop, req.tipo_inversion, data
+        ingreso_mensual, score_val = calcular(
+            req.presupuesto_cop, req.tipo_inversion, data, alertas
         )
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc))
 
-    alertas.extend(extra_alertas)
+    var_anual, fuente_tasa = _resolve_var_anual(data, alertas)
 
     presupuesto = req.presupuesto_cop
     area_m2 = round(presupuesto / precio_m2, 1)
     ingreso_mensual = round(ingreso_mensual)
+
+    # Financial params from DB (not hardcoded)
+    tca = parametros.get("USD_TO_COP")
+
+    # ── Profile-specific adjustments ─────────────────────────────────────────
+    ingreso_bruto_mensual: Optional[float] = None
+    costo_gestion_mensual: Optional[float] = None
+    ingreso_neto_gestion_mensual: Optional[float] = None
+    n_unidades_efectivo: Optional[int] = None
+    down_payment_val: Optional[float] = None
+    monto_credito_val: Optional[float] = None
+    cuota_mensual_val: Optional[float] = None
+    flujo_neto_mensual_val: Optional[float] = None
+    yield_coc_val: Optional[float] = None
+    recupero_credito_val: Optional[float] = None
+    nota_hipoteca_val: Optional[str] = None
+    costo_amoblado_val: Optional[float] = None
+    presupuesto_efectivo_val: Optional[float] = None
+
+    if req.tipo_inversion == "airbnb":
+        n_raw = (req.n_unidades or "").lower()
+        mult = 3 if "2-5" in n_raw else (6 if "5+" in n_raw else 1)
+        if mult > 1:
+            n_unidades_efectivo = mult
+            ingreso_mensual = round(ingreso_mensual * mult)
+            alertas.append(f"Simulación para {mult} unidades")
+        gestion_raw = (req.tipo_gestion or "").lower()
+        if "manager" in gestion_raw:
+            ingreso_bruto_mensual = float(ingreso_mensual)
+            costo_gestion_mensual = round(ingreso_mensual * 0.25)
+            ingreso_neto_gestion_mensual = round(ingreso_mensual * 0.75)
+            ingreso_mensual = ingreso_neto_gestion_mensual
+
+    elif req.tipo_inversion == "renta_media":
+        amoblado_raw = (req.amoblado or "").lower()
+        if "furnished" in amoblado_raw or "fully" in amoblado_raw:
+            costo_amoblado_val = round(area_m2 * 200_000)
+            presupuesto_efectivo_val = round(presupuesto - costo_amoblado_val)
+            alertas.append(
+                f"Presupuesto para amoblar: ${costo_amoblado_val / 1_000_000:.1f}M COP (~$200k/m²)"
+            )
+
+    elif req.tipo_inversion == "renta_larga":
+        pago_raw = (req.tipo_pago or "").lower()
+        if "mortgage" in pago_raw or "financing" in pago_raw:
+            horizonte_raw = (req.horizonte_inversion or "").lower()
+            plazo_meses = (
+                240 if "20" in horizonte_raw
+                else (60 if ("5" in horizonte_raw and "10" not in horizonte_raw) else 120)
+            )
+            # Colombia estándar: banco financia _LTV (70%), comprador aporta (1-_LTV) (30%)
+            down_payment_val = round(presupuesto * (1 - _LTV))
+            monto_credito_val = round(presupuesto * _LTV)
+            tasa_mensual = 0.012  # 1.2%/mes ≈ 14.4% EA referencial
+            cuota = monto_credito_val * tasa_mensual / (1 - (1 + tasa_mensual) ** -plazo_meses)
+            cuota_mensual_val = round(cuota)
+            # Flujo usa arriendo neto (−10% vacancia/admin) para ser conservador
+            arriendo_neto_mensual = round(ingreso_mensual * 0.90)
+            flujo_neto_mensual_val = arriendo_neto_mensual - cuota_mensual_val
+            # Cash-on-cash: retorno anual sobre el capital propio aportado
+            if flujo_neto_mensual_val > 0 and down_payment_val > 0:
+                yield_coc_val = _r2((flujo_neto_mensual_val * 12) / down_payment_val * 100)
+                recupero_credito_val = _r2(down_payment_val / (flujo_neto_mensual_val * 12))
+            else:
+                yield_coc_val = _r2(0.0)
+                recupero_credito_val = 999.0
+            nota_hipoteca_val = _NOTA_HIPOTECA
+            alertas.append(
+                f"Estructura: 30% entrada ({down_payment_val / 1_000_000:.0f}M COP) "
+                f"+ 70% crédito hipotecario ({monto_credito_val / 1_000_000:.0f}M COP)"
+            )
+            msg = (
+                f"Flujo neto con crédito: +${flujo_neto_mensual_val / 1_000_000:.2f}M/mes"
+                if flujo_neto_mensual_val >= 0
+                else f"Flujo negativo con crédito: necesitas aportar ${abs(flujo_neto_mensual_val) / 1_000_000:.2f}M/mes"
+            )
+            alertas.append(msg)
+    # ─────────────────────────────────────────────────────────────────────────
+
     ingreso_anual = ingreso_mensual * 12
 
     yield_bruto = _r2(ingreso_anual / presupuesto * 100)
-    ingreso_neto_anual = ingreso_anual * 0.92 - presupuesto * 0.027
+    opex_rate = _OPEX[req.tipo_inversion]
+    ingreso_neto_anual = ingreso_anual * (1 - opex_rate)
     yield_neto = _r2(ingreso_neto_anual / presupuesto * 100)
-    diff_cdt, msg_cdt = _cdt_diff(yield_neto)
 
     # Corrección inmobiliaria: -3% precio venta, -10% arriendo
     precio_real_m2 = round(precio_m2 * 0.97)
-    arriendo_neto = round(ingreso_mensual * 0.90) if req.tipo_inversion in ("renta_larga", "renta_media") else ingreso_mensual
+    arriendo_neto = (
+        round(ingreso_mensual * 0.90)
+        if req.tipo_inversion in ("renta_larga", "renta_media")
+        else ingreso_mensual
+    )
     yield_real = _r2(arriendo_neto * 12 / presupuesto * 100)
 
     recupero_bruto = _r2(presupuesto / ingreso_anual)
@@ -230,14 +411,12 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
 
     valor_3 = round(presupuesto * (1 + var_anual / 100) ** 3)
     valor_5 = round(presupuesto * (1 + var_anual / 100) ** 5)
+    valor_20 = round(presupuesto * (1 + var_anual / 100) ** 20)
     ganancia_5 = valor_5 - presupuesto
     retorno_total_5 = ganancia_5 + round(ingreso_neto_anual * 5)
 
     score_op = int(score_val)
     rating = _rating(score_op)
-
-    if (data.get("n_venta") or 0) < 5:
-        alertas.insert(0, "Muestra de datos limitada en este barrio")
 
     barrio_nombre = data.get("nombre_barrio") or f"Barrio {req.barrio_id}"
     tipo_label = {
@@ -257,9 +436,8 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
 
     if current_user:
         try:
-            _pool = get_pool()
             meta = json.dumps({"tipo_inversion": req.tipo_inversion, "presupuesto_cop": req.presupuesto_cop})
-            await _pool.execute(
+            await pool.execute(
                 "INSERT INTO historial (usuario_id, tipo, barrio_id, metadata) VALUES ($1, $2, $3, $4::jsonb)",
                 current_user["id"], "simulacion", req.barrio_id, meta,
             )
@@ -269,20 +447,18 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     return SimulacionResponse(
         barrio=barrio_nombre,
         presupuesto_cop=presupuesto,
-        presupuesto_usd=round(presupuesto / _TCA_USD),
+        presupuesto_usd=round(presupuesto / tca),
         area_comprable_m2=area_m2,
         tipo_inversion=req.tipo_inversion,
         ingresos=Ingresos(
             mensual_cop=float(ingreso_mensual),
             anual_cop=float(ingreso_anual),
-            mensual_usd=round(ingreso_mensual / _TCA_USD),
-            anual_usd=round(ingreso_anual / _TCA_USD),
+            mensual_usd=round(ingreso_mensual / tca),
+            anual_usd=round(ingreso_anual / tca),
         ),
         yields=Yields(
             bruto_pct=yield_bruto,
             neto_pct=yield_neto,
-            vs_cdt=diff_cdt,
-            mensaje_cdt=msg_cdt,
         ),
         recupero=Recupero(
             bruto_anos=recupero_bruto,
@@ -290,6 +466,7 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         ),
         valorizacion=Valorizacion(
             tasa_anual_pct=var_anual,
+            fuente_tasa=fuente_tasa,
             valor_3anos_cop=float(valor_3),
             valor_5anos_cop=float(valor_5),
             ganancia_5anos_cop=float(ganancia_5),
@@ -311,4 +488,19 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         ),
         resumen=resumen,
         alertas=alertas,
+        datos_insuficientes=datos_insuficientes,
+        ingreso_bruto_mensual=ingreso_bruto_mensual,
+        costo_gestion_mensual=float(costo_gestion_mensual) if costo_gestion_mensual is not None else None,
+        ingreso_neto_gestion_mensual=float(ingreso_neto_gestion_mensual) if ingreso_neto_gestion_mensual is not None else None,
+        n_unidades_efectivo=n_unidades_efectivo,
+        down_payment_cop=float(down_payment_val) if down_payment_val is not None else None,
+        monto_credito_cop=float(monto_credito_val) if monto_credito_val is not None else None,
+        cuota_mensual=float(cuota_mensual_val) if cuota_mensual_val is not None else None,
+        flujo_neto_mensual=float(flujo_neto_mensual_val) if flujo_neto_mensual_val is not None else None,
+        yield_coc_pct=float(yield_coc_val) if yield_coc_val is not None else None,
+        recupero_credito_anos=float(recupero_credito_val) if recupero_credito_val is not None else None,
+        nota_hipoteca=nota_hipoteca_val,
+        costo_amoblado=float(costo_amoblado_val) if costo_amoblado_val is not None else None,
+        presupuesto_efectivo=float(presupuesto_efectivo_val) if presupuesto_efectivo_val is not None else None,
+        valor_20anos_cop=float(valor_20),
     )

@@ -13,6 +13,7 @@ from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 
 from api.db import create_pool, close_pool, get_pool
+from api import parametros
 from api.limiter import limiter
 from api.routers import admin, auth, barrios, calculadora, favoritos, historial, listings, oportunidades, stats, usuario
 
@@ -68,6 +69,7 @@ async def _connect_with_retry() -> None:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await _connect_with_retry()
+    await parametros.load()
     try:
         pool = get_pool()
         await pool.execute(

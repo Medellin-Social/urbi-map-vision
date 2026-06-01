@@ -32,9 +32,8 @@ type Props = {
   mlsListings?: ApiListing[];
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
-  onListingClickFromMap?: (id: number) => void;
+  onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
   activeBarrioName?: string | null;
-  triggerListingPopupRef?: React.MutableRefObject<((listing: ApiListing) => void) | null>;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -197,7 +196,6 @@ export function MapView({
   flyToListingRef,
   onListingClickFromMap,
   activeBarrioName,
-  triggerListingPopupRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -205,7 +203,6 @@ export function MapView({
   const barriosRef = useRef<ApiBarrio[]>([]);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
-  const showListingPopupRef = useRef<((props: Record<string, unknown>, lngLat: mapboxgl.LngLat) => void) | null>(null);
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
 
   // Nivel de vista actual — ref para acceso dentro de closures de Mapbox
@@ -628,26 +625,6 @@ export function MapView({
         },
       });
 
-      // Listing popup — created once, reused on every click
-      const listingPopup = new mapboxgl.Popup({
-        closeButton: true,
-        closeOnClick: false,
-        maxWidth: "320px",
-        offset: 10,
-      });
-
-      const showListingPopup = (props: Record<string, unknown>, lngLat: mapboxgl.LngLat) => {
-        const barrio = barriosRef.current.find(
-          (b) => b.barrio_id === (props.barrio_id as number | null)
-        );
-        listingPopup
-          .setLngLat(lngLat)
-          .setHTML(buildListingPopupHTML(props, barrio, perfil))
-          .addTo(map);
-      };
-
-      showListingPopupRef.current = showListingPopup;
-
       // Click en cluster MLS → zoom in
       map.on("click", "listings-mls-clusters", (e) => {
         if (!e.features?.length) return;
@@ -659,13 +636,15 @@ export function MapView({
         );
       });
 
-      // Click en punto individual → popup + resaltar en panel
+      // Click en punto individual → resaltar en panel
       map.on("click", "listings-mls-unclustered", (e) => {
         if (!e.features?.length) return;
         const props = e.features[0].properties as Record<string, unknown>;
-        const coords = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
-        showListingPopup(props, new mapboxgl.LngLat(coords[0], coords[1]));
-        onListingClickFromMapRef.current?.(props.id as number);
+        onListingClickFromMapRef.current?.(
+          props.id as number,
+          e.originalEvent.clientX,
+          e.originalEvent.clientY,
+        );
       });
 
       map.on("mouseenter", "listings-mls-clusters",    () => { map.getCanvas().style.cursor = "pointer"; });
@@ -891,31 +870,6 @@ export function MapView({
     };
   });
 
-  // ── Exponer popup trigger al padre (para card click → popup en mapa) ─────────
-  useEffect(() => {
-    if (!triggerListingPopupRef) return;
-    triggerListingPopupRef.current = (listing: ApiListing) => {
-      if (!showListingPopupRef.current || !listing.lat || !listing.lon) return;
-      const props: Record<string, unknown> = {
-        id: listing.id,
-        tipo_op: listing.tipo_operacion ?? "venta",
-        tipo_inmueble: listing.tipo_inmueble ?? "",
-        precio_cop: listing.precio_cop ?? null,
-        precio_usd: listing.precio_usd ?? null,
-        precio_m2: listing.precio_m2 ?? null,
-        precio_m2_mediana_barrio: listing.precio_m2_mediana_barrio ?? null,
-        area_m2: listing.area_m2 ?? null,
-        habitaciones: listing.habitaciones ?? null,
-        banos: listing.banos ?? null,
-        url: listing.url ?? null,
-        fuente: listing.fuente ?? "",
-        barrio_nombre: listing.barrio_nombre ?? "",
-        barrio_id: listing.barrio_id ?? null,
-        pct_bajo_mediana: listing.pct_bajo_mediana ?? null,
-      };
-      showListingPopupRef.current(props, new mapboxgl.LngLat(listing.lon, listing.lat));
-    };
-  });
 
   // ── Markers de oportunidades ─────────────────────────────────────────────────
   function addOpportunityMarkers(map: MapboxMap) {

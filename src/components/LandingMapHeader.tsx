@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "@tanstack/react-router";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ArrowDown, X } from "lucide-react";
+import { BarrioChoiceModal } from "@/components/BarrioChoiceModal";
 
 // Urbi palette thresholds [70, 50, 30] — mirrors mapColors.ts
 function scoreToColor(score: number | null | undefined): string {
@@ -28,6 +29,7 @@ export function LandingMapHeader() {
   const hoveredIdRef = useRef<number | string | undefined>(undefined);
 
   const [clicked, setClicked] = useState<ClickedBarrio | null>(null);
+  const [showPaywall, setShowPaywall] = useState(false);
   const [tooltip, setTooltip] = useState<{ nombre: string; municipio: string; x: number; y: number } | null>(null);
 
   useEffect(() => {
@@ -335,16 +337,36 @@ export function LandingMapHeader() {
           </div>
         )}
 
-        {/* Click modal */}
-        {clicked && (
+        {/* Choice modal */}
+        {clicked && !showPaywall && (
+          <BarrioChoiceModal
+            barrio={clicked}
+            onClose={() => setClicked(null)}
+            onComunidad={() => {
+              const slug = clicked.nombre
+                .toLowerCase()
+                .normalize("NFD")
+                .replace(/[̀-ͯ]/g, "")
+                .replace(/\s+/g, "-");
+              window.location.href = `/comunidad?barrio=${slug}`;
+            }}
+            onInversiones={() => setShowPaywall(true)}
+          />
+        )}
+
+        {/* Paywall modal */}
+        {clicked && showPaywall && (
           <div
-            className="absolute inset-0 z-40 flex items-center justify-center bg-black/55 backdrop-blur-sm"
-            onClick={(e) => e.target === e.currentTarget && setClicked(null)}
+            className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+            onClick={() => { setClicked(null); setShowPaywall(false); }}
           >
-            <div className="relative mx-4 w-full max-w-sm rounded-2xl border border-white/20 bg-[#0d1117] p-6 shadow-2xl">
+            <div
+              className="relative mx-4 w-full max-w-sm rounded-2xl border border-white/20 bg-[#0d1117] p-6 shadow-2xl"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
                 className="absolute right-3 top-3 rounded-md p-1 text-white/40 transition hover:text-white"
-                onClick={() => setClicked(null)}
+                onClick={() => { setClicked(null); setShowPaywall(false); }}
                 aria-label="Close"
               >
                 <X className="h-4 w-4" />
@@ -354,31 +376,49 @@ export function LandingMapHeader() {
                 {clicked.municipio}
               </div>
               <h3 className="mt-1 font-display text-xl font-bold text-white">
-                {clicked.nombre}
+                {clicked.nombre
+                  .toLowerCase()
+                  .split(" ")
+                  .map((w) => w[0]?.toUpperCase() + w.slice(1))
+                  .join(" ")}
               </h3>
+              <p className="mt-1 text-sm text-white/50">Datos de inversión completos</p>
 
-              <p className="mt-3 text-sm leading-relaxed text-white/70">
-                Unlock full investment data for{" "}
-                <span className="font-semibold text-white">{clicked.nombre}</span>.
-                Subscribe to access yields, market analysis and agent connections.
-              </p>
+              <div className="mt-4 space-y-2">
+                {[
+                  "Precio/m² y arriendo real",
+                  "Yield Airbnb con datos reales",
+                  "Score de inversión personalizado",
+                  "Conexión con agentes certificados",
+                  "Calculadora de retorno",
+                ].map((item) => (
+                  <div key={item} className="flex items-center gap-2 text-sm text-white/80">
+                    <span className="text-[#00d4ff]">✅</span>
+                    {item}
+                  </div>
+                ))}
+              </div>
 
               <div className="mt-5 flex flex-col gap-2">
                 <Link
                   to="/register"
                   className="flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
-                  onClick={() => setClicked(null)}
+                  onClick={() => { setClicked(null); setShowPaywall(false); }}
                 >
-                  Create Account — Free
+                  Crear cuenta — Gratis →
                 </Link>
                 <Link
                   to="/login"
                   className="flex items-center justify-center rounded-lg border border-white/20 px-4 py-2.5 text-sm font-semibold text-white transition hover:border-white/40 hover:bg-white/5"
-                  onClick={() => setClicked(null)}
+                  onClick={() => { setClicked(null); setShowPaywall(false); }}
                 >
-                  Sign In
+                  Ya tengo cuenta — Iniciar sesión
                 </Link>
               </div>
+
+              <p className="mt-4 text-center text-[11px] text-white/30">
+                Acceso gratuito incluye perfil básico. Datos premium desde $5 USD/mes
+              </p>
             </div>
           </div>
         )}

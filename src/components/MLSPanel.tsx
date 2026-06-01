@@ -9,7 +9,7 @@ type Props = {
   listings: ApiListing[];
   isLoading: boolean;
   onBack: () => void;
-  onListingSelect: (listing: ApiListing) => void;
+  onListingSelect: (listing: ApiListing, screenX: number, screenY: number) => void;
   highlightedListingId?: number | null;
   activeBarrioName?: string | null;
   onBarrioFilter?: (barrio: string | null) => void;
@@ -56,7 +56,7 @@ function ListingCard({
 }: {
   listing: ApiListing;
   highlighted: boolean;
-  onSelect: () => void;
+  onSelect: (e: React.MouseEvent) => void;
   cardRef?: (el: HTMLDivElement | null) => void;
 }) {
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
@@ -84,7 +84,7 @@ function ListingCard({
   return (
     <div
       ref={cardRef}
-      onClick={onSelect}
+      onClick={(e) => onSelect(e)}
       className={`cursor-pointer rounded-lg border p-3 transition-all ${
         highlighted
           ? "border-cyan-400/60 bg-cyan-400/10 shadow-md shadow-cyan-400/20"
@@ -338,8 +338,18 @@ export function MLSPanel({
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver al análisis
           </button>
-          <div className="flex items-baseline gap-2">
+          <div className="flex flex-col gap-0.5">
             <h2 className="font-display text-base font-semibold">{headerName}</h2>
+            {barrio.comuna && barrio.comuna.toUpperCase() !== barrio.nombre.toUpperCase() && (
+              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                Barrio · {toTitleCase(barrio.comuna)}
+              </span>
+            )}
+            {barrio.comuna && barrio.comuna.toUpperCase() === barrio.nombre.toUpperCase() && (
+              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
+                Barrio · {barrio.municipio}
+              </span>
+            )}
           </div>
           <p className="mt-0.5 text-xs text-muted-foreground">
             {isLoading
@@ -518,7 +528,7 @@ export function MLSPanel({
               key={`${l.fuente ?? "x"}-${l.id}`}
               listing={l}
               highlighted={highlightedListingId === l.id}
-              onSelect={() => onListingSelect(l)}
+              onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}
               cardRef={(el) => { cardRefs.current[l.id] = el; }}
             />
           ))}

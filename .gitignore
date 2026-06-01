@@ -46,3 +46,8 @@ scripts/data/raw/
 # Datos catastrales sensibles
 *.csv
 *.Zone.Identifier
+
+# Large geojson / zip data files (local only)
+geojson_*/
+*.geojson
+*.zip

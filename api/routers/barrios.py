@@ -252,7 +252,7 @@ _BARRIO_MAP_SQL = """
         bm.yield_bruto                      AS yield_bruto_pct,
         bm.ratio_precio_arriendo            AS anos_recupero,
         bm.estado_precio,
-        bm.pbn_precio_justo,
+        bm.pbn_precio_justo_m2              AS pbn_precio_justo,
         bm.poi_precio_oferta,
         b.excluir_inversion,
         NULL::varchar                       AS uso_suelo_dominante,
@@ -303,7 +303,7 @@ _BARRIO_SQL = """
         bm.yield_bruto                      AS yield_bruto_pct,
         bm.ratio_precio_arriendo            AS anos_recupero,
         bm.estado_precio,
-        bm.pbn_precio_justo,
+        bm.pbn_precio_justo_m2              AS pbn_precio_justo,
         bm.poi_precio_oferta,
         -- airbnb
         bm.ocupacion_airbnb_pct,
