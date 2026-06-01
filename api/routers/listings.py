@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+import time
 from datetime import datetime
 from typing import Any, Optional
 
@@ -14,6 +16,10 @@ from api.services.personalizacion import calcular_relevancia, get_match_label, P
 router = APIRouter()
 
 _USD = USD_TO_COP
+
+# In-process TTL cache for _expand_neighbors — barrios/geometry never change at runtime.
+_NEIGHBORS_TTL = 300  # seconds
+_NEIGHBORS_CACHE: dict[tuple, tuple] = {}
 
 
 class ListingFull(BaseModel):
@@ -295,13 +301,19 @@ async def _expand_neighbors(
     min_listings: int = 5,
     only_premium: bool = False,
 ) -> tuple[list[int], list[str], int]:
-    # Premium listings are few by nature; expand only if barrio has none at all
+    """Cascade-expand barrio → neighbors until min_listings reached.
+    Results cached for _NEIGHBORS_TTL seconds — barrio geometry is static at runtime.
+    """
+    cache_key = (barrio_id, only_premium)
+    cached = _NEIGHBORS_CACHE.get(cache_key)
+    if cached is not None:
+        result, ts = cached
+        if time.time() - ts < _NEIGHBORS_TTL:
+            return result  # type: ignore[return-value]
+
     if only_premium:
         min_listings = 1
-    """Cascade-expand barrio → neighbors until min_listings reached.
-    Returns (barrio_ids, barrio_names, radio_usado_metros).
-    When only_premium=True, expansion is driven by premium listing count.
-    """
+
     ids = [barrio_id]
     names: list[str] = []
 
@@ -314,14 +326,27 @@ async def _expand_neighbors(
     for radio in radios:
         count = await pool.fetchval(count_sql, ids)
         if (count or 0) >= min_listings:
-            return ids, names, radio if radio == 0 else radios[radios.index(radio) - 1]
+            result = (ids, names, radio if radio == 0 else radios[radios.index(radio) - 1])
+            _NEIGHBORS_CACHE[cache_key] = (result, time.time())
+            return result
         if radio == 0:
             continue
         nearby = await pool.fetch(_NEARBY_BARRIOS_SQL, barrio_id, float(radio))
         ids = [barrio_id] + [r["id"] for r in nearby]
         names = [names[0]] + [r["nombre"] for r in nearby]
 
-    return ids, names, radios[-1]
+    result = (ids, names, radios[-1])
+    _NEIGHBORS_CACHE[cache_key] = (result, time.time())
+    return result
+
+
+async def _count_and_fetch(pool: Any, args: tuple, fetch_limit: int, fetch_offset: int) -> tuple:
+    """Run COUNT + LISTINGS concurrently. Returns (count, rows)."""
+    count, rows = await asyncio.gather(
+        pool.fetchval(_COUNT_SQL, *args),
+        pool.fetch(_LISTINGS_SQL + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+    )
+    return count or 0, rows
 
 
 @router.get("", response_model=ListingsAllResponse)
@@ -351,9 +376,6 @@ async def get_all_listings(
             pool, barrio_id, only_premium=only_premium
         )
 
-    args = (municipio, barrio_ids, tipo_operacion, tipo_inmueble,
-            precio_min, precio_max, area_min, habitaciones, only_premium)
-
     # Fetch investor profile if authenticated
     perfil_dict: Optional[dict] = None
     if current_user:
@@ -370,19 +392,36 @@ async def get_all_listings(
         except Exception:
             pass
 
-    total = await pool.fetchval(_COUNT_SQL, *args)
+    def _args(tipo_op: Optional[str]) -> tuple:
+        return (municipio, barrio_ids, tipo_op, tipo_inmueble,
+                precio_min, precio_max, area_min, habitaciones, only_premium)
 
-    if perfil_dict:
-        fetch_limit = min(500, max(limit * 3, 200))
-        fetch_offset = 0
+    # Unified venta+arriendo path: 2 parallel fetches → balanced results, 1 HTTP round-trip.
+    # Only applies when: no tipo_operacion filter, barrio selected, no premium, no personalization, page 0.
+    if (tipo_operacion is None and barrio_id is not None
+            and not only_premium and not perfil_dict and offset == 0):
+        half = max(1, limit // 2)
+        (total_v, rows_v), (total_a, rows_a) = await asyncio.gather(
+            _count_and_fetch(pool, _args("venta"),   half, 0),
+            _count_and_fetch(pool, _args("arriendo"), half, 0),
+        )
+        rows = list(rows_v) + list(rows_a)
+        total = (total_v or 0) + (total_a or 0)
     else:
-        fetch_limit = limit
-        fetch_offset = offset
-
-    rows = await pool.fetch(
-        _LISTINGS_SQL + f" LIMIT {fetch_limit} OFFSET {fetch_offset}",
-        *args,
-    )
+        # Single tipo_operacion (or premium / personalized / paginated):
+        # run COUNT + LISTINGS in parallel — halves sequential overhead.
+        args = _args(tipo_operacion)
+        if perfil_dict:
+            fetch_limit = min(500, max(limit * 3, 200))
+            fetch_offset = 0
+        else:
+            fetch_limit = limit
+            fetch_offset = offset
+        total, rows = await asyncio.gather(
+            pool.fetchval(_COUNT_SQL, *args),
+            pool.fetch(_LISTINGS_SQL + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+        )
+        total = total or 0
 
     items: list[ListingFull] = []
     for r in rows:
@@ -413,7 +452,7 @@ async def get_all_listings(
         items = items[offset: offset + limit]
 
     return ListingsAllResponse(
-        total=total or 0,
+        total=total,
         listings=items,
         barrios_incluidos=barrios_incluidos,
         radio_usado_metros=radio_usado,

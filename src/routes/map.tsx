@@ -52,18 +52,12 @@ function MapPage() {
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
-  // Fetch venta + arriendo separately — ORDER BY pm2 ASC puts arriendo before venta,
-  // so a single unfiltered call of 500 returns ~498 arriendo and ~2 venta.
-  const { data: ventaData,    isLoading: ventaLoading    } = useListings(mlsBarrio?.id ?? null, 250, 0, "venta");
-  const { data: arrendoData,  isLoading: arrendoLoading  } = useListings(mlsBarrio?.id ?? null, 250, 0, "arriendo");
-  const mlsListings: ApiListing[] = useMemo(
-    () => [...(ventaData?.listings ?? []), ...(arrendoData?.listings ?? [])],
-    [ventaData, arrendoData],
-  );
-  const mlsIsLoading = ventaLoading || arrendoLoading;
+  // Single unified call — backend fetches venta + arriendo concurrently (half each) and merges.
+  const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0);
+  const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
   const mlsTotal = mlsListings.length;
-  const mlsRadio = ventaData?.radio_usado_metros ?? arrendoData?.radio_usado_metros ?? null;
-  const mlsBarriosIncluidos = ventaData?.barrios_incluidos ?? arrendoData?.barrios_incluidos ?? null;
+  const mlsRadio = mlsData?.radio_usado_metros ?? null;
+  const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
 
   // Premium-expansion fetch — fires when premium filter is active to find nearby premium
   const [premiumExpand, setPremiumExpand] = useState(false);
