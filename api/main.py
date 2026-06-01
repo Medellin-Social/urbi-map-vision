@@ -82,7 +82,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Urbidata API",
+    title="Medellin Social API",
     description="Motor de decisión de inversión inmobiliaria — Valle de Aburrá",
     version="1.0.0",
     lifespan=lifespan,

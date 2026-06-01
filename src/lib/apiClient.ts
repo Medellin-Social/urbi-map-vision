@@ -1,4 +1,4 @@
-const TOKEN_KEY = "urbidata.token";
+const TOKEN_KEY = "medellin-social.token";
 
 export function getToken(): string | null {
   if (typeof window === "undefined") return null;

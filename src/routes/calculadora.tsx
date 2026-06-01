@@ -34,14 +34,14 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/calculadora")({
   head: () => ({
     meta: [
-      { title: "Calculadora de Rentabilidad · Urbidata" },
+      { title: "Calculadora de Rentabilidad · Medellin Social" },
       { name: "description", content: "Simula el retorno de tu inversión inmobiliaria en Medellín. Calcula yield bruto, flujo de caja y proyección a 10 años por barrio." },
     ],
   }),
   validateSearch: searchSchema,
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("urbidata.user");
+    const raw = localStorage.getItem("medellin-social.user");
     if (!raw) throw redirect({ to: "/login" });
   },
   component: CalculadoraPage,
@@ -650,7 +650,7 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
         <button
           onClick={() => {
             if (typeof navigator !== "undefined" && navigator.share) {
-              navigator.share({ title: "Simulación Urbidata", url: window.location.href }).catch(() => {});
+              navigator.share({ title: "Simulación Medellin Social", url: window.location.href }).catch(() => {});
             } else if (typeof navigator !== "undefined") {
               navigator.clipboard?.writeText(window.location.href);
             }

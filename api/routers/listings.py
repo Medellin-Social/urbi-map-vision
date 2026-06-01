@@ -345,7 +345,7 @@ async def _expand_neighbors(
     pool: Any,
     barrio_id: int,
     radios: tuple[int, ...] = (0, 500, 1000),
-    min_listings: int = 15,
+    min_listings: int = 5,
     only_premium: bool = False,
 ) -> tuple[list[int], list[str], int]:
     # Premium listings are few by nature; expand only if barrio has none at all

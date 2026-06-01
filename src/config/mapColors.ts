@@ -77,8 +77,8 @@ export const SCORE_PALETTES: Record<ScorePaletteId, ScorePalette> = {
   },
 };
 
-export const PALETTE_STORAGE_KEY = "urbidata.score_palette";
-export const PALETTE_EVENT = "urbidata:palette";
+export const PALETTE_STORAGE_KEY = "medellin-social.score_palette";
+export const PALETTE_EVENT = "medellin-social:palette";
 
 const RISK_DEFAULT_PALETTE: Record<string, ScorePaletteId> = {
   conservador: "suave",
@@ -108,7 +108,7 @@ export function setActivePalette(id: ScorePaletteId): void {
   window.dispatchEvent(new CustomEvent(PALETTE_EVENT));
 }
 
-export const THRESHOLDS_EVENT = "urbidata:thresholds";
+export const THRESHOLDS_EVENT = "medellin-social:thresholds";
 
 // Kept for backward compat — no longer affects score coloring.
 let _thresholds: Record<string, [number, number, number]> = {};

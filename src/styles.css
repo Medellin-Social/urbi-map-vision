@@ -44,7 +44,7 @@
 :root {
   --radius: 0.625rem;
 
-  /* Urbidata dark theme */
+  /* Medellin Social dark theme */
   --background: oklch(0.15 0.02 260);          /* #0a0e1a */
   --foreground: oklch(0.98 0.005 260);         /* #f9fafb */
   --surface: oklch(0.21 0.02 260);             /* #111827 */

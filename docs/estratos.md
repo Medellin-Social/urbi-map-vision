@@ -1,4 +1,4 @@
-# Sistemas de Estrato en Urbidata
+# Sistemas de Estrato en Medellin Social
 
 Hay tres columnas llamadas "estrato" con fuentes y usos distintos.
 No son intercambiables.

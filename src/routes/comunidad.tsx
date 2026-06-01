@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
-import { ExternalLink, Star } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import { SiteNavbar } from "@/components/SiteNavbar";
 import { Reveal } from "@/components/Reveal";
 
 export const Route = createFileRoute("/comunidad")({
   component: ComunidadPage,
   head: () => ({
-    meta: [{ title: "Medellín Community · Events & Local Culture" }],
+    meta: [{ title: "Comunidad Medellín · Eventos & Cultura Local" }],
   }),
 });
 
@@ -23,15 +23,15 @@ type Event = {
 };
 
 const EVENTS: Event[] = [
-  { id: 1, title: "Friday Salsa Night",          venue: "Parque Lleras",         neighborhood: "El Poblado", date: "2026-05-29", time: "9:00 PM",  featured: true,  link: "#" },
-  { id: 2, title: "Laureles Organic Market",      venue: "Parque Laureles",       neighborhood: "Laureles",   date: "2026-05-31", time: "8:00 AM",  featured: true,  link: "#" },
-  { id: 3, title: "Street Art Tour El Centro",    venue: "Museo de Antioquia",    neighborhood: "El Centro",  date: "2026-06-01", time: "10:00 AM", featured: true,  link: "#" },
-  { id: 4, title: "Coffee Tasting at Pergamino",  venue: "Pergamino Café",        neighborhood: "El Poblado", date: "2026-05-30", time: "3:00 PM",  featured: false, link: "#" },
-  { id: 5, title: "Sunset Rooftop Drinks",        venue: "Azul Rooftop",          neighborhood: "Envigado",   date: "2026-05-31", time: "6:00 PM",  featured: false, link: "#" },
-  { id: 6, title: "Robledo Community Fair",       venue: "Plaza Principal",       neighborhood: "Robledo",    date: "2026-06-01", time: "10:00 AM", featured: false, link: "#" },
-  { id: 7, title: "Morning Yoga in the Park",     venue: "Parque El Poblado",     neighborhood: "El Poblado", date: "2026-06-07", time: "7:00 AM",  featured: false, link: "#" },
-  { id: 8, title: "Live Jazz Night",              venue: "Blues Brothers Bar",    neighborhood: "Laureles",   date: "2026-06-06", time: "8:00 PM",  featured: false, link: "#" },
-  { id: 9, title: "Sabaneta Food Festival",       venue: "Parque Principal",      neighborhood: "Sabaneta",   date: "2026-06-13", time: "12:00 PM", featured: false, link: "#" },
+  { id: 1, title: "Noche de Salsa del Viernes",    venue: "Parque Lleras",         neighborhood: "El Poblado", date: "2026-05-29", time: "9:00 PM",  featured: true,  link: "#" },
+  { id: 2, title: "Mercado Orgánico de Laureles",   venue: "Parque Laureles",       neighborhood: "Laureles",   date: "2026-05-31", time: "8:00 AM",  featured: true,  link: "#" },
+  { id: 3, title: "Tour de Arte Urbano El Centro",  venue: "Museo de Antioquia",    neighborhood: "El Centro",  date: "2026-06-01", time: "10:00 AM", featured: true,  link: "#" },
+  { id: 4, title: "Cata de Café en Pergamino",      venue: "Pergamino Café",        neighborhood: "El Poblado", date: "2026-05-30", time: "3:00 PM",  featured: false, link: "#" },
+  { id: 5, title: "Drinks al Atardecer en Rooftop", venue: "Azul Rooftop",          neighborhood: "Envigado",   date: "2026-05-31", time: "6:00 PM",  featured: false, link: "#" },
+  { id: 6, title: "Feria Comunitaria de Robledo",   venue: "Plaza Principal",       neighborhood: "Robledo",    date: "2026-06-01", time: "10:00 AM", featured: false, link: "#" },
+  { id: 7, title: "Yoga Matutino en el Parque",     venue: "Parque El Poblado",     neighborhood: "El Poblado", date: "2026-06-07", time: "7:00 AM",  featured: false, link: "#" },
+  { id: 8, title: "Noche de Jazz en Vivo",          venue: "Blues Brothers Bar",    neighborhood: "Laureles",   date: "2026-06-06", time: "8:00 PM",  featured: false, link: "#" },
+  { id: 9, title: "Festival Gastronómico Sabaneta", venue: "Parque Principal",      neighborhood: "Sabaneta",   date: "2026-06-13", time: "12:00 PM", featured: false, link: "#" },
 ];
 
 const TODAY = new Date("2026-05-28");
@@ -39,22 +39,22 @@ const WEEK_END = new Date("2026-06-04");
 const MONTH_END = new Date("2026-06-28");
 
 const TIME_TABS = [
-  { id: "all",   label: "Upcoming" },
-  { id: "week",  label: "This Week" },
-  { id: "month", label: "This Month" },
+  { id: "all",   label: "Próximos" },
+  { id: "week",  label: "Esta semana" },
+  { id: "month", label: "Este mes" },
 ] as const;
 
 const HOOD_TABS = [
-  { id: "all",        label: "All" },
+  { id: "all",        label: "Todos" },
   { id: "El Poblado", label: "El Poblado" },
   { id: "Laureles",   label: "Laureles" },
   { id: "Envigado",   label: "Envigado" },
-  { id: "other",      label: "Other" },
+  { id: "other",      label: "Otro" },
 ] as const;
 
 function formatDate(dateStr: string) {
   const d = new Date(dateStr);
-  return d.toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
+  return d.toLocaleDateString("es-CO", { weekday: "short", month: "short", day: "numeric" });
 }
 
 function EventCard({ event, prominent = false }: { event: Event; prominent?: boolean }) {
@@ -68,7 +68,7 @@ function EventCard({ event, prominent = false }: { event: Event; prominent?: boo
     >
       {event.featured && (
         <span className="absolute right-3 top-3 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-foreground glow-cyan">
-          Featured
+          Destacado
         </span>
       )}
       <div className="text-[10px] font-bold uppercase tracking-wider text-primary">{event.neighborhood}</div>
@@ -84,7 +84,7 @@ function EventCard({ event, prominent = false }: { event: Event; prominent?: boo
         rel="noopener noreferrer"
         className="mt-4 inline-flex items-center gap-1.5 text-xs font-semibold text-primary transition hover:underline"
       >
-        View details <ExternalLink className="h-3 w-3" />
+        Ver detalles <ExternalLink className="h-3 w-3" />
       </a>
     </div>
   );
@@ -115,11 +115,10 @@ function ComunidadPage() {
         {/* Header */}
         <section className="border-b border-border/40 bg-surface/20 px-4 py-12 text-center sm:px-6">
           <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">🌎 Community</span>
-            <h1 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Medellín Community</h1>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">🌎 Comunidad</span>
+            <h1 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Comunidad Medellín</h1>
             <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-              Events, meetups and local experiences across the Aburrá Valley — curated by
-              people who actually live here.
+              Eventos, meetups y experiencias locales en el Valle de Aburrá — curados por personas que realmente viven aquí.
             </p>
           </Reveal>
         </section>
@@ -129,8 +128,8 @@ function ComunidadPage() {
           <div className="mx-auto max-w-6xl">
             <Reveal>
               <h2 className="font-display text-xl font-bold">
-                ✨ Featured Events
-                <span className="ml-2 text-sm font-normal text-muted-foreground">— sponsored spots</span>
+                ✨ Eventos Destacados
+                <span className="ml-2 text-sm font-normal text-muted-foreground">— espacios patrocinados</span>
               </h2>
             </Reveal>
             <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -147,7 +146,7 @@ function ComunidadPage() {
         <section className="border-t border-border/40 px-4 pb-20 pt-10 sm:px-6">
           <div className="mx-auto max-w-6xl">
             <Reveal>
-              <h2 className="font-display text-xl font-bold">All Events</h2>
+              <h2 className="font-display text-xl font-bold">Todos los eventos</h2>
             </Reveal>
 
             {/* Filters */}
@@ -183,7 +182,7 @@ function ComunidadPage() {
 
             {regular.length === 0 ? (
               <div className="mt-16 text-center text-sm text-muted-foreground">
-                No events match the current filters.
+                Ningún evento coincide con los filtros actuales.
               </div>
             ) : (
               <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -199,7 +198,7 @@ function ComunidadPage() {
       </main>
 
       <footer className="border-t border-border/40 py-6 text-center text-xs text-muted-foreground">
-        © 2026 Medellín Social · <a href="/" className="hover:text-foreground">Home</a>
+        © 2026 Medellín Social · <a href="/" className="hover:text-foreground">Inicio</a>
       </footer>
     </div>
   );

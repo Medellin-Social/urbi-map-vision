@@ -33,7 +33,7 @@ function LoginPage() {
   };
 
   return (
-    <AuthShell title="Iniciar sesión" subtitle="Bienvenido de vuelta a Urbidata">
+    <AuthShell title="Iniciar sesión" subtitle="Bienvenido de vuelta a Medellin Social">
       <form onSubmit={submit} className="space-y-4">
         <Field label="Correo">
           <input
@@ -101,7 +101,7 @@ export function AuthShell({ title, subtitle, children }: { title: string; subtit
           <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
             <Building2 className="h-4 w-4" />
           </div>
-          <span className="font-display text-lg font-semibold tracking-tight">Urbidata</span>
+          <span className="font-display text-lg font-semibold tracking-tight">Medellin Social</span>
         </div>
         <h1 className="font-display text-2xl font-semibold">{title}</h1>
         <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>

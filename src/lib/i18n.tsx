@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 
 export type Lang = "es" | "en";
-const KEY = "urbidata.lang";
+const KEY = "medellin-social.lang";
 
 /* ---------- Spanish → English dictionary ----------
  * Order matters: longer phrases first to avoid partial replacements
@@ -10,8 +10,8 @@ const KEY = "urbidata.lang";
  */
 const PHRASES: Array<[string, string]> = [
   // Brand / taglines
-  ["Urbidata · Inteligencia inmobiliaria de Medellín", "Urbidata · Real estate intelligence for Medellín"],
-  ["Urbidata · Invierte en Medellín con datos reales", "Urbidata · Invest in Medellín with real data"],
+  ["Medellin Social · Inteligencia inmobiliaria de Medellín", "Medellin Social · Real estate intelligence for Medellín"],
+  ["Medellin Social · Invierte en Medellín con datos reales", "Medellin Social · Invest in Medellín with real data"],
   ["Inteligencia inmobiliaria de Medellín", "Real estate intelligence for Medellín"],
   ["Invierte en Medellín con datos reales", "Invest in Medellín with real data"],
   ["El primer motor de decisión inmobiliaria para el Valle de Aburrá. Yields, precios justos, seguridad y oportunidades por barrio.",
@@ -25,7 +25,7 @@ const PHRASES: Array<[string, string]> = [
   ["Yields, precios y oportunidades por barrio en Medellín.",
     "Yields, prices and opportunities by neighborhood in Medellín."],
   ["Medellín · Valle de Aburrá", "Medellín · Aburrá Valley"],
-  ["Urbidata © 2026 · Medellín, Colombia", "Urbidata © 2026 · Medellín, Colombia"],
+  ["Medellin Social © 2026 · Medellín, Colombia", "Medellin Social © 2026 · Medellín, Colombia"],
 
   // Onboarding
   ["¿Cuál es tu objetivo principal?", "What is your main goal?"],
@@ -62,11 +62,11 @@ const PHRASES: Array<[string, string]> = [
   ["Yield real, precio justo (PBN), años de recupero, proyección a 5 años y comparación vs CDT bancario.",
     "Real yield, fair price (PBN), payback years, 5-year projection and comparison vs bank CDT."],
   ["o con intuición?", "or with intuition?"],
-  ["Simulación Urbidata", "Urbidata simulation"],
+  ["Simulación Medellin Social", "Medellin Social simulation"],
   ["📈 valorización anual", "📈 average annual appreciation"],
 
   // Map / floating panel
-  ["Cómo funciona Urbidata", "How Urbidata works"],
+  ["Cómo funciona Medellin Social", "How Medellin Social works"],
   ["Cómo funciona", "How it works"],
   ["Selecciona un barrio en el mapa para ver análisis detallado.",
     "Select a neighborhood on the map to see detailed analysis."],
@@ -104,7 +104,7 @@ const PHRASES: Array<[string, string]> = [
   ["Iniciar sesión", "Sign in"],
   ["Crear cuenta", "Create account"],
   ["Crear una cuenta", "Create an account"],
-  ["Bienvenido de vuelta a Urbidata", "Welcome back to Urbidata"],
+  ["Bienvenido de vuelta a Medellin Social", "Welcome back to Medellin Social"],
   ["Ingresa tu correo y contraseña.", "Enter your email and password."],
   ["Las contraseñas no coinciden", "Passwords do not match"],
   ["Mínimo 8 caracteres", "Minimum 8 characters"],
@@ -157,7 +157,7 @@ const PHRASES: Array<[string, string]> = [
 
   // 404
   ["Página no encontrada", "Page not found"],
-  ["Esta ruta no existe en Urbidata.", "This route does not exist in Urbidata."],
+  ["Esta ruta no existe en Medellin Social.", "This route does not exist in Medellin Social."],
   ["Ir al inicio", "Go home"],
 
   // Common short labels (apply last so they don't break compounds above)
@@ -238,12 +238,12 @@ const PHRASES: Array<[string, string]> = [
 
   // ---- Additional coverage (titles, subtitles, labels) ----
   // Landing — Hero
-  ["Urbidata cruza precios de mercado, rendimiento Airbnb, seguridad, conectividad y valorización histórica para decirte exactamente dónde y cómo invertir en Medellín.",
-    "Urbidata crosses market prices, Airbnb performance, safety, connectivity and historical appreciation to tell you exactly where and how to invest in Medellín."],
+  ["Medellin Social cruza precios de mercado, rendimiento Airbnb, seguridad, conectividad y valorización histórica para decirte exactamente dónde y cómo invertir en Medellín.",
+    "Medellin Social crosses market prices, Airbnb performance, safety, connectivity and historical appreciation to tell you exactly where and how to invest in Medellín."],
   ["Cruzamos +2,400 listings activos, 3,239 puntos de interés urbano, 10 años de datos de valorización y criminalidad por barrio — todo en tiempo real.",
     "We cross-reference +2,400 active listings, 3,239 urban points of interest, 10 years of appreciation and crime data by neighborhood — all in real time."],
-  ["Ingresa tu presupuesto y zona objetivo. Urbidata calcula yield neto, proyección de valorización y retorno total a 5 años — comparado contra un CDT bancario.",
-    "Enter your budget and target area. Urbidata calculates net yield, appreciation projection and total 5-year return — compared to a bank CDT."],
+  ["Ingresa tu presupuesto y zona objetivo. Medellin Social calcula yield neto, proyección de valorización y retorno total a 5 años — comparado contra un CDT bancario.",
+    "Enter your budget and target area. Medellin Social calculates net yield, appreciation projection and total 5-year return — compared to a bank CDT."],
   ["Ya analizamos +65 barrios del Valle de Aburrá", "We've already analyzed +65 neighborhoods in the Aburrá Valley"],
   ["Accede gratis durante el beta. Sin tarjeta de crédito.", "Free access during the beta. No credit card required."],
   ["Datos con fines informativos. No constituye asesoría financiera.", "For informational purposes only. Not financial advice."],
@@ -274,7 +274,7 @@ const PHRASES: Array<[string, string]> = [
   ["Explora el mapa", "Explore the map"],
   ["Ir al mapa", "Go to the map"],
   ["Comenzar gratis", "Start free"],
-  ["Cómo funciona Urbidata", "How Urbidata works"],
+  ["Cómo funciona Medellin Social", "How Medellin Social works"],
   ["Cómo funciona", "How it works"],
   ["Para inversores", "For investors"],
   ["Datos que usamos", "Data we use"],
@@ -519,6 +519,157 @@ const PHRASES: Array<[string, string]> = [
   ["Redimensionar", "Resize"],
   ["Municipio", "Municipality"],
 
+  // ---- Comunidad ----
+  ["Comunidad Medellín · Eventos & Cultura Local", "Medellín Community · Events & Local Culture"],
+  ["🌎 Comunidad", "🌎 Community"],
+  ["Comunidad Medellín", "Medellín Community"],
+  ["Eventos, meetups y experiencias locales en el Valle de Aburrá — curados por personas que realmente viven aquí.",
+    "Events, meetups and local experiences across the Aburrá Valley — curated by people who actually live here."],
+  ["✨ Eventos Destacados", "✨ Featured Events"],
+  ["— espacios patrocinados", "— sponsored spots"],
+  ["Todos los eventos", "All Events"],
+  ["Próximos", "Upcoming"],
+  ["Esta semana", "This Week"],
+  ["Este mes", "This Month"],
+  ["Todos", "All"],
+  ["Otro", "Other"],
+  ["Destacado", "Featured"],
+  ["Ver detalles", "View details"],
+  ["Ningún evento coincide con los filtros actuales.", "No events match the current filters."],
+
+  // ---- Real estate ----
+  ["Agentes Certificados · Medellín Social", "Certified Agents · Medellín Social"],
+  ["🏠 Bienes Raíces", "🏠 Real Estate"],
+  ["Agentes Inmobiliarios Certificados", "Certified Real Estate Agents"],
+  ["Trabaja con profesionales verificados que garantizan todo tu proceso de compra — desde la selección del barrio hasta la firma de escrituras.",
+    "Work with verified professionals who guarantee your entire buying process — from neighborhood selection to signing the deed."],
+  ["Ver Mapa de Inversión", "View Investment Map"],
+  ["Certificado", "Certified"],
+  ["Especialidad", "Specialty"],
+  ["Operaciones", "Deals"],
+  ["transacciones", "transactions"],
+  ["Nuestros Agentes Certificados", "Our Certified Agents"],
+  ["Cómo Funciona", "How It Works"],
+  ["Elige tu barrio en el mapa", "Choose your neighborhood on the map"],
+  ["Explora 606 barrios del Valle de Aburrá, cada uno con score de potencial de inversión.",
+    "Browse 606 neighborhoods across the Aburrá Valley, each scored for investment potential."],
+  ["Conéctate con un agente certificado", "Get matched with a certified agent"],
+  ["Te conectamos con un agente local verificado especializado en tu barrio objetivo.",
+    "We connect you with a verified local agent who specializes in your target neighborhood."],
+  ["Tu inversión está garantizada", "Your investment is guaranteed"],
+  ["Los agentes certificados te guían por los pasos legales, notariales y financieros — de principio a fin.",
+    "Certified agents guide you through legal, notarial and financial steps — end to end."],
+  ["¿Eres agente local?", "Are you a local agent?"],
+  ["Únete a nuestra red. Obtén el badge certificado, listings enriquecidos con informes CMA automáticos y acceso directo a inversores globales.",
+    "Join our network. Get a certified badge, enriched listings with automatic CMA reports and direct access to global investors."],
+  ["Aplicar como Agente", "Apply as Agent"],
+
+  // ---- Stores ----
+  ["Negocios Locales · Medellín Social", "Local Businesses · Medellín Social"],
+  ["🏪 Negocios Locales", "🏪 Local Businesses"],
+  ["Negocios Locales", "Local Businesses"],
+  ["Descubre los mejores lugares en cada barrio — seleccionados y recomendados por la comunidad de Medellín Social.",
+    "Discover the best spots in each neighborhood — handpicked and recommended by the Medellín Social community."],
+  ["Recomendado", "Recommended"],
+  ["Sitio web", "Website"],
+  ["⭐ Mejores Lugares", "⭐ Top Spots"],
+  ["Mejores Lugares", "Top Spots"],
+  ["Ordenado por recomendación de la comunidad", "Ordered by community recommendation"],
+  ["¿Quieres tu negocio aquí?", "Want your business here?"],
+  ["Obtén el badge Recomendado y llega a miles de inversores y locales cada mes.",
+    "Get a Recommended badge and reach thousands of investors and locals every month."],
+  ["Registra tu Negocio", "List Your Business"],
+  ["Restaurante", "Restaurant"],
+  ["Mercado Gourmet", "Food Market"],
+  ["Gimnasio", "Gym"],
+
+  // ---- Onboarding step 0 ----
+  ["¿Qué te trae a Medellín Social?", "What brings you to Medellín Social?"],
+  ["Personalizaremos tu experiencia según tu objetivo.", "We'll personalize your experience according to your goal."],
+  ["💼 INVERSOR", "💼 INVESTOR"],
+  ["Quiero invertir en bienes raíces en el Valle de Aburrá", "I want to invest in real estate in the Aburrá Valley"],
+  ["🌎 EXPLORADOR", "🌎 EXPLORER"],
+  ["Quiero descubrir Medellín como un local", "I want to discover Medellín like a local"],
+
+  // ---- Onboarding step 3 airbnb ----
+  ["¿Cuántas unidades estás planeando?", "How many units are you planning?"],
+  ["Ajustamos las recomendaciones según el tamaño de tu portafolio.", "We tailor recommendations to your portfolio size."],
+  ["1 unidad — personal", "1 unit — personal"],
+  ["Empieza pequeño, aprende el mercado", "Start small, learn the market"],
+  ["2-5 unidades — portafolio pequeño", "2-5 units — small portfolio"],
+  ["Escala con complejidad manejable", "Build scale with manageable complexity"],
+  ["5+ unidades — portafolio completo", "5+ units — full portfolio"],
+  ["Estrategia de operador y objetivos de yield", "Operator-level strategy and yield targets"],
+
+  // ---- Onboarding step 3 mediano_plazo ----
+  ["¿Quién es tu inquilino objetivo?", "Who is your target tenant?"],
+  ["Destacaremos los barrios con mayor demanda para tu perfil.", "We'll highlight neighborhoods with the highest demand for your profile."],
+  ["Nómadas digitales y trabajadores remotos", "Digital nomads & remote workers"],
+  ["Alta demanda en El Poblado, Laureles", "High demand in El Poblado, Laureles"],
+  ["Ejecutivos y profesionales locales", "Local executives & professionals"],
+  ["Demanda estable, estadías más largas", "Stable demand, longer stays"],
+  ["Estudiantes", "Students"],
+  ["Arriendo menor, alta ocupación", "Lower rent, high occupancy rate"],
+  ["Flexible — cualquier perfil", "Flexible — any"],
+  ["Mayor cobertura de mercado", "Broader market coverage"],
+
+  // ---- Onboarding step 3 renta-larga ----
+  ["¿Cómo planeas pagar?", "How are you planning to pay?"],
+  ["Esto define qué barrios y estructuras de negocio priorizamos.", "This shapes which neighborhoods and deal structures we'll prioritize."],
+  ["Contado — pago total", "Cash — full payment"],
+  ["Máximo poder de negociación, cierre más rápido", "Maximum negotiation power, faster closing"],
+  ["Crédito hipotecario / financiamiento", "Mortgage/financing"],
+  ["Apalancamiento para propiedades de mayor valor", "Leverage to access higher-value properties"],
+  ["Aún no lo sé", "Not sure yet"],
+  ["Te mostraremos todas las opciones disponibles", "We'll show you all available options"],
+
+  // ---- Onboarding step 4 airbnb ----
+  ["¿Cómo planeas administrarlo?", "How do you plan to manage it?"],
+  ["El estilo de gestión impacta directamente tu yield neto.", "Management style has a direct impact on your net yield."],
+  ["Autogestión", "Self-managed"],
+  ["Mayor yield, más involucramiento directo", "Higher yield, more hands-on involvement"],
+  ["Contratar administrador", "Hire property manager"],
+  ["Ingreso pasivo, menor yield neto (~15–20% comisión)", "Passive income, lower net yield (~15–20% fee)"],
+  ["Te explicamos los pros y contras", "We'll walk you through the tradeoffs"],
+
+  // ---- Onboarding step 4 mediano_plazo ----
+  ["¿Amoblado o sin amoblar?", "Furnished or unfurnished?"],
+  ["El mobiliario afecta el precio, tiempo de arriendo y tipo de inquilino.", "Furnishing affects price, time-to-lease, and tenant type."],
+  ["Completamente amoblado (arriendo mayor)", "Fully furnished (higher rent)"],
+  ["Hasta 30% de prima, atrae nómadas y ejecutivos", "Up to 30% premium, attracts nomads & executives"],
+  ["Sin amoblar (más fácil de arrendar)", "Unfurnished (easier to find)"],
+  ["Menor barrera, inquilinos estables a largo plazo", "Lower barrier, stable long-term tenants"],
+  ["Decide propiedad por propiedad", "Decide property by property"],
+
+  // ---- Onboarding step 4 renta-larga ----
+  ["¿Cuál es tu horizonte de inversión?", "What's your investment horizon?"],
+  ["Tu horizonte define el perfil riesgo/retorno que optimizamos.", "Your timeline shapes the risk/return profile we optimize for."],
+  ["5 años", "5 years"],
+  ["Enfoque en barrios de mayor valorización", "Focus on fastest-appreciating neighborhoods"],
+  ["10 años", "10 years"],
+  ["Balance entre yield y valorización a largo plazo", "Balance between yield and long-term appreciation"],
+  ["20+ años — largo plazo", "20+ years — long term"],
+  ["Prioriza estabilidad y activos defensivos", "Prioritize stability and defensive assets"],
+
+  // ---- Onboarding step 6 ----
+  ["¿Es tu primera propiedad en Colombia?", "Is this your first property in Colombia?"],
+  ["Personalizaremos las guías y recursos que te compartimos.", "We'll customize the guidance and resources we share with you."],
+  ["Sí — soy nuevo en el mercado inmobiliario colombiano", "Yes — I'm new to Colombian real estate"],
+  ["Te asignamos un agente especializado en guiar inversores extranjeros en el proceso de compra colombiano.",
+    "We'll assign you an agent who specializes in guiding foreign investors through the Colombian buying process."],
+  ["No — ya he invertido aquí antes", "No — I've invested here before"],
+  ["Proceso estándar, sin orientación adicional necesaria.", "Standard process, no extra hand-holding needed."],
+  ["¿Te gustaría ser contactado por un agente certificado?", "Would you like to be contacted by a certified agent?"],
+  ["Un experto local puede ayudarte a navegar el proceso de principio a fin.", "A local expert can help you navigate the process end-to-end."],
+  ["Sí, conéctame con un agente", "Yes, connect me with an agent"],
+  ["Un agente certificado te contactará en 24 horas.", "A certified agent will reach out within 24 hours."],
+  ["No, exploraré por mi cuenta primero", "No, I'll explore on my own first"],
+  ["Siempre puedes solicitar un agente desde tu perfil.", "You can always request an agent later from your profile."],
+
+  // ---- Common footer / misc ----
+  ["Inicio", "Home"],
+  ["Ir al mapa", "Go to the map"],
+
   // ---- Forgot / Reset password ----
   ["¡Contraseña actualizada!", "Password updated!"],
   ["Contraseña actualizada correctamente. Serás redirigido en segundos.", "Password successfully updated. You will be redirected shortly."],
@@ -631,7 +782,7 @@ const PHRASES: Array<[string, string]> = [
 
 /* Tokens that should never be translated (brand, neighborhood names, etc.) */
 const PROTECT = new Set([
-  "Urbidata", "Medellín", "Aburrá", "Airbnb", "Belén", "Estadio",
+  "Medellin Social", "Medellín", "Aburrá", "Airbnb", "Belén", "Estadio",
   "Laureles", "Robledo", "Aranjuez", "El Poblado", "El Rodeo",
   "Mapbox", "Fincaraíz", "Metrocuadrado", "PBN", "ADR", "CDT",
   "Google", "PSE", "Nequi",

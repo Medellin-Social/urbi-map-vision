@@ -54,7 +54,7 @@ export type UrbiUser = {
   mostrarOportunidades?: boolean;
 };
 
-const KEY = "urbidata.user";
+const KEY = "medellin-social.user";
 
 export const auth = {
   get(): UrbiUser | null {
@@ -73,7 +73,7 @@ export const auth = {
   set(u: UrbiUser) {
     localStorage.setItem(KEY, JSON.stringify(u));
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("urbidata:user"));
+      window.dispatchEvent(new CustomEvent("medellin-social:user"));
     }
   },
   patch(p: Partial<UrbiUser>) {
@@ -83,7 +83,7 @@ export const auth = {
   clear() {
     localStorage.removeItem(KEY);
     if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("urbidata:user"));
+      window.dispatchEvent(new CustomEvent("medellin-social:user"));
     }
   },
   toggleFavorite(fav: Omit<FavoriteBarrio, "savedAt">) {
@@ -115,7 +115,7 @@ export const auth = {
   },
 };
 
-const TOKEN_KEY = "urbidata.token";
+const TOKEN_KEY = "medellin-social.token";
 const REFRESH_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000; // refresh if < 7 days left
 
 function _decodeJwtExp(token: string): number | null {

@@ -28,7 +28,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
           <Building2 className="h-4 w-4" />
         </div>
         <span className="font-display text-base font-semibold tracking-tight">
-          Urbi<span className="text-primary">data</span>
+          Medellín <span className="text-primary">Social</span>
         </span>
       </Link>
 

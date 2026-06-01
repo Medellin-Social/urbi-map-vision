@@ -9,6 +9,7 @@ import {
   Building2, Home, KeyRound, Briefcase, Shield, ShieldHalf, Flame,
   Globe2, TrendingUp,
 } from "lucide-react";
+import { LanguageToggle } from "@/lib/i18n";
 
 const GOAL_TO_OBJETIVO: Record<Goal, string> = {
   airbnb: "score_corto",
@@ -131,12 +132,17 @@ function OnboardingPage() {
       <div className="pointer-events-none absolute -right-40 bottom-20 h-96 w-96 rounded-full bg-accent/20 blur-3xl" />
 
       <div className="relative z-10 mx-auto flex max-w-3xl flex-col">
+        {/* Lang toggle */}
+        <div className="mb-6 flex justify-end">
+          <LanguageToggle />
+        </div>
+
         {/* Logo */}
         <div className="mb-8 flex items-center gap-2">
           <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
             <Building2 className="h-4 w-4" />
           </div>
-          <span className="font-display text-lg font-semibold">Urbidata</span>
+          <span className="font-display text-lg font-semibold">Medellin Social</span>
         </div>
 
         {/* Progress bar — only for investor steps 1–6 */}
@@ -180,9 +186,9 @@ function OnboardingPage() {
                       <TrendingUp className="h-7 w-7" />
                     </div>
                     <div>
-                      <div className="text-lg font-semibold">💼 INVESTOR</div>
+                      <div className="text-lg font-semibold">💼 INVERSOR</div>
                       <div className="mt-1 text-sm text-muted-foreground">
-                        I want to invest in real estate in the Aburrá Valley
+                        Quiero invertir en bienes raíces en el Valle de Aburrá
                       </div>
                     </div>
                   </motion.button>
@@ -197,9 +203,9 @@ function OnboardingPage() {
                       <Globe2 className="h-7 w-7" />
                     </div>
                     <div>
-                      <div className="text-lg font-semibold">🌎 EXPLORER</div>
+                      <div className="text-lg font-semibold">🌎 EXPLORADOR</div>
                       <div className="mt-1 text-sm text-muted-foreground">
-                        I want to discover Medellín like a local
+                        Quiero descubrir Medellín como un local
                       </div>
                     </div>
                   </motion.button>
@@ -265,15 +271,15 @@ function OnboardingPage() {
             {/* ── STEP 3: Conditional Question A ── */}
             {step === 3 && goal === "airbnb" && (
               <Step
-                title="How many units are you planning?"
-                subtitle="Helps us tailor recommendations for your portfolio size."
+                title="¿Cuántas unidades estás planeando?"
+                subtitle="Ajustamos las recomendaciones según el tamaño de tu portafolio."
               >
                 <div className="grid grid-cols-1 gap-3">
                   {(
                     [
-                      { v: "1 unit — personal",         hint: "Start small, learn the market" },
-                      { v: "2-5 units — small portfolio",hint: "Build scale with manageable complexity" },
-                      { v: "5+ units — full portfolio",  hint: "Operator-level strategy and yield targets" },
+                      { v: "1 unidad — personal",              hint: "Empieza pequeño, aprende el mercado" },
+                      { v: "2-5 unidades — portafolio pequeño", hint: "Escala con complejidad manejable" },
+                      { v: "5+ unidades — portafolio completo", hint: "Estrategia de operador y objetivos de yield" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionA === o.v} onClick={() => setQuestionA(o.v)} label={o.v} hint={o.hint} />
@@ -283,16 +289,16 @@ function OnboardingPage() {
             )}
             {step === 3 && goal === "mediano_plazo" && (
               <Step
-                title="Who is your target tenant?"
-                subtitle="We'll highlight neighborhoods with the highest demand for your profile."
+                title="¿Quién es tu inquilino objetivo?"
+                subtitle="Destacaremos los barrios con mayor demanda para tu perfil."
               >
                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                   {(
                     [
-                      { v: "Digital nomads & remote workers",    hint: "High demand in El Poblado, Laureles" },
-                      { v: "Local executives & professionals",   hint: "Stable demand, longer stays" },
-                      { v: "Students",                           hint: "Lower rent, high occupancy rate" },
-                      { v: "Flexible — any",                     hint: "Broader market coverage" },
+                      { v: "Nómadas digitales y trabajadores remotos", hint: "Alta demanda en El Poblado, Laureles" },
+                      { v: "Ejecutivos y profesionales locales",        hint: "Demanda estable, estadías más largas" },
+                      { v: "Estudiantes",                               hint: "Arriendo menor, alta ocupación" },
+                      { v: "Flexible — cualquier perfil",               hint: "Mayor cobertura de mercado" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionA === o.v} onClick={() => setQuestionA(o.v)} label={o.v} hint={o.hint} />
@@ -302,15 +308,15 @@ function OnboardingPage() {
             )}
             {step === 3 && (goal === "renta-larga" || goal === "valorizacion") && (
               <Step
-                title="How are you planning to pay?"
-                subtitle="This shapes which neighborhoods and deal structures we'll prioritize."
+                title="¿Cómo planeas pagar?"
+                subtitle="Esto define qué barrios y estructuras de negocio priorizamos."
               >
                 <div className="grid grid-cols-1 gap-3">
                   {(
                     [
-                      { v: "Cash — full payment",  hint: "Maximum negotiation power, faster closing" },
-                      { v: "Mortgage/financing",   hint: "Leverage to access higher-value properties" },
-                      { v: "Not sure yet",          hint: "We'll show you all available options" },
+                      { v: "Contado — pago total",               hint: "Máximo poder de negociación, cierre más rápido" },
+                      { v: "Crédito hipotecario / financiamiento",hint: "Apalancamiento para propiedades de mayor valor" },
+                      { v: "Aún no lo sé",                       hint: "Te mostraremos todas las opciones disponibles" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionA === o.v} onClick={() => setQuestionA(o.v)} label={o.v} hint={o.hint} />
@@ -322,15 +328,15 @@ function OnboardingPage() {
             {/* ── STEP 4: Conditional Question B ── */}
             {step === 4 && goal === "airbnb" && (
               <Step
-                title="How do you plan to manage it?"
-                subtitle="Management style has a direct impact on your net yield."
+                title="¿Cómo planeas administrarlo?"
+                subtitle="El estilo de gestión impacta directamente tu yield neto."
               >
                 <div className="grid grid-cols-1 gap-3">
                   {(
                     [
-                      { v: "Self-managed",           hint: "Higher yield, more hands-on involvement" },
-                      { v: "Hire property manager",  hint: "Passive income, lower net yield (~15–20% fee)" },
-                      { v: "Not sure yet",            hint: "We'll walk you through the tradeoffs" },
+                      { v: "Autogestión",            hint: "Mayor yield, más involucramiento directo" },
+                      { v: "Contratar administrador", hint: "Ingreso pasivo, menor yield neto (~15–20% comisión)" },
+                      { v: "Aún no lo sé",            hint: "Te explicamos los pros y contras" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionB === o.v} onClick={() => setQuestionB(o.v)} label={o.v} hint={o.hint} />
@@ -340,15 +346,15 @@ function OnboardingPage() {
             )}
             {step === 4 && goal === "mediano_plazo" && (
               <Step
-                title="Furnished or unfurnished?"
-                subtitle="Furnishing affects price, time-to-lease, and tenant type."
+                title="¿Amoblado o sin amoblar?"
+                subtitle="El mobiliario afecta el precio, tiempo de arriendo y tipo de inquilino."
               >
                 <div className="grid grid-cols-1 gap-3">
                   {(
                     [
-                      { v: "Fully furnished (higher rent)",  hint: "Up to 30% premium, attracts nomads & executives" },
-                      { v: "Unfurnished (easier to find)",   hint: "Lower barrier, stable long-term tenants" },
-                      { v: "Flexible",                       hint: "Decide property by property" },
+                      { v: "Completamente amoblado (arriendo mayor)", hint: "Hasta 30% de prima, atrae nómadas y ejecutivos" },
+                      { v: "Sin amoblar (más fácil de arrendar)",      hint: "Menor barrera, inquilinos estables a largo plazo" },
+                      { v: "Flexible",                                  hint: "Decide propiedad por propiedad" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionB === o.v} onClick={() => setQuestionB(o.v)} label={o.v} hint={o.hint} />
@@ -358,15 +364,15 @@ function OnboardingPage() {
             )}
             {step === 4 && (goal === "renta-larga" || goal === "valorizacion") && (
               <Step
-                title="What's your investment horizon?"
-                subtitle="Your timeline shapes the risk/return profile we optimize for."
+                title="¿Cuál es tu horizonte de inversión?"
+                subtitle="Tu horizonte define el perfil riesgo/retorno que optimizamos."
               >
                 <div className="grid grid-cols-1 gap-3">
                   {(
                     [
-                      { v: "5 years",              hint: "Focus on fastest-appreciating neighborhoods" },
-                      { v: "10 years",             hint: "Balance between yield and long-term appreciation" },
-                      { v: "20+ years — long term",hint: "Prioritize stability and defensive assets" },
+                      { v: "5 años",                    hint: "Enfoque en barrios de mayor valorización" },
+                      { v: "10 años",                   hint: "Balance entre yield y valorización a largo plazo" },
+                      { v: "20+ años — largo plazo",    hint: "Prioriza estabilidad y activos defensivos" },
                     ]
                   ).map((o) => (
                     <Choice key={o.v} active={questionB === o.v} onClick={() => setQuestionB(o.v)} label={o.v} hint={o.hint} />
@@ -406,41 +412,41 @@ function OnboardingPage() {
             {step === 6 && (
               <div className="space-y-10">
                 <Step
-                  title="Is this your first property in Colombia?"
-                  subtitle="We'll customize the guidance and resources we share with you."
+                  title="¿Es tu primera propiedad en Colombia?"
+                  subtitle="Personalizaremos las guías y recursos que te compartimos."
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Choice
                       active={primeraPropiedad === true}
                       onClick={() => setPrimeraPropiedad(true)}
-                      label="Yes — I'm new to Colombian real estate"
-                      hint="We'll assign you an agent who specializes in guiding foreign investors through the Colombian buying process."
+                      label="Sí — soy nuevo en el mercado inmobiliario colombiano"
+                      hint="Te asignamos un agente especializado en guiar inversores extranjeros en el proceso de compra colombiano."
                     />
                     <Choice
                       active={primeraPropiedad === false}
                       onClick={() => setPrimeraPropiedad(false)}
-                      label="No — I've invested here before"
-                      hint="Standard process, no extra hand-holding needed."
+                      label="No — ya he invertido aquí antes"
+                      hint="Proceso estándar, sin orientación adicional necesaria."
                     />
                   </div>
                 </Step>
 
                 <Step
-                  title="Would you like to be contacted by a certified agent?"
-                  subtitle="A local expert can help you navigate the process end-to-end."
+                  title="¿Te gustaría ser contactado por un agente certificado?"
+                  subtitle="Un experto local puede ayudarte a navegar el proceso de principio a fin."
                 >
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <Choice
                       active={wantsAgent === true}
                       onClick={() => setWantsAgent(true)}
-                      label="Yes, connect me with an agent"
-                      hint="A certified agent will reach out within 24 hours."
+                      label="Sí, conéctame con un agente"
+                      hint="Un agente certificado te contactará en 24 horas."
                     />
                     <Choice
                       active={wantsAgent === false}
                       onClick={() => setWantsAgent(false)}
-                      label="No, I'll explore on my own first"
-                      hint="You can always request an agent later from your profile."
+                      label="No, exploraré por mi cuenta primero"
+                      hint="Siempre puedes solicitar un agente desde tu perfil."
                     />
                   </div>
                 </Step>

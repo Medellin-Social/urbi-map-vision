@@ -16,7 +16,7 @@ import { useMemo } from "react";
 export const Route = createFileRoute("/map")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("urbidata.user");
+    const raw = localStorage.getItem("medellin-social.user");
     if (!raw) throw redirect({ to: "/login" });
   },
   component: MapPage,
@@ -97,8 +97,8 @@ function MapPage() {
 
   useEffect(() => {
     const sync = () => setMostrarOportunidades(auth.get()?.mostrarOportunidades ?? false);
-    window.addEventListener("urbidata:user", sync);
-    return () => window.removeEventListener("urbidata:user", sync);
+    window.addEventListener("medellin-social:user", sync);
+    return () => window.removeEventListener("medellin-social:user", sync);
   }, []);
 
   useEffect(() => {

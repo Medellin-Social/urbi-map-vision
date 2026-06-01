@@ -6,7 +6,7 @@ import { Reveal } from "@/components/Reveal";
 export const Route = createFileRoute("/real-estate")({
   component: RealEstatePage,
   head: () => ({
-    meta: [{ title: "Certified Agents · Medellín Social" }],
+    meta: [{ title: "Agentes Certificados · Medellín Social" }],
   }),
 });
 
@@ -26,7 +26,7 @@ const AGENTS: Agent[] = [
   {
     name: "Ken Richardson",
     agency: "Medellín Realty Group",
-    specialty: "Airbnb / Short-term Rental",
+    specialty: "Airbnb / Renta Corta",
     neighborhoods: ["El Poblado", "Laureles", "Boston"],
     transactions: 47,
     initials: "KR",
@@ -37,7 +37,7 @@ const AGENTS: Agent[] = [
   {
     name: "Carlos Rodríguez",
     agency: "Invest Medellín",
-    specialty: "Long-term Rental",
+    specialty: "Renta Larga",
     neighborhoods: ["Robledo", "El Rodeo", "Aranjuez"],
     transactions: 82,
     initials: "CR",
@@ -48,7 +48,7 @@ const AGENTS: Agent[] = [
   {
     name: "María F. Gómez",
     agency: "Valle Real Estate",
-    specialty: "Mid-term / Digital Nomads",
+    specialty: "Renta Media / Nómadas Digitales",
     neighborhoods: ["Envigado", "Sabaneta", "Itagüí"],
     transactions: 35,
     initials: "MG",
@@ -59,7 +59,7 @@ const AGENTS: Agent[] = [
   {
     name: "David Park",
     agency: "Medellín Realty Group",
-    specialty: "Airbnb / New Construction",
+    specialty: "Airbnb / Obra Nueva",
     neighborhoods: ["El Poblado", "Boston", "Manila"],
     transactions: 61,
     initials: "DP",
@@ -72,18 +72,18 @@ const AGENTS: Agent[] = [
 const HOW_IT_WORKS = [
   {
     emoji: "🗺️",
-    title: "Choose your neighborhood on the map",
-    body: "Browse 606 neighborhoods across the Aburrá Valley, each scored for investment potential.",
+    title: "Elige tu barrio en el mapa",
+    body: "Explora 606 barrios del Valle de Aburrá, cada uno con score de potencial de inversión.",
   },
   {
     emoji: "🤝",
-    title: "Get matched with a certified agent",
-    body: "We connect you with a verified local agent who specializes in your target neighborhood.",
+    title: "Conéctate con un agente certificado",
+    body: "Te conectamos con un agente local verificado especializado en tu barrio objetivo.",
   },
   {
     emoji: "✅",
-    title: "Your investment is guaranteed",
-    body: "Certified agents guide you through legal, notarial and financial steps — end to end.",
+    title: "Tu inversión está garantizada",
+    body: "Los agentes certificados te guían por los pasos legales, notariales y financieros — de principio a fin.",
   },
 ];
 
@@ -101,7 +101,7 @@ function AgentCard({ agent }: { agent: Agent }) {
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-display text-base font-bold">{agent.name}</span>
             <span className="inline-flex items-center gap-1 rounded-full bg-success/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-success ring-1 ring-success/30">
-              <CheckCircle2 className="h-3 w-3" /> Certified
+              <CheckCircle2 className="h-3 w-3" /> Certificado
             </span>
           </div>
           <div className="mt-0.5 text-xs text-muted-foreground">{agent.agency}</div>
@@ -110,16 +110,16 @@ function AgentCard({ agent }: { agent: Agent }) {
 
       <div className="mt-4 space-y-2 text-sm">
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 shrink-0">Specialty</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 shrink-0">Especialidad</span>
           <span className="text-xs">{agent.specialty}</span>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 shrink-0">Areas</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 shrink-0">Zonas</span>
           <span className="text-xs">{agent.neighborhoods.join(" · ")}</span>
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-20 shrink-0">Deals</span>
-          <span className="text-xs font-semibold text-primary">{agent.transactions} transactions</span>
+          <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground w-24 shrink-0">Operaciones</span>
+          <span className="text-xs font-semibold text-primary">{agent.transactions} transacciones</span>
         </div>
       </div>
 
@@ -152,11 +152,10 @@ function RealEstatePage() {
         {/* Header */}
         <section className="border-b border-border/40 bg-surface/20 px-4 py-12 text-center sm:px-6">
           <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-success">🏠 Real Estate</span>
-            <h1 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Certified Real Estate Agents</h1>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-success">🏠 Bienes Raíces</span>
+            <h1 className="mt-3 font-display text-3xl font-bold sm:text-4xl">Agentes Inmobiliarios Certificados</h1>
             <p className="mx-auto mt-3 max-w-xl text-sm text-muted-foreground">
-              Work with verified professionals who guarantee your entire buying process —
-              from neighborhood selection to signing the deed.
+              Trabaja con profesionales verificados que garantizan todo tu proceso de compra — desde la selección del barrio hasta la firma de escrituras.
             </p>
           </Reveal>
           <Reveal delay={120}>
@@ -164,7 +163,7 @@ function RealEstatePage() {
               to="/map"
               className="mt-6 inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-bold text-primary-foreground transition hover:opacity-90 glow-cyan"
             >
-              <MapIcon className="h-4 w-4" /> View Investment Map <ArrowRight className="h-4 w-4" />
+              <MapIcon className="h-4 w-4" /> Ver Mapa de Inversión <ArrowRight className="h-4 w-4" />
             </Link>
           </Reveal>
         </section>
@@ -173,7 +172,7 @@ function RealEstatePage() {
         <section className="px-4 py-14 sm:px-6">
           <div className="mx-auto max-w-5xl">
             <Reveal>
-              <h2 className="font-display text-xl font-bold">Our Certified Agents</h2>
+              <h2 className="font-display text-xl font-bold">Nuestros Agentes Certificados</h2>
             </Reveal>
             <div className="mt-6 grid gap-5 sm:grid-cols-2">
               {AGENTS.map((a, i) => (
@@ -189,7 +188,7 @@ function RealEstatePage() {
         <section className="border-t border-border/40 bg-surface/10 px-4 py-16 sm:px-6">
           <div className="mx-auto max-w-4xl">
             <Reveal className="text-center">
-              <h2 className="font-display text-2xl font-bold sm:text-3xl">How It Works</h2>
+              <h2 className="font-display text-2xl font-bold sm:text-3xl">Cómo Funciona</h2>
             </Reveal>
             <div className="mt-10 grid gap-8 md:grid-cols-3">
               {HOW_IT_WORKS.map((s, i) => (
@@ -198,7 +197,7 @@ function RealEstatePage() {
                     <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl border border-primary/30 bg-primary/10 text-2xl shadow-[0_0_24px_-8px_rgba(0,212,255,0.4)]">
                       {s.emoji}
                     </div>
-                    <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Step {i + 1}</div>
+                    <div className="mt-2 text-[10px] font-bold uppercase tracking-[0.2em] text-primary">Paso {i + 1}</div>
                     <h3 className="mt-2 text-sm font-bold">{s.title}</h3>
                     <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{s.body}</p>
                   </div>
@@ -211,23 +210,22 @@ function RealEstatePage() {
         {/* Apply CTA */}
         <section className="border-t border-border/40 px-4 py-14 text-center sm:px-6">
           <Reveal>
-            <h2 className="font-display text-xl font-bold">Are you a local agent?</h2>
+            <h2 className="font-display text-xl font-bold">¿Eres agente local?</h2>
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
-              Join our network. Get a certified badge, enriched listings with automatic CMA reports
-              and direct access to global investors.
+              Únete a nuestra red. Obtén el badge certificado, listings enriquecidos con informes CMA automáticos y acceso directo a inversores globales.
             </p>
             <Link
               to="/register"
               className="mt-5 inline-flex items-center gap-2 rounded-lg border border-success/50 bg-success/10 px-5 py-2.5 text-sm font-semibold text-success transition hover:bg-success/20"
             >
-              Apply as Agent <ArrowRight className="h-4 w-4" />
+              Aplicar como Agente <ArrowRight className="h-4 w-4" />
             </Link>
           </Reveal>
         </section>
       </main>
 
       <footer className="border-t border-border/40 py-6 text-center text-xs text-muted-foreground">
-        © 2026 Medellín Social · <a href="/" className="hover:text-foreground">Home</a>
+        © 2026 Medellín Social · <a href="/" className="hover:text-foreground">Inicio</a>
       </footer>
     </div>
   );

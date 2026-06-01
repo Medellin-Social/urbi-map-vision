@@ -592,10 +592,7 @@ export function useListings(
         const all = await loadStaticListings(fake.slug);
         const filtered = all.filter((l) => {
           const lb = stripAccents((l.barrio ?? "").toUpperCase());
-          const barrioMatch = fake.slug !== "medellin"
-            ? true
-            : lb === fake.statsNombre;
-          return barrioMatch && (!tipoOperacion || l.tipo_operacion === tipoOperacion);
+          return lb === fake.statsNombre && (!tipoOperacion || l.tipo_operacion === tipoOperacion);
         });
         const page = filtered.slice(offset, offset + limit);
         return {
@@ -620,13 +617,12 @@ export function useListings(
         };
       }
 
-      // API path — neighbor expansion handled server-side
+      // API path — expansion handled server-side (expands only when barrio has < 5 listings)
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
       if (barrioId != null) params.set("barrio_id", String(barrioId));
       if (onlyPremium) params.set("only_premium", "true");
-      const url = `${API_ENDPOINTS.allListings}?${params}`;
-      return apiFetch<ApiListingsResponse>(url);
+      return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
     enabled: barrioId != null,
     staleTime: 5 * 60 * 1000,

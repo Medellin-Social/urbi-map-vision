@@ -42,7 +42,7 @@ import { formatCOP } from "@/lib/format";
 export const Route = createFileRoute("/perfil")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("urbidata.user");
+    const raw = localStorage.getItem("medellin-social.user");
     if (!raw) throw redirect({ to: "/login" });
   },
   component: PerfilPage,
@@ -65,8 +65,8 @@ function PerfilPage() {
 
   useEffect(() => {
     const sync = () => setUser(auth.get());
-    window.addEventListener("urbidata:user", sync);
-    return () => window.removeEventListener("urbidata:user", sync);
+    window.addEventListener("medellin-social:user", sync);
+    return () => window.removeEventListener("medellin-social:user", sync);
   }, []);
 
   if (!user) return null;

@@ -1,4 +1,4 @@
-// Minimal stub — Urbidata uses recharts directly. Kept to satisfy any incidental imports.
+// Minimal stub — Medellin Social uses recharts directly. Kept to satisfy any incidental imports.
 import * as React from "react";
 
 export const ChartContainer = ({ children }: { children?: React.ReactNode }) => <>{children}</>;
