@@ -14,6 +14,7 @@ from slowapi.errors import RateLimitExceeded
 
 from api.db import create_pool, close_pool, get_pool
 from api import parametros
+from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
 from api.routers import admin, auth, barrios, calculadora, favoritos, historial, listings, oportunidades, stats, usuario
 
@@ -70,14 +71,19 @@ async def _connect_with_retry() -> None:
 async def lifespan(app: FastAPI):
     await _connect_with_retry()
     await parametros.load()
+    pool = get_pool()
     try:
-        pool = get_pool()
         await pool.execute(
             "DELETE FROM token_blacklist WHERE created_at < NOW() - INTERVAL '30 days'"
         )
     except Exception as exc:
         print(f"[startup] token_blacklist cleanup skipped: {exc}", flush=True)
+    # Populate materialized cache tables before serving — eliminates per-request CTEs
+    await refresh_listings_cache(pool)
+    # Start hourly background refresh
+    _refresh_task = asyncio.create_task(run_periodic_cache_refresh(pool))
     yield
+    _refresh_task.cancel()
     await close_pool()
 
 

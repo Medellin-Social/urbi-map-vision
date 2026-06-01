@@ -57,62 +57,13 @@ class ListingsAllResponse(BaseModel):
     radio_usado_metros: Optional[int] = None
 
 
-# Barrio context CTE — joins analytics tables for personalization scoring.
-# Extra columns (score_corto, etc.) are returned in the row dict but ignored
-# by ListingFull (Pydantic v2 silently drops extra fields).
+# Uses pre-computed cache tables (refreshed hourly) instead of per-request CTEs.
+# analytics.barrios_medianas  replaces: med CTE (PERCENTILE_CONT full scan)
+# analytics.barrios_contexto  replaces: bctx CTE (6 analytics table JOINs)
+# analytics.barrios_cd        replaces: barrio_cd CTE (catastro JOIN)
+# analytics.listings_georef   replaces: 3 LEFT JOINs (lm/lf/lp) + COALESCE lat/lon filter
 _LISTINGS_SQL = """
-WITH med AS (
-    -- Per-(barrio, tipo_inmueble) medians.
-    -- m2_mediana: venta only, outliers [500K–50M] COP/m² filtered, ::bigint avoids int4 overflow.
-    -- arr_mediana: arriendo only, median monthly rent price.
-    SELECT
-        barrio_id,
-        tipo_inmueble,
-        ROUND(
-            PERCENTILE_CONT(0.5) WITHIN GROUP (
-                ORDER BY precio::float / NULLIF(area_m2, 0)
-            ) FILTER (WHERE
-                tipo_operacion = 'venta'
-                AND area_m2 > 0
-                AND precio::float / area_m2 > 500000
-                AND precio::float / area_m2 < 50000000
-            )
-        )::bigint  AS m2_mediana,
-        PERCENTILE_CONT(0.5) WITHIN GROUP (
-            ORDER BY precio::float
-        ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint AS arr_mediana
-    FROM staging.stg_listings
-    WHERE activo = TRUE AND precio > 0
-    GROUP BY barrio_id, tipo_inmueble
-),
-bctx AS (
-    SELECT
-        bm.barrio_id,
-        bm.yield_bruto                AS yield_bruto_pct,
-        bm.airbnb_n_listings          AS n_listings_airbnb,
-        sc.score_corto,
-        sc.score_mediano,
-        sc.score_largo,
-        lq.liquidez_score,
-        poi.indice_nomada,
-        seg.score_seguridad_residente AS seguridad_score,
-        sl.var_anual_5anos_pct        AS var_anual_pct,
-        am.pct_wifi
-    FROM analytics.barrios_mercado bm
-    LEFT JOIN analytics.barrios_score_consolidado sc  ON sc.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.barrios_liquidez          lq  ON lq.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.barrios_pois_distancia    poi ON poi.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.barrios_seguridad         seg ON seg.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.score_largo_plazo         sl  ON sl.barrio_id = bm.barrio_id
-    LEFT JOIN analytics.barrios_amenities         am  ON am.barrio_id = bm.barrio_id
-),
-barrio_cd AS (
-    SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
-    FROM raw.barrios b2
-    JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
-    ORDER BY b2.id
-),
-lraw AS (
+WITH lraw AS (
     SELECT id, fuente, tipo_operacion, tipo_inmueble,
            precio, area_m2, habitaciones, banos,
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
@@ -157,8 +108,8 @@ SELECT
     l.banos::float8,
     l.direccion_raw,
     l.url,
-    COALESCE(lm.lat, lf.lat, lp.lat)    AS lat,
-    COALESCE(lm.lon, lf.lon, lp.lon)    AS lon,
+    g.lat,
+    g.lon,
     l.barrio_id,
     b.nombre    AS barrio_nombre,
     b.municipio AS municipio,
@@ -187,8 +138,7 @@ SELECT
         ELSE NULL
     END AS pct_bajo_mediana,
     m.m2_mediana::int             AS precio_m2_mediana_barrio,
-    -- url_activa: set by validate_listings_urls.py; NULL = not yet validated
-    COALESCE(lm.url_activa, lf.url_activa) AS disponible_actualmente,
+    g.url_activa                  AS disponible_actualmente,
     NULL::int                     AS dias_en_mercado,
     NULL::timestamp               AS fecha_ultima_verificacion,
     ctx.yield_bruto_pct,
@@ -201,16 +151,14 @@ SELECT
     ctx.seguridad_score,
     ctx.var_anual_pct,
     ctx.pct_wifi,
-    COALESCE(lm.estrato_real, lf.estrato_real) AS estrato_real
+    g.estrato_real
 FROM lraw l
-JOIN raw.barrios b ON b.id = l.barrio_id
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
-LEFT JOIN med m ON m.barrio_id = l.barrio_id
-              AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
-LEFT JOIN barrio_cd bc ON bc.barrio_id = b.id
-LEFT JOIN bctx ctx ON ctx.barrio_id = l.barrio_id
+JOIN raw.barrios b                    ON b.id = l.barrio_id
+JOIN analytics.listings_georef g      ON g.url = l.url
+LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
+               AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
+LEFT JOIN analytics.barrios_cd bc     ON bc.barrio_id = b.id
+LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text    IS NULL OR l.tipo_operacion = $3)
@@ -220,8 +168,6 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
   AND ($8::int     IS NULL OR l.habitaciones = $8)
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
-  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
 ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
          WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
@@ -249,10 +195,8 @@ WITH lraw AS (
 )
 SELECT COUNT(*)
 FROM lraw l
-JOIN raw.barrios b ON b.id = l.barrio_id
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
+JOIN raw.barrios b               ON b.id = l.barrio_id
+JOIN analytics.listings_georef g ON g.url = l.url
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text   IS NULL OR l.tipo_operacion = $3)
@@ -262,8 +206,6 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
   AND ($8::int     IS NULL OR l.habitaciones = $8)
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
-  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
 """
 
 _BARRIO_CTX_KEYS = (
@@ -289,20 +231,25 @@ _NEARBY_BARRIOS_SQL = """
 """
 
 _LISTINGS_COUNT_BY_IDS = """
-    WITH lraw AS (
-        SELECT * FROM staging.stg_listings
-        WHERE activo = TRUE AND precio >= 500000
-          AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-          AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-    )
-    SELECT COUNT(*)
-    FROM lraw l
-    JOIN raw.barrios b ON b.id = l.barrio_id
-    LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-    LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-    WHERE l.barrio_id = ANY($1::int[])
-      AND COALESCE(lm.lat, lf.lat) IS NOT NULL
-      AND COALESCE(lm.lat, lf.lat) != 0
+    SELECT SUM(cnt)::bigint FROM (
+        SELECT COUNT(*) AS cnt
+        FROM staging.stg_listings l
+        JOIN analytics.listings_georef g ON g.url = l.url
+        WHERE l.activo = TRUE
+          AND l.precio >= 500000
+          AND NOT (l.tipo_operacion = 'arriendo' AND l.precio > 50000000)
+          AND NOT (l.tipo_operacion = 'venta'    AND l.precio > 50000000000)
+          AND l.barrio_id = ANY($1::int[])
+
+        UNION ALL
+
+        SELECT COUNT(*) AS cnt
+        FROM raw.listings_premium lp
+        JOIN analytics.listings_georef g ON g.url = lp.url
+        WHERE lp.precio_cop >= 500000
+          AND lp.tipo_operacion IS NOT NULL
+          AND lp.barrio_id = ANY($1::int[])
+    ) sub
 """
 
 _PREMIUM_COUNT_BY_IDS = """
