@@ -37,7 +37,8 @@ _OPEX_LABEL: dict[str, str] = {
 }
 
 # LEFT JOIN barrios_airbnb_real to prefer real observed income over projected ADR×ocupacion.
-# LEFT JOIN LATERAL ipvn_dane to get the latest DANE appreciation rate as var_anual fallback.
+# NULL fallback for ipvn_variacion_anual — raw.ipvn_dane not yet migrated to prod;
+# _resolve_var_anual_dane() cascades to parametros/hardcoded default when NULL.
 _SQL = """
     SELECT
         sc.nombre_barrio,
@@ -54,18 +55,11 @@ _SQL = """
         bm.zona_turistica,
         sl.var_anual_5anos_pct,
         bar.ingresos_anuales_p50_cop   AS ingreso_anual_airbnb_real_cop,
-        ipvn.variacion_anual           AS ipvn_variacion_anual
+        NULL::float                    AS ipvn_variacion_anual
     FROM analytics.barrios_score_consolidado sc
     JOIN  analytics.barrios_mercado          bm   ON sc.barrio_id = bm.barrio_id
     LEFT JOIN analytics.score_largo_plazo    sl   ON sc.barrio_id = sl.barrio_id
     LEFT JOIN analytics.barrios_airbnb_real  bar  ON sc.barrio_id = bar.barrio_id
-    LEFT JOIN LATERAL (
-        SELECT variacion_anual
-        FROM raw.ipvn_dane
-        WHERE año = (SELECT MAX(año) FROM raw.ipvn_dane)
-        ORDER BY periodo DESC
-        LIMIT 1
-    ) ipvn ON TRUE
     WHERE sc.barrio_id = $1
 """
 
