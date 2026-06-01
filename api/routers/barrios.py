@@ -255,8 +255,8 @@ _BARRIO_MAP_SQL = """
         bm.pbn_precio_justo,
         bm.poi_precio_oferta,
         b.excluir_inversion,
-        b.uso_suelo_dominante,
-        b.uso_suelo_score,
+        NULL::varchar                       AS uso_suelo_dominante,
+        NULL::integer                       AS uso_suelo_score,
         op.oportunidad_detectada,
         op.tipo_oportunidad,
         op.descripcion_oportunidad,
@@ -336,8 +336,8 @@ _BARRIO_SQL = """
         lq.nota_metodologia,
         -- zona
         b.excluir_inversion,
-        b.uso_suelo_dominante,
-        b.uso_suelo_score,
+        NULL::varchar                       AS uso_suelo_dominante,
+        NULL::integer                       AS uso_suelo_score,
         -- oportunidad
         op.oportunidad_detectada,
         op.tipo_oportunidad,

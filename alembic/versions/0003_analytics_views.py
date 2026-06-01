@@ -121,6 +121,8 @@ JOIN seg_score     ss ON b.barrio_id = ss.barrio_id;
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS analytics")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
+    op.execute("ALTER TABLE raw.barrios ADD COLUMN IF NOT EXISTS uso_suelo_dominante varchar")
+    op.execute("ALTER TABLE raw.barrios ADD COLUMN IF NOT EXISTS uso_suelo_score integer")
     # score_mediano_plazo may exist as a table (pre-migration) — must drop before CREATE VIEW
     op.execute("DROP TABLE IF EXISTS analytics.score_mediano_plazo")
     op.execute(_VIEW_SQL)
