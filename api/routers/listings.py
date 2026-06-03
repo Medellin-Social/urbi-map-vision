@@ -44,6 +44,8 @@ class ListingFull(BaseModel):
     buena_oferta: Optional[bool] = None
     pct_bajo_mediana: Optional[float] = None
     precio_m2_mediana_barrio: Optional[int] = None
+    dias_en_mercado: Optional[int] = None
+    fecha_publicacion: Optional[str] = None
     # URL availability — populated after running validate_listings_urls.py
     disponible_actualmente: Optional[bool] = None
     dias_en_mercado: Optional[int] = None

@@ -223,6 +223,8 @@ export type ApiListing = {
   fecha_scraping?: string | null;
   buena_oferta?: boolean | null;
   pct_bajo_mediana?: number | null;
+  dias_en_mercado?: number | null;
+  fecha_publicacion?: string | null;
   lat?: number | null;
   lon?: number | null;
   barrio_id?: number | null;
@@ -231,7 +233,6 @@ export type ApiListing = {
   tier?: string | null;
   // URL availability — present after validate_listings_urls.py has run
   disponible_actualmente?: boolean | null;
-  dias_en_mercado?: number | null;
   fecha_ultima_verificacion?: string | null;
   // Personalization — present when user is authenticated with a perfil
   relevancia_score?: number | null;

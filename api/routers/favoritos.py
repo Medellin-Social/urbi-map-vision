@@ -2,13 +2,66 @@ from __future__ import annotations
 
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
 
 router = APIRouter()
+
+
+# ── Listing favorites ─────────────────────────────────────────────────────────
+
+class FavListingRequest(BaseModel):
+    url: str
+    barrio_id: Optional[int] = None
+
+
+@router.get("/listings/ids")
+async def fav_listing_ids(current_user: dict = Depends(get_current_user)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT url FROM raw.favoritos_listings WHERE usuario_id = $1",
+        current_user["id"],
+    )
+    return {"ids": [r["url"] for r in rows]}
+
+
+@router.get("/listings")
+async def list_fav_listings(current_user: dict = Depends(get_current_user)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT id, url, barrio_id, created_at FROM raw.favoritos_listings WHERE usuario_id = $1 ORDER BY created_at DESC",
+        current_user["id"],
+    )
+    return [dict(r) for r in rows]
+
+
+@router.post("/listings", status_code=201)
+async def add_fav_listing(req: FavListingRequest, current_user: dict = Depends(get_current_user)):
+    pool = get_pool()
+    await pool.execute(
+        """
+        INSERT INTO raw.favoritos_listings (usuario_id, url, barrio_id)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (usuario_id, url) DO NOTHING
+        """,
+        current_user["id"], req.url, req.barrio_id,
+    )
+    return {"ok": True}
+
+
+@router.delete("/listings", status_code=204)
+async def remove_fav_listing(
+    url: str = Query(...),
+    current_user: dict = Depends(get_current_user),
+):
+    pool = get_pool()
+    await pool.execute(
+        "DELETE FROM raw.favoritos_listings WHERE usuario_id = $1 AND url = $2",
+        current_user["id"], url,
+    )
 
 
 class FavoritoRequest(BaseModel):
