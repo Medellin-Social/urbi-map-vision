@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Optional
 
@@ -670,6 +671,80 @@ async def list_barrios(
     return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max) for r in rows]
 
 
+# ── Lightweight selector endpoints ───────────────────────────────────────────
+
+class ComunaItem(BaseModel):
+    key: str
+    label: str
+    municipio: str
+    n_barrios: int
+
+
+class BarrioComunaItem(BaseModel):
+    id: int
+    nombre: str
+    municipio: str
+    comuna: Optional[str] = None
+    yield_bruto_pct: Optional[float] = None
+    precio_m2_cop: Optional[int] = None
+
+
+@router.get("/comunas", response_model=list[ComunaItem])
+async def list_comunas():
+    pool = get_pool()
+    rows = await pool.fetch("""
+        SELECT
+            COALESCE(b.comuna, b.municipio) AS key,
+            COALESCE(b.comuna, b.municipio) AS label,
+            b.municipio,
+            COUNT(*)::int AS n_barrios
+        FROM raw.barrios b
+        WHERE b.excluir_inversion = FALSE
+        GROUP BY b.comuna, b.municipio
+        ORDER BY b.municipio, label
+    """)
+    return [ComunaItem(**dict(r)) for r in rows]
+
+
+@router.get("/por-comuna/{key}", response_model=list[BarrioComunaItem])
+async def list_barrios_por_comuna(key: str):
+    pool = get_pool()
+    rows = await pool.fetch("""
+        SELECT
+            b.id,
+            b.nombre,
+            b.municipio,
+            b.comuna,
+            bm.yield_bruto         AS yield_bruto_pct,
+            bm.precio_venta_m2_p50 AS precio_m2_cop
+        FROM raw.barrios b
+        LEFT JOIN analytics.barrios_mercado bm ON b.id = bm.barrio_id
+        WHERE (b.comuna = $1 OR b.municipio = $1)
+          AND b.excluir_inversion = FALSE
+        ORDER BY b.nombre
+    """, key)
+    return [BarrioComunaItem(**dict(r)) for r in rows]
+
+
+class BarrioInfo(BaseModel):
+    id: int
+    nombre: str
+    municipio: str
+    comuna: Optional[str] = None
+
+
+@router.get("/{barrio_id}/info", response_model=BarrioInfo)
+async def get_barrio_info(barrio_id: int):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT id, nombre, municipio, comuna FROM raw.barrios WHERE id = $1",
+        barrio_id,
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
+    return BarrioInfo(**dict(row))
+
+
 @router.get("/comparar", response_model=list[BarrioResponse])
 async def comparar_barrios(
     ids: str = Query(description="IDs separados por coma: 1,2,3 (máx 3)"),
@@ -694,7 +769,10 @@ async def get_barrio(
     score_col = get_score_col(perfil)
     pool = get_pool()
     sql = _BARRIO_SQL + " WHERE b.id = $1"
-    row = await pool.fetchrow(sql, barrio_id)
+    try:
+        row = await pool.fetchrow(sql, barrio_id, timeout=15.0)
+    except asyncio.TimeoutError:
+        raise HTTPException(status_code=503, detail="Datos temporalmente no disponibles")
     if row is None:
         raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
     return _build_response(dict(row), score_col, perfil)

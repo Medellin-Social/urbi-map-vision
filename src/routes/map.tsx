@@ -153,7 +153,7 @@ function MapPage() {
     } else {
       // Fallback: build a minimal Neighborhood from BarrioOption so listings update
       setMlsBarrio({
-        id: opt.id, nombre: opt.nombre, comuna: opt.nombre,
+        id: opt.id, nombre: opt.nombre, comuna: opt.comuna ?? opt.nombre,
         municipio: opt.municipio.toUpperCase(), estrato: 3,
         precio_m2: 0, arriendo: 0, yield: 0, anos_recupero: 0,
         dist_metro: 0, dist_parque: 0, dist_mall: 0, n_venta: 0, n_arriendo: 0,

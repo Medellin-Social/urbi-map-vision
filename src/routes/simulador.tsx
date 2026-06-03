@@ -24,7 +24,9 @@ import { z } from "zod";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP, formatPct } from "@/lib/format";
 import { auth } from "@/lib/auth";
-import { useBarrios } from "@/hooks/useBarrios";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
+import { useBarriosComunas, useBarriosPorComuna } from "@/hooks/useBarrios";
 import { useSimular, type SimulacionResponse } from "@/hooks/useCalculadora";
 
 const searchSchema = z.object({
@@ -229,20 +231,50 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
 function SimuladorPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/simulador" });
-  const { data: barrios = [], isPlaceholderData } = useBarrios();
 
+  const [comunaKey, setComunaKey] = useState<string | null>(null);
   const [barrioId, setBarrioId] = useState<number>(search.barrio ?? 0);
 
-  // Initialize to first real barrio once placeholder resolves
+  const { data: comunasData } = useBarriosComunas();
+  const { data: barriosDeComunaData, isLoading: isComunaLoading } =
+    useBarriosPorComuna(comunaKey);
+
+  // Default to first Medellín comune (best data), skip if URL param present
   useEffect(() => {
-    if (isPlaceholderData || barrios.length === 0) return;
+    if (!comunasData?.length || comunaKey !== null) return;
+    if (search.barrio) return;
+    const firstMedellin = comunasData.find((c) => c.municipio === "MEDELLIN");
+    setComunaKey(firstMedellin?.key ?? comunasData[0].key);
+  }, [comunasData]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Default to first barrio in the selected comune (unless already set to a valid barrio)
+  useEffect(() => {
+    if (!barriosDeComunaData?.length) return;
     setBarrioId((prev) => {
-      if (prev !== 0 && barrios.some((b) => b.id === prev)) return prev;
-      return search.barrio && barrios.some((b) => b.id === search.barrio)
-        ? search.barrio
-        : barrios[0].id;
+      if (prev !== 0 && barriosDeComunaData.some((b) => b.id === prev)) return prev;
+      return barriosDeComunaData[0].id;
     });
-  }, [barrios, isPlaceholderData, search.barrio]);
+  }, [barriosDeComunaData]);
+
+  // Pre-fill from URL ?barrio=X: lightweight /info endpoint (no analytics joins)
+  useEffect(() => {
+    if (!search.barrio || !comunasData?.length) return;
+    setBarrioId(search.barrio);
+    apiFetch<{ id: number; nombre: string; municipio: string; comuna: string | null }>(
+      API_ENDPOINTS.barrioInfo(search.barrio),
+    )
+      .then((b) => setComunaKey(b.comuna ?? b.municipio))
+      .catch(() => {
+        const firstMedellin = comunasData.find((c) => c.municipio === "MEDELLIN");
+        setComunaKey(firstMedellin?.key ?? comunasData[0].key);
+      });
+  }, [search.barrio, comunasData?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function handleComunaChange(key: string | null) {
+    setComunaKey(key);
+    setBarrioId(0); // reset barrio until new list loads
+    reset();
+  }
   const listingRef = search.uid ? { uid: search.uid, fuente: search.fuente, url: search.url_listing } : null;
 
   const initPresupuesto = search.precio ? Math.max(1, Math.round(search.precio / 1_000_000)) : 350;
@@ -343,22 +375,69 @@ function SimuladorPage() {
               </div>
             )}
 
-            {/* Barrio */}
+            {/* Zona / Barrio — 2 niveles */}
             <Field label="Zona / Barrio">
               <select
-                value={barrioId}
-                onChange={(e) => {
-                  setBarrioId(Number(e.target.value));
-                  reset();
-                }}
+                value={comunaKey ?? ""}
+                onChange={(e) => handleComunaChange(e.target.value || null)}
                 className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm focus:border-primary focus:outline-none"
               >
-                {barrios.map((n) => (
-                  <option key={n.id} value={n.id}>
-                    {titleCase(n.nombre)} · {n.comuna}
-                  </option>
-                ))}
+                <option value="">Seleccionar zona...</option>
+                {(() => {
+                  const medellin = (comunasData ?? []).filter(
+                    (c) => c.municipio === "MEDELLIN",
+                  );
+                  const valle = (comunasData ?? []).filter(
+                    (c) => c.municipio !== "MEDELLIN",
+                  );
+                  return (
+                    <>
+                      {medellin.length > 0 && (
+                        <optgroup label="Medellín — Comunas">
+                          {medellin.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {titleCase(c.label)} ({c.n_barrios})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                      {valle.length > 0 && (
+                        <optgroup label="Valle de Aburrá">
+                          {valle.map((c) => (
+                            <option key={c.key} value={c.key}>
+                              {titleCase(c.label)} ({c.n_barrios})
+                            </option>
+                          ))}
+                        </optgroup>
+                      )}
+                    </>
+                  );
+                })()}
               </select>
+
+              {comunaKey && (
+                <select
+                  value={barrioId || ""}
+                  onChange={(e) => {
+                    setBarrioId(Number(e.target.value));
+                    reset();
+                  }}
+                  disabled={isComunaLoading}
+                  className="mt-2 w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm focus:border-primary focus:outline-none disabled:opacity-50"
+                >
+                  <option value="">
+                    {isComunaLoading ? "Cargando barrios..." : "Seleccionar barrio..."}
+                  </option>
+                  {(barriosDeComunaData ?? []).map((b) => (
+                    <option key={b.id} value={b.id}>
+                      {titleCase(b.nombre)}
+                      {b.yield_bruto_pct
+                        ? ` · ${b.yield_bruto_pct.toFixed(1)}% yield`
+                        : ""}
+                    </option>
+                  ))}
+                </select>
+              )}
             </Field>
 
             {/* Presupuesto */}
@@ -477,7 +556,7 @@ function SimuladorPage() {
 
             <button
               onClick={handleCalcular}
-              disabled={isPending || !presupuesto || presupuesto <= 0}
+              disabled={isPending || !presupuesto || presupuesto <= 0 || barrioId === 0}
               className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 glow-cyan disabled:opacity-60"
             >
               {isPending ? (

@@ -14,6 +14,7 @@ export const API_ENDPOINTS = {
   // Barrios
   barrios: `${API_BASE_URL}/barrios`,
   barrio: (id: number) => `${API_BASE_URL}/barrios/${id}`,
+  barrioInfo: (id: number) => `${API_BASE_URL}/barrios/${id}/info`,
   comparar: `${API_BASE_URL}/barrios/comparar`,
   listings: (id: number) => `${API_BASE_URL}/barrios/${id}/listings`,
   allListings: `${API_BASE_URL}/listings`,

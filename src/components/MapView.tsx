@@ -655,10 +655,16 @@ export function MapView({
       map.on("click", "listings-mls-unclustered", (e) => {
         if (!e.features?.length) return;
         const props = e.features[0].properties as Record<string, unknown>;
+        const coords = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
+        // Ajuste para copias del mundo cuando zoom out
+        while (Math.abs(e.lngLat.lng - coords[0]) > 180) {
+          coords[0] += e.lngLat.lng > coords[0] ? 360 : -360;
+        }
+        const point = map.project(coords);
         onListingClickFromMapRef.current?.(
           props.id as number,
-          e.originalEvent.clientX,
-          e.originalEvent.clientY,
+          point.x,
+          point.y,
         );
       });
 

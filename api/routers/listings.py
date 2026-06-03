@@ -18,7 +18,7 @@ router = APIRouter()
 _USD = USD_TO_COP
 
 # In-process TTL cache for _expand_neighbors — barrios/geometry never change at runtime.
-_NEIGHBORS_TTL = 300  # seconds
+_NEIGHBORS_TTL = 60  # seconds
 _NEIGHBORS_CACHE: dict[tuple, tuple] = {}
 
 
@@ -242,7 +242,6 @@ _LISTINGS_COUNT_BY_IDS = """
     SELECT SUM(cnt)::bigint FROM (
         SELECT COUNT(*) AS cnt
         FROM staging.stg_listings l
-        JOIN analytics.listings_georef g ON g.url = l.url
         WHERE l.activo = TRUE
           AND l.precio >= 500000
           AND NOT (l.tipo_operacion = 'arriendo' AND l.precio > 50000000)
@@ -253,7 +252,6 @@ _LISTINGS_COUNT_BY_IDS = """
 
         SELECT COUNT(*) AS cnt
         FROM raw.listings_premium lp
-        JOIN analytics.listings_georef g ON g.url = lp.url
         WHERE lp.precio_cop >= 500000
           AND lp.tipo_operacion IS NOT NULL
           AND lp.barrio_id = ANY($1::int[])

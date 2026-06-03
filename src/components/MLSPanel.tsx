@@ -414,7 +414,7 @@ export function MLSPanel({
             )}
             {barrio.comuna && barrio.comuna.toUpperCase() === barrio.nombre.toUpperCase() && (
               <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Barrio · {barrio.municipio}
+                Barrio · {toTitleCase(barrio.comuna)} · {barrio.municipio}
               </span>
             )}
           </div>

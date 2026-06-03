@@ -629,3 +629,43 @@ export function useListings(
     retry: 1,
   });
 }
+
+// ── Lightweight selector hooks (simulador) ────────────────────────────────────
+
+export type ComunaItem = {
+  key: string;
+  label: string;
+  municipio: string;
+  n_barrios: number;
+};
+
+export type BarrioComunaItem = {
+  id: number;
+  nombre: string;
+  municipio: string;
+  comuna: string | null;
+  yield_bruto_pct: number | null;
+  precio_m2_cop: number | null;
+};
+
+export function useBarriosComunas() {
+  return useQuery({
+    queryKey: ["barrios-comunas"],
+    queryFn: () => apiFetch<ComunaItem[]>(`${API_ENDPOINTS.barrios}/comunas`),
+    staleTime: 10 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+export function useBarriosPorComuna(key: string | null) {
+  return useQuery({
+    queryKey: ["barrios-por-comuna", key],
+    queryFn: () =>
+      apiFetch<BarrioComunaItem[]>(
+        `${API_ENDPOINTS.barrios}/por-comuna/${encodeURIComponent(key!)}`,
+      ),
+    enabled: key !== null,
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
