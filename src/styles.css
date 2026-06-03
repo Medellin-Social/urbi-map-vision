@@ -96,6 +96,11 @@ body {
   * { border-color: var(--color-border); }
 }
 
+/* Push top-left controls (draw) below navbar */
+.mapboxgl-ctrl-top-left {
+  top: 68px !important;
+}
+
 /* Mapbox dark tweaks */
 .mapboxgl-ctrl-attrib, .mapboxgl-ctrl-logo {
   opacity: 0.5;

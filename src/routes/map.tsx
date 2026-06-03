@@ -12,6 +12,7 @@ import { auth } from "@/lib/auth";
 import { useListings, useBarriosRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/adapters";
 import { useMemo } from "react";
+import { point, booleanPointInPolygon } from "@turf/turf";
 
 export const Route = createFileRoute("/map")({
   beforeLoad: () => {
@@ -52,6 +53,11 @@ function MapPage() {
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
+  // Draw-to-filter
+  const [drawModeActive, setDrawModeActive] = useState(false);
+  const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Feature | null>(null);
+  const clearDrawRef = useRef<(() => void) | null>(null);
+
   // Single unified call — backend fetches venta + arriendo concurrently (half each) and merges.
   const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0);
   const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
@@ -76,6 +82,20 @@ function MapPage() {
   useEffect(() => {
     setFilteredListings(null);
   }, [mlsListings]);
+
+  // Apply polygon filter on top of raw listings
+  const polygonFilteredListings = useMemo<ApiListing[]>(() => {
+    if (!drawnPolygon) return mlsListings;
+    return mlsListings.filter((l) => {
+      if (!l.lat || !l.lon) return false;
+      return booleanPointInPolygon(point([l.lon, l.lat]), drawnPolygon as GeoJSON.Feature<GeoJSON.Polygon>);
+    });
+  }, [mlsListings, drawnPolygon]);
+
+  // Reset MLSPanel filters when polygon changes so mapListings stays consistent
+  useEffect(() => {
+    setFilteredListings(null);
+  }, [drawnPolygon]);
 
   // All barrios for the municipality selector in MLSPanel
   const { data: barriosRaw } = useBarriosRaw(perfil);
@@ -152,6 +172,8 @@ function MapPage() {
     setHighlightedListingId(null);
     setActiveBarrioInComune(null);
     setFilteredListings(null);
+    setDrawnPolygon(null);
+    setDrawModeActive(false);
   }
 
   function handleBarrioFilter(barrioNombre: string | null) {
@@ -188,8 +210,21 @@ function MapPage() {
     setFilteredListings(listings);
   }
 
-  // Map renders filtered subset when filters are active, otherwise all listings
-  const mapListings = filteredListings ?? mlsListings;
+  // Draw handlers — disabled, revisar filtros antes de habilitar
+  // function handleToggleDrawMode() { ... }
+  // function handleClearDraw() { ... }
+
+  function handleDrawPolygon(poly: GeoJSON.Feature) {
+    setDrawnPolygon(poly);
+    setDrawModeActive(false);
+  }
+
+  function handleDrawDelete() {
+    setDrawnPolygon(null);
+  }
+
+  // Map renders filtered subset when filters are active, otherwise all polygon-filtered listings
+  const mapListings = filteredListings ?? polygonFilteredListings;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
@@ -209,6 +244,10 @@ function MapPage() {
         flyToListingRef={flyToListingRef}
         onListingClickFromMap={handleListingClickFromMap}
         activeBarrioName={activeBarrioInComune}
+        drawModeActive={drawModeActive}
+        onDrawPolygon={handleDrawPolygon}
+        onDrawDelete={handleDrawDelete}
+        clearDrawRef={clearDrawRef}
       />
 
       {/* Gradiente superior */}
@@ -273,6 +312,11 @@ function MapPage() {
           premiumRadio={premiumRadio}
           premiumBarriosIncluidos={premiumBarriosIncluidos}
           onPremiumExpand={setPremiumExpand}
+          // Draw-to-filter — disabled, revisar filtros antes de habilitar
+          // drawModeActive={drawModeActive}
+          // drawnPolygon={drawnPolygon}
+          // onToggleDrawMode={handleToggleDrawMode}
+          // onClearDraw={handleClearDraw}
         />
       )}
     </div>

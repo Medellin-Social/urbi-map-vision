@@ -34,6 +34,11 @@ type Props = {
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
   activeBarrioName?: string | null;
+  // Draw-to-filter
+  drawModeActive?: boolean;
+  onDrawPolygon?: (polygon: GeoJSON.Feature) => void;
+  onDrawDelete?: () => void;
+  clearDrawRef?: React.MutableRefObject<(() => void) | null>;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -196,6 +201,10 @@ export function MapView({
   flyToListingRef,
   onListingClickFromMap,
   activeBarrioName,
+  drawModeActive = false,
+  onDrawPolygon,
+  onDrawDelete,
+  clearDrawRef,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -212,6 +221,12 @@ export function MapView({
   // Refs estables para callbacks (evita stale closures)
   const onViewLevelChangeRef = useRef(onViewLevelChange);
   useEffect(() => { onViewLevelChangeRef.current = onViewLevelChange; }, [onViewLevelChange]);
+
+  const onDrawPolygonRef = useRef(onDrawPolygon);
+  useEffect(() => { onDrawPolygonRef.current = onDrawPolygon; }, [onDrawPolygon]);
+
+  const onDrawDeleteRef = useRef(onDrawDelete);
+  useEffect(() => { onDrawDeleteRef.current = onDrawDelete; }, [onDrawDelete]);
 
   const onGoToMLSRef = useRef(onGoToMLS);
   useEffect(() => { onGoToMLSRef.current = onGoToMLS; }, [onGoToMLS]);
@@ -741,6 +756,7 @@ export function MapView({
       }
       map.setTerrain(null);
       map.easeTo({ pitch: 0, duration: 500 });
+
     } else {
       // Vista 1: ocultar MLS layers
       mlsLastFlyToRef.current = null;
@@ -780,6 +796,83 @@ export function MapView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView]);
+
+  // ── Draw mode: custom polygon drawing (native mapbox-gl v3) ─────────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || !drawModeActive) return;
+
+    const SRC   = "urbi-draw-preview";
+    const FILL  = "urbi-draw-fill";
+    const LINE  = "urbi-draw-line";
+    const DOTS  = "urbi-draw-dots";
+
+    const vertices: [number, number][] = [];
+
+    if (!map.getSource(SRC)) {
+      map.addSource(SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
+      map.addLayer({ id: FILL, type: "fill",   source: SRC, filter: ["==", "$type", "Polygon"],    paint: { "fill-color": "#00d4ff", "fill-opacity": 0.15 } });
+      map.addLayer({ id: LINE, type: "line",   source: SRC, filter: ["==", "$type", "LineString"], paint: { "line-color": "#00d4ff", "line-width": 2, "line-dasharray": [3, 2] } });
+      map.addLayer({ id: DOTS, type: "circle", source: SRC, filter: ["==", "$type", "Point"],      paint: { "circle-radius": 5, "circle-color": "#00d4ff", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+    }
+
+    const setPreview = (mouse?: [number, number]) => {
+      const src = map.getSource(SRC) as mapboxgl.GeoJSONSource;
+      if (!src) return;
+      const pts = mouse ? [...vertices, mouse] : vertices;
+      const features: GeoJSON.Feature[] = vertices.map(v => ({ type: "Feature", geometry: { type: "Point", coordinates: v }, properties: {} }));
+      if (pts.length >= 3) features.push({ type: "Feature", geometry: { type: "Polygon",    coordinates: [[...pts, pts[0]]] }, properties: {} });
+      else if (pts.length === 2) features.push({ type: "Feature", geometry: { type: "LineString", coordinates: pts }, properties: {} });
+      src.setData({ type: "FeatureCollection", features });
+    };
+
+    map.dragPan.disable();
+    map.doubleClickZoom.disable();
+    map.getCanvas().style.cursor = "crosshair";
+
+    const onClick = (e: mapboxgl.MapMouseEvent) => {
+      vertices.push([e.lngLat.lng, e.lngLat.lat]);
+      setPreview();
+    };
+    const onDblClick = (e: mapboxgl.MapMouseEvent) => {
+      e.preventDefault();
+      vertices.pop(); // remove duplicate vertex from 2nd click of dblclick
+      if (vertices.length < 3) return;
+      onDrawPolygonRef.current?.({
+        type: "Feature",
+        geometry: { type: "Polygon", coordinates: [[...vertices, vertices[0]]] },
+        properties: {},
+      });
+    };
+    const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
+      if (vertices.length > 0) setPreview([e.lngLat.lng, e.lngLat.lat]);
+    };
+
+    map.on("click",     onClick);
+    map.on("dblclick",  onDblClick);
+    map.on("mousemove", onMouseMove);
+
+    if (clearDrawRef) clearDrawRef.current = () => {
+      (map.getSource(SRC) as mapboxgl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
+    };
+
+    return () => {
+      map.off("click",     onClick);
+      map.off("dblclick",  onDblClick);
+      map.off("mousemove", onMouseMove);
+      map.dragPan.enable();
+      map.doubleClickZoom.enable();
+      map.getCanvas().style.cursor = "";
+      try {
+        if (map.getLayer(FILL)) map.removeLayer(FILL);
+        if (map.getLayer(LINE)) map.removeLayer(LINE);
+        if (map.getLayer(DOTS)) map.removeLayer(DOTS);
+        if (map.getSource(SRC)) map.removeSource(SRC);
+      } catch { /* ignore if map already torn down */ }
+      if (clearDrawRef) clearDrawRef.current = null;
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drawModeActive]);
 
   // ── Vista 2: actualizar datos GeoJSON cuando llegan listings ────────────────
   useEffect(() => {
