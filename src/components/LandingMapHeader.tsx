@@ -277,13 +277,13 @@ export function LandingMapHeader() {
               textShadow: "0 2px 28px rgba(0,0,0,0.9), 0 0 80px rgba(0,0,0,0.7)",
             }}
           >
-            Welcome to the Aburrá Valley
+            Bienvenido al Valle de Aburrá
           </h1>
           <p
             className="mt-2 text-sm font-medium text-white/75 sm:text-base lg:text-lg"
             style={{ textShadow: "0 2px 14px rgba(0,0,0,0.95)" }}
           >
-            Medellín &amp; Surrounding Communities
+            Medellín y comunidades cercanas
           </p>
         </div>
 
@@ -292,19 +292,19 @@ export function LandingMapHeader() {
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#10b981]" />
-              High potential
+              Alto potencial
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#2BBAA5]" />
-              Good
+              Bueno
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#f59e0b]" />
-              Moderate
+              Moderado
             </span>
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#ef4444]" />
-              Low
+              Bajo
             </span>
           </div>
         </div>
@@ -312,7 +312,7 @@ export function LandingMapHeader() {
         {/* Badge — bottom left */}
         <div className="absolute bottom-[54px] left-3 z-20 hidden rounded-full border border-white/15 bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white/80 backdrop-blur-sm sm:flex items-center gap-1.5">
           <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          488 neighborhoods analyzed · Live data
+          488 barrios analizados · Datos en vivo
         </div>
 
         {/* Scroll indicator — bottom center */}
@@ -321,7 +321,7 @@ export function LandingMapHeader() {
             className="text-[10px] font-semibold uppercase tracking-widest text-white/45"
             style={{ textShadow: "0 1px 6px rgba(0,0,0,0.9)" }}
           >
-            Scroll to explore
+            Desplaza para explorar
           </span>
           <ArrowDown className="h-3.5 w-3.5 animate-bounce text-white/40" />
         </div>

@@ -846,6 +846,37 @@ const PHRASES: Array<[string, string]> = [
   // ---- BarrioChoiceModal ----
   ["Conoce el barrio, cafés y eventos locales", "Discover the neighborhood, cafés and local events"],
   ["Ver yields, precios y análisis de inversión", "See yields, prices and investment analysis"],
+
+  // ---- Landing page — SiteNavbar / index.tsx / LandingMapHeader ----
+  ["Evita las trampas turísticas. Conecta con locales reales que conocen su barrio — cafés ocultos, eventos comunitarios y los lugares que solo los locales conocen.",
+    "Skip the tourist traps. Connect with real locals who know their neighborhoods — hidden cafés, community events and the places only locals know about."],
+  ["Cruza precios de mercado reales, rendimiento Airbnb, puntuaciones de seguridad y valorización histórica para encontrar exactamente dónde invertir en el Valle de Aburrá.",
+    "Cross real market prices, Airbnb performance, security scores and historical appreciation to find exactly where to invest in the Aburrá Valley."],
+  ["Lugares seleccionados por personas que realmente viven ahí — no influencers.", "Curated spots by people who actually live there — not influencers."],
+  ["Del nightlife de El Poblado a los mercados de agricultores de Laureles.", "From El Poblado nightlife to Laureles farmers markets."],
+  ["Descubre los lugares que hacen único a cada barrio.", "Discover the spots that make each neighborhood unique."],
+  ["Precio por m², yields y reportes CMA respaldados por +43,000 listings.", "Price per m², yield calculations and CMA reports backed by 43,000+ listings."],
+  ["Cada barrio puntuado para potencial Airbnb, renta media y renta larga.", "Every neighborhood scored for Airbnb, mid-term and long-term potential."],
+  ["Agentes verificados que garantizan todo el proceso de compra.", "Verified agents who guarantee the entire buying process."],
+  ["Bienvenido al Valle de Aburrá", "Welcome to the Aburrá Valley"],
+  ["Medellín y comunidades cercanas", "Medellín & Surrounding Communities"],
+  ["488 barrios analizados · Datos en vivo", "488 neighborhoods analyzed · Live data"],
+  ["Desplaza para explorar", "Scroll to explore"],
+  ["Empieza a invertir con datos.", "Start Investing with Data."],
+  ["Recomendaciones Locales", "Local Recommendations"],
+  ["Eventos por Barrio", "Events by Neighborhood"],
+  ["Apoya el Comercio Local", "Support Local Business"],
+  ["Inteligencia de Mercado Real", "Real Market Intelligence"],
+  ["Puntuación por Barrio", "Neighborhood Scoring"],
+  ["Agentes Certificados", "Certified Agents"],
+  ["Descubre Medellín", "Experience Medellín"],
+  ["Como un Local", "Like a Local"],
+  ["Alto potencial", "High potential"],
+  ["Explorar Comunidad", "Explore Community"],
+  ["Tiendas", "Stores"],
+  ["Agentes", "Agents"],
+  ["Comenzar", "Get Started"],
+  ["Bueno", "Good"],
 ];
 
 /* Tokens that should never be translated (brand, neighborhood names, etc.) */

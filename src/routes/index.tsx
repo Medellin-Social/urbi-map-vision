@@ -17,15 +17,15 @@ export const Route = createFileRoute("/")({
 });
 
 const COMMUNITY_FEATURES = [
-  { icon: Coffee,       title: "Local Recommendations",    body: "Curated spots by people who actually live there — not influencers." },
-  { icon: Calendar,     title: "Events by Neighborhood",   body: "From El Poblado nightlife to Laureles farmers markets." },
-  { icon: ShoppingBag,  title: "Support Local Business",   body: "Discover the spots that make each neighborhood unique." },
+  { icon: Coffee,       title: "Recomendaciones Locales",  body: "Lugares seleccionados por personas que realmente viven ahí — no influencers." },
+  { icon: Calendar,     title: "Eventos por Barrio",       body: "Del nightlife de El Poblado a los mercados de agricultores de Laureles." },
+  { icon: ShoppingBag,  title: "Apoya el Comercio Local",  body: "Descubre los lugares que hacen único a cada barrio." },
 ];
 
 const INVEST_FEATURES = [
-  { icon: BarChart3, title: "Real Market Intelligence",  body: "Price per m², yield calculations and CMA reports backed by 43,000+ listings." },
-  { icon: MapIcon,   title: "Neighborhood Scoring",      body: "Every neighborhood scored for Airbnb, mid-term and long-term potential." },
-  { icon: Users,     title: "Certified Agents",          body: "Verified agents who guarantee the entire buying process." },
+  { icon: BarChart3, title: "Inteligencia de Mercado Real", body: "Precio por m², yields y reportes CMA respaldados por +43,000 listings." },
+  { icon: MapIcon,   title: "Puntuación por Barrio",        body: "Cada barrio puntuado para potencial Airbnb, renta media y renta larga." },
+  { icon: Users,     title: "Agentes Certificados",         body: "Agentes verificados que garantizan todo el proceso de compra." },
 ];
 
 function TwoColumnSection() {
@@ -35,15 +35,14 @@ function TwoColumnSection() {
         {/* Community — left */}
         <div className="border-border/40 bg-surface/10 p-10 sm:p-14 lg:border-r">
           <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">🌎 Community</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">🌎 Comunidad</span>
             <h2 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-3xl">
-              Experience Medellín
+              Descubre Medellín
               <br />
-              <span className="text-primary">Like a Local</span>
+              <span className="text-primary">Como un Local</span>
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Skip the tourist traps. Connect with real locals who know their neighborhoods —
-              hidden cafés, community events and the places only locals know about.
+              Evita las trampas turísticas. Conecta con locales reales que conocen su barrio — cafés ocultos, eventos comunitarios y los lugares que solo los locales conocen.
             </p>
           </Reveal>
           <div className="mt-7 space-y-4">
@@ -66,7 +65,7 @@ function TwoColumnSection() {
               href="/comunidad"
               className="mt-8 inline-flex items-center gap-2 rounded-lg border border-primary/50 bg-primary/10 px-5 py-2.5 text-sm font-semibold text-primary transition hover:bg-primary/20"
             >
-              Explore Community <ArrowRight className="h-4 w-4" />
+              Explorar Comunidad <ArrowRight className="h-4 w-4" />
             </a>
           </Reveal>
         </div>
@@ -74,15 +73,14 @@ function TwoColumnSection() {
         {/* Investment — right */}
         <div className="border-border/40 border-t bg-background p-10 sm:p-14 lg:border-t-0">
           <Reveal>
-            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">💼 Invest</span>
+            <span className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">💼 Invertir</span>
             <h2 className="mt-3 font-display text-2xl font-bold leading-tight sm:text-3xl">
-              Stop Guessing.
+              Deja de adivinar.
               <br />
-              <span className="text-primary">Start Investing with Data.</span>
+              <span className="text-primary">Empieza a invertir con datos.</span>
             </h2>
             <p className="mt-3 text-sm leading-relaxed text-muted-foreground">
-              Cross real market prices, Airbnb performance, security scores and historical
-              appreciation to find exactly where to invest in the Aburrá Valley.
+              Cruza precios de mercado reales, rendimiento Airbnb, puntuaciones de seguridad y valorización histórica para encontrar exactamente dónde invertir en el Valle de Aburrá.
             </p>
           </Reveal>
           <div className="mt-7 space-y-4">
@@ -105,7 +103,7 @@ function TwoColumnSection() {
               to="/map"
               className="mt-8 inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
             >
-              View Investment Map <ArrowRight className="h-4 w-4" />
+              Ver Mapa de Inversión <ArrowRight className="h-4 w-4" />
             </Link>
           </Reveal>
         </div>
@@ -127,7 +125,7 @@ function MinimalFooter() {
           </span>
         </div>
         <nav className="flex flex-wrap justify-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-          {[["Invest", "/map"], ["Community", "/comunidad"], ["Stores", "/stores"], ["Agents", "/real-estate"], ["Sign In", "/login"]].map(([l, h]) => (
+          {[["Invertir", "/map"], ["Comunidad", "/comunidad"], ["Tiendas", "/stores"], ["Agentes", "/real-estate"], ["Iniciar sesión", "/login"]].map(([l, h]) => (
             <a key={l} href={h} className="transition hover:text-foreground">{l}</a>
           ))}
         </nav>
