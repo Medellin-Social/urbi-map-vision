@@ -830,6 +830,22 @@ const PHRASES: Array<[string, string]> = [
   ["Perfil activo", "Active profile"],
   ["Ingreso neto", "Net income"],
   ["neto / año", "net / yr"],
+
+  // ---- Landing — paywall modal (LandingMapHeader) ----
+  ["Acceso gratuito incluye perfil básico. Datos premium desde $5 USD/mes",
+    "Free access includes basic profile. Premium data from $5 USD/month"],
+  ["Score de inversión personalizado", "Personalized investment score"],
+  ["Conexión con agentes certificados", "Certified agent connection"],
+  ["Yield Airbnb con datos reales", "Airbnb yield with real data"],
+  ["Datos de inversión completos", "Full investment data"],
+  ["Precio/m² y arriendo real", "Price/m² and real rent"],
+  ["Ya tengo cuenta — Iniciar sesión", "I have an account — Sign in"],
+  ["Crear cuenta — Gratis →", "Create account — Free →"],
+  ["Simulador de retorno", "Return simulator"],
+
+  // ---- BarrioChoiceModal ----
+  ["Conoce el barrio, cafés y eventos locales", "Discover the neighborhood, cafés and local events"],
+  ["Ver yields, precios y análisis de inversión", "See yields, prices and investment analysis"],
 ];
 
 /* Tokens that should never be translated (brand, neighborhood names, etc.) */
