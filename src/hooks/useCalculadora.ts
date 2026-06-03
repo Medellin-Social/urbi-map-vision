@@ -30,11 +30,11 @@ export type SimulacionResponse = {
   };
   yields: {
     bruto_pct: number;
-    neto_pct: number;
+    neto_pct: number | null;     // null when sample too small (FIX 2)
   };
   recupero: {
     bruto_anos: number;
-    neto_anos: number;
+    neto_anos: number | null;    // null when yield suppressed (FIX 2)
   };
   valorizacion: {
     tasa_anual_pct: number;
@@ -50,6 +50,8 @@ export type SimulacionResponse = {
   resumen: string;
   alertas: string[];
   datos_insuficientes: boolean;
+  zona_score?: number | null;
+  zona_categoria?: string | null;
   // Profile desglose (optional)
   ingreso_bruto_mensual?: number | null;
   costo_gestion_mensual?: number | null;

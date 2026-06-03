@@ -1,8 +1,11 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ArrowLeft, ExternalLink } from "lucide-react";
+import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
+import { useFavoritosListings } from "@/hooks/useFavoritosListings";
+import { auth } from "@/lib/auth";
 
 type Props = {
   barrio: Neighborhood;
@@ -23,6 +26,11 @@ type Props = {
   premiumRadio?: number | null;
   premiumBarriosIncluidos?: string[] | null;
   onPremiumExpand?: (v: boolean) => void;
+  // Draw-to-filter
+  drawModeActive?: boolean;
+  drawnPolygon?: GeoJSON.Feature | null;
+  onToggleDrawMode?: () => void;
+  onClearDraw?: () => void;
 };
 
 type Filters = {
@@ -48,16 +56,32 @@ function tierColor(l: ApiListing): string {
   return "#00d4ff";
 }
 
+function diasLabel(dias: number | null | undefined): string | null {
+  if (dias == null || dias < 0) return null;
+  if (dias === 0) return "Publicado hoy";
+  if (dias === 1) return "Publicado ayer";
+  if (dias < 7)  return `${dias} días`;
+  if (dias < 30) return `${Math.floor(dias / 7)} semana${Math.floor(dias / 7) > 1 ? "s" : ""}`;
+  if (dias < 365) return `${Math.floor(dias / 30)} mes${Math.floor(dias / 30) > 1 ? "es" : ""}`;
+  return `+${Math.floor(dias / 365)} año${Math.floor(dias / 365) > 1 ? "s" : ""}`;
+}
+
 function ListingCard({
   listing,
   highlighted,
   onSelect,
   cardRef,
+  isFav,
+  onToggleFav,
+  onSimular,
 }: {
   listing: ApiListing;
   highlighted: boolean;
   onSelect: (e: React.MouseEvent) => void;
   cardRef?: (el: HTMLDivElement | null) => void;
+  isFav: boolean;
+  onToggleFav: () => void;
+  onSimular: () => void;
 }) {
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
   const precioUsd = listing.precio_usd
@@ -134,6 +158,25 @@ function ListingCard({
         </div>
       )}
 
+      {diasLabel(listing.dias_en_mercado) && (
+        <div
+          className={`mt-1.5 text-[11px] font-medium ${
+            (listing.dias_en_mercado ?? 0) < 7
+              ? "text-emerald-400"
+              : (listing.dias_en_mercado ?? 0) < 30
+              ? "text-muted-foreground"
+              : (listing.dias_en_mercado ?? 0) < 90
+              ? "text-amber-400"
+              : "text-rose-400"
+          }`}
+          title={listing.fecha_publicacion ? `Publicado el ${listing.fecha_publicacion}` : undefined}
+        >
+          {(listing.dias_en_mercado ?? 0) < 7 && "NUEVO · "}
+          {diasLabel(listing.dias_en_mercado)}
+          {(listing.dias_en_mercado ?? 0) > 90 && " · Lleva tiempo"}
+        </div>
+      )}
+
       <div className="mt-2 flex items-center justify-between">
         {listing.url && listing.disponible_actualmente !== false ? (
           <a
@@ -159,6 +202,23 @@ function ListingCard({
             {listing.fuente ?? "—"}
           </span>
         )}
+
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); onSimular(); }}
+            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/70 border border-border hover:text-primary hover:border-primary/40 transition"
+            title="Simular inversión"
+          >
+            Simular
+          </button>
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+            className="text-base leading-none transition hover:scale-110"
+            title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+          >
+            {isFav ? "❤️" : "🤍"}
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -187,6 +247,10 @@ export function MLSPanel({
   premiumRadio,
   premiumBarriosIncluidos,
   onPremiumExpand,
+  drawModeActive = false,
+  drawnPolygon,
+  onToggleDrawMode,
+  onClearDraw,
 }: Props) {
   const [filters, setFilters] = useState<Filters>({
     tipoOp: "todos",
@@ -196,6 +260,9 @@ export function MLSPanel({
     habitaciones: null,
     tipoInmueble: null,
   });
+  const navigate = useNavigate();
+  const { isFav, toggle: toggleFav } = useFavoritosListings();
+
   // 2-level navigation state
   const [navComuna, setNavComuna] = useState<string | null>(null);
 
@@ -407,9 +474,11 @@ export function MLSPanel({
           </div>
         )}
 
+        {/* Badge área dibujada — disabled, revisar filtros antes de habilitar */}
+
         {/* Filtros */}
         <div className="border-b border-border px-4 py-3 space-y-3">
-          {/* Tipo operación + Premium */}
+          {/* Tipo operación + Premium + Dibujar área */}
           <div className="flex gap-2 flex-wrap">
             {(["todos", "venta", "arriendo"] as const).map((t) => (
               <button
@@ -430,6 +499,9 @@ export function MLSPanel({
             >
               ✦ Premium
             </button>
+            {/* Botón dibujar área — disabled, revisar filtros antes de habilitar
+            <button onClick={onToggleDrawMode} className={...}>Área</button>
+            */}
           </div>
 
           {/* Precio slider */}
@@ -530,6 +602,21 @@ export function MLSPanel({
               highlighted={highlightedListingId === l.id}
               onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}
               cardRef={(el) => { cardRefs.current[l.id] = el; }}
+              isFav={isFav(l.url)}
+              onToggleFav={() => {
+                if (!auth.get()) return;
+                toggleFav(l.url, l.barrio_id);
+              }}
+              onSimular={() => {
+                const p = new URLSearchParams();
+                if (l.barrio_id) p.set("barrio", String(l.barrio_id));
+                if (l.precio_cop) p.set("precio", String(l.precio_cop));
+                if (l.area_m2)   p.set("area",   String(l.area_m2));
+                if (l.url)       p.set("uid",     l.url);
+                if (l.fuente)    p.set("fuente",  l.fuente);
+                if (l.url)       p.set("url_listing", l.url);
+                navigate({ to: "/simulador", search: { barrio: l.barrio_id ?? undefined, precio: l.precio_cop ?? undefined } });
+              }}
             />
           ))}
         </div>

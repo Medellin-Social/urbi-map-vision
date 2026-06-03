@@ -47,8 +47,8 @@ const PHRASES: Array<[string, string]> = [
 
   // Calculator
   ["Simula tu inversión", "Simulate your investment"],
-  ["Calculadora de inversión", "Investment calculator"],
-  ["Calculadora", "Calculator"],
+  ["Simulador de inversión", "Investment simulator"],
+  ["Simulador", "Simulator"],
   ["Inversión inicial", "Initial investment"],
   ["Apartamento típico", "Typical apartment"],
   ["Años recupero", "Payback years"],
@@ -270,7 +270,7 @@ const PHRASES: Array<[string, string]> = [
   ["en segundos.", "in seconds."],
   ["Nosotros mostramos los datos.", "We show the data."],
   ["o con intuición?", "or on intuition?"],
-  ["Prueba la calculadora", "Try the calculator"],
+  ["Prueba el simulador", "Try the simulator"],
   ["Explora el mapa", "Explore the map"],
   ["Ir al mapa", "Go to the map"],
   ["Comenzar gratis", "Start free"],
@@ -445,7 +445,7 @@ const PHRASES: Array<[string, string]> = [
   ["LIQUIDEZ", "LIQUIDITY"],
   ["SEGURIDAD", "SAFETY"],
 
-  // ---- Calculadora ----
+  // ---- Simulador ----
   ["Ajusta los parámetros y presiona Calcular para ver los resultados.", "Adjust parameters and press Calculate to see results."],
   ["Calidad de inversión · Mayor score = mejor oportunidad", "Investment quality · Higher score = better opportunity"],
   ["en ingresos netos (5 años) · Retorno total:", "in net income (5 years) · Total return:"],
@@ -716,7 +716,7 @@ const PHRASES: Array<[string, string]> = [
   ["✓ Guardado", "✓ Saved"],
   ["Activo", "Active"],
 
-  // ---- Calculadora ----
+  // ---- Simulador ----
   ["Resultados basados en datos reales del mercado", "Results based on real market data"],
   ["Comparar barrios", "Compare neighborhoods"],
   ["· 8% costos operativos (vacancia + mantenimiento)", "· 8% operating costs (vacancy + maintenance)"],

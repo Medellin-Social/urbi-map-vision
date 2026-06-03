@@ -390,7 +390,7 @@ export function LandingMapHeader() {
                   "Yield Airbnb con datos reales",
                   "Score de inversión personalizado",
                   "Conexión con agentes certificados",
-                  "Calculadora de retorno",
+                  "Simulador de retorno",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm text-white/80">
                     <span className="text-[#00d4ff]">✅</span>

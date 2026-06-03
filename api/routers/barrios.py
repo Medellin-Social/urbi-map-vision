@@ -21,6 +21,12 @@ _PERFIL_SCORE = {
     "nomadas": "score_mediano",       # legacy alias — keep for existing sessions
     "mediano_plazo": "score_mediano", # canonical new name
     "largo_plazo": "score_largo",
+    # frontend Goal values (renta-larga uses hyphen, valorizacion maps to long-term)
+    "renta-larga": "score_largo",
+    "valorizacion": "score_largo",
+    # corrupted DB values — map to their closest intent
+    "score_mediano": "score_mediano",
+    "mixto": "score_corto",          # ambiguous → default corto (handled by max below)
 }
 
 
@@ -38,14 +44,23 @@ _USD = USD_TO_COP
 def _score_to_hex(score: Optional[int], perfil: Optional[str] = None) -> str:
     if score is None or score == 0:
         return "#00d4ff"
+    # FIX 3: score_mediano distribution is p25=11, p50=18, p75=23, max=56 —
+    # old thresholds (55/40/25) produced almost no green/teal. Calibrated to percentiles.
     if perfil in ("nomadas", "mediano_plazo"):
-        if score >= 55: return "#10b981"
-        if score >= 40: return "#2BBAA5"
-        if score >= 25: return "#f59e0b"
+        if score >= 23: return "#10b981"   # top 25%
+        if score >= 18: return "#2BBAA5"   # top 50%
+        if score >= 11: return "#f59e0b"   # top 75%
         return "#ef4444"
-    if score >= 70:
+    if perfil in ("largo_plazo", "renta-larga", "valorizacion"):
+        # score_largo: p25=37, p50=42, p75=54, max=89
+        if score >= 54: return "#10b981"
+        if score >= 42: return "#2BBAA5"
+        if score >= 37: return "#f59e0b"
+        return "#ef4444"
+    # Default (score_corto / no perfil / max score): p25=27, p50=28, p75=34, max=76
+    if score >= 60:
         return "#10b981"
-    if score >= 50:
+    if score >= 45:
         return "#2BBAA5"
     if score >= 30:
         return "#f59e0b"
@@ -426,7 +441,7 @@ def _i(row: dict, key: str) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None) -> BarrioResponse:
+def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None, use_max_score: bool = False) -> BarrioResponse:
     raw_geo = row.get("geometry_raw")
     geometry = json.loads(raw_geo) if raw_geo else None
 
@@ -446,7 +461,13 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         "score_mediano": _i(row, "score_mediano"),
         "score_largo": _i(row, "score_largo"),
     }
-    score_activo = score_map.get(score_col)
+    # FIX 1: when no perfil is active, show each barrio's best potential score
+    # instead of always defaulting to score_corto (Airbnb).
+    if use_max_score:
+        available = [s for s in score_map.values() if s is not None]
+        score_activo = max(available) if available else None
+    else:
+        score_activo = score_map.get(score_col)
     excluir = bool(row.get("excluir_inversion"))
     color_hex = "#6b7280" if excluir else _score_to_hex(score_activo, perfil)
 
@@ -645,7 +666,8 @@ async def list_barrios(
         ORDER BY sc.{score_col} DESC NULLS LAST
     """
     rows = await pool.fetch(sql, municipio, estrato, score_min)
-    return [_build_response(dict(r), score_col, effective_perfil, perfil_full) for r in rows]
+    use_max = not effective_perfil
+    return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max) for r in rows]
 
 
 @router.get("/comparar", response_model=list[BarrioResponse])
@@ -715,6 +737,8 @@ lraw AS (
     SELECT id, fuente, tipo_operacion, tipo_inmueble,
            precio, area_m2, habitaciones, banos,
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
+           dias_en_mercado,
+           fecha_publicacion,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
                WHEN area_m2 > 0 THEN ROUND(precio::float8 / area_m2)::int
@@ -730,6 +754,8 @@ lraw AS (
     SELECT id, fuente, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, habitaciones, banos,
            NULL AS direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
+           EXTRACT(DAY FROM NOW() - fecha_publicacion)::int AS dias_en_mercado,
+           fecha_publicacion,
            CASE WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
                 ELSE NULL END AS pm2
     FROM raw.listings_premium
@@ -786,7 +812,8 @@ SELECT
     med.m2_mediana::int           AS precio_m2_mediana_barrio,
     COALESCE(lm.url_activa, lf.url_activa) AS disponible_actualmente,
     COALESCE(lm.estrato_real, lf.estrato_real) AS estrato_real,
-    NULL::int                     AS dias_en_mercado,
+    l.dias_en_mercado,
+    l.fecha_publicacion::text     AS fecha_publicacion,
     NULL::timestamp               AS fecha_ultima_verificacion,
     NULL::float8                  AS relevancia_score,
     NULL::text                    AS match_label,

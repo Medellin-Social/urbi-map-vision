@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StoresRouteImport } from './routes/stores'
+import { Route as SimuladorRouteImport } from './routes/simulador'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RealEstateRouteImport } from './routes/real-estate'
@@ -26,6 +27,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const StoresRoute = StoresRouteImport.update({
   id: '/stores',
   path: '/stores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SimuladorRoute = SimuladorRouteImport.update({
+  id: '/simulador',
+  path: '/simulador',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResetPasswordRoute = ResetPasswordRouteImport.update({
@@ -102,6 +108,7 @@ export interface FileRoutesByFullPath {
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
 }
 export interface FileRoutesByTo {
@@ -117,6 +124,7 @@ export interface FileRoutesByTo {
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
 }
 export interface FileRoutesById {
@@ -133,6 +141,7 @@ export interface FileRoutesById {
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
+  '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
 }
 export interface FileRouteTypes {
@@ -150,6 +159,7 @@ export interface FileRouteTypes {
     | '/real-estate'
     | '/register'
     | '/reset-password'
+    | '/simulador'
     | '/stores'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -165,6 +175,7 @@ export interface FileRouteTypes {
     | '/real-estate'
     | '/register'
     | '/reset-password'
+    | '/simulador'
     | '/stores'
   id:
     | '__root__'
@@ -180,6 +191,7 @@ export interface FileRouteTypes {
     | '/real-estate'
     | '/register'
     | '/reset-password'
+    | '/simulador'
     | '/stores'
   fileRoutesById: FileRoutesById
 }
@@ -196,6 +208,7 @@ export interface RootRouteChildren {
   RealEstateRoute: typeof RealEstateRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
+  SimuladorRoute: typeof SimuladorRoute
   StoresRoute: typeof StoresRoute
 }
 
@@ -206,6 +219,13 @@ declare module '@tanstack/react-router' {
       path: '/stores'
       fullPath: '/stores'
       preLoaderRoute: typeof StoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/simulador': {
+      id: '/simulador'
+      path: '/simulador'
+      fullPath: '/simulador'
+      preLoaderRoute: typeof SimuladorRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reset-password': {
@@ -308,6 +328,7 @@ const rootRouteChildren: RootRouteChildren = {
   RealEstateRoute: RealEstateRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
+  SimuladorRoute: SimuladorRoute,
   StoresRoute: StoresRoute,
 }
 export const routeTree = rootRouteImport

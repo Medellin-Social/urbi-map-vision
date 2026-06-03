@@ -45,15 +45,21 @@ _SQL = """
         sc.precio_m2_venta_p50,
         sc.arriendo_p50,
         sc.score_corto,
+        sc.categoria_corto,
         sc.score_mediano,
+        sc.categoria_mediano,
         sc.score_largo,
+        sc.categoria_largo,
         bm.adr_noche_cop,
         bm.ocupacion_airbnb_pct,
         bm.precio_renta_media_p50,
         bm.n_venta,
         bm.zona_turistica,
+        bm.airbnb_n_listings,
         sl.var_anual_5anos_pct,
         bar.ingresos_anuales_p50_cop   AS ingreso_anual_airbnb_real_cop,
+        bar.n_listings_airbnb          AS n_listings_airbnb_real,
+        bar.adr_p50_cop                AS adr_real_noche_cop,
         ipvn.variacion_anual_pct       AS ipvn_variacion_anual
     FROM analytics.barrios_score_consolidado sc
     JOIN  analytics.barrios_mercado          bm   ON sc.barrio_id = bm.barrio_id
@@ -95,12 +101,12 @@ class Ingresos(BaseModel):
 
 class Yields(BaseModel):
     bruto_pct: float
-    neto_pct: float
+    neto_pct: Optional[float] = None  # None when sample too small (FIX 2)
 
 
 class Recupero(BaseModel):
     bruto_anos: float
-    neto_anos: float
+    neto_anos: Optional[float] = None  # None when yield_neto suppressed (FIX 2)
 
 
 class PreciosCorregidos(BaseModel):
@@ -148,6 +154,10 @@ class SimulacionResponse(BaseModel):
     alertas: list[str]
     datos_insuficientes: bool = False
 
+    # Zona quality — the barrio's score for this investment type (separate from yield rating)
+    zona_score: Optional[int] = None
+    zona_categoria: Optional[str] = None
+
     # Profile desglose (optional — only present when profile fields sent)
     ingreso_bruto_mensual: Optional[float] = None
     costo_gestion_mensual: Optional[float] = None
@@ -178,6 +188,27 @@ def _rating(score: int) -> str:
     if score >= 60:
         return "BUENA OPORTUNIDAD"
     if score >= 40:
+        return "MODERADA"
+    return "NO RECOMENDADA"
+
+
+# FIX 2: yield-based rating — separates "rentabilidad" from "zona" quality.
+_YIELD_THRESHOLDS: dict[str, dict[str, float]] = {
+    "airbnb":      {"excelente": 10.0, "buena": 7.0, "moderada": 4.0},
+    "renta_media": {"excelente":  8.0, "buena": 5.0, "moderada": 3.0},
+    "renta_larga": {"excelente":  7.0, "buena": 5.0, "moderada": 3.0},
+}
+
+
+def _rating_por_yield(yield_neto_pct: Optional[float], tipo_inversion: str) -> str:
+    if yield_neto_pct is None:
+        return "SIN DATOS"
+    u = _YIELD_THRESHOLDS.get(tipo_inversion, _YIELD_THRESHOLDS["renta_larga"])
+    if yield_neto_pct >= u["excelente"]:
+        return "EXCELENTE"
+    if yield_neto_pct >= u["buena"]:
+        return "BUENA OPORTUNIDAD"
+    if yield_neto_pct >= u["moderada"]:
         return "MODERADA"
     return "NO RECOMENDADA"
 
@@ -227,13 +258,27 @@ def calcular(
         ingreso_anual_real = data.get("ingreso_anual_airbnb_real_cop")
         adr = float(data.get("adr_noche_cop") or 0)
         ocupacion = float(data.get("ocupacion_airbnb_pct") or 0)
+        n_listings_real = int(data.get("n_listings_airbnb_real") or 0)
+        adr_real = float(data.get("adr_real_noche_cop") or 0)
 
-        if ingreso_anual_real:
-            # Prefer real scraped Airbnb income over ADR×ocupacion projection
+        # FIX 1: require ≥10 real listings to trust the P50
+        # FIX 3: discard real data if observed ADR > 2× estimated ADR (outlier signal)
+        real_data_confiable = (
+            bool(ingreso_anual_real)
+            and n_listings_real >= 10
+            and (not adr or not adr_real or adr_real <= adr * 2)
+        )
+
+        if real_data_confiable:
             ingreso_mensual = float(ingreso_anual_real) / 12
             alertas.append("Ingreso Airbnb basado en datos reales del barrio (mediana P50)")
         elif adr and ocupacion:
             ingreso_mensual = adr * (ocupacion / 100.0) * 30
+            if ingreso_anual_real and not real_data_confiable:
+                alertas.append(
+                    f"Ingreso estimado con ADR×ocupación — muestra real insuficiente "
+                    f"({n_listings_real} listings)"
+                )
         else:
             raise ValueError(
                 "Este barrio no tiene datos Airbnb suficientes (sin ADR ni ingresos reales). "
@@ -333,6 +378,16 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     if req.tipo_inversion == "airbnb":
         n_raw = (req.n_unidades or "").lower()
         mult = 3 if "2-5" in n_raw else (6 if "5+" in n_raw else 1)
+        # FIX 4: only multiply when ≥20 verified real listings exist — scraper counts
+        # (barrios_mercado.airbnb_n_listings) can include area-wide noise; real data
+        # from barrios_airbnb_real is the reliable signal for per-unit income.
+        n_listings_real_fix4 = int(data.get("n_listings_airbnb_real") or 0)
+        if mult > 1 and n_listings_real_fix4 < 20:
+            alertas.append(
+                f"Simulación para múltiples unidades no disponible — "
+                f"muestra verificada insuficiente ({n_listings_real_fix4} listings reales)"
+            )
+            mult = 1
         if mult > 1:
             n_unidades_efectivo = mult
             ingreso_mensual = round(ingreso_mensual * mult)
@@ -395,7 +450,22 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     yield_bruto = _r2(ingreso_anual / presupuesto * 100)
     opex_rate = _OPEX[req.tipo_inversion]
     ingreso_neto_anual = ingreso_anual * (1 - opex_rate)
-    yield_neto = _r2(ingreso_neto_anual / presupuesto * 100)
+    yield_neto_raw = _r2(ingreso_neto_anual / presupuesto * 100)
+
+    # FIX 2: yield >25% signals unreliable income data — suppress the number rather
+    # than display a figure that can't be trusted. datos_insuficientes is set True.
+    _YIELD_CEILING = 25.0
+    if yield_neto_raw > _YIELD_CEILING:
+        yield_neto: Optional[float] = None
+        recupero_neto: Optional[float] = None
+        datos_insuficientes = True
+        alertas.insert(0,
+            "⚠️ DATO INSUFICIENTE — yield calculado supera el 25%, señal de muestra muy pequeña. "
+            "Los ingresos estimados no son confiables para este barrio y tipo de inversión."
+        )
+    else:
+        yield_neto = yield_neto_raw
+        recupero_neto = _r2(presupuesto / ingreso_neto_anual) if ingreso_neto_anual > 0 else 999.0
 
     # Corrección inmobiliaria: -3% precio venta, -10% arriendo
     precio_real_m2 = round(precio_m2 * 0.97)
@@ -407,7 +477,6 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     yield_real = _r2(arriendo_neto * 12 / presupuesto * 100)
 
     recupero_bruto = _r2(presupuesto / ingreso_anual)
-    recupero_neto = _r2(presupuesto / ingreso_neto_anual) if ingreso_neto_anual > 0 else 999.0
 
     valor_3 = round(presupuesto * (1 + var_anual / 100) ** 3)
     valor_5 = round(presupuesto * (1 + var_anual / 100) ** 5)
@@ -416,7 +485,11 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     retorno_total_5 = ganancia_5 + round(ingreso_neto_anual * 5)
 
     score_op = int(score_val)
-    rating = _rating(score_op)
+    # FIX 2: rating_oportunidad is yield-based; zona_score/zona_categoria is the barrio score
+    rating = _rating_por_yield(yield_neto, req.tipo_inversion)
+    # Map tipo_inversion → categoria column for zone context
+    _zona_col = {"airbnb": "categoria_corto", "renta_media": "categoria_mediano", "renta_larga": "categoria_largo"}
+    zona_categoria_val: Optional[str] = data.get(_zona_col.get(req.tipo_inversion, "categoria_corto"))
 
     barrio_nombre = data.get("nombre_barrio") or f"Barrio {req.barrio_id}"
     tipo_label = {
@@ -428,7 +501,7 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         f"Con ${presupuesto/1_000_000:.0f}M en {barrio_nombre.title()} para {tipo_label}, "
         f"puedes comprar ~{area_m2}m² con ingreso estimado de "
         f"${ingreso_mensual/1_000_000:.1f}M/mes. "
-        f"Yield neto {yield_neto}%. "
+        f"Yield neto {f'{yield_neto}%' if yield_neto is not None else 'no disponible (muestra insuficiente)'}. "
         f"En 5 años tu propiedad valdría ~${valor_5/1_000_000:.0f}M "
         f"más ${round(ingreso_neto_anual * 5 / 1_000_000, 0):.0f}M en ingresos netos "
         f"= retorno total de ${retorno_total_5/1_000_000:.0f}M."
@@ -474,6 +547,8 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         ),
         score_oportunidad=score_op,
         rating_oportunidad=rating,
+        zona_score=score_op,
+        zona_categoria=zona_categoria_val,
         estado_precio=data.get("estado_precio"),
         precios=PreciosCorregidos(
             precio_publicado_m2=float(precio_m2),

@@ -82,25 +82,38 @@ _INSERT_LISTINGS_GEOREF = """
 INSERT INTO analytics.listings_georef (url, lat, lon, url_activa, estrato_real, refreshed_at)
 SELECT DISTINCT ON (l.url)
     l.url,
-    COALESCE(lm.lat, lf.lat, lp.lat)          AS lat,
-    COALESCE(lm.lon, lf.lon, lp.lon)          AS lon,
-    COALESCE(lm.url_activa, lf.url_activa)    AS url_activa,
-    COALESCE(lm.estrato_real, lf.estrato_real) AS estrato_real,
+    COALESCE(lm.lat, lf.lat, lp.lat)           AS lat,
+    COALESCE(lm.lon, lf.lon, lp.lon)           AS lon,
+    COALESCE(lm.url_activa, lf.url_activa)     AS url_activa,
+    COALESCE(lm.estrato_real, lf.estrato_real)  AS estrato_real,
     now()
 FROM (
-    SELECT DISTINCT url, fuente FROM staging.stg_listings
+    SELECT DISTINCT url, fuente, barrio_id FROM staging.stg_listings
     WHERE activo = TRUE AND precio >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
     UNION ALL
-    SELECT DISTINCT url, 'medellinliving'::text FROM raw.listings_premium
+    SELECT DISTINCT url, 'medellinliving'::text, barrio_id FROM raw.listings_premium
     WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL
 ) l
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
+JOIN raw.barrios b                      ON b.id = l.barrio_id
 WHERE COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
   AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
+  -- Coords must lie within 2 km of the listing's declared barrio polygon.
+  -- Catches listings scraped with coords in a different municipality (e.g. barrio_id=Envigado
+  -- but lat/lon pointing at Bello). 2 km tolerates imprecise barrio boundary digitisation
+  -- while being far tighter than inter-municipality distances in the Valle (~10-30 km).
+  AND ST_DWithin(
+      ST_SetSRID(ST_MakePoint(
+          COALESCE(lm.lon, lf.lon, lp.lon),
+          COALESCE(lm.lat, lf.lat, lp.lat)
+      ), 4326)::geography,
+      b.geometry::geography,
+      2000
+  )
 ORDER BY l.url
 """
 
