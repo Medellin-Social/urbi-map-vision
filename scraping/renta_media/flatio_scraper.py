@@ -171,6 +171,13 @@ def _parse_from_next_data(nd: dict, canonical_url: str, barrios: list[dict]) -> 
                 except (ValueError, TypeError):
                     pass
 
+        descripcion = None
+        for k in ("description", "body", "summary", "content", "details"):
+            v = raw.get(k)
+            if v and isinstance(v, str) and len(v) > 10:
+                descripcion = v.strip()[:2000]
+                break
+
         utilities = bool(
             raw.get("utilities_included") or raw.get("bills_included") or
             raw.get("allUtilities") or raw.get("all_utilities")
@@ -208,6 +215,7 @@ def _parse_from_next_data(nd: dict, canonical_url: str, barrios: list[dict]) -> 
         return {
             "fuente": FUENTE,
             "titulo": title[:500] or None,
+            "descripcion": descripcion,
             "precio_mes_cop": price_mes_cop,
             "precio_mes_usd": price_mes_usd,
             "area_m2": area,
@@ -329,9 +337,34 @@ def _parse_from_dom(page, canonical_url: str, barrios: list[dict]) -> Optional[d
             re.search(r"utilities\s+included|all\s+utilities|servicios\s+incluidos", body_text, re.I)
         )
 
+        # Amenidades — highlights list rendered in HTML
+        amenidades = []
+        for el in page.query_selector_all(".offer-equipment-highlights__label"):
+            txt = (el.inner_text() or "").strip()
+            if txt:
+                amenidades.append(txt)
+        # Fallback: full equipment list if highlights empty
+        if not amenidades:
+            for el in page.query_selector_all(".offer-equipment__label"):
+                txt = (el.inner_text() or "").strip()
+                if txt:
+                    amenidades.append(txt)
+
+        # Descripción
+        descripcion_pw = None
+        for sel in (".offer-description__text", ".description-text", "[class*='description']"):
+            el = page.query_selector(sel)
+            if el:
+                txt = (el.inner_text() or "").strip()
+                if len(txt) > 20:
+                    descripcion_pw = txt[:2000]
+                    break
+
         return {
             "fuente": FUENTE,
             "titulo": title[:500] or None,
+            "descripcion": descripcion_pw,
+            "amenidades": amenidades if amenidades else None,
             "precio_mes_cop": int(price_mes_eur * EUR_TO_COP),
             "precio_mes_usd": round(price_mes_eur * EUR_TO_COP / USD_TO_COP, 2),
             "area_m2": area,

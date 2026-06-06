@@ -1,5 +1,5 @@
 const API_BASE_URL =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8000/api/v1";
+  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8001/api/v1";
 
 export const API_ENDPOINTS = {
   // Auth
@@ -18,6 +18,7 @@ export const API_ENDPOINTS = {
   comparar: `${API_BASE_URL}/barrios/comparar`,
   listings: (id: number) => `${API_BASE_URL}/barrios/${id}/listings`,
   allListings: `${API_BASE_URL}/listings`,
+  listing: (id: number) => `${API_BASE_URL}/listings/${id}`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,
@@ -35,6 +36,13 @@ export const API_ENDPOINTS = {
   historial: `${API_BASE_URL}/historial`,
   ciudadStats: `${API_BASE_URL}/stats/ciudad`,
   scoreThresholds: `${API_BASE_URL}/stats/score-thresholds`,
+
+  // Comunidad
+  comunidadEventos: (barrioId: number) => `${API_BASE_URL}/comunidad/${barrioId}/eventos`,
+  comunidadTiendas: (barrioId: number) => `${API_BASE_URL}/comunidad/${barrioId}/tiendas`,
+  ticker: (ciudadId = 1) => `${API_BASE_URL}/comunidad/ticker?ciudad_id=${ciudadId}`,
+  todosEventos: `${API_BASE_URL}/comunidad/todos/eventos?limit=20`,
+  todosTiendas: `${API_BASE_URL}/comunidad/todos/tiendas?limit=4`,
 } as const;
 
 export { API_BASE_URL };

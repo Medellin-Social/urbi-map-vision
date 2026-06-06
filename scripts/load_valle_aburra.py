@@ -136,10 +136,8 @@ def load_real_listings(cur, db_features: list[dict], dry_run: bool):
     for f in db_features:
         by_slug.setdefault(f["slug"], []).append(f)
 
-    # Existing URLs to avoid re-insert
-    cur.execute(
-        "SELECT url FROM raw.listings_metrocuadrado WHERE url LIKE 'https://www.fincaraiz.com.co/ficha/%'"
-    )
+    # Existing URLs — used only to skip dup check before upsert (ON CONFLICT handles actual dedup)
+    cur.execute("SELECT url FROM raw.listings_fincaraiz WHERE url IS NOT NULL")
     existing_urls = {row["url"] for row in cur.fetchall()}
 
     venta_n = arriendo_n = skipped_mun = skipped_geo = skipped_dup = 0
@@ -225,24 +223,53 @@ def load_real_listings(cur, db_features: list[dict], dry_run: bool):
                 skipped_geo += 1
                 continue
 
+            tipo_inmueble = lst.get("tipo_inmueble", "apartamento")
+
+            raw_data_json = json.dumps({
+                "id": listing_id,
+                "descripcion": lst.get("descripcion"),
+                "amenidades": lst.get("amenidades") or [],
+            })
+
+            amenidades_list = lst.get("amenidades") or []
+
             if not dry_run:
                 cur.execute(
                     """
-                    INSERT INTO raw.listings_metrocuadrado
+                    INSERT INTO raw.listings_fincaraiz
                         (fuente, tipo_operacion, tipo_inmueble, precio, area_m2,
-                         barrio_id, url, barrio_raw, raw_data, activo,
-                         lat, lon, estrato)
-                    VALUES ('fincaraiz',%s,'apartamento',%s,%s,%s,%s,%s,%s::jsonb,true,%s,%s,%s)
-                    ON CONFLICT (url) DO NOTHING
+                         habitaciones, banos, direccion_raw,
+                         barrio_id, url, barrio_raw, municipio_raw, raw_data, activo,
+                         lat, lon, estrato_real, descripcion, amenidades, fecha_scraping)
+                    VALUES ('fincaraiz',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,true,%s,%s,%s,%s,%s,NOW())
+                    ON CONFLICT (url) DO UPDATE SET
+                        descripcion    = EXCLUDED.descripcion,
+                        amenidades     = EXCLUDED.amenidades,
+                        precio         = EXCLUDED.precio,
+                        area_m2        = EXCLUDED.area_m2,
+                        habitaciones   = EXCLUDED.habitaciones,
+                        banos          = EXCLUDED.banos,
+                        tipo_inmueble  = EXCLUDED.tipo_inmueble,
+                        raw_data       = EXCLUDED.raw_data,
+                        fecha_scraping = EXCLUDED.fecha_scraping
+                    WHERE
+                        EXCLUDED.descripcion IS NOT NULL
+                        OR EXCLUDED.amenidades IS NOT NULL
+                        OR listings_fincaraiz.descripcion IS NULL
                     """,
                     (
-                        tipo, precio, area if area > 0 else None,
+                        tipo, tipo_inmueble, precio, area if area > 0 else None,
+                        lst.get("habitaciones"), lst.get("banos"),
+                        lst.get("direccion"),
                         barrio_id, url,
                         (lst.get("barrio") or "").upper(),
-                        json.dumps({"id": listing_id}),
+                        (lst.get("municipio") or "").upper() or None,
+                        raw_data_json,
                         float(lat) if lat else None,
                         float(lng) if lng else None,
-                        lst.get("estrato"),
+                        lst.get("estrato") or None,
+                        lst.get("descripcion"),
+                        amenidades_list if amenidades_list else None,
                     ),
                 )
 
@@ -291,7 +318,7 @@ def main():
     print("""
 ── Step 4: Run dbt ────────────────────────────────────────────────
 cd /home/edwlearn/urbi/dbt && dbt run --profiles-dir . --select \\
-  staging.stg_listings \\
+  staging.stg_listings_unificado \\
   analytics.barrios_mercado \\
   analytics.score_corto_plazo \\
   analytics.score_mediano_plazo \\

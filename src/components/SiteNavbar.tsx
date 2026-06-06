@@ -4,7 +4,7 @@ import { LanguageToggle } from "@/lib/i18n";
 
 const NAV_LINKS = [
   { label: "Invertir",   href: "/map" },
-  { label: "Comunidad",  href: "/comunidad" },
+  { label: "Comunidad",  href: "/eventos/el-poblado" },
   { label: "Tiendas",    href: "/stores" },
   { label: "Agentes",    href: "/real-estate" },
 ] as const;

@@ -33,6 +33,7 @@ type Props = {
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
+  onListingDblClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   // Draw-to-filter
   drawModeActive?: boolean;
@@ -200,6 +201,7 @@ export function MapView({
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
+  onListingDblClickFromMap,
   activeBarrioName,
   drawModeActive = false,
   onDrawPolygon,
@@ -233,6 +235,9 @@ export function MapView({
 
   const onListingClickFromMapRef = useRef(onListingClickFromMap);
   useEffect(() => { onListingClickFromMapRef.current = onListingClickFromMap; }, [onListingClickFromMap]);
+
+  const onListingDblClickFromMapRef = useRef(onListingDblClickFromMap);
+  useEffect(() => { onListingDblClickFromMapRef.current = onListingDblClickFromMap; }, [onListingDblClickFromMap]);
 
   const riskRef = useRef(risk);
   const [scorePalette, setScorePalette] = useState<ScorePaletteId>(() => getActivePaletteId(risk));
@@ -666,6 +671,14 @@ export function MapView({
           point.x,
           point.y,
         );
+      });
+
+      // Doble click en punto individual → abrir modal de detalle
+      map.on("dblclick", "listings-mls-unclustered", (e) => {
+        e.preventDefault(); // evita zoom de doble click
+        if (!e.features?.length) return;
+        const props = e.features[0].properties as Record<string, unknown>;
+        onListingDblClickFromMapRef.current?.(props.id as number);
       });
 
       map.on("mouseenter", "listings-mls-clusters",    () => { map.getCanvas().style.cursor = "pointer"; });

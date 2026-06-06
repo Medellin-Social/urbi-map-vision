@@ -5,7 +5,7 @@ import time
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.config import USD_TO_COP
@@ -24,6 +24,7 @@ _NEIGHBORS_CACHE: dict[tuple, tuple] = {}
 
 class ListingFull(BaseModel):
     id: int
+    listing_uid: Optional[str] = None
     fuente: Optional[str] = None
     tipo_operacion: Optional[str] = None
     tipo_inmueble: Optional[str] = None
@@ -58,6 +59,21 @@ class ListingFull(BaseModel):
     match_razones: Optional[list[str]] = None
 
 
+class ListingDetail(ListingFull):
+    descripcion: Optional[str] = None
+    arriendo_p50_barrio: Optional[int] = None
+    yield_estimado: Optional[float] = None
+    # Barrio context fields
+    yield_bruto_pct: Optional[float] = None
+    score_corto: Optional[float] = None
+    score_mediano: Optional[float] = None
+    score_largo: Optional[float] = None
+    liquidez_score: Optional[float] = None
+    indice_nomada: Optional[float] = None
+    seguridad_score: Optional[float] = None
+    var_anual_pct: Optional[float] = None
+
+
 class ListingsAllResponse(BaseModel):
     total: int
     listings: list[ListingFull]
@@ -72,40 +88,27 @@ class ListingsAllResponse(BaseModel):
 # analytics.listings_georef   replaces: 3 LEFT JOINs (lm/lf/lp) + COALESCE lat/lon filter
 _LISTINGS_SQL = """
 WITH lraw AS (
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
-           precio, area_m2, habitaciones, banos,
+    SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
+           listing_uid,
+           fuente, tier, tipo_operacion, tipo_inmueble,
+           precio_cop                                  AS precio,
+           area_m2, habitaciones, banos,
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
-               WHEN area_m2 > 0 THEN ROUND(precio::float8 / area_m2)::int
+               WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
                ELSE NULL
            END AS pm2
-    FROM staging.stg_listings
-    WHERE activo = TRUE
-      AND precio >= 500000
-      AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-      AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-
-    UNION ALL
-
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
-           precio_cop AS precio, area_m2, habitaciones, banos,
-           NULL AS direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
-           CASE WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
-                ELSE NULL END AS pm2
-    FROM raw.listings_premium
+    FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
-      AND tipo_operacion IS NOT NULL
+      AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
+      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
 SELECT
     l.id,
+    l.listing_uid,
     l.fuente,
-    CASE l.fuente
-        WHEN 'medellinliving' THEN 'agencia_premium'
-        WHEN 'booking_mensual' THEN 'renta_media'
-        WHEN 'flatio' THEN 'renta_media'
-        ELSE 'standard'
-    END AS tier,
+    l.tier,
     l.tipo_operacion,
     l.tipo_inmueble,
     l.precio::bigint            AS precio_cop,
@@ -186,20 +189,12 @@ ORDER BY
 
 _COUNT_SQL = """
 WITH lraw AS (
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
-           precio, area_m2, habitaciones, banos, barrio_id, url
-    FROM staging.stg_listings
-    WHERE activo = TRUE
-      AND precio >= 500000
-      AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-      AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-
-    UNION ALL
-
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
+    SELECT fuente, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, habitaciones, banos, barrio_id, url
-    FROM raw.listings_premium
-    WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL
+    FROM staging.stg_listings_unificado
+    WHERE precio_cop >= 500000
+      AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
+      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
 SELECT COUNT(*)
 FROM lraw l
@@ -239,23 +234,12 @@ _NEARBY_BARRIOS_SQL = """
 """
 
 _LISTINGS_COUNT_BY_IDS = """
-    SELECT SUM(cnt)::bigint FROM (
-        SELECT COUNT(*) AS cnt
-        FROM staging.stg_listings l
-        WHERE l.activo = TRUE
-          AND l.precio >= 500000
-          AND NOT (l.tipo_operacion = 'arriendo' AND l.precio > 50000000)
-          AND NOT (l.tipo_operacion = 'venta'    AND l.precio > 50000000000)
-          AND l.barrio_id = ANY($1::int[])
-
-        UNION ALL
-
-        SELECT COUNT(*) AS cnt
-        FROM raw.listings_premium lp
-        WHERE lp.precio_cop >= 500000
-          AND lp.tipo_operacion IS NOT NULL
-          AND lp.barrio_id = ANY($1::int[])
-    ) sub
+    SELECT COUNT(*)::bigint
+    FROM staging.stg_listings_unificado l
+    WHERE l.precio_cop >= 500000
+      AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
+      AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
+      AND l.barrio_id = ANY($1::int[])
 """
 
 _PREMIUM_COUNT_BY_IDS = """
@@ -457,3 +441,104 @@ async def get_all_listings(
         barrios_incluidos=barrios_incluidos,
         radio_usado_metros=radio_usado,
     )
+
+
+_LISTING_BY_ID_SQL = """
+WITH listing AS (
+    SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
+           listing_uid,
+           fuente, tier, tipo_operacion, tipo_inmueble,
+           precio_cop, area_m2, habitaciones, banos,
+           direccion_raw, barrio_id, url,
+           NULL::int  AS dias_en_mercado,
+           NULL::date AS fecha_publicacion,
+           CASE
+               WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
+               WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
+               ELSE NULL
+           END AS pm2
+    FROM staging.stg_listings_unificado
+    WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1
+)
+SELECT
+    l.id,
+    l.listing_uid,
+    l.fuente,
+    l.tier,
+    l.tipo_operacion,
+    l.tipo_inmueble,
+    l.precio_cop::bigint,
+    (l.precio_cop / {usd})::bigint AS precio_usd,
+    l.area_m2::float8,
+    l.pm2 AS precio_m2,
+    l.habitaciones,
+    l.banos::float8,
+    l.direccion_raw,
+    l.url,
+    g.lat,
+    g.lon,
+    g.url_activa AS disponible_actualmente,
+    g.estrato_real,
+    l.barrio_id,
+    b.nombre AS barrio_nombre,
+    b.municipio,
+    bc.cd_comuna,
+    m.m2_mediana::int AS precio_m2_mediana_barrio,
+    m.arr_mediana::int AS arriendo_p50_barrio,
+    CASE
+        WHEN l.tipo_operacion = 'venta'
+             AND l.pm2 IS NOT NULL AND l.pm2 > 0 AND m.m2_mediana > 0
+        THEN round(((m.m2_mediana - l.pm2)::float8 / m.m2_mediana * 100)::numeric, 1)::float8
+        WHEN l.tipo_operacion = 'arriendo'
+             AND l.precio_cop > 0 AND m.arr_mediana > 0
+        THEN round(((m.arr_mediana - l.precio_cop)::float8 / m.arr_mediana * 100)::numeric, 1)::float8
+        ELSE NULL
+    END AS pct_bajo_mediana,
+    CASE
+        WHEN l.tipo_operacion = 'venta'
+             AND l.pm2 IS NOT NULL AND l.pm2 > 0 AND m.m2_mediana > 0
+             AND (m.m2_mediana - l.pm2)::float8 / m.m2_mediana > 0.10 THEN TRUE
+        WHEN l.tipo_operacion = 'arriendo'
+             AND l.precio_cop > 0 AND m.arr_mediana > 0
+             AND (m.arr_mediana - l.precio_cop)::float8 / m.arr_mediana > 0.10 THEN TRUE
+        ELSE FALSE
+    END AS buena_oferta,
+    CASE
+        WHEN l.tipo_operacion = 'venta' AND l.precio_cop > 0 AND m.arr_mediana > 0
+        THEN round(((m.arr_mediana * 12)::float8 / l.precio_cop * 100)::numeric, 2)::float8
+        ELSE NULL
+    END AS yield_estimado,
+    lp.descripcion AS descripcion,
+    l.dias_en_mercado,
+    l.fecha_publicacion::text,
+    NULL::timestamp AS fecha_ultima_verificacion,
+    ctx.yield_bruto_pct,
+    ctx.score_corto,
+    ctx.score_mediano,
+    ctx.score_largo,
+    ctx.liquidez_score,
+    ctx.indice_nomada,
+    ctx.seguridad_score,
+    ctx.var_anual_pct
+FROM listing l
+JOIN raw.barrios b ON b.id = l.barrio_id
+JOIN analytics.listings_georef g ON g.url = l.url
+LEFT JOIN analytics.barrios_medianas m
+    ON m.barrio_id = l.barrio_id
+    AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
+LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
+LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
+LEFT JOIN raw.listings_premium lp ON lp.url = l.url
+LIMIT 1
+""".format(usd=int(_USD))
+
+
+@router.get("/{listing_id}", response_model=ListingDetail)
+async def get_listing_by_id(listing_id: int):
+    pool = get_pool()
+    row = await pool.fetchrow(_LISTING_BY_ID_SQL, listing_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="Listing not found")
+    return ListingDetail(**dict(row))

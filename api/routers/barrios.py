@@ -779,29 +779,17 @@ async def get_barrio(
 
 
 _BARRIO_COUNT_SQL = """
-WITH lraw AS (
-    SELECT id, barrio_id, tipo_operacion, precio, area_m2, habitaciones, url, fuente
-    FROM staging.stg_listings
-    WHERE activo = TRUE AND precio >= 500000 AND barrio_id = $1
-      AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-      AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-    UNION ALL
-    SELECT id, barrio_id, tipo_operacion, precio_cop AS precio, area_m2, habitaciones, url, fuente
-    FROM raw.listings_premium
-    WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL AND barrio_id = $1
-)
-SELECT COUNT(*) FROM lraw l
-JOIN raw.barrios b ON b.id = l.barrio_id
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
-WHERE ($2::text   IS NULL OR l.tipo_operacion = $2)
-  AND ($3::bigint IS NULL OR l.precio >= $3)
-  AND ($4::bigint IS NULL OR l.precio <= $4)
+SELECT COUNT(*) FROM staging.stg_listings_unificado l
+JOIN analytics.listings_georef g ON g.url = l.url
+WHERE l.barrio_id = $1
+  AND l.precio_cop >= 500000
+  AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
+  AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
+  AND ($2::text   IS NULL OR l.tipo_operacion = $2)
+  AND ($3::bigint IS NULL OR l.precio_cop >= $3)
+  AND ($4::bigint IS NULL OR l.precio_cop <= $4)
   AND ($5::float8 IS NULL OR l.area_m2 >= $5)
   AND ($6::int    IS NULL OR l.habitaciones = $6)
-  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
 """
 
 _BARRIO_LISTINGS_SQL = """
@@ -812,42 +800,29 @@ WITH med AS (
     WHERE barrio_id = $1
 ),
 lraw AS (
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
-           precio, area_m2, habitaciones, banos,
+    SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
+           listing_uid,
+           fuente, tier, tipo_operacion, tipo_inmueble,
+           precio_cop                                  AS precio,
+           area_m2, habitaciones, banos,
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
-           dias_en_mercado,
-           fecha_publicacion,
+           NULL::int  AS dias_en_mercado,
+           NULL::date AS fecha_publicacion,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
-               WHEN area_m2 > 0 THEN ROUND(precio::float8 / area_m2)::int
+               WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
                ELSE NULL
            END AS pm2
-    FROM staging.stg_listings
-    WHERE activo = TRUE AND precio >= 500000 AND barrio_id = $1
-      AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-      AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-
-    UNION ALL
-
-    SELECT id, fuente, tipo_operacion, tipo_inmueble,
-           precio_cop AS precio, area_m2, habitaciones, banos,
-           NULL AS direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
-           EXTRACT(DAY FROM NOW() - fecha_publicacion)::int AS dias_en_mercado,
-           fecha_publicacion,
-           CASE WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
-                ELSE NULL END AS pm2
-    FROM raw.listings_premium
-    WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL AND barrio_id = $1
+    FROM staging.stg_listings_unificado
+    WHERE precio_cop >= 500000 AND barrio_id = $1
+      AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
+      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
 SELECT
     l.id,
+    l.listing_uid,
     l.fuente,
-    CASE l.fuente
-        WHEN 'medellinliving' THEN 'agencia_premium'
-        WHEN 'booking_mensual' THEN 'renta_media'
-        WHEN 'flatio' THEN 'renta_media'
-        ELSE 'standard'
-    END AS tier,
+    l.tier,
     l.tipo_operacion,
     l.tipo_inmueble,
     l.precio::bigint              AS precio_cop,
@@ -858,8 +833,8 @@ SELECT
     l.banos::float8,
     l.direccion_raw,
     l.url,
-    COALESCE(lm.lat, lf.lat, lp.lat)      AS lat,
-    COALESCE(lm.lon, lf.lon, lp.lon)      AS lon,
+    g.lat,
+    g.lon,
     l.barrio_id,
     b.nombre                      AS barrio_nombre,
     b.municipio                   AS municipio,
@@ -888,8 +863,8 @@ SELECT
         ELSE NULL
     END AS pct_bajo_mediana,
     med.m2_mediana::int           AS precio_m2_mediana_barrio,
-    COALESCE(lm.url_activa, lf.url_activa) AS disponible_actualmente,
-    COALESCE(lm.estrato_real, lf.estrato_real) AS estrato_real,
+    g.url_activa                  AS disponible_actualmente,
+    g.estrato_real,
     l.dias_en_mercado,
     l.fecha_publicacion::text     AS fecha_publicacion,
     NULL::timestamp               AS fecha_ultima_verificacion,
@@ -898,17 +873,13 @@ SELECT
     NULL::text[]                  AS match_razones
 FROM lraw l
 CROSS JOIN med
-JOIN raw.barrios b ON b.id = l.barrio_id
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
+JOIN raw.barrios b                ON b.id = l.barrio_id
+JOIN analytics.listings_georef g  ON g.url = l.url
 WHERE ($2::text   IS NULL OR l.tipo_operacion = $2)
   AND ($3::bigint IS NULL OR l.precio >= $3)
   AND ($4::bigint IS NULL OR l.precio <= $4)
   AND ($5::float8 IS NULL OR l.area_m2 >= $5)
   AND ($6::int    IS NULL OR l.habitaciones = $6)
-  AND COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
 ORDER BY
     CASE WHEN l.fuente = 'medellinliving' THEN 0 ELSE 1 END,
     l.pm2 ASC NULLS LAST

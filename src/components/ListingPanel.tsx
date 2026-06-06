@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { GripVertical, MapPin, Minus, X } from "lucide-react";
+import { GripVertical, MapPin, Minus, X, Maximize2 as ExpandIcon } from "lucide-react";
 import { formatCOP } from "@/lib/format";
 import type { ApiListing, ApiBarrio } from "@/lib/adapters";
 
@@ -33,9 +33,10 @@ type Props = {
   barrio?: ApiBarrio | null;
   initialPos?: { x: number; y: number };
   onClose: () => void;
+  onOpenDetail?: () => void;
 };
 
-export function ListingPanel({ listing, barrio, initialPos, onClose }: Props) {
+export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetail }: Props) {
   const OFFSET_X = 16;
   const OFFSET_Y = -24;
 
@@ -227,7 +228,8 @@ export function ListingPanel({ listing, barrio, initialPos, onClose }: Props) {
             )}
 
             <div className="rounded-lg border border-border/60 bg-background/30 p-3 text-xs space-y-1.5">
-              {pm2 && (
+              {/* precio/m² solo para venta */}
+              {pm2 && tipoOp === "venta" && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Precio/m²:</span>
                   <span className="font-semibold">{formatCOP(pm2)}/m²</span>
@@ -266,6 +268,15 @@ export function ListingPanel({ listing, barrio, initialPos, onClose }: Props) {
                 <div className="mt-0.5 text-muted-foreground">{badge.desc}</div>
               </div>
             )}
+
+            {/* Ver detalle completo → abre modal */}
+            <button
+              onClick={onOpenDetail}
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background/60 py-2 text-[11px] font-semibold text-foreground transition hover:bg-background"
+            >
+              <ExpandIcon className="h-3 w-3" />
+              Ver detalle completo
+            </button>
 
             <div className="flex gap-2">
               {listing.url && (

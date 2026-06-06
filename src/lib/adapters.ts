@@ -240,6 +240,22 @@ export type ApiListing = {
   match_razones?: string[] | null;
 };
 
+export type ApiListingDetail = ApiListing & {
+  municipio?: string | null;
+  estrato_real?: number | null;
+  descripcion?: string | null;
+  arriendo_p50_barrio?: number | null;
+  yield_estimado?: number | null;
+  yield_bruto_pct?: number | null;
+  score_corto?: number | null;
+  score_mediano?: number | null;
+  score_largo?: number | null;
+  liquidez_score?: number | null;
+  indice_nomada?: number | null;
+  seguridad_score?: number | null;
+  var_anual_pct?: number | null;
+};
+
 export type ApiListingsResponse = {
   total: number;
   listings: ApiListing[];

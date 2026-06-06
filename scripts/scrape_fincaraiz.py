@@ -30,6 +30,21 @@ from config import MUNICIPIOS, MUNICIPIOS_BY_SLUG, TIPOSNEGOCIOS
 RAW_DIR = Path(__file__).parent / "data" / "raw"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
+# Verified 2026-06-04: all URLs return 200+__NEXT_DATA__. locales-comerciales redirects → use locales.
+# edificios-apartamentos / edificios-oficinas redirect → excluded.
+TIPOS_FINCARAIZ: dict[str, str] = {
+    "apartamento":   "apartamentos",
+    "apartaestudio": "apartaestudios",
+    "casa":          "casas",
+    "local":         "locales",
+    "oficina":       "oficinas",
+    "bodega":        "bodegas",
+    "consultorio":   "consultorios",
+    "lote":          "lotes",
+    "casa_lote":     "casas-lotes",
+    "finca":         "fincas",
+}
+
 HEADERS = {
     "User-Agent": (
         "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -51,7 +66,7 @@ DELAY = 1.8  # seconds between requests (respectful crawling)
 # URL patterns (confirmed working)
 # tipo "venta" → /venta/apartamentos/{slug}/antioquia
 # tipo "arriendo" → /arriendo/apartamentos/{slug}/antioquia
-BASE_URL = "https://www.fincaraiz.com.co/{tipo}/apartamentos/{slug}/antioquia"
+BASE_URL = "https://www.fincaraiz.com.co/{operacion}/{tipo_url}/{slug}/antioquia"
 
 # Valle de Aburrá bounding box (for filtering out-of-area listings)
 LAT_MIN, LAT_MAX = 5.95, 6.55
@@ -104,7 +119,7 @@ def get_area(raw: dict) -> float:
     return 0.0
 
 
-def normalize_listing(raw: dict, slug: str, tipo_negocio: str) -> dict | None:
+def normalize_listing(raw: dict, slug: str, tipo_negocio: str, tipo_inmueble: str) -> dict | None:
     """
     Normalize a fincaraiz listing to our schema.
     Returns None if required fields are missing or out of area.
@@ -150,27 +165,44 @@ def normalize_listing(raw: dict, slug: str, tipo_negocio: str) -> dict | None:
         listing_id = raw.get("id")
         url = f"https://www.fincaraiz.com.co/ficha/{listing_id}" if listing_id else None
 
+        # Rich fields available in searchFast response
+        descripcion = (raw.get("description") or "").strip() or None
+        amenidades = [f["name"] for f in (raw.get("facilities") or []) if f.get("name")]
+        direccion = raw.get("address") if raw.get("showAddress") else None
+        habitaciones = raw.get("rooms") or raw.get("bedrooms")
+        banos = raw.get("bathrooms")
+        garajes = raw.get("garage")
+        precio_usd = raw.get("price_amount_usd")
+
         return {
             "barrio": barrio,
             "municipio_slug": slug,
             "municipio": municipio,
             "precio": int(precio),
+            "precio_usd": int(precio_usd) if precio_usd else None,
             "area": round(area, 2),
             "precio_m2": precio_m2,
             "tipo": tipo_negocio,
+            "tipo_inmueble": tipo_inmueble,
             "estrato": int(estrato) if estrato else 0,
             "lat": round(float(lat), 7),
             "lng": round(float(lng), 7),
             "id": listing_id,
             "url": url,
+            "descripcion": descripcion,
+            "amenidades": amenidades,
+            "direccion": direccion,
+            "habitaciones": int(habitaciones) if habitaciones else None,
+            "banos": int(banos) if banos else None,
+            "garajes": int(garajes) if garajes else None,
         }
     except Exception:
         return None
 
 
-def scrape_municipio_tipo(slug: str, tipo: str, max_pages: int) -> list[dict]:
-    """Scrape all pages for one (municipio, tipo_negocio) combination."""
-    url_base = BASE_URL.format(tipo=tipo, slug=slug)
+def scrape_municipio_tipo(slug: str, operacion: str, tipo_inmueble: str, tipo_url: str, max_pages: int) -> list[dict]:
+    """Scrape all pages for one (municipio, operacion, tipo_inmueble) combination."""
+    url_base = BASE_URL.format(operacion=operacion, tipo_url=tipo_url, slug=slug)
     print(f"  → {url_base} (max {max_pages} pages)")
 
     listings: list[dict] = []
@@ -202,7 +234,7 @@ def scrape_municipio_tipo(slug: str, tipo: str, max_pages: int) -> list[dict]:
             if lid in seen_ids:
                 continue
             seen_ids.add(lid)
-            normalized = normalize_listing(raw, slug, tipo)
+            normalized = normalize_listing(raw, slug, operacion, tipo_inmueble)
             if normalized:
                 page_listings.append(normalized)
 
@@ -223,8 +255,8 @@ def scrape_municipio_tipo(slug: str, tipo: str, max_pages: int) -> list[dict]:
     return listings
 
 
-def save_raw(slug: str, tipo: str, listings: list[dict]) -> Path:
-    out = RAW_DIR / f"{slug}_{tipo}.json"
+def save_raw(slug: str, tipo_inmueble: str, operacion: str, listings: list[dict]) -> Path:
+    out = RAW_DIR / f"{slug}_{tipo_inmueble}_{operacion}.json"
     with open(out, "w", encoding="utf-8") as f:
         json.dump(listings, f, ensure_ascii=False, indent=2)
     print(f"  saved {len(listings)} listings → {out.name}")
@@ -234,31 +266,42 @@ def save_raw(slug: str, tipo: str, listings: list[dict]) -> Path:
 def main():
     parser = argparse.ArgumentParser(description="Scrape fincaraiz.com.co — Valle de Aburrá")
     parser.add_argument("--slug", help="Single municipio slug (e.g. medellin)")
-    parser.add_argument("--tipo", choices=TIPOSNEGOCIOS, help="Only scrape this tipo")
+    parser.add_argument("--operacion", choices=TIPOSNEGOCIOS, help="Only scrape this operacion (venta|arriendo)")
+    parser.add_argument(
+        "--tipo-inmueble",
+        choices=list(TIPOS_FINCARAIZ.keys()),
+        help="Only scrape this tipo de inmueble",
+    )
     parser.add_argument(
         "--max-pages",
         type=int,
         default=DEFAULT_MAX_PAGES,
-        help=f"Max pages per (slug, tipo) combo (default={DEFAULT_MAX_PAGES})",
+        help=f"Max pages per combination (default={DEFAULT_MAX_PAGES})",
     )
     args = parser.parse_args()
 
     slugs = [args.slug] if args.slug else [m["slug"] for m in MUNICIPIOS]
-    tipos = [args.tipo] if args.tipo else TIPOSNEGOCIOS
+    operaciones = [args.operacion] if args.operacion else TIPOSNEGOCIOS
+    tipos_iter = (
+        {args.tipo_inmueble: TIPOS_FINCARAIZ[args.tipo_inmueble]}.items()
+        if args.tipo_inmueble
+        else TIPOS_FINCARAIZ.items()
+    )
 
     total_saved = 0
     for slug in slugs:
         if slug not in MUNICIPIOS_BY_SLUG:
             print(f"Unknown slug: {slug}")
             continue
-        for tipo in tipos:
-            print(f"\n{'='*60}")
-            print(f"Scraping: {slug} / {tipo}")
-            print(f"{'='*60}")
-            listings = scrape_municipio_tipo(slug, tipo, args.max_pages)
-            save_raw(slug, tipo, listings)
-            total_saved += len(listings)
-            time.sleep(DELAY * 2)
+        for tipo_inmueble, tipo_url in tipos_iter:
+            for operacion in operaciones:
+                print(f"\n{'='*60}")
+                print(f"Scraping: {slug} / {tipo_inmueble} / {operacion}")
+                print(f"{'='*60}")
+                listings = scrape_municipio_tipo(slug, operacion, tipo_inmueble, tipo_url, args.max_pages)
+                save_raw(slug, tipo_inmueble, operacion, listings)
+                total_saved += len(listings)
+                time.sleep(DELAY * 2)
 
     print(f"\nDone. Total listings saved: {total_saved}")
 

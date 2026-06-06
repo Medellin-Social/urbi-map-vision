@@ -60,7 +60,7 @@ def _update_results(conn, results: list[dict]) -> None:
             SET url_activa              = TRUE,
                 url_validada_at         = :ts,
                 fecha_ultima_vez_activa = :ts
-            WHERE listing_uid = ANY(:ids)
+            WHERE url = ANY(:ids)
         """), {"ts": now, "ids": activos_fr})
 
     # fincaraiz — inactive
@@ -69,7 +69,7 @@ def _update_results(conn, results: list[dict]) -> None:
             UPDATE raw.listings_fincaraiz
             SET url_activa      = FALSE,
                 url_validada_at = :ts
-            WHERE listing_uid = ANY(:ids)
+            WHERE url = ANY(:ids)
         """), {"ts": now, "ids": inactivos_fr})
 
     # metrocuadrado — active
@@ -79,7 +79,7 @@ def _update_results(conn, results: list[dict]) -> None:
             SET url_activa              = TRUE,
                 url_validada_at         = :ts,
                 fecha_ultima_vez_activa = :ts
-            WHERE listing_uid = ANY(:ids)
+            WHERE url = ANY(:ids)
         """), {"ts": now, "ids": activos_mc})
 
     # metrocuadrado — inactive
@@ -88,7 +88,7 @@ def _update_results(conn, results: list[dict]) -> None:
             UPDATE raw.listings_metrocuadrado
             SET url_activa      = FALSE,
                 url_validada_at = :ts
-            WHERE listing_uid = ANY(:ids)
+            WHERE url = ANY(:ids)
         """), {"ts": now, "ids": inactivos_mc})
 
 
@@ -98,16 +98,15 @@ async def validate_all(batch_size: int = 500, concurrency: int = 50) -> dict:
 
     with engine.connect() as conn:
         rows = conn.execute(text("""
-            SELECT listing_uid, url, fuente
-            FROM staging.stg_listings
-            WHERE url IS NOT NULL
-              AND fuente IN ('fincaraiz', 'metrocuadrado')
-              AND activo = TRUE
-              AND (
-                  url_validada_at IS NULL
-                  OR url_validada_at < NOW() - INTERVAL '7 days'
-              )
-            ORDER BY url_validada_at ASC NULLS FIRST
+            SELECT url AS listing_uid, url, 'fincaraiz' AS fuente
+            FROM raw.listings_fincaraiz
+            WHERE url IS NOT NULL AND activo = TRUE
+              AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
+            UNION ALL
+            SELECT url, url, 'metrocuadrado'
+            FROM raw.listings_metrocuadrado
+            WHERE url IS NOT NULL AND activo = TRUE
+              AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
             LIMIT :lim
         """), {"lim": batch_size}).fetchall()
 

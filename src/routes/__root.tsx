@@ -66,10 +66,16 @@ export const Route = createRootRoute({
     links: [
       { rel: "icon", href: "/favicon.svg", type: "image/svg+xml" },
       { rel: "stylesheet", href: appCss },
-      { rel: "stylesheet", href: "https://api.mapbox.com/mapbox-gl-js/v3.7.0/mapbox-gl.css" },
+      // Mapbox — bundled CSS used instead of CDN to avoid version mismatch (v3.7 vs v3.23)
+      { rel: "preconnect", href: "https://api.mapbox.com" },
+      { rel: "preconnect", href: "https://events.mapbox.com" },
+      { rel: "dns-prefetch", href: "https://a.tiles.mapbox.com" },
+      { rel: "dns-prefetch", href: "https://b.tiles.mapbox.com" },
+      { rel: "dns-prefetch", href: "https://c.tiles.mapbox.com" },
+      { rel: "dns-prefetch", href: "https://d.tiles.mapbox.com" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&display=swap" },
     ],
   }),
   shellComponent: RootShell,

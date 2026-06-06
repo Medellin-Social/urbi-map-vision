@@ -52,7 +52,7 @@ function OnboardingPage() {
     setUserType(type);
     if (type === "explorer") {
       auth.patch({ userType: "explorer" });
-      navigate({ to: "/comunidad" });
+      window.location.href = '/eventos/el-poblado';
     } else {
       setStep(1);
     }

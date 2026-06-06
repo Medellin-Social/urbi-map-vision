@@ -20,20 +20,20 @@ SELECT
     tipo_inmueble,
     ROUND(
         PERCENTILE_CONT(0.5) WITHIN GROUP (
-            ORDER BY precio::float / NULLIF(area_m2, 0)
+            ORDER BY precio_cop::float / NULLIF(area_m2, 0)
         ) FILTER (WHERE
             tipo_operacion = 'venta'
             AND area_m2 > 0
-            AND precio::float / area_m2 > 500000
-            AND precio::float / area_m2 < 50000000
+            AND precio_cop::float / area_m2 > 500000
+            AND precio_cop::float / area_m2 < 50000000
         )
     )::bigint AS m2_mediana,
     PERCENTILE_CONT(0.5) WITHIN GROUP (
-        ORDER BY precio::float
+        ORDER BY precio_cop::float
     ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint AS arr_mediana,
     now()
-FROM staging.stg_listings
-WHERE activo = TRUE AND precio > 0
+FROM staging.stg_listings_unificado
+WHERE precio_cop > 0 AND barrio_id IS NOT NULL
 GROUP BY barrio_id, tipo_inmueble
 """
 
@@ -82,35 +82,21 @@ _INSERT_LISTINGS_GEOREF = """
 INSERT INTO analytics.listings_georef (url, lat, lon, url_activa, estrato_real, refreshed_at)
 SELECT DISTINCT ON (l.url)
     l.url,
-    COALESCE(lm.lat, lf.lat, lp.lat)           AS lat,
-    COALESCE(lm.lon, lf.lon, lp.lon)           AS lon,
-    COALESCE(lm.url_activa, lf.url_activa)     AS url_activa,
-    COALESCE(lm.estrato_real, lf.estrato_real)  AS estrato_real,
+    l.lat,
+    l.lon,
+    COALESCE(lm.url_activa, lf.url_activa)              AS url_activa,
+    COALESCE(l.estrato_real, lm.estrato_real, lf.estrato_real) AS estrato_real,
     now()
-FROM (
-    SELECT DISTINCT url, fuente, barrio_id FROM staging.stg_listings
-    WHERE activo = TRUE AND precio >= 500000
-      AND NOT (tipo_operacion = 'arriendo' AND precio > 50000000)
-      AND NOT (tipo_operacion = 'venta'    AND precio > 50000000000)
-    UNION ALL
-    SELECT DISTINCT url, 'medellinliving'::text, barrio_id FROM raw.listings_premium
-    WHERE precio_cop >= 500000 AND tipo_operacion IS NOT NULL
-) l
+FROM staging.stg_listings_unificado l
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-LEFT JOIN raw.listings_premium lp       ON lp.url = l.url AND l.fuente = 'medellinliving'
 JOIN raw.barrios b                      ON b.id = l.barrio_id
-WHERE COALESCE(lm.lat, lf.lat, lp.lat) IS NOT NULL
-  AND COALESCE(lm.lat, lf.lat, lp.lat) != 0
-  -- Coords must lie within 2 km of the listing's declared barrio polygon.
-  -- Catches listings scraped with coords in a different municipality (e.g. barrio_id=Envigado
-  -- but lat/lon pointing at Bello). 2 km tolerates imprecise barrio boundary digitisation
-  -- while being far tighter than inter-municipality distances in the Valle (~10-30 km).
+WHERE l.precio_cop >= 500000
+  AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
+  AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
+  AND l.lat IS NOT NULL AND l.lat != 0
   AND ST_DWithin(
-      ST_SetSRID(ST_MakePoint(
-          COALESCE(lm.lon, lf.lon, lp.lon),
-          COALESCE(lm.lat, lf.lat, lp.lat)
-      ), 4326)::geography,
+      ST_SetSRID(ST_MakePoint(l.lon, l.lat), 4326)::geography,
       b.geometry::geography,
       2000
   )

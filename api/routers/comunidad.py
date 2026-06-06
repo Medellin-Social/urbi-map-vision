@@ -1,0 +1,749 @@
+from __future__ import annotations
+
+import asyncio
+from datetime import date, timedelta
+from typing import Any, Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+
+from api.db import get_pool
+
+router = APIRouter()
+
+
+class EventoOut(BaseModel):
+    id: int
+    fuente: str
+    titulo: str
+    descripcion: Optional[str]
+    foto_url: Optional[str]
+    url_externo: Optional[str]
+    fecha_inicio: str
+    fecha_fin: Optional[str]
+    gratuito: bool
+    precio: float
+    organizador: Optional[str]
+    categoria: Optional[str]
+    tipo_audiencia: Optional[str]
+    lat: Optional[float]
+    lon: Optional[float]
+    barrio_id: Optional[int]
+    barrio_nombre: Optional[str]
+    destacado: bool
+
+
+class EventosResponse(BaseModel):
+    barrio_id: Optional[int]
+    municipio: Optional[str] = None
+    total: int
+    eventos: list[EventoOut]
+
+
+# ── Todos (Valle de Aburrá completo) — must be before /{barrio_id}/ routes ────
+
+_TODOS_EVENTOS_QUERY = """
+SELECT
+    e.id, e.fuente, e.titulo, e.descripcion,
+    e.foto_url, e.url_externo,
+    e.fecha_inicio::text AS fecha_inicio,
+    e.fecha_fin::text    AS fecha_fin,
+    e.gratuito, COALESCE(e.precio, 0) AS precio,
+    e.organizador, e.categoria, e.tipo_audiencia,
+    e.lat, e.lon, e.barrio_id,
+    b.nombre AS barrio_nombre,
+    e.destacado
+FROM public.eventos e
+LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+ORDER BY e.destacado DESC, e.fecha_inicio ASC
+LIMIT $6 OFFSET $7
+"""
+
+_TODOS_COUNT_QUERY = """
+SELECT COUNT(*)
+FROM public.eventos e
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+"""
+
+
+@router.get("/todos/eventos", response_model=EventosResponse)
+async def get_eventos_todos(
+    categoria: Optional[str] = Query(None),
+    tipo_audiencia: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    gratuito: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    hoy = date.today()
+    f_desde = fecha_desde or hoy
+    f_hasta = fecha_hasta or (hoy + timedelta(days=30))
+    args = (f_desde, f_hasta, categoria, tipo_audiencia, gratuito)
+    try:
+        rows, total_row = await pool.fetch(
+            _TODOS_EVENTOS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_TODOS_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return EventosResponse(
+        barrio_id=None, municipio="VALLE DE ABURRÁ",
+        total=total_row[0] if total_row else 0,
+        eventos=[_build_evento_out(r) for r in rows],
+    )
+
+
+_EVENTOS_QUERY = """
+SELECT
+    e.id,
+    e.fuente,
+    e.titulo,
+    e.descripcion,
+    e.foto_url,
+    e.url_externo,
+    e.fecha_inicio::text    AS fecha_inicio,
+    e.fecha_fin::text       AS fecha_fin,
+    e.gratuito,
+    COALESCE(e.precio, 0)   AS precio,
+    e.organizador,
+    e.categoria,
+    e.tipo_audiencia,
+    e.lat,
+    e.lon,
+    e.barrio_id,
+    b.nombre                AS barrio_nombre,
+    e.destacado
+FROM public.eventos e
+LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+  AND (
+    e.barrio_id = $6
+    OR e.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $6),
+            2000
+        )
+    )
+  )
+ORDER BY e.destacado DESC, e.fecha_inicio ASC
+LIMIT $7 OFFSET $8
+"""
+
+_COUNT_QUERY = """
+SELECT COUNT(*)
+FROM public.eventos e
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+  AND (
+    e.barrio_id = $6
+    OR e.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $6),
+            2000
+        )
+    )
+  )
+"""
+
+
+@router.get("/{barrio_id}/eventos", response_model=EventosResponse)
+async def get_eventos_barrio(
+    barrio_id: int,
+    categoria: Optional[str] = Query(None),
+    tipo_audiencia: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    gratuito: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    hoy = date.today()
+    f_desde = fecha_desde or hoy
+    f_hasta = fecha_hasta or (hoy + timedelta(days=30))
+
+    args = (f_desde, f_hasta, categoria, tipo_audiencia, gratuito, barrio_id)
+
+    try:
+        rows, total_row = await pool.fetch(
+            _EVENTOS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return EventosResponse(
+        barrio_id=barrio_id, total=total_row[0] if total_row else 0,
+        eventos=[_build_evento_out(r) for r in rows],
+    )
+
+
+_MUNICIPIO_EVENTOS_QUERY = """
+SELECT
+    e.id, e.fuente, e.titulo, e.descripcion,
+    e.foto_url, e.url_externo,
+    e.fecha_inicio::text AS fecha_inicio,
+    e.fecha_fin::text    AS fecha_fin,
+    e.gratuito, COALESCE(e.precio, 0) AS precio,
+    e.organizador, e.categoria, e.tipo_audiencia,
+    e.lat, e.lon, e.barrio_id,
+    b.nombre AS barrio_nombre,
+    e.destacado
+FROM public.eventos e
+LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+  AND UPPER(b.municipio) = UPPER($6)
+ORDER BY e.destacado DESC, e.fecha_inicio ASC
+LIMIT $7 OFFSET $8
+"""
+
+_MUNICIPIO_COUNT_QUERY = """
+SELECT COUNT(*)
+FROM public.eventos e
+LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+WHERE e.activo = TRUE
+  AND e.fecha_inicio >= $1
+  AND e.fecha_inicio <= $2
+  AND ($3::text IS NULL OR e.categoria     = $3)
+  AND ($4::text IS NULL OR e.tipo_audiencia = $4)
+  AND ($5::bool IS NULL OR e.gratuito       = $5)
+  AND UPPER(b.municipio) = UPPER($6)
+"""
+
+
+def _build_evento_out(r) -> EventoOut:
+    return EventoOut(
+        id=r["id"], fuente=r["fuente"], titulo=r["titulo"],
+        descripcion=r["descripcion"], foto_url=r["foto_url"],
+        url_externo=r["url_externo"], fecha_inicio=r["fecha_inicio"],
+        fecha_fin=r["fecha_fin"], gratuito=r["gratuito"],
+        precio=float(r["precio"]), organizador=r["organizador"],
+        categoria=r["categoria"], tipo_audiencia=r["tipo_audiencia"],
+        lat=r["lat"], lon=r["lon"], barrio_id=r["barrio_id"],
+        barrio_nombre=r["barrio_nombre"], destacado=r["destacado"],
+    )
+
+
+@router.get("/municipio/{municipio}/eventos", response_model=EventosResponse)
+async def get_eventos_municipio(
+    municipio: str,
+    categoria: Optional[str] = Query(None),
+    tipo_audiencia: Optional[str] = Query(None),
+    fecha_desde: Optional[date] = Query(None),
+    fecha_hasta: Optional[date] = Query(None),
+    gratuito: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    hoy = date.today()
+    f_desde = fecha_desde or hoy
+    f_hasta = fecha_hasta or (hoy + timedelta(days=30))
+    args = (f_desde, f_hasta, categoria, tipo_audiencia, gratuito, municipio)
+    try:
+        rows, total_row = await pool.fetch(
+            _MUNICIPIO_EVENTOS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_MUNICIPIO_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return EventosResponse(
+        barrio_id=None, municipio=municipio.upper(),
+        total=total_row[0] if total_row else 0,
+        eventos=[_build_evento_out(r) for r in rows],
+    )
+
+
+
+# ── Tiendas ────────────────────────────────────────────────────────────────────
+
+
+GRUPOS: dict[str, list[str]] = {
+    "gastronomia": ["brunch", "almuerzo", "cena", "bares", "cafes", "comida_rapida", "panaderia", "asiatica"],
+    "salud": ["medicos", "dentistas", "dermatologia", "optometria", "fisioterapia", "masajes_spa", "peluquerias", "estetica"],
+    "fitness": ["gimnasios", "yoga"],
+    "servicios_hogar": ["remodelaciones", "plomeria", "electricistas", "mudanzas", "cerrajeria", "jardineria"],
+    "mas_servicios": ["bancos", "mascotas", "parqueaderos", "segunda_mano"],
+}
+
+
+class TiendaOut(BaseModel):
+    id: int
+    google_place_id: Optional[str]
+    nombre: str
+    descripcion: Optional[str]
+    categoria: Optional[str]
+    barrio_id: Optional[int]
+    barrio_nombre: Optional[str]
+    direccion: Optional[str]
+    telefono: Optional[str]
+    whatsapp: Optional[str]
+    website: Optional[str]
+    foto_url: Optional[str]
+    lat: Optional[float]
+    lon: Optional[float]
+    rating_google: Optional[float]
+    precio_rango: Optional[str]
+    horario: Optional[Any]
+    destacado: bool
+    verificado: bool
+
+
+class TiendasResponse(BaseModel):
+    barrio_id: Optional[int]
+    municipio: Optional[str] = None
+    total: int
+    tiendas: list[TiendaOut]
+
+
+_TIENDAS_QUERY = """
+SELECT
+    t.id,
+    t.google_place_id,
+    t.nombre,
+    t.descripcion,
+    t.categoria,
+    t.barrio_id,
+    b.nombre        AS barrio_nombre,
+    t.direccion,
+    t.telefono,
+    t.whatsapp,
+    t.website,
+    t.foto_url,
+    t.lat,
+    t.lon,
+    t.rating_google,
+    t.precio_rango,
+    t.horario,
+    t.destacado,
+    t.verificado
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND (
+    t.barrio_id = $1
+    OR t.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            1500
+        )
+    )
+  )
+  AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
+  AND ($3::text IS NULL OR t.categoria    = $3)
+  AND ($4::text IS NULL OR t.precio_rango = $4)
+ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+LIMIT $5 OFFSET $6
+"""
+
+_TIENDAS_COUNT_QUERY = """
+SELECT COUNT(*)
+FROM public.tiendas t
+WHERE t.activo = TRUE
+  AND (
+    t.barrio_id = $1
+    OR t.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            1500
+        )
+    )
+  )
+  AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
+  AND ($3::text IS NULL OR t.categoria    = $3)
+  AND ($4::text IS NULL OR t.precio_rango = $4)
+"""
+
+
+_TODOS_TIENDAS_QUERY = """
+SELECT
+    t.id, t.google_place_id, t.nombre, t.descripcion, t.categoria,
+    t.barrio_id, b.nombre AS barrio_nombre,
+    t.direccion, t.telefono, t.whatsapp, t.website,
+    t.foto_url, t.lat, t.lon,
+    t.rating_google, t.precio_rango, t.horario,
+    t.destacado, t.verificado
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND ($1::text[] IS NULL OR t.categoria = ANY($1::text[]))
+  AND ($2::text IS NULL OR t.categoria   = $2)
+  AND ($3::text IS NULL OR t.precio_rango = $3)
+ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+LIMIT $4 OFFSET $5
+"""
+
+_TODOS_TIENDAS_COUNT_QUERY = """
+SELECT COUNT(*) FROM public.tiendas t
+WHERE t.activo = TRUE
+  AND ($1::text[] IS NULL OR t.categoria = ANY($1::text[]))
+  AND ($2::text IS NULL OR t.categoria   = $2)
+  AND ($3::text IS NULL OR t.precio_rango = $3)
+"""
+
+
+@router.get("/todos/tiendas", response_model=TiendasResponse)
+async def get_tiendas_todos(
+    grupo: Optional[str] = Query(None),
+    categoria: Optional[str] = Query(None),
+    precio_rango: Optional[str] = Query(None),
+    limit: int = Query(4, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
+    args = (grupo_cats, categoria, precio_rango)
+    try:
+        rows, total_row = await pool.fetch(
+            _TODOS_TIENDAS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_TODOS_TIENDAS_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    total = total_row[0] if total_row else 0
+    tiendas = [
+        TiendaOut(
+            id=r["id"], google_place_id=r["google_place_id"], nombre=r["nombre"],
+            descripcion=r["descripcion"], categoria=r["categoria"],
+            barrio_id=r["barrio_id"], barrio_nombre=r["barrio_nombre"],
+            direccion=r["direccion"], telefono=r["telefono"], whatsapp=r["whatsapp"],
+            website=r["website"], foto_url=r["foto_url"], lat=r["lat"], lon=r["lon"],
+            rating_google=r["rating_google"], precio_rango=r["precio_rango"],
+            horario=r["horario"], destacado=r["destacado"], verificado=r["verificado"],
+        )
+        for r in rows
+    ]
+    return TiendasResponse(barrio_id=None, municipio="VALLE DE ABURRÁ", total=total, tiendas=tiendas)
+
+
+@router.get("/{barrio_id}/tiendas", response_model=TiendasResponse)
+async def get_tiendas_barrio(
+    barrio_id: int,
+    grupo: Optional[str] = Query(None),
+    categoria: Optional[str] = Query(None),
+    precio_rango: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
+    args = (barrio_id, grupo_cats, categoria, precio_rango)
+
+    try:
+        rows, total_row = await pool.fetch(
+            _TIENDAS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_TIENDAS_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    total = total_row[0] if total_row else 0
+
+    tiendas = [
+        TiendaOut(
+            id=r["id"],
+            google_place_id=r["google_place_id"],
+            nombre=r["nombre"],
+            descripcion=r["descripcion"],
+            categoria=r["categoria"],
+            barrio_id=r["barrio_id"],
+            barrio_nombre=r["barrio_nombre"],
+            direccion=r["direccion"],
+            telefono=r["telefono"],
+            whatsapp=r["whatsapp"],
+            website=r["website"],
+            foto_url=r["foto_url"],
+            lat=r["lat"],
+            lon=r["lon"],
+            rating_google=r["rating_google"],
+            precio_rango=r["precio_rango"],
+            horario=r["horario"],
+            destacado=r["destacado"],
+            verificado=r["verificado"],
+        )
+        for r in rows
+    ]
+
+    return TiendasResponse(barrio_id=barrio_id, total=total, tiendas=tiendas)
+
+
+_GRUPOS_MAP: dict[str, list[str]] = {
+    "gastronomia":     ["brunch","almuerzo","cena","bares","cafes","comida_rapida","panaderia","asiatica"],
+    "salud":           ["medicos","dentistas","dermatologia","fisioterapia","masajes_spa","peluquerias","estetica"],
+    "fitness":         ["gimnasios","yoga"],
+    "servicios_hogar": ["remodelaciones","plomeria","electricistas","mudanzas","cerrajeria","jardineria"],
+    "mas_servicios":   ["bancos","mascotas","parqueaderos","segunda_mano","agente_inmobiliario","otro"],
+}
+
+_COUNTS_QUERY = """
+SELECT
+    CASE
+        WHEN t.categoria = ANY($2::text[]) THEN 'gastronomia'
+        WHEN t.categoria = ANY($3::text[]) THEN 'salud'
+        WHEN t.categoria = ANY($4::text[]) THEN 'fitness'
+        WHEN t.categoria = ANY($5::text[]) THEN 'servicios_hogar'
+        ELSE 'mas_servicios'
+    END AS grupo,
+    COUNT(*) AS n
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND (
+    t.barrio_id = $1
+    OR t.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            1500
+        )
+    )
+  )
+GROUP BY grupo
+"""
+
+_MUNICIPIO_COUNTS_QUERY = """
+SELECT
+    CASE
+        WHEN t.categoria = ANY($2::text[]) THEN 'gastronomia'
+        WHEN t.categoria = ANY($3::text[]) THEN 'salud'
+        WHEN t.categoria = ANY($4::text[]) THEN 'fitness'
+        WHEN t.categoria = ANY($5::text[]) THEN 'servicios_hogar'
+        ELSE 'mas_servicios'
+    END AS grupo,
+    COUNT(*) AS n
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND UPPER(b.municipio) = UPPER($1)
+GROUP BY grupo
+"""
+
+
+@router.get("/{barrio_id}/tiendas/counts")
+async def get_tiendas_counts(barrio_id: int, pool=Depends(get_pool)):
+    args = (
+        barrio_id,
+        _GRUPOS_MAP["gastronomia"],
+        _GRUPOS_MAP["salud"],
+        _GRUPOS_MAP["fitness"],
+        _GRUPOS_MAP["servicios_hogar"],
+    )
+    try:
+        rows = await pool.fetch(_COUNTS_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {r["grupo"]: r["n"] for r in rows}
+
+
+@router.get("/municipio/{municipio}/tiendas/counts")
+async def get_municipio_tiendas_counts(municipio: str, pool=Depends(get_pool)):
+    args = (
+        municipio,
+        _GRUPOS_MAP["gastronomia"],
+        _GRUPOS_MAP["salud"],
+        _GRUPOS_MAP["fitness"],
+        _GRUPOS_MAP["servicios_hogar"],
+    )
+    try:
+        rows = await pool.fetch(_MUNICIPIO_COUNTS_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    return {r["grupo"]: r["n"] for r in rows}
+
+
+_MUNICIPIO_TIENDAS_QUERY = """
+SELECT
+    t.id,
+    t.google_place_id,
+    t.nombre,
+    t.descripcion,
+    t.categoria,
+    t.barrio_id,
+    b.nombre        AS barrio_nombre,
+    t.direccion,
+    t.telefono,
+    t.whatsapp,
+    t.website,
+    t.foto_url,
+    t.lat,
+    t.lon,
+    t.rating_google,
+    t.precio_rango,
+    t.horario,
+    t.destacado,
+    t.verificado
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND UPPER(b.municipio) = UPPER($1)
+  AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
+  AND ($3::text IS NULL OR t.categoria    = $3)
+  AND ($4::text IS NULL OR t.precio_rango = $4)
+ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+LIMIT $5 OFFSET $6
+"""
+
+_MUNICIPIO_TIENDAS_COUNT_QUERY = """
+SELECT COUNT(*)
+FROM public.tiendas t
+LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND UPPER(b.municipio) = UPPER($1)
+  AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
+  AND ($3::text IS NULL OR t.categoria    = $3)
+  AND ($4::text IS NULL OR t.precio_rango = $4)
+"""
+
+
+@router.get("/municipio/{municipio}/tiendas", response_model=TiendasResponse)
+async def get_tiendas_municipio(
+    municipio: str,
+    grupo: Optional[str] = Query(None),
+    categoria: Optional[str] = Query(None),
+    precio_rango: Optional[str] = Query(None),
+    limit: int = Query(20, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    pool=Depends(get_pool),
+):
+    grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
+    args = (municipio, grupo_cats, categoria, precio_rango)
+
+    try:
+        rows, total_row = await pool.fetch(
+            _MUNICIPIO_TIENDAS_QUERY, *args, limit, offset
+        ), await pool.fetchrow(_MUNICIPIO_TIENDAS_COUNT_QUERY, *args)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    total = total_row[0] if total_row else 0
+
+    tiendas = [
+        TiendaOut(
+            id=r["id"],
+            google_place_id=r["google_place_id"],
+            nombre=r["nombre"],
+            descripcion=r["descripcion"],
+            categoria=r["categoria"],
+            barrio_id=r["barrio_id"],
+            barrio_nombre=r["barrio_nombre"],
+            direccion=r["direccion"],
+            telefono=r["telefono"],
+            whatsapp=r["whatsapp"],
+            website=r["website"],
+            foto_url=r["foto_url"],
+            lat=r["lat"],
+            lon=r["lon"],
+            rating_google=r["rating_google"],
+            precio_rango=r["precio_rango"],
+            horario=r["horario"],
+            destacado=r["destacado"],
+            verificado=r["verificado"],
+        )
+        for r in rows
+    ]
+
+    return TiendasResponse(barrio_id=None, municipio=municipio.upper(), total=total, tiendas=tiendas)
+
+
+# ---------------------------------------------------------------------------
+# Ticker — mezcla noticias RSS + eventos próximos culturales
+# ---------------------------------------------------------------------------
+
+_TICKER_CATEGORIAS = ("musica", "cultura", "gastronomia", "bienestar", "deporte", "social")
+
+_TICKER_NOTICIAS_QUERY = """
+SELECT
+    'noticia'           AS tipo,
+    titulo,
+    url                 AS link,
+    fecha_publicacion   AS fecha
+FROM public.noticias
+WHERE activa = TRUE
+ORDER BY fecha_publicacion DESC
+LIMIT 5
+"""
+
+_TICKER_EVENTOS_QUERY = """
+SELECT
+    'evento'            AS tipo,
+    titulo,
+    url_externo         AS link,
+    fecha_inicio        AS fecha
+FROM public.eventos
+WHERE activo = TRUE
+  AND fecha_inicio > NOW()
+  AND categoria = ANY($1::text[])
+  AND ($2::int IS NULL OR ciudad_id = $2)
+ORDER BY fecha_inicio ASC
+LIMIT 8
+"""
+
+
+class TickerItem(BaseModel):
+    tipo: str
+    titulo: str
+    link: Optional[str]
+    fecha: Optional[str]
+
+
+class TickerResponse(BaseModel):
+    ciudad_id: Optional[int]
+    total: int
+    items: list[TickerItem]
+
+
+@router.get("/ticker", response_model=TickerResponse)
+async def get_ticker(
+    ciudad_id: Optional[int] = Query(None),
+    pool=Depends(get_pool),
+):
+    try:
+        noticias_rows, eventos_rows = await asyncio.gather(
+            pool.fetch(_TICKER_NOTICIAS_QUERY),
+            pool.fetch(_TICKER_EVENTOS_QUERY, list(_TICKER_CATEGORIAS), ciudad_id),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    items = [
+        TickerItem(
+            tipo=r["tipo"],
+            titulo=r["titulo"],
+            link=r["link"],
+            fecha=r["fecha"].isoformat() if r["fecha"] else None,
+        )
+        for r in (*noticias_rows, *eventos_rows)
+    ]
+
+    return TickerResponse(ciudad_id=ciudad_id, total=len(items), items=items)

@@ -217,9 +217,32 @@ def _parse_card(card, barrios: list[dict]) -> Optional[dict]:
 
         titulo_full = f"{tipo} {title}".strip()[:500]
 
+        # Amenidades — keyword match against card body text (cards don't have structured list)
+        _AMENIDADES_KW = [
+            ("wifi", "WiFi"), ("internet", "WiFi"),
+            ("piscin", "Piscina"), (" pool", "Piscina"),
+            ("gym", "Gimnasio"), ("gimnasio", "Gimnasio"),
+            ("kitchen", "Cocina"), ("cocina", "Cocina"),
+            ("parking", "Parqueadero"), ("parqueadero", "Parqueadero"), ("garaje", "Parqueadero"),
+            ("balc", "Balcón"),
+            ("terraza", "Terraza"), ("terrace", "Terraza"),
+            ("aire acondicionado", "Aire Acondicionado"), ("air conditioning", "Aire Acondicionado"),
+            ("lavadora", "Lavadora"), ("washer", "Lavadora"),
+            ("jacuzzi", "Jacuzzi"), ("hot tub", "Jacuzzi"),
+            ("sauna", "Sauna"),
+            ("netflix", "Netflix"),
+        ]
+        seen = set()
+        amenidades = []
+        for kw, label in _AMENIDADES_KW:
+            if kw in body_text and label not in seen:
+                amenidades.append(label)
+                seen.add(label)
+
         return {
             "fuente": FUENTE,
             "titulo": titulo_full,
+            "amenidades": amenidades if amenidades else None,
             "precio_mes_cop": price_mes_cop,
             "precio_mes_usd": price_mes_usd,
             "area_m2": area,

@@ -712,7 +712,7 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
           </button>
         )}
         <Link
-          to="/comunidad"
+          to="/eventos/el-poblado" as any
           className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 py-2.5 text-xs font-semibold text-primary transition hover:bg-primary/20"
         >
           💬 Ir a comunidad

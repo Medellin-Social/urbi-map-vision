@@ -1,5 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { Navbar, ProfileChipMobile } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
@@ -7,12 +8,15 @@ import { ListingPanel } from "@/components/ListingPanel";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
 import { MLSPanel } from "@/components/MLSPanel";
 import type { Neighborhood } from "@/lib/adapters";
-import type { ApiListing } from "@/lib/adapters";
+import type { ApiListing, ApiListingDetail } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
 import { useListings, useBarriosRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/adapters";
 import { useMemo } from "react";
 import { point, booleanPointInPolygon } from "@turf/turf";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
+import { ListingDetailContent } from "./listing.$id";
 
 export const Route = createFileRoute("/map")({
   beforeLoad: () => {
@@ -31,6 +35,52 @@ const GOAL_TO_PERFIL: Record<string, string> = {
   nomadas: "mediano_plazo",
 };
 
+// ─── Listing detail modal ──────────────────────────────────────────────────────
+function ListingDetailModal({
+  listingId,
+  onClose,
+  flyToRef,
+}: {
+  listingId: number;
+  onClose: () => void;
+  flyToRef: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
+}) {
+  const { data: listing, isLoading } = useQuery<ApiListingDetail>({
+    queryKey: ["listing-modal", listingId],
+    queryFn: () => apiFetch(API_ENDPOINTS.listing(listingId)),
+  });
+
+  useEffect(() => {
+    if (listing?.lat && listing?.lon) {
+      flyToRef.current?.(listing.lat, listing.lon);
+    }
+  }, [listing?.id]);
+
+  return (
+    /* Backdrop */
+    <div
+      className="pointer-events-auto absolute inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-10"
+      style={{ right: 0 }}
+      onClick={onClose}
+    >
+      {/* Panel */}
+      <div
+        className="relative w-full max-h-screen sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-2xl border border-border/60 bg-background shadow-2xl sm:max-w-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isLoading || !listing ? (
+          <div className="flex h-64 items-center justify-center">
+            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+          </div>
+        ) : (
+          <ListingDetailContent listing={listing} isModal onClose={onClose} />
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Map page ──────────────────────────────────────────────────────────────────
 function MapPage() {
   const [selected, setSelected] = useState<Neighborhood | null>(null);
   const [mostrarOportunidades, setMostrarOportunidades] = useState(
@@ -49,6 +99,9 @@ function MapPage() {
   const flyToListingRef = useRef<((lat: number, lng: number) => void) | null>(null);
   const [selectedListing, setSelectedListing] = useState<ApiListing | null>(null);
   const [listingPanelPos, setListingPanelPos] = useState<{ x: number; y: number } | null>(null);
+
+  // Listing detail modal
+  const [listingDetailId, setListingDetailId] = useState<number | null>(null);
 
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
@@ -109,6 +162,16 @@ function MapPage() {
   const [activeComuna, setActiveComuna] = useState<string | null>(null);
   const returnToComunasRef = useRef<(() => void) | null>(null);
 
+  // Read ?listing=X from URL on mount → open modal automatically
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const lid = params.get("listing");
+    if (lid) {
+      const id = Number(lid);
+      if (!Number.isNaN(id)) setListingDetailId(id);
+    }
+  }, []);
+
   useEffect(() => {
     const sync = () => setMostrarOportunidades(auth.get()?.mostrarOportunidades ?? false);
     window.addEventListener("medellin-social:user", sync);
@@ -123,6 +186,16 @@ function MapPage() {
     window.addEventListener("perfil-updated", onPerfilUpdated);
     return () => window.removeEventListener("perfil-updated", onPerfilUpdated);
   }, []);
+
+  function openListingDetail(id: number) {
+    setListingDetailId(id);
+    window.history.pushState({}, "", `/map?listing=${id}`);
+  }
+
+  function closeListingDetail() {
+    setListingDetailId(null);
+    window.history.pushState({}, "", "/map");
+  }
 
   function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null) {
     setViewLevel(level);
@@ -243,6 +316,7 @@ function MapPage() {
         highlightedListingId={highlightedListingId}
         flyToListingRef={flyToListingRef}
         onListingClickFromMap={handleListingClickFromMap}
+        onListingDblClickFromMap={openListingDetail}
         activeBarrioName={activeBarrioInComune}
         drawModeActive={drawModeActive}
         onDrawPolygon={handleDrawPolygon}
@@ -281,13 +355,14 @@ function MapPage() {
         </>
       )}
 
-      {/* Panel de listing seleccionado */}
-      {selectedListing && (
+      {/* Panel de listing seleccionado (popup flotante) */}
+      {selectedListing && !listingDetailId && (
         <ListingPanel
           listing={selectedListing}
           barrio={barriosRaw?.find((b) => b.barrio_id === selectedListing.barrio_id) ?? null}
           initialPos={listingPanelPos ?? undefined}
           onClose={() => { setSelectedListing(null); setListingPanelPos(null); }}
+          onOpenDetail={() => openListingDetail(selectedListing.id)}
         />
       )}
 
@@ -317,6 +392,15 @@ function MapPage() {
           // drawnPolygon={drawnPolygon}
           // onToggleDrawMode={handleToggleDrawMode}
           // onClearDraw={handleClearDraw}
+        />
+      )}
+
+      {/* Listing detail modal — overlay sobre el mapa */}
+      {listingDetailId && (
+        <ListingDetailModal
+          listingId={listingDetailId}
+          onClose={closeListingDetail}
+          flyToRef={flyToListingRef}
         />
       )}
     </div>

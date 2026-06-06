@@ -23,6 +23,9 @@ import { Route as ComunidadRouteImport } from './routes/comunidad'
 import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
+import { Route as ListingIdRouteImport } from './routes/listing.$id'
+import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
 
 const StoresRoute = StoresRouteImport.update({
   id: '/stores',
@@ -94,6 +97,22 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LocalBusinessBarrio_slugRoute =
+  LocalBusinessBarrio_slugRouteImport.update({
+    id: '/local-business/$barrio_slug',
+    path: '/local-business/$barrio_slug',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ListingIdRoute = ListingIdRouteImport.update({
+  id: '/listing/$id',
+  path: '/listing/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
+  id: '/eventos/$barrio_slug',
+  path: '/eventos/$barrio_slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -110,6 +129,9 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
+  '/listing/$id': typeof ListingIdRoute
+  '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -126,6 +148,9 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
+  '/listing/$id': typeof ListingIdRoute
+  '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -143,6 +168,9 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
+  '/listing/$id': typeof ListingIdRoute
+  '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -161,6 +189,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/eventos/$barrio_slug'
+    | '/listing/$id'
+    | '/local-business/$barrio_slug'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -177,6 +208,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/eventos/$barrio_slug'
+    | '/listing/$id'
+    | '/local-business/$barrio_slug'
   id:
     | '__root__'
     | '/'
@@ -193,6 +227,9 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/eventos/$barrio_slug'
+    | '/listing/$id'
+    | '/local-business/$barrio_slug'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -210,6 +247,9 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SimuladorRoute: typeof SimuladorRoute
   StoresRoute: typeof StoresRoute
+  EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
+  ListingIdRoute: typeof ListingIdRoute
+  LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -312,6 +352,27 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/local-business/$barrio_slug': {
+      id: '/local-business/$barrio_slug'
+      path: '/local-business/$barrio_slug'
+      fullPath: '/local-business/$barrio_slug'
+      preLoaderRoute: typeof LocalBusinessBarrio_slugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/listing/$id': {
+      id: '/listing/$id'
+      path: '/listing/$id'
+      fullPath: '/listing/$id'
+      preLoaderRoute: typeof ListingIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/eventos/$barrio_slug': {
+      id: '/eventos/$barrio_slug'
+      path: '/eventos/$barrio_slug'
+      fullPath: '/eventos/$barrio_slug'
+      preLoaderRoute: typeof EventosBarrio_slugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -330,6 +391,9 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SimuladorRoute: SimuladorRoute,
   StoresRoute: StoresRoute,
+  EventosBarrio_slugRoute: EventosBarrio_slugRoute,
+  ListingIdRoute: ListingIdRoute,
+  LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

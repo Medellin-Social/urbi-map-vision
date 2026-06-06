@@ -1,0 +1,214 @@
+import { createFileRoute } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
+import { useBarrio } from '@/components/comunidad/BarrioContext'
+import { EventCardMini, EventCardFeatured, type EventoData } from '@/components/comunidad/EventCard'
+import { API_BASE_URL } from '@/config/api'
+import { CATEGORIAS_EVENTOS } from '@/lib/categorias_comunidad'
+
+export const Route = createFileRoute('/eventos/$barrio_slug')({
+  component: EventosRoot,
+  head: ({ params }) => ({
+    meta: [{ title: `Eventos en ${params.barrio_slug.replace(/-/g, ' ')} · Medellín Social` }],
+  }),
+})
+
+function EventosRoot() {
+  const { barrio_slug } = Route.useParams()
+  return (
+    <ComunidadLayout initialSlug={barrio_slug}>
+      <EventosPage />
+    </ComunidadLayout>
+  )
+}
+
+const K = {
+  surface: '#f5f0e8', line: '#e9e4d8', ink: '#14201d', muted: '#62736d',
+  teal: '#1D9E75', tealDeep: '#085041', coral: '#D85A30', coralLight: '#FAECE7',
+  amarillo: '#ffc928', serif: "'Fraunces', Georgia, serif" as const,
+}
+
+interface EventosResp { total: number; eventos: EventoData[] }
+const PAGE_SIZE = 12
+
+const FILTROS_FECHA = [
+  { id: 'all',    es: 'Todas las fechas', en: 'All dates' },
+  { id: 'hoy',   es: 'Hoy',              en: 'Today' },
+  { id: 'finde', es: 'Este finde',       en: 'Weekend' },
+  { id: 'semana',es: 'Esta semana',      en: 'This week' },
+  { id: 'mes',   es: 'Este mes',         en: 'This month' },
+]
+const FILTROS_AUDIENCIA = [
+  { id: 'all',         es: 'Todos',       en: 'All' },
+  { id: 'social',      es: 'Social',      en: 'Social' },
+  { id: 'profesional', es: 'Profesional', en: 'Professional' },
+  { id: 'activo',      es: 'Activo',      en: 'Active' },
+]
+
+function Pill({ active, onClick, label, accent = false }: { active: boolean; onClick: () => void; label: string; accent?: boolean }) {
+  const c = accent ? K.coral : K.teal
+  return (
+    <button onClick={onClick} style={{
+      border: active ? `2px solid ${c}` : `2px solid ${K.line}`,
+      background: active ? c + '18' : 'transparent',
+      color: active ? c : K.muted,
+      fontWeight: 700, fontSize: '.8rem', padding: '7px 15px',
+      borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
+    }}>{label}</button>
+  )
+}
+
+function EventosPage() {
+  const { barrio, lang } = useBarrio()
+  const t = (es: string, en: string) => lang === 'es' ? es : en
+
+  const [categoria, setCategoria] = useState('all')
+  const [fecha, setFecha]         = useState('all')
+  const [audiencia, setAudiencia] = useState('all')
+  const [gratuito, setGratuito]   = useState(false)
+  const [page, setPage]           = useState(0)
+
+  function buildParams() {
+    const p = new URLSearchParams()
+    if (categoria !== 'all') p.set('categoria', categoria)
+    if (audiencia !== 'all') p.set('tipo_audiencia', audiencia)
+    if (gratuito) p.set('gratuito', 'true')
+    const now = new Date()
+    if (fecha === 'hoy') {
+      const d = now.toISOString().split('T')[0]; p.set('fecha_desde', d); p.set('fecha_hasta', d)
+    } else if (fecha === 'finde') {
+      const sat = new Date(now); sat.setDate(now.getDate() + (6 - now.getDay()))
+      const sun = new Date(sat); sun.setDate(sat.getDate() + 1)
+      p.set('fecha_desde', sat.toISOString().split('T')[0])
+      p.set('fecha_hasta', sun.toISOString().split('T')[0])
+    } else if (fecha === 'semana') {
+      const n = new Date(now); n.setDate(now.getDate() + 7)
+      p.set('fecha_hasta', n.toISOString().split('T')[0])
+    } else if (fecha === 'mes') {
+      const n = new Date(now); n.setDate(now.getDate() + 30)
+      p.set('fecha_hasta', n.toISOString().split('T')[0])
+    }
+    p.set('limit', String(PAGE_SIZE))
+    p.set('offset', String(page * PAGE_SIZE))
+    return p.toString()
+  }
+
+  const hasData = !!(barrio.barrio_id || barrio.municipio_nombre)
+
+  const { data, isLoading } = useQuery<EventosResp | null>({
+    queryKey: ['eventos', barrio.barrio_id, barrio.municipio_nombre, categoria, fecha, audiencia, gratuito, page],
+    queryFn: async () => {
+      if (!hasData) return null
+      const url = barrio.municipio_nombre
+        ? `${API_BASE_URL}/comunidad/municipio/${encodeURIComponent(barrio.municipio_nombre)}/eventos?${buildParams()}`
+        : `${API_BASE_URL}/comunidad/${barrio.barrio_id}/eventos?${buildParams()}`
+      const r = await fetch(url)
+      return r.ok ? r.json() as Promise<EventosResp> : null
+    },
+    enabled: hasData,
+  })
+
+  const eventos  = data?.eventos ?? []
+  const total    = data?.total ?? 0
+  const pages    = Math.ceil(total / PAGE_SIZE)
+  const featured = eventos.filter(e => e.destacado)
+  const regular  = eventos.filter(e => !e.destacado)
+  const reset    = () => setPage(0)
+
+  return (
+    <>
+      {/* Header */}
+      <div style={{ background: K.surface, borderBottom: `1px solid ${K.line}`, padding: '36px 26px 28px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
+            Eventos
+          </p>
+          <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
+            {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
+          </h1>
+          <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
+            {t('Todos los eventos, en un solo lugar.', 'Every event, in one place.')}
+            {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {t('eventos', 'events')}</span>}
+          </p>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 26px' }}>
+        {/* Filtros */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas las categorías', 'All categories')} />
+            {CATEGORIAS_EVENTOS.map(c => (
+              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${c.label}`} />
+            ))}
+          </div>
+          <div style={{ height: 1, background: K.line }} />
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+            {FILTROS_FECHA.map(f => (
+              <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
+            ))}
+            <div style={{ width: 1, height: 18, background: K.line, margin: '0 4px' }} />
+            {FILTROS_AUDIENCIA.map(a => (
+              <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
+            ))}
+            <div style={{ width: 1, height: 18, background: K.line, margin: '0 4px' }} />
+            <button onClick={() => { setGratuito(g => !g); reset() }} style={{ border: gratuito ? `2px solid ${K.amarillo}` : `2px solid ${K.line}`, background: gratuito ? K.amarillo + '30' : 'transparent', color: gratuito ? K.ink : K.muted, fontWeight: 700, fontSize: '.8rem', padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>
+              🎟️ {t('Solo gratis', 'Free only')}
+            </button>
+          </div>
+        </div>
+
+        {isLoading && <p style={{ color: K.muted }}>{t('Cargando eventos…', 'Loading events…')}</p>}
+
+        {!isLoading && !hasData && (
+          <div style={{ textAlign: 'center', padding: '60px 0' }}>
+            <p style={{ fontFamily: K.serif, fontSize: '1.3rem', color: K.muted }}>
+              {t(`Próximamente en ${barrio.nombre}.`, `Coming soon to ${barrio.nombre}.`)}
+            </p>
+          </div>
+        )}
+
+        {!isLoading && hasData && featured.length > 0 && (
+          <div style={{ marginBottom: 40 }}>
+            <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.3rem', color: K.ink, margin: '0 0 18px' }}>
+              ⭐ {t('Destacados', 'Featured')}
+            </h2>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
+              {featured.map(e => <EventCardFeatured key={e.id} evento={e} />)}
+            </div>
+          </div>
+        )}
+
+        {!isLoading && hasData && (
+          regular.length === 0 && featured.length === 0 ? (
+            <div style={{ textAlign: 'center', padding: '60px 0' }}>
+              <p style={{ color: K.muted, fontSize: '1.05rem', marginBottom: 12 }}>
+                {t('Aún no hay eventos aquí.', 'No events here yet.')}
+              </p>
+              <a href="#" style={{ color: K.coral, fontWeight: 700, textDecoration: 'none' }}>
+                {t('¿Tienes uno? Publícalo →', 'Have one? Publish it →')}
+              </a>
+            </div>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '0 48px' }}>
+              {regular.map(e => <EventCardMini key={e.id} evento={e} />)}
+            </div>
+          )
+        )}
+
+        {pages > 1 && (
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 40 }}>
+            <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{ border: `2px solid ${K.line}`, background: 'transparent', color: K.muted, padding: '8px 18px', borderRadius: 999, cursor: page === 0 ? 'default' : 'pointer', fontFamily: 'inherit', opacity: page === 0 ? .4 : 1 }}>
+              ← {t('Anterior', 'Previous')}
+            </button>
+            <span style={{ padding: '8px 14px', color: K.muted, fontSize: '.9rem' }}>{page + 1} / {pages}</span>
+            <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} style={{ border: `2px solid ${K.line}`, background: 'transparent', color: K.muted, padding: '8px 18px', borderRadius: 999, cursor: page >= pages - 1 ? 'default' : 'pointer', fontFamily: 'inherit', opacity: page >= pages - 1 ? .4 : 1 }}>
+              {t('Siguiente', 'Next')} →
+            </button>
+          </div>
+        )}
+      </div>
+    </>
+  )
+}

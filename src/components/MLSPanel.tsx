@@ -42,13 +42,32 @@ type Filters = {
   tipoInmueble: string | null;
 };
 
-const TIPO_INMUEBLE_OPTIONS = [
-  { label: "Todos", value: null },
-  { label: "Apto", value: "apartamento" },
-  { label: "Casa", value: "casa" },
-  { label: "Local", value: "local" },
-  { label: "Oficina", value: "oficina" },
+const TIPO_LABELS: Record<string, string> = {
+  apartamento:   "Apartamento",
+  apartaestudio: "Apartaestudio",
+  casa:          "Casa",
+  casa_lote:     "Casa-Lote",
+  finca:         "Finca",
+  local:         "Local comercial",
+  oficina:       "Oficina",
+  bodega:        "Bodega",
+  consultorio:   "Consultorio",
+  lote:          "Lote",
+};
+
+const TIPO_GRUPOS = [
+  { label: "Residencial", tipos: ["apartamento", "apartaestudio", "casa", "casa_lote", "finca"] },
+  { label: "Comercial",   tipos: ["local", "oficina", "bodega", "consultorio"] },
+  { label: "Terreno",     tipos: ["lote"] },
 ];
+
+function getTipoBadgeClass(tipo: string): string {
+  const residencial = ["apartamento", "apartaestudio", "casa", "casa_lote", "finca"];
+  const comercial   = ["local", "oficina", "bodega", "consultorio"];
+  if (residencial.includes(tipo)) return "bg-teal-700";
+  if (comercial.includes(tipo))   return "bg-amber-600";
+  return "bg-green-700"; // lote
+}
 
 function tierColor(l: ApiListing): string {
   if (l.buena_oferta) return "#10b981";
@@ -141,8 +160,8 @@ function ListingCard({
           {tipo}
         </span>
         {tipoInmueble && (
-          <span className="text-[11px] text-muted-foreground capitalize">
-            {tipoInmueble}
+          <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ${getTipoBadgeClass(tipoInmueble)}`}>
+            {TIPO_LABELS[tipoInmueble] ?? tipoInmueble}
           </span>
         )}
       </div>
@@ -305,6 +324,15 @@ export function MLSPanel({
       : [],
     [navComuna, navComunasMap],
   );
+
+  const tipoCount = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const l of listings) {
+      const t = l.tipo_inmueble ?? "otro";
+      c[t] = (c[t] ?? 0) + 1;
+    }
+    return c;
+  }, [listings]);
 
   const nVenta = useMemo(
     () => listings.filter((l) => l.tipo_operacion === "venta").length,
@@ -551,17 +579,26 @@ export function MLSPanel({
           </div>
 
           {/* Tipo inmueble */}
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2">
             <span className="text-[11px] text-muted-foreground shrink-0">Tipo:</span>
-            {TIPO_INMUEBLE_OPTIONS.map((o) => (
-              <button
-                key={String(o.value)}
-                onClick={() => setFilters((f) => ({ ...f, tipoInmueble: o.value }))}
-                className={btnFilter(filters.tipoInmueble === o.value)}
-              >
-                {o.label}
-              </button>
-            ))}
+            <select
+              value={filters.tipoInmueble ?? ""}
+              onChange={(e) => setFilters((f) => ({ ...f, tipoInmueble: e.target.value || null }))}
+              className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            >
+              <option value="">Todos los tipos ({listings.length.toLocaleString()})</option>
+              {TIPO_GRUPOS.map((grupo) => (
+                <optgroup key={grupo.label} label={grupo.label}>
+                  {grupo.tipos
+                    .filter((t) => tipoCount[t] > 0)
+                    .map((t) => (
+                      <option key={t} value={t}>
+                        {TIPO_LABELS[t]} ({(tipoCount[t] ?? 0).toLocaleString()})
+                      </option>
+                    ))}
+                </optgroup>
+              ))}
+            </select>
           </div>
         </div>
 

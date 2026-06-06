@@ -23,7 +23,13 @@ type BarrioStat = {
 
 type ClickedBarrio = { nombre: string; municipio: string };
 
-export function LandingMapHeader() {
+export function LandingMapHeader({
+  flyToRef,
+  hideOverlay = false,
+}: {
+  flyToRef?: React.MutableRefObject<((lat: number, lon: number, zoom?: number) => void) | null>
+  hideOverlay?: boolean
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<mapboxgl.Map | null>(null);
   const hoveredIdRef = useRef<number | string | undefined>(undefined);
@@ -42,7 +48,7 @@ export function LandingMapHeader() {
       style: "mapbox://styles/mapbox/dark-v11",
       center: [-75.5812, 6.2442],
       zoom: 12,
-      pitch: 45,
+      pitch: 55,
       bearing: -30,
       interactive: true,
       attributionControl: false,
@@ -53,22 +59,34 @@ export function LandingMapHeader() {
     // ── Cinematic rotation ──────────────────────────────────────────────────
     let bearing = -30;
     let animationId = 0;
+    let lastTs = 0;
     let resumeTimeout: ReturnType<typeof setTimeout> | undefined;
+    const DEG_PER_SEC = 4.5; // full rotation in ~80 s
 
-    function rotateMap() {
-      bearing += 0.08;
-      map.easeTo({ bearing, duration: 100, easing: (t) => t });
+    function rotateMap(ts: number) {
+      if (map.isEasing()) {
+        // flyTo / easeTo in progress — skip bearing update, check next frame
+        lastTs = 0;
+        animationId = requestAnimationFrame(rotateMap);
+        return;
+      }
+      if (lastTs) {
+        bearing += ((ts - lastTs) / 1000) * DEG_PER_SEC;
+        map.setBearing(bearing);
+      }
+      lastTs = ts;
       animationId = requestAnimationFrame(rotateMap);
     }
 
     function stopRotation() {
       cancelAnimationFrame(animationId);
+      lastTs = 0;
       clearTimeout(resumeTimeout);
     }
 
     function scheduleResume() {
       clearTimeout(resumeTimeout);
-      resumeTimeout = setTimeout(rotateMap, 3000);
+      resumeTimeout = setTimeout(() => requestAnimationFrame(rotateMap), 3000);
     }
 
     // Stop when user scrolls away
@@ -90,7 +108,7 @@ export function LandingMapHeader() {
         tileSize: 512,
         maxzoom: 14,
       });
-      map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
+      map.setTerrain({ source: "mapbox-dem", exaggeration: 0.8 });
 
       try {
         const [valleRes, medellinRes, statsRes] = await Promise.all([
@@ -183,7 +201,7 @@ export function LandingMapHeader() {
         });
 
         // Start rotation once barrios are fully rendered
-        map.once("idle", rotateMap);
+        map.once("idle", () => requestAnimationFrame(rotateMap));
       } catch (err) {
         console.error("[LandingMapHeader] failed to load data", err);
       }
@@ -242,13 +260,23 @@ export function LandingMapHeader() {
       });
     });
 
+    if (flyToRef) {
+      flyToRef.current = (lat, lon, zoom = 13) => {
+        stopRotation();
+        map.stop();
+        map.flyTo({ center: [lon, lat], zoom, pitch: 50, duration: 1800, essential: true });
+        map.once('moveend', scheduleResume);
+      };
+    }
+
     return () => {
+      if (flyToRef) flyToRef.current = null;
       stopRotation();
       window.removeEventListener("scroll", onScroll);
       map.remove();
       mapRef.current = null;
     };
-  }, []);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <>
@@ -261,16 +289,18 @@ export function LandingMapHeader() {
         <div ref={containerRef} className="absolute inset-0" />
 
         {/* Bottom fade into page background */}
-        <div
-          className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
-          style={{
-            height: "130px",
-            background: "linear-gradient(to bottom, transparent, #0a0e1a)",
-          }}
-        />
+        {!hideOverlay && (
+          <div
+            className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
+            style={{
+              height: "130px",
+              background: "linear-gradient(to bottom, transparent, #0a0e1a)",
+            }}
+          />
+        )}
 
         {/* Text overlay — top center */}
-        <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center pt-10 text-center">
+        <div className={`pointer-events-none absolute inset-x-0 top-0 z-20 flex flex-col items-center pt-10 text-center${hideOverlay ? ' hidden' : ''}`}>
           <h1
             className="font-display text-2xl font-bold text-white sm:text-4xl lg:text-5xl xl:text-6xl"
             style={{
@@ -288,7 +318,7 @@ export function LandingMapHeader() {
         </div>
 
         {/* Legend — bottom right */}
-        <div className="absolute bottom-[54px] right-3 z-20 hidden rounded-lg border border-white/15 bg-black/65 px-3 py-2 text-[11px] text-white backdrop-blur-sm sm:block">
+        {!hideOverlay && <div className="absolute bottom-[54px] right-3 z-20 hidden rounded-lg border border-white/15 bg-black/65 px-3 py-2 text-[11px] text-white backdrop-blur-sm sm:block">
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5">
               <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#10b981]" />
@@ -307,24 +337,28 @@ export function LandingMapHeader() {
               Bajo
             </span>
           </div>
-        </div>
+        </div>}
 
         {/* Badge — bottom left */}
-        <div className="absolute bottom-[54px] left-3 z-20 hidden rounded-full border border-white/15 bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white/80 backdrop-blur-sm sm:flex items-center gap-1.5">
-          <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
-          488 barrios analizados · Datos en vivo
-        </div>
+        {!hideOverlay && (
+          <div className="absolute bottom-[54px] left-3 z-20 hidden rounded-full border border-white/15 bg-black/65 px-3 py-1.5 text-[11px] font-medium text-white/80 backdrop-blur-sm sm:flex items-center gap-1.5">
+            <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+            488 barrios analizados · Datos en vivo
+          </div>
+        )}
 
         {/* Scroll indicator — bottom center */}
-        <div className="pointer-events-none absolute bottom-6 inset-x-0 z-20 flex flex-col items-center gap-0.5">
-          <span
-            className="text-[10px] font-semibold uppercase tracking-widest text-white/45"
-            style={{ textShadow: "0 1px 6px rgba(0,0,0,0.9)" }}
-          >
-            Desplaza para explorar
-          </span>
-          <ArrowDown className="h-3.5 w-3.5 animate-bounce text-white/40" />
-        </div>
+        {!hideOverlay && (
+          <div className="pointer-events-none absolute bottom-6 inset-x-0 z-20 flex flex-col items-center gap-0.5">
+            <span
+              className="text-[10px] font-semibold uppercase tracking-widest text-white/45"
+              style={{ textShadow: "0 1px 6px rgba(0,0,0,0.9)" }}
+            >
+              Desplaza para explorar
+            </span>
+            <ArrowDown className="h-3.5 w-3.5 animate-bounce text-white/40" />
+          </div>
+        )}
 
         {/* Hover tooltip */}
         {tooltip && (
@@ -338,7 +372,7 @@ export function LandingMapHeader() {
         )}
 
         {/* Choice modal */}
-        {clicked && !showPaywall && (
+        {!hideOverlay && clicked && !showPaywall && (
           <BarrioChoiceModal
             barrio={clicked}
             onClose={() => setClicked(null)}
@@ -348,14 +382,14 @@ export function LandingMapHeader() {
                 .normalize("NFD")
                 .replace(/[̀-ͯ]/g, "")
                 .replace(/\s+/g, "-");
-              window.location.href = `/comunidad?barrio=${slug}`;
+              window.location.href = `/${slug}`;
             }}
             onInversiones={() => setShowPaywall(true)}
           />
         )}
 
         {/* Paywall modal */}
-        {clicked && showPaywall && (
+        {!hideOverlay && clicked && showPaywall && (
           <div
             className="absolute inset-0 z-40 flex items-center justify-center bg-black/60 backdrop-blur-sm"
             onClick={() => { setClicked(null); setShowPaywall(false); }}
