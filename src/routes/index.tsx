@@ -1,12 +1,11 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useQuery } from '@tanstack/react-query'
 import { useState, useRef, useEffect } from 'react'
 import { LandingMapHeader } from '@/components/LandingMapHeader'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useBarrio } from '@/components/comunidad/BarrioContext'
-import { EventCardFeatured, EventCardMini, type EventoData } from '@/components/comunidad/EventCard'
-import { BusinessCardDirectory, type TiendaData } from '@/components/comunidad/BusinessCard'
-import { API_BASE_URL } from '@/config/api'
+import { useDeals } from '@/hooks/useDeals'
+import { useDirectorio } from '@/hooks/useDirectorio'
+import { useNoticias } from '@/hooks/useNoticias'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -27,37 +26,46 @@ const K = {
   serif: "'Fraunces', Georgia, serif" as const,
 }
 
-interface EventosResp { total: number; eventos: EventoData[] }
-interface TiendasResp { total: number; tiendas: TiendaData[] }
+const CATEGORIA_LABELS: Record<string, string> = {
+  brunch: 'Brunch',
+  cena: 'Restaurante',
+  gimnasios: 'Gimnasio',
+  masajes_spa: 'Spa & Wellness',
+  medicos: 'Salud',
+  cafes: 'Café',
+  bares: 'Bar',
+  yoga: 'Yoga',
+  dentistas: 'Dental',
+  peluquerias: 'Estética',
+  almuerzo: 'Almuerzo',
+  estetica: 'Estética',
+  panaderia: 'Panadería',
+}
 
-const PILLS_TIEMPO = [
-  { id: 'all',    es: 'Todos',       en: 'All' },
-  { id: 'hoy',   es: 'Hoy',         en: 'Today' },
-  { id: 'finde', es: 'Este finde',  en: 'Weekend' },
-  { id: 'semana',es: 'Esta semana', en: 'This week' },
-]
-const PILLS_CAT = [
-  { id: 'all',        es: 'Todos',      en: 'All' },
-  { id: 'networking', es: 'Networking', en: 'Networking' },
-  { id: 'musica',     es: 'Música',     en: 'Music' },
-  { id: 'bienestar',  es: 'Bienestar',  en: 'Wellness' },
-  { id: 'gratis',     es: 'Gratis',     en: 'Free' },
-]
+const CATEGORIA_COLORS: Record<string, string> = {
+  bares: '#14201d',
+  brunch: '#f5f0e8',
+  cafes: '#c8a96e',
+  cena: '#2d1b0e',
+  gimnasios: '#1D9E75',
+  masajes_spa: '#d4a5c9',
+  medicos: '#e8f4f8',
+  dentistas: '#e8f4f8',
+  peluquerias: '#fce4ec',
+  yoga: '#e8f5e9',
+}
 
-function filterEvt(eventos: EventoData[], tiempo: string, cat: string) {
-  const now = new Date()
-  return eventos.filter(e => {
-    const d = new Date(e.fecha_inicio + 'T00:00:00')
-    if (tiempo === 'hoy'   && d.toDateString() !== now.toDateString()) return false
-    if (tiempo === 'finde' && d.getDay() !== 0 && d.getDay() !== 6)   return false
-    if (tiempo === 'semana') {
-      const n7 = new Date(now); n7.setDate(now.getDate() + 7)
-      if (d < now || d > n7) return false
-    }
-    if (cat === 'gratis' && !e.gratuito) return false
-    if (cat !== 'all' && cat !== 'gratis' && e.categoria?.toLowerCase() !== cat) return false
-    return true
-  })
+const CATEGORIA_EMOJI: Record<string, string> = {
+  bares: '🍺',
+  brunch: '☕',
+  cafes: '☕',
+  cena: '🍽️',
+  gimnasios: '💪',
+  masajes_spa: '🧖',
+  medicos: '🏥',
+  dentistas: '🦷',
+  peluquerias: '✂️',
+  yoga: '🧘',
 }
 
 function SecTitle({ children, link, linkLabel }: { children: string; link?: string; linkLabel?: string }) {
@@ -80,14 +88,12 @@ function HomeContent() {
   const { barrio, lang } = useBarrio()
   const t = (es: string, en: string) => lang === 'es' ? es : en
 
-  const [tiempo, setTiempo] = useState('all')
-  const [cat,    setCat]    = useState('all')
   const [nombre, setNombre] = useState('')
   const [email,  setEmail]  = useState('')
   const [suscrito, setSuscrito] = useState(false)
 
-  const mapFlyToRef  = useRef<((lat: number, lon: number, zoom?: number) => void) | null>(null)
-  const didMountRef  = useRef(false)
+  const mapFlyToRef = useRef<((lat: number, lon: number, zoom?: number) => void) | null>(null)
+  const didMountRef = useRef(false)
 
   useEffect(() => {
     if (!didMountRef.current) { didMountRef.current = true; return }
@@ -95,45 +101,20 @@ function HomeContent() {
     mapFlyToRef.current?.(barrio.lat, barrio.lon, barrio.zoom)
   }, [barrio.slug])
 
-  const isTodos = barrio.slug === 'todos'
+  const isTodos  = barrio.slug === 'todos'
+  const noBarrio = !barrio.barrio_id && !isTodos
 
-  const { data: evData } = useQuery<EventosResp | null>({
-    queryKey: ['home-eventos', barrio.slug],
-    queryFn: async () => {
-      const url = isTodos
-        ? `${API_BASE_URL}/comunidad/todos/eventos?limit=20`
-        : `${API_BASE_URL}/comunidad/${barrio.barrio_id}/eventos?limit=20`
-      const r = await fetch(url)
-      return r.ok ? r.json() as Promise<EventosResp> : null
-    },
-    enabled: isTodos || !!barrio.barrio_id,
-  })
+  const barrioFilter = isTodos ? null : (barrio.barrio_id ?? null)
 
-  const { data: tzData } = useQuery<TiendasResp | null>({
-    queryKey: ['home-tiendas', barrio.slug],
-    queryFn: async () => {
-      const url = isTodos
-        ? `${API_BASE_URL}/comunidad/todos/tiendas?limit=4`
-        : `${API_BASE_URL}/comunidad/${barrio.barrio_id}/tiendas?limit=4`
-      const r = await fetch(url)
-      return r.ok ? r.json() as Promise<TiendasResp> : null
-    },
-    enabled: isTodos || !!barrio.barrio_id,
-  })
-
-  const allEvt    = evData?.eventos ?? []
-  const destacados = allEvt.filter(e => e.destacado).slice(0, 3)
-  const proximos   = filterEvt(allEvt, tiempo, cat).slice(0, 6)
-  const tiendas    = tzData?.tiendas ?? []
-  const noBarrio   = !barrio.barrio_id && !isTodos
+  const { data: noticias   = [] }                          = useNoticias(4)
+  const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter)
+  const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter)
 
   return (
     <>
       {/* ── HERO ──────────────────────────────────────── */}
       <section style={{ position: 'relative', overflow: 'hidden' }}>
-        {/* LandingMapHeader: barrio polygons + terrain + cinematic rotation */}
         <LandingMapHeader flyToRef={mapFlyToRef} hideOverlay />
-
       </section>
 
       {/* ── NO BARRIO ─────────────────────────────────── */}
@@ -145,83 +126,239 @@ function HomeContent() {
         </div>
       )}
 
-      {/* ── EVENTOS DESTACADOS ────────────────────────── */}
-      {!noBarrio && (
-        <section style={{ padding: '48px 26px 36px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-          <SecTitle link={`/eventos/${barrio.slug}`}>{t('Eventos Destacados', 'Featured Events')}</SecTitle>
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
-            {destacados.length === 0 ? (
-              <p style={{ color: K.muted, gridColumn: '1/-1' }}>
-                {t('Aún no hay eventos destacados.', 'No featured events yet.')}
-                {' '}<a href="#" style={{ color: K.coral, fontWeight: 700, textDecoration: 'none' }}>{t('¿Tienes uno? Publícalo →', 'Have one? Publish →')}</a>
-              </p>
-            ) : destacados.map(e => <EventCardFeatured key={e.id} evento={e} />)}
-          </div>
-        </section>
-      )}
-
-      {/* ── PRÓXIMOS EVENTOS ──────────────────────────── */}
-      {!noBarrio && (
-        <section style={{ padding: '0 26px 48px', maxWidth: 1200, margin: '0 auto', width: '100%' }}>
-          <SecTitle link={`/eventos/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
-            {t('Próximos Eventos', 'Upcoming Events')}
+      {/* ── SECCIÓN 1 — LO ÚLTIMO DEL BARRIO ─────────── */}
+      <section style={{ padding: '48px 26px 36px', borderBottom: `1px solid ${K.line}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <SecTitle link="/blog" linkLabel={t('Todas las noticias →', 'All news →')}>
+            {t('Lo último del barrio', 'Latest from the Barrio')}
           </SecTitle>
 
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 24 }}>
-            {PILLS_TIEMPO.map(p => (
-              <button key={p.id} onClick={() => setTiempo(p.id)} style={{
-                border: tiempo === p.id ? `2px solid ${K.coral}` : `2px solid ${K.line}`,
-                background: tiempo === p.id ? K.coralLight : 'transparent',
-                color: tiempo === p.id ? K.coral : K.muted,
-                fontWeight: 700, fontSize: '.8rem', padding: '6px 14px',
-                borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{lang === 'es' ? p.es : p.en}</button>
-            ))}
-            <div style={{ width: 1, background: K.line, alignSelf: 'center', height: 18 }} />
-            {PILLS_CAT.map(p => (
-              <button key={p.id} onClick={() => setCat(p.id)} style={{
-                border: cat === p.id ? `2px solid ${K.teal}` : `2px solid ${K.line}`,
-                background: cat === p.id ? K.tealDeep + '18' : 'transparent',
-                color: cat === p.id ? K.tealDeep : K.muted,
-                fontWeight: 700, fontSize: '.8rem', padding: '6px 14px',
-                borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
-              }}>{lang === 'es' ? p.es : p.en}</button>
-            ))}
-          </div>
-
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '0 40px' }}>
-            {proximos.length === 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+            {noticias.length === 0 ? (
               <p style={{ color: K.muted, gridColumn: '1/-1' }}>
-                {t('Ningún evento coincide con los filtros.', 'No events match the filters.')}
+                {t('Cargando noticias...', 'Loading news...')}
               </p>
-            ) : proximos.map(e => <EventCardMini key={e.id} evento={e} />)}
+            ) : noticias.map((n, i) => (
+              <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
+                display: 'block', padding: 16,
+                background: K.surface,
+                borderRadius: 10, border: `0.5px solid ${K.line}`,
+                textDecoration: 'none',
+              }}>
+                <span style={{
+                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.08em', color: K.coral,
+                  marginBottom: 8, display: 'block',
+                }}>
+                  {n.fuente === 'el_colombiano' ? 'El Colombiano' : (n.fuente ?? 'Medellín')}
+                </span>
+                <h3 style={{
+                  fontFamily: K.serif, fontSize: 16, fontWeight: 600,
+                  color: K.ink, lineHeight: 1.3, marginBottom: 8, margin: '0 0 8px',
+                }}>
+                  {n.titulo}
+                </h3>
+                {n.fecha_publicacion && (
+                  <span style={{ fontSize: 11, color: K.muted }}>
+                    {new Date(n.fecha_publicacion).toLocaleDateString(lang === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' })}
+                  </span>
+                )}
+              </a>
+            ))}
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
-      {/* ── DIRECTORIO 5 ESTRELLAS ────────────────────── */}
-      {!noBarrio && (
-        <section style={{ padding: '48px 26px', background: K.surface, borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todo →', 'Browse all →')}>
-              {t('Directorio 5 Estrellas', '5-Star Directory')}
-            </SecTitle>
-            <p style={{ color: K.muted, marginBottom: 22, maxWidth: 700, fontSize: '1.02rem' }}>
-              {t(
-  `Los negocios que tus vecinos ya aman en ${isTodos ? 'el Valle de Aburrá' : barrio.nombre}.`,
-  `The businesses your neighbors already love in ${isTodos ? 'the Valle de Aburrá' : barrio.nombre}.`
-)}
-            </p>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 18 }}>
-              {tiendas.length === 0 ? (
-                <a href={`/local-business/${barrio.slug}`} style={{ color: K.coral, fontWeight: 700, textDecoration: 'none', gridColumn: '1/-1' }}>
-                  {t('Explorar directorio de negocios →', 'Explore business directory →')}
+      {/* ── SECCIÓN 2 — HOTSPOTS & DEALS ─────────────── */}
+      <section style={{ padding: '48px 26px 36px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
+            {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
+          </SecTitle>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {dealsLoading ? (
+              <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
+                {t('Cargando deals...', 'Loading deals...')}
+              </p>
+            ) : deals.length === 0 ? (
+              <div style={{ gridColumn: '1/-1', padding: '2rem', textAlign: 'center', background: K.paper, borderRadius: 10, border: `0.5px solid ${K.line}` }}>
+                <p style={{ color: K.muted, marginBottom: 8, margin: '0 0 8px' }}>
+                  {t(`Aún no hay deals en ${barrio.nombre}.`, `No deals in ${barrio.nombre} yet.`)}
+                </p>
+                <a href="/negocios/unirse" style={{ color: K.coral, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                  {t('¿Tienes un negocio? Publícalo aquí →', 'Have a business? List it here →')}
                 </a>
-              ) : tiendas.map(t => <BusinessCardDirectory key={t.id} tienda={t} />)}
-            </div>
+              </div>
+            ) : deals.map((deal, i) => (
+              <div key={deal.id ?? i} style={{
+                background: K.paper,
+                border: `0.5px solid ${K.line}`,
+                borderRadius: 10,
+                overflow: 'hidden',
+                position: 'relative',
+              }}>
+                {/* Badge deal */}
+                <div style={{
+                  position: 'absolute', top: 12, left: 12, zIndex: 1,
+                  background: K.coral, color: '#fff',
+                  fontWeight: 900, fontSize: 14,
+                  padding: '4px 10px', borderRadius: 6,
+                }}>
+                  {deal.tipo_deal}
+                </div>
+
+                {/* Foto */}
+                <div style={{
+                  height: 120, background: K.line,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  fontSize: 32, overflow: 'hidden',
+                }}>
+                  {deal.foto_url
+                    ? <img src={deal.foto_url} alt={deal.tienda_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    : <span>{deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}</span>
+                  }
+                </div>
+
+                <div style={{ padding: 12 }}>
+                  <p style={{ fontSize: 11, color: K.muted, marginBottom: 4, margin: '0 0 4px' }}>
+                    {CATEGORIA_LABELS[deal.categoria ?? ''] ?? deal.categoria}
+                    {deal.barrio_nombre ? ` · ${deal.barrio_nombre}` : ''}
+                  </p>
+                  <p style={{ fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 4px' }}>
+                    {deal.descripcion}
+                  </p>
+                  <p style={{ fontSize: 12, color: K.muted, margin: 0 }}>
+                    {deal.tienda_nombre}
+                  </p>
+                </div>
+              </div>
+            ))}
           </div>
-        </section>
-      )}
+        </div>
+      </section>
+
+      {/* ── SECCIÓN 3 — DIRECTORIO 5 ESTRELLAS ───────── */}
+      <section style={{ padding: '48px 26px', borderBottom: `1px solid ${K.line}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todo →', 'Browse all →')}>
+            {t('Directorio 5 Estrellas', '5-Star Directory')}
+          </SecTitle>
+          <p style={{ color: K.muted, marginBottom: 22, maxWidth: 700, fontSize: '1rem', marginTop: 0 }}>
+            {t(
+              'Un nombre de confianza por categoría — los negocios que tus vecinos ya aman.',
+              'One trusted name per category — the businesses your neighbors already love.',
+            )}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            {dirLoading ? (
+              <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
+                {t('Cargando directorio...', 'Loading directory...')}
+              </p>
+            ) : directorio.length === 0 ? (
+              <div style={{ gridColumn: '1/-1', padding: '2rem', textAlign: 'center', background: K.paper, borderRadius: 10, border: `0.5px solid ${K.line}` }}>
+                <p style={{ color: K.muted, marginBottom: 8, margin: '0 0 8px' }}>
+                  {t(`Sin negocios destacados en ${barrio.nombre} aún.`, `No featured businesses in ${barrio.nombre} yet.`)}
+                </p>
+                <a href={`/local-business/${barrio.slug}`} style={{ color: K.coral, textDecoration: 'none', fontWeight: 600, fontSize: 14 }}>
+                  {t('Explorar directorio completo →', 'Explore full directory →')}
+                </a>
+              </div>
+            ) : directorio.slice(0, 4).map((negocio, i) => (
+              <div key={negocio.id ?? i} style={{
+                background: K.surface,
+                border: `0.5px solid ${K.line}`,
+                borderRadius: 10,
+                overflow: 'hidden',
+                position: 'relative',
+              }}>
+                {/* Badge categoría */}
+                <div style={{
+                  position: 'absolute', top: 12, left: 12, zIndex: 1,
+                  background: K.amarillo, color: K.ink,
+                  fontWeight: 900, fontSize: 11,
+                  padding: '3px 8px', borderRadius: 4,
+                  letterSpacing: '0.5px',
+                }}>
+                  ★ {CATEGORIA_LABELS[negocio.categoria] ?? negocio.categoria}
+                </div>
+
+                {/* Foto o placeholder */}
+                <div style={{
+                  height: 130, overflow: 'hidden',
+                  background: CATEGORIA_COLORS[negocio.categoria] ?? K.surface,
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}>
+                  {negocio.foto_url ? (
+                    <img
+                      src={negocio.foto_url}
+                      alt={negocio.nombre}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.currentTarget.style.display = 'none' }}
+                    />
+                  ) : (
+                    <span style={{ fontSize: 40 }}>
+                      {CATEGORIA_EMOJI[negocio.categoria] ?? '⭐'}
+                    </span>
+                  )}
+                </div>
+
+                <div style={{ padding: '12px 14px' }}>
+                  {negocio.barrio_nombre && (
+                    <p style={{ fontSize: 11, color: K.muted, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                      {negocio.barrio_nombre}
+                    </p>
+                  )}
+
+                  <p style={{ fontWeight: 600, fontSize: 15, color: K.ink, margin: '0 0 6px', lineHeight: 1.2 }}>
+                    {negocio.nombre}
+                  </p>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+                    <span style={{ color: '#ffc928' }}>★★★★★</span>
+                    <span style={{ fontSize: 13, color: K.muted }}>{negocio.rating_google?.toFixed(1)}</span>
+                  </div>
+
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {(negocio.google_place_id || negocio.lat) && (
+                      <a
+                        href={negocio.google_place_id
+                          ? `https://www.google.com/maps/place/?q=place_id:${negocio.google_place_id}`
+                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(negocio.nombre + ' ' + (negocio.barrio_nombre ?? 'Medellín'))}`
+                        }
+                        target="_blank" rel="noopener noreferrer"
+                        style={{
+                          flex: 1, textAlign: 'center', padding: '6px 0',
+                          background: K.paper, border: `0.5px solid ${K.line}`,
+                          borderRadius: 6, fontSize: 12, color: K.ink,
+                          textDecoration: 'none', fontWeight: 500,
+                        }}
+                      >
+                        📍 Ver en Maps
+                      </a>
+                    )}
+                    {negocio.whatsapp && (
+                      <a
+                        href={`https://wa.me/${negocio.whatsapp.replace(/\D/g, '')}`}
+                        target="_blank" rel="noopener noreferrer"
+                        style={{
+                          flex: 1, textAlign: 'center', padding: '6px 0',
+                          background: '#25D366', borderRadius: 6,
+                          fontSize: 12, color: '#fff',
+                          textDecoration: 'none', fontWeight: 500,
+                        }}
+                      >
+                        💬 WhatsApp
+                      </a>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
 
       {/* ── REAL ESTATE ───────────────────────────────── */}
       <section style={{ padding: '48px 26px' }}>

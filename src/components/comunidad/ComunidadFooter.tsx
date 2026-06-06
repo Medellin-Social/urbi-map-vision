@@ -15,11 +15,11 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
     ['Blog', '#'],
   ]
 
-  const participa = [
-    t('Sé Embajador del Barrio', 'Become an Ambassador'),
-    t('Registra tu Negocio', 'List Your Business'),
-    t('Programa de Afiliados', 'Affiliate Program'),
-    t('Fundaciones', 'Nonprofits'),
+  const participa: [string, string][] = [
+    [t('Suscribirte gratis', 'Subscribe free'), '/suscribirse'],
+    [t('Lista tu negocio', 'List your business'), '/negocios/unirse'],
+    [t('Sé Embajador del Barrio', 'Become an Ambassador'), '/embajador'],
+    [t('Programa de Afiliados', 'Affiliate Program'), '/afiliado'],
   ]
 
   return (
@@ -64,9 +64,9 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
           <h5 style={{ color: '#fff', fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.8px', margin: '0 0 14px' }}>
             {t('Participa', 'Get Involved')}
           </h5>
-          {participa.map(item => (
-            <a key={item} href="#" style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#bccfc8', textDecoration: 'none' }}>
-              {item}
+          {participa.map(([label, href]) => (
+            <a key={label} href={href} style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#bccfc8', textDecoration: 'none' }}>
+              {label}
             </a>
           ))}
         </div>

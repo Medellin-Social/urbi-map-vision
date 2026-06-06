@@ -175,3 +175,67 @@ async def update_map_config(req: MapConfigRequest, current_user: dict = Depends(
         req.capas_visibles, req.score_display, req.mostrar_oportunidades,
     )
     return dict(row)
+
+
+# ── Newsletter / Suscribirse ──────────────────────────────────────────────────
+
+class SuscribirseIn(BaseModel):
+    nombre: str
+    apellido: Optional[str] = None
+    email: str
+    barrio_id: Optional[int] = None
+    intereses: Optional[str] = None
+    newsletter_activo: bool = True
+
+
+class SuscribirseOut(BaseModel):
+    success: bool
+    nuevo: bool
+    usuario_id: int
+
+
+@router.post("/suscribirse", response_model=SuscribirseOut)
+async def suscribirse(body: SuscribirseIn, pool=Depends(get_pool)):
+    try:
+        existing = await pool.fetchrow(
+            "SELECT id FROM public.usuarios WHERE email = $1", body.email
+        )
+        if existing:
+            await pool.execute(
+                """
+                UPDATE public.usuarios SET
+                    newsletter_activo    = $2,
+                    newsletter_barrio_id = COALESCE($3, newsletter_barrio_id),
+                    newsletter_intereses = CASE WHEN $4::text IS NOT NULL
+                                               THEN ARRAY[$4::text]
+                                               ELSE newsletter_intereses END,
+                    fecha_suscripcion    = COALESCE(fecha_suscripcion, NOW()),
+                    nombre               = COALESCE($5, nombre),
+                    apellido             = COALESCE($6, apellido)
+                WHERE id = $1
+                """,
+                existing["id"], body.newsletter_activo, body.barrio_id,
+                body.intereses, body.nombre, body.apellido,
+            )
+            return SuscribirseOut(success=True, nuevo=False, usuario_id=existing["id"])
+
+        import bcrypt
+        import secrets
+        tmp_password = secrets.token_urlsafe(16)
+        hashed = bcrypt.hashpw(tmp_password.encode(), bcrypt.gensalt()).decode()
+        row = await pool.fetchrow(
+            """
+            INSERT INTO public.usuarios
+                (email, password_hash, nombre, apellido, rol,
+                 newsletter_activo, newsletter_barrio_id, newsletter_intereses, fecha_suscripcion)
+            VALUES ($1, $2, $3, $4, 'usuario', $5, $6,
+                    CASE WHEN $7::text IS NOT NULL THEN ARRAY[$7::text] ELSE NULL END,
+                    NOW())
+            RETURNING id
+            """,
+            body.email, hashed, body.nombre, body.apellido,
+            body.newsletter_activo, body.barrio_id, body.intereses,
+        )
+        return SuscribirseOut(success=True, nuevo=True, usuario_id=row["id"])
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))

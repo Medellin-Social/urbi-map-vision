@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as SuscribirseRouteImport } from './routes/suscribirse'
 import { Route as StoresRouteImport } from './routes/stores'
 import { Route as SimuladorRouteImport } from './routes/simulador'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
@@ -19,14 +20,22 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as EmbajadorRouteImport } from './routes/embajador'
 import { Route as ComunidadRouteImport } from './routes/comunidad'
 import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
+import { Route as AfiliadoRouteImport } from './routes/afiliado'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
 
+const SuscribirseRoute = SuscribirseRouteImport.update({
+  id: '/suscribirse',
+  path: '/suscribirse',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StoresRoute = StoresRouteImport.update({
   id: '/stores',
   path: '/stores',
@@ -77,6 +86,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EmbajadorRoute = EmbajadorRouteImport.update({
+  id: '/embajador',
+  path: '/embajador',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ComunidadRoute = ComunidadRouteImport.update({
   id: '/comunidad',
   path: '/comunidad',
@@ -92,9 +106,19 @@ const CalculadoraRoute = CalculadoraRouteImport.update({
   path: '/calculadora',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AfiliadoRoute = AfiliadoRouteImport.update({
+  id: '/afiliado',
+  path: '/afiliado',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
+  id: '/negocios/unirse',
+  path: '/negocios/unirse',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LocalBusinessBarrio_slugRoute =
@@ -116,9 +140,11 @@ const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/afiliado': typeof AfiliadoRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
@@ -129,15 +155,19 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/suscribirse': typeof SuscribirseRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/negocios/unirse': typeof NegociosUnirseRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/afiliado': typeof AfiliadoRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
@@ -148,16 +178,20 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/suscribirse': typeof SuscribirseRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/negocios/unirse': typeof NegociosUnirseRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/afiliado': typeof AfiliadoRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
@@ -168,17 +202,21 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
+  '/suscribirse': typeof SuscribirseRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/negocios/unirse': typeof NegociosUnirseRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/afiliado'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
@@ -189,15 +227,19 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/suscribirse'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/negocios/unirse'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
+    | '/afiliado'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
@@ -208,15 +250,19 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/suscribirse'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/negocios/unirse'
   id:
     | '__root__'
     | '/'
+    | '/afiliado'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
@@ -227,16 +273,20 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/simulador'
     | '/stores'
+    | '/suscribirse'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/negocios/unirse'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AfiliadoRoute: typeof AfiliadoRoute
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
   ComunidadRoute: typeof ComunidadRoute
+  EmbajadorRoute: typeof EmbajadorRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
@@ -247,13 +297,22 @@ export interface RootRouteChildren {
   ResetPasswordRoute: typeof ResetPasswordRoute
   SimuladorRoute: typeof SimuladorRoute
   StoresRoute: typeof StoresRoute
+  SuscribirseRoute: typeof SuscribirseRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
+  NegociosUnirseRoute: typeof NegociosUnirseRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/suscribirse': {
+      id: '/suscribirse'
+      path: '/suscribirse'
+      fullPath: '/suscribirse'
+      preLoaderRoute: typeof SuscribirseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/stores': {
       id: '/stores'
       path: '/stores'
@@ -324,6 +383,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ForgotPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/embajador': {
+      id: '/embajador'
+      path: '/embajador'
+      fullPath: '/embajador'
+      preLoaderRoute: typeof EmbajadorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/comunidad': {
       id: '/comunidad'
       path: '/comunidad'
@@ -345,11 +411,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculadoraRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/afiliado': {
+      id: '/afiliado'
+      path: '/afiliado'
+      fullPath: '/afiliado'
+      preLoaderRoute: typeof AfiliadoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/negocios/unirse': {
+      id: '/negocios/unirse'
+      path: '/negocios/unirse'
+      fullPath: '/negocios/unirse'
+      preLoaderRoute: typeof NegociosUnirseRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/local-business/$barrio_slug': {
@@ -378,9 +458,11 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AfiliadoRoute: AfiliadoRoute,
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
   ComunidadRoute: ComunidadRoute,
+  EmbajadorRoute: EmbajadorRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,
@@ -391,9 +473,11 @@ const rootRouteChildren: RootRouteChildren = {
   ResetPasswordRoute: ResetPasswordRoute,
   SimuladorRoute: SimuladorRoute,
   StoresRoute: StoresRoute,
+  SuscribirseRoute: SuscribirseRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
+  NegociosUnirseRoute: NegociosUnirseRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

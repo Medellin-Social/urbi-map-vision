@@ -747,3 +747,50 @@ async def get_ticker(
     ]
 
     return TickerResponse(ciudad_id=ciudad_id, total=len(items), items=items)
+
+
+# ── Noticias ──────────────────────────────────────────────────────────────────
+
+class NoticiaOut(BaseModel):
+    id: int
+    titulo: str
+    url: str
+    fuente: Optional[str]
+    fecha_publicacion: Optional[str]
+
+
+class NoticiasResponse(BaseModel):
+    total: int
+    noticias: list[NoticiaOut]
+
+
+_NOTICIAS_QUERY = """
+SELECT id, titulo, url, fuente, fecha_publicacion
+FROM public.noticias
+WHERE activa = TRUE
+ORDER BY fecha_publicacion DESC NULLS LAST
+LIMIT $1
+"""
+
+
+@router.get("/noticias", response_model=NoticiasResponse)
+async def get_noticias(
+    limit: int = Query(4, ge=1, le=20),
+    pool=Depends(get_pool),
+):
+    try:
+        rows = await pool.fetch(_NOTICIAS_QUERY, limit)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    noticias = [
+        NoticiaOut(
+            id=r["id"],
+            titulo=r["titulo"],
+            url=r["url"],
+            fuente=r["fuente"],
+            fecha_publicacion=r["fecha_publicacion"].isoformat() if r["fecha_publicacion"] else None,
+        )
+        for r in rows
+    ]
+    return NoticiasResponse(total=len(noticias), noticias=noticias)

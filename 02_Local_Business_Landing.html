@@ -1,0 +1,582 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Easy Street | Local Business — Own Your Category in Your Community</title>
+<meta name="description" content="Reach your neighbors with Easy Street. Two paths: Special Offers to the local subscriber base, or a Featured Business Listing with exclusive rights to your category in your community." />
+<style>
+  :root {
+    --es-blue: #27273E;
+    --es-blue-soft: #3A3A5C;
+    --es-green: #458C1E;
+    --es-green-soft: #5BB02A;
+    --es-cream: #FAF7F2;
+    --es-paper: #FFFFFF;
+    --es-ink: #1A1A2E;
+    --es-muted: #6E6E85;
+    --es-line: #E6E2DA;
+    --es-amber: #F4B23A;
+    --es-amber-deep: #C8841F;
+    --shadow-card: 0 8px 30px rgba(39,39,62,0.08);
+    --shadow-cta: 0 12px 36px rgba(69,140,30,0.28);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { scroll-behavior: smooth; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+    color: var(--es-ink); background: var(--es-cream); line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--es-green); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  .container { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+  .topbar { background: var(--es-blue); color: #fff; padding: 12px 0; font-size: 14px; }
+  .topbar .container { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .brandmark { display: flex; align-items: center; gap: 12px; font-weight: 700; letter-spacing: 0.5px; }
+  .brandmark .sign { background: var(--es-green); color: #fff; padding: 4px 10px; border-radius: 4px; font-family: "Georgia", serif; letter-spacing: 1px; }
+  .topbar nav a { color: #fff; opacity: 0.85; margin-left: 18px; }
+  .topbar nav a:hover { opacity: 1; }
+  .hero {
+    background:
+      radial-gradient(circle at 12% 18%, rgba(244,178,58,0.10), transparent 55%),
+      radial-gradient(circle at 88% 80%, rgba(39,39,62,0.08), transparent 55%),
+      linear-gradient(180deg, #FFFFFF 0%, var(--es-cream) 100%);
+    padding: 72px 0 48px; border-bottom: 1px solid var(--es-line);
+  }
+  .eyebrow {
+    display: inline-block; background: rgba(244,178,58,0.18); color: var(--es-amber-deep);
+    padding: 6px 14px; border-radius: 999px; font-weight: 700; font-size: 13px;
+    letter-spacing: 0.6px; text-transform: uppercase; margin-bottom: 18px;
+  }
+  h1 {
+    font-size: clamp(38px, 5vw, 58px); line-height: 1.05; letter-spacing: -0.5px;
+    color: var(--es-blue); margin-bottom: 18px; font-weight: 800; max-width: 920px;
+  }
+  h1 .accent { color: var(--es-green); }
+  .lede { font-size: 19px; color: var(--es-muted); margin-bottom: 30px; max-width: 760px; }
+  .cta-row { display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-block; padding: 16px 28px; border-radius: 10px;
+    font-weight: 700; font-size: 16px; letter-spacing: 0.2px;
+    border: 2px solid transparent; cursor: pointer; transition: transform 0.15s ease;
+  }
+  .btn-primary { background: var(--es-green); color: #fff; box-shadow: var(--shadow-cta); }
+  .btn-primary:hover { transform: translateY(-2px); text-decoration: none; }
+  .btn-secondary { background: #fff; color: var(--es-blue); border-color: var(--es-blue); }
+  .btn-secondary:hover { background: var(--es-blue); color: #fff; text-decoration: none; }
+  .btn-amber { background: var(--es-amber); color: var(--es-blue); box-shadow: 0 12px 36px rgba(244,178,58,0.35); }
+  .btn-amber:hover { transform: translateY(-2px); text-decoration: none; }
+  section { padding: 72px 0; }
+  section.alt { background: #fff; border-top: 1px solid var(--es-line); border-bottom: 1px solid var(--es-line); }
+  h2 {
+    font-size: clamp(28px, 3.4vw, 38px); color: var(--es-blue); letter-spacing: -0.3px;
+    margin-bottom: 14px; font-weight: 800;
+  }
+  .section-sub { color: var(--es-muted); font-size: 17px; max-width: 760px; margin-bottom: 40px; }
+  /* TWO PATHS */
+  .paths { display: grid; grid-template-columns: 1fr 1fr; gap: 28px; }
+  .path-card {
+    background: #fff; border-radius: 16px; padding: 36px; box-shadow: var(--shadow-card);
+    border: 2px solid var(--es-line); position: relative; display: flex; flex-direction: column;
+  }
+  .path-card.featured { border-color: var(--es-green); background: linear-gradient(180deg, #fff 0%, rgba(69,140,30,0.04) 100%); }
+  .ribbon {
+    position: absolute; top: -14px; right: 28px;
+    background: var(--es-green); color: #fff; padding: 6px 14px;
+    border-radius: 999px; font-size: 12px; font-weight: 800; letter-spacing: 0.5px; text-transform: uppercase;
+  }
+  .ribbon.amber { background: var(--es-amber); color: var(--es-blue); }
+  .path-card .label {
+    font-size: 13px; font-weight: 800; letter-spacing: 0.8px; text-transform: uppercase;
+    color: var(--es-muted); margin-bottom: 12px;
+  }
+  .path-card h3 { color: var(--es-blue); font-size: 28px; margin-bottom: 8px; letter-spacing: -0.3px; }
+  .path-card .tagline { color: var(--es-muted); font-size: 15px; margin-bottom: 22px; }
+  .path-card .price-line {
+    background: var(--es-cream); border-radius: 10px; padding: 14px 18px;
+    margin-bottom: 22px; font-size: 15px;
+  }
+  .path-card .price-line .from { color: var(--es-muted); font-size: 12px; letter-spacing: 0.5px; text-transform: uppercase; }
+  .path-card .price-line .amt { color: var(--es-blue); font-weight: 800; font-size: 24px; display: block; }
+  .feat-list { list-style: none; padding: 0; margin: 0 0 28px; flex-grow: 1; }
+  .feat-list li {
+    padding: 10px 0 10px 32px; position: relative; color: var(--es-ink); font-size: 15px;
+    border-bottom: 1px solid var(--es-line);
+  }
+  .feat-list li:last-child { border-bottom: none; }
+  .feat-list li::before {
+    content: "✓"; position: absolute; left: 0; top: 10px;
+    color: var(--es-green); font-weight: 800; font-size: 18px;
+    width: 24px; height: 24px; display: flex; align-items: center; justify-content: center;
+  }
+  .path-card .btn { width: 100%; text-align: center; }
+  /* WHY BAND */
+  .why-band {
+    background: linear-gradient(135deg, var(--es-blue) 0%, var(--es-blue-soft) 100%);
+    color: #fff; padding: 56px 0;
+  }
+  .why-band h2 { color: #fff; }
+  .why-band .section-sub { color: rgba(255,255,255,0.85); }
+  .why-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 22px; }
+  .why-card {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 12px; padding: 26px;
+  }
+  .why-card .ico {
+    width: 44px; height: 44px; border-radius: 10px; background: var(--es-amber);
+    color: var(--es-blue); display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 18px; margin-bottom: 14px;
+  }
+  .why-card h4 { color: #fff; font-size: 18px; margin-bottom: 8px; }
+  .why-card p { color: rgba(255,255,255,0.78); font-size: 14px; }
+  /* SEO / AEO / MEO */
+  .auth-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+  .auth-card {
+    background: #fff; border-radius: 12px; padding: 28px; border: 1px solid var(--es-line);
+    box-shadow: var(--shadow-card);
+  }
+  .auth-card .badge {
+    display: inline-block; padding: 4px 10px; border-radius: 6px; font-size: 11px; font-weight: 800;
+    letter-spacing: 0.8px; background: var(--es-green); color: #fff; margin-bottom: 14px;
+  }
+  .auth-card h3 { color: var(--es-blue); font-size: 20px; margin-bottom: 10px; }
+  .auth-card p { color: var(--es-muted); font-size: 14px; }
+  /* COMPARISON */
+  table.compare {
+    width: 100%; border-collapse: collapse; background: #fff; border-radius: 12px; overflow: hidden;
+    box-shadow: var(--shadow-card); margin-top: 24px;
+  }
+  table.compare th, table.compare td { padding: 16px 18px; text-align: left; border-bottom: 1px solid var(--es-line); font-size: 15px; }
+  table.compare th { background: var(--es-blue); color: #fff; font-weight: 700; letter-spacing: 0.3px; }
+  table.compare tr:last-child td { border-bottom: none; }
+  table.compare td.feature { font-weight: 700; color: var(--es-blue); background: var(--es-cream); }
+  table.compare td.check { color: var(--es-green); font-weight: 800; font-size: 18px; }
+  table.compare td.miss { color: #C44; font-weight: 800; font-size: 18px; }
+  /* HOW */
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 24px; }
+  .step {
+    background: var(--es-cream); border-radius: 12px; padding: 26px;
+    border-left: 4px solid var(--es-green); position: relative;
+  }
+  .step .num {
+    position: absolute; top: -16px; left: 22px;
+    background: var(--es-blue); color: #fff; width: 32px; height: 32px;
+    border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 14px;
+  }
+  .step h4 { color: var(--es-blue); font-size: 16px; margin: 6px 0 8px; }
+  .step p { color: var(--es-muted); font-size: 14px; }
+  /* SOCIAL PROOF */
+  .stats {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 24px; margin-top: 8px;
+  }
+  .stat {
+    background: #fff; border-radius: 12px; padding: 28px; text-align: center;
+    border: 1px solid var(--es-line);
+  }
+  .stat .n { font-size: 36px; font-weight: 800; color: var(--es-green); display: block; }
+  .stat .l { color: var(--es-blue); font-weight: 700; font-size: 14px; letter-spacing: 0.3px; }
+  .stat .s { color: var(--es-muted); font-size: 13px; margin-top: 4px; }
+  /* APPLY FORM */
+  .apply {
+    background: linear-gradient(180deg, #FFFFFF 0%, var(--es-cream) 100%);
+    border-radius: 16px; padding: 48px; box-shadow: var(--shadow-card);
+    border: 1px solid var(--es-line);
+  }
+  .apply h2 { text-align: center; }
+  .apply .section-sub { margin-left: auto; margin-right: auto; text-align: center; }
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; max-width: 820px; margin: 24px auto 0; }
+  .form-grid .full { grid-column: 1 / -1; }
+  .field label { display: block; font-size: 13px; font-weight: 700; color: var(--es-blue); margin-bottom: 6px; letter-spacing: 0.3px; }
+  .field input, .field select, .field textarea {
+    width: 100%; padding: 12px 14px; border: 1px solid var(--es-line); border-radius: 8px;
+    font-size: 15px; font-family: inherit; background: #fff;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none; border-color: var(--es-green); box-shadow: 0 0 0 3px rgba(69,140,30,0.15);
+  }
+  .field textarea { min-height: 90px; resize: vertical; }
+  .submit-row { text-align: center; margin-top: 24px; }
+  .submit-row .btn-primary { padding: 18px 40px; font-size: 17px; }
+  .fineprint { font-size: 12px; color: var(--es-muted); margin-top: 12px; text-align: center; }
+  /* FOOTER */
+  footer { background: var(--es-blue); color: rgba(255,255,255,0.75); padding: 40px 0; font-size: 14px; text-align: center; }
+  footer .brandmark { justify-content: center; margin-bottom: 12px; color: #fff; }
+  @media (max-width: 880px) {
+    .paths { grid-template-columns: 1fr; }
+    .auth-grid { grid-template-columns: 1fr; }
+    .form-grid { grid-template-columns: 1fr; }
+    .apply { padding: 32px 24px; }
+    table.compare { font-size: 13px; }
+    table.compare th, table.compare td { padding: 12px 10px; }
+  }
+  html[lang="en"] .t-es { display: none !important; }
+  html[lang="es"] .t-en { display: none !important; }
+  .lang-toggle {
+    background: rgba(255,255,255,0.15);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.3);
+    padding: 6px 12px;
+    border-radius: 6px;
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    margin-left: 18px;
+    letter-spacing: 0.5px;
+    transition: background 0.15s;
+    font-family: inherit;
+  }
+  .lang-toggle:hover { background: rgba(255,255,255,0.25); }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="container">
+    <div class="brandmark">
+      <span class="sign">EASY STREET</span>
+      <span style="opacity: 0.8;"><span class="t-en">For Local Business</span><span class="t-es">Para Negocios Locales</span></span>
+    </div>
+    <nav>
+      <a href="#paths"><span class="t-en">Two paths</span><span class="t-es">Dos caminos</span></a>
+      <a href="#authority"><span class="t-en">Authority</span><span class="t-es">Autoridad</span></a>
+      <a href="#compare"><span class="t-en">Compare</span><span class="t-es">Comparar</span></a>
+      <a href="#apply"><span class="t-en">Apply</span><span class="t-es">Aplicar</span></a>
+      <button id="lang-toggle" class="lang-toggle" aria-label="Toggle language"><span class="t-en">Español</span><span class="t-es">English</span></button>
+    </nav>
+  </div>
+</div>
+
+<section class="hero">
+  <div class="container">
+    <span class="eyebrow"><span class="t-en">For 5-Star Local Businesses</span><span class="t-es">Para Negocios Locales 5 Estrellas</span></span>
+    <h1><span class="t-en">Be the business your neighbors <span class="accent">trust before</span> they even call you.</span><span class="t-es">Sea el negocio en el que sus vecinos <span class="accent">confían antes</span> de siquiera llamarle.</span></h1>
+    <p class="lede"><span class="t-en">Easy Street is the digital town square for your community. Two ways to get on the map — a Special Offer to reach the subscriber base, or an exclusive Featured Listing where you own your business category in your community. Both put you in front of locals who are already deciding who to hire, where to eat, and where to spend.</span><span class="t-es">Easy Street es la plaza digital de su comunidad. Dos formas de ponerse en el mapa — una Oferta Especial para llegar a la base de suscriptores, o un Listado Destacado exclusivo donde usted es dueño de su categoría de negocio en su comunidad. Ambas le ponen frente a vecinos que ya están decidiendo a quién contratar, dónde comer y dónde gastar.</span></p>
+    <div class="cta-row">
+      <a class="btn btn-primary" href="#paths"><span class="t-en">See Both Paths →</span><span class="t-es">Ver Ambos Caminos →</span></a>
+      <a class="btn btn-secondary" href="#apply"><span class="t-en">Reserve My Category</span><span class="t-es">Reservar Mi Categoría</span></a>
+    </div>
+  </div>
+</section>
+
+<section id="paths">
+  <div class="container">
+    <h2><span class="t-en">Two paths. Pick the one that fits.</span><span class="t-es">Dos caminos. Elija el que le convenga.</span></h2>
+    <p class="section-sub"><span class="t-en">Start small with Special Offers, or claim the only Featured Business slot for your category in this community. You can always upgrade.</span><span class="t-es">Comience en pequeño con Ofertas Especiales, o reclame el único lugar de Negocio Destacado para su categoría en esta comunidad. Siempre puede mejorar después.</span></p>
+    <div class="paths">
+      <!-- PATH A -->
+      <div class="path-card">
+        <span class="ribbon amber"><span class="t-en">Start Small</span><span class="t-es">Comience en Pequeño</span></span>
+        <div class="label"><span class="t-en">Path A · Special Offers</span><span class="t-es">Camino A · Ofertas Especiales</span></div>
+        <h3><span class="t-en">Special Offer / Hotspot Listing</span><span class="t-es">Oferta Especial / Listado Hotspot</span></h3>
+        <p class="tagline"><span class="t-en">Reach the local subscriber base with a featured deal, flash offer, or Hotspot placement. Low commitment, fast results.</span><span class="t-es">Llegue a la base local de suscriptores con una promoción destacada, Oferta Flash o ubicación Hotspot. Poco compromiso, resultados rápidos.</span></p>
+        <div class="price-line">
+          <span class="from"><span class="t-en">From</span><span class="t-es">Desde</span></span>
+          <span class="amt">$29 – $199</span>
+          <span class="t-en">per placement</span><span class="t-es">por ubicación</span>
+        </div>
+        <ul class="feat-list">
+          <li><span class="t-en">Featured in the subscriber-only deals section</span><span class="t-es">Destacado en la sección de ofertas exclusiva para suscriptores</span></li>
+          <li><span class="t-en">Included in the weekly Easy Street newsletter</span><span class="t-es">Incluido en el boletín semanal de Easy Street</span></li>
+          <li><span class="t-en">Hotspot placement (Happy Hour, Date Night, Live Music, Ice Cream, Craft Beer, Cocktails, Sports Bar, Fun &amp; Games)</span><span class="t-es">Ubicación Hotspot (Happy Hour, Noche de Cita, Música en Vivo, Helados, Cerveza Artesanal, Cócteles, Sports Bar, Diversión y Juegos)</span></li>
+          <li><span class="t-en">Time-sensitive SMS push to the subscriber base for Flash Offers</span><span class="t-es">Envío SMS de tiempo limitado a la base de suscriptores para Ofertas Flash</span></li>
+          <li><span class="t-en">Featured on the community Facebook + Instagram</span><span class="t-es">Destacado en el Facebook e Instagram de la comunidad</span></li>
+          <li><span class="t-en">No long-term commitment — run a single offer or a series</span><span class="t-es">Sin compromiso a largo plazo — ejecute una sola oferta o una serie</span></li>
+          <li><span class="t-en">Perfect for restaurants, bars, retail, and trial offers</span><span class="t-es">Perfecto para restaurantes, bares, comercio minorista y ofertas de prueba</span></li>
+        </ul>
+        <a class="btn btn-amber" href="#apply"><span class="t-en">Run a Special Offer →</span><span class="t-es">Lanzar una Oferta Especial →</span></a>
+      </div>
+      <!-- PATH B -->
+      <div class="path-card featured">
+        <span class="ribbon"><span class="t-en">Best Value · Exclusive</span><span class="t-es">Mejor Valor · Exclusivo</span></span>
+        <div class="label"><span class="t-en">Path B · Featured Business Listing</span><span class="t-es">Camino B · Listado de Negocio Destacado</span></div>
+        <h3><span class="t-en">Featured Business with Category Exclusivity</span><span class="t-es">Negocio Destacado con Exclusividad de Categoría</span></h3>
+        <p class="tagline"><span class="t-en">One — and only one — business per category per community. You become the de facto answer when your neighbors look up "best [your category] near me."</span><span class="t-es">Uno — y solo uno — negocio por categoría por comunidad. Usted se convierte en la respuesta predeterminada cuando sus vecinos buscan "mejor [su categoría] cerca de mí".</span></p>
+        <div class="price-line">
+          <span class="from"><span class="t-en">Enhanced Listing onboarding</span><span class="t-es">Onboarding de Listado Mejorado</span></span>
+          <span class="amt">$99 <span class="t-en">launch</span><span class="t-es">lanzamiento</span> <span style="font-size: 14px; font-weight: 500; color: var(--es-muted);">/ $249 <span class="t-en">standard</span><span class="t-es">estándar</span></span></span>
+          <span class="t-en">+ monthly Featured Contributor tier</span><span class="t-es">+ nivel mensual de Colaborador Destacado</span>
+        </div>
+        <ul class="feat-list">
+          <li><span class="t-en"><strong>Category exclusivity</strong> — your competitors are locked out</span><span class="t-es"><strong>Exclusividad de categoría</strong> — sus competidores quedan bloqueados</span></li>
+          <li><span class="t-en">Permanent homepage and category-page placement with "Featured Contributor" badge</span><span class="t-es">Ubicación permanente en la página principal y de categoría con insignia de "Colaborador Destacado"</span></li>
+          <li><span class="t-en">Dedicated author profile with bio, photo, links, and content library</span><span class="t-es">Perfil dedicado de autor con biografía, foto, enlaces y biblioteca de contenido</span></li>
+          <li><span class="t-en">AI-assisted article + video publishing (we write the first one with you)</span><span class="t-es">Publicación de artículos y videos asistida por IA (escribimos el primero junto con usted)</span></li>
+          <li><span class="t-en">Cross-channel distribution — blog, newsletter, social, RSS, mobile app</span><span class="t-es">Distribución multicanal — blog, boletín, redes sociales, RSS, aplicación móvil</span></li>
+          <li><span class="t-en">SEO + AEO + Local Map authority that compounds month after month</span><span class="t-es">SEO + AEO + Autoridad de Mapa Local que se acumula mes tras mes</span></li>
+          <li><span class="t-en"><strong>Free consultative analysis</strong> and business report at onboarding</span><span class="t-es"><strong>Análisis consultivo gratuito</strong> e informe de negocio al momento del onboarding</span></li>
+          <li><span class="t-en">Premium add-ons available: AI chat widget, voice agent, lead automation, appointment booking</span><span class="t-es">Complementos premium disponibles: widget de chat con IA, agente de voz, automatización de prospectos, reserva de citas</span></li>
+        </ul>
+        <a class="btn btn-primary" href="#apply"><span class="t-en">Reserve My Category →</span><span class="t-es">Reservar Mi Categoría →</span></a>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- WHY BAND -->
+<section class="why-band">
+  <div class="container">
+    <h2><span class="t-en">Why local businesses say yes</span><span class="t-es">Por qué los negocios locales dicen que sí</span></h2>
+    <p class="section-sub"><span class="t-en">Easy Street is not advertising. It's authority. The compounding kind that pays you back year after year.</span><span class="t-es">Easy Street no es publicidad. Es autoridad. Del tipo que se acumula y le devuelve año tras año.</span></p>
+    <div class="why-grid">
+      <div class="why-card">
+        <div class="ico">🏆</div>
+        <h4><span class="t-en">You're the Only One</span><span class="t-es">Usted es el Único</span></h4>
+        <p><span class="t-en">Only one roofer, one dentist, one realtor, one HVAC pro per community. When your neighbor needs you, you're the choice — not one of ten options.</span><span class="t-es">Solo un techador, un dentista, un agente inmobiliario, un profesional de HVAC por comunidad. Cuando su vecino le necesita, usted es la elección — no una de diez opciones.</span></p>
+      </div>
+      <div class="why-card">
+        <div class="ico">📣</div>
+        <h4><span class="t-en">Authority, Not Ads</span><span class="t-es">Autoridad, No Anuncios</span></h4>
+        <p><span class="t-en">Your articles, your video, your expertise — published on a trusted local platform. Trust builds before the conversation starts.</span><span class="t-es">Sus artículos, su video, su experticia — publicados en una plataforma local confiable. La confianza se construye antes de que comience la conversación.</span></p>
+      </div>
+      <div class="why-card">
+        <div class="ico">🎯</div>
+        <h4><span class="t-en">Hyper-Local Reach</span><span class="t-es">Alcance Hiper-Local</span></h4>
+        <p><span class="t-en">Your community's subscribers see your content in the newsletter, on the blog, across social, and in the mobile app. The audience is already qualified.</span><span class="t-es">Los suscriptores de su comunidad ven su contenido en el boletín, en el blog, en redes sociales y en la aplicación móvil. La audiencia ya está calificada.</span></p>
+      </div>
+      <div class="why-card">
+        <div class="ico">⏳</div>
+        <h4><span class="t-en">It Doesn't Disappear</span><span class="t-es">No Desaparece</span></h4>
+        <p><span class="t-en">Unlike ads, your content stays. Months and years later, it's still discoverable in search and AI tools. It compounds.</span><span class="t-es">A diferencia de los anuncios, su contenido permanece. Meses y años después, sigue siendo descubrible en buscadores y herramientas de IA. Se acumula.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- AUTHORITY -->
+<section id="authority" class="alt">
+  <div class="container">
+    <h2><span class="t-en">SEO. AEO. Local Map Authority. All three.</span><span class="t-es">SEO. AEO. Autoridad de Mapa Local. Los tres.</span></h2>
+    <p class="section-sub"><span class="t-en">Your content doesn't just help people see you — it helps search engines and AI platforms understand who you are, where you operate, and why you're credible. This is the new local marketing.</span><span class="t-es">Su contenido no solo ayuda a que la gente lo vea — ayuda a los motores de búsqueda y plataformas de IA a entender quién es, dónde opera y por qué es creíble. Este es el nuevo marketing local.</span></p>
+    <div class="auth-grid">
+      <div class="auth-card">
+        <span class="badge">SEO</span>
+        <h3><span class="t-en">Authority that compounds</span><span class="t-es">Autoridad que se acumula</span></h3>
+        <p><span class="t-en">Your articles are published on an established, trusted local domain. Consistent, high-quality content reinforces topical expertise. Backlinks from Easy Street signal legitimacy. Months later, that content is still ranking — and still working for you.</span><span class="t-es">Sus artículos se publican en un dominio local establecido y confiable. El contenido consistente y de alta calidad refuerza la experticia temática. Los enlaces desde Easy Street son señal de legitimidad. Meses después, ese contenido sigue posicionando — y sigue trabajando para usted.</span></p>
+      </div>
+      <div class="auth-card">
+        <span class="badge">AEO</span>
+        <h3><span class="t-en">Be the source AI cites</span><span class="t-es">Sea la fuente que la IA cita</span></h3>
+        <p><span class="t-en">Modern search is AI-generated answers. Your Featured Contributor content is structured so AI tools reference, summarize, and cite it. You become part of the answer ecosystem — not a paid link competing for clicks.</span><span class="t-es">La búsqueda moderna es respuestas generadas por IA. Su contenido de Colaborador Destacado está estructurado para que las herramientas de IA lo referencien, resuman y citen. Usted se convierte en parte del ecosistema de respuestas — no un enlace pagado compitiendo por clics.</span></p>
+      </div>
+      <div class="auth-card">
+        <span class="badge">MEO</span>
+        <h3><span class="t-en">Win the "near me" searches</span><span class="t-es">Gane las búsquedas "cerca de mí"</span></h3>
+        <p><span class="t-en">Strong geographic relevance signals tied to your service area. Association with trusted local content boosts local authority. The map results favor experts over advertisers — and Easy Street makes you the expert.</span><span class="t-es">Fuertes señales de relevancia geográfica vinculadas a su área de servicio. La asociación con contenido local confiable impulsa la autoridad local. Los resultados del mapa favorecen a los expertos sobre los anunciantes — y Easy Street lo convierte en el experto.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- COMPARISON -->
+<section id="compare">
+  <div class="container">
+    <h2><span class="t-en">Side-by-side comparison</span><span class="t-es">Comparación lado a lado</span></h2>
+    <p class="section-sub"><span class="t-en">What's included at each level. Start where you want — upgrade when you're ready.</span><span class="t-es">Lo que se incluye en cada nivel. Comience donde quiera — mejore cuando esté listo.</span></p>
+    <table class="compare">
+      <thead>
+        <tr>
+          <th><span class="t-en">Feature</span><span class="t-es">Característica</span></th>
+          <th style="text-align: center;"><span class="t-en">Basic Listing</span><span class="t-es">Listado Básico</span><br /><span style="font-weight: 400; font-size: 13px; opacity: 0.8;"><span class="t-en">Free</span><span class="t-es">Gratis</span></span></th>
+          <th style="text-align: center;"><span class="t-en">Special Offer / Hotspot</span><span class="t-es">Oferta Especial / Hotspot</span><br /><span style="font-weight: 400; font-size: 13px; opacity: 0.8;">$29 – $199</span></th>
+          <th style="text-align: center;"><span class="t-en">Enhanced Listing</span><span class="t-es">Listado Mejorado</span><br /><span style="font-weight: 400; font-size: 13px; opacity: 0.8;">$99 <span class="t-en">launch</span><span class="t-es">lanzamiento</span> / $249</span></th>
+          <th style="text-align: center;"><span class="t-en">Featured Business</span><span class="t-es">Negocio Destacado</span><br /><span style="font-weight: 400; font-size: 13px; opacity: 0.8;"><span class="t-en">Monthly · Exclusive</span><span class="t-es">Mensual · Exclusivo</span></span></th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="feature"><span class="t-en">Listed in business directory</span><span class="t-es">Listado en el directorio de negocios</span></td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Newsletter &amp; social inclusion</span><span class="t-es">Inclusión en boletín y redes sociales</span></td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Featured deal / Hotspot placement</span><span class="t-es">Promoción destacada / Ubicación Hotspot</span></td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Enhanced profile (description, history, team, photos, video)</span><span class="t-es">Perfil mejorado (descripción, historia, equipo, fotos, video)</span></td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">AI-assisted article &amp; video publishing</span><span class="t-es">Publicación de artículos y videos asistida por IA</span></td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Free consultative analysis &amp; business report</span><span class="t-es">Análisis consultivo gratuito e informe de negocio</span></td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Community introduction post + special offer</span><span class="t-es">Publicación de introducción a la comunidad + oferta especial</span></td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Author profile &amp; content library</span><span class="t-es">Perfil de autor y biblioteca de contenido</span></td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Permanent homepage placement + Featured badge</span><span class="t-es">Ubicación permanente en página principal + insignia Destacado</span></td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">CATEGORY EXCLUSIVITY (only you in your category)</span><span class="t-es">EXCLUSIVIDAD DE CATEGORÍA (solo usted en su categoría)</span></td><td class="miss">—</td><td class="miss">—</td><td class="miss">—</td><td class="check">✓</td></tr>
+        <tr><td class="feature"><span class="t-en">Add-ons: AI chat, voice agent, lead automation, appointment booking</span><span class="t-es">Complementos: chat con IA, agente de voz, automatización de prospectos, reserva de citas</span></td><td class="miss">—</td><td class="miss">—</td><td class="check"><span class="t-en">à la carte</span><span class="t-es">a la carta</span></td><td class="check"><span class="t-en">included tier-up</span><span class="t-es">incluido al subir de nivel</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ELIGIBILITY -->
+<section class="alt">
+  <div class="container">
+    <h2><span class="t-en">Who's a fit</span><span class="t-es">Quién es el indicado</span></h2>
+    <p class="section-sub"><span class="t-en">Easy Street curates. Not every business gets a Featured slot — and that's the point.</span><span class="t-es">Easy Street selecciona cuidadosamente. No todo negocio obtiene un lugar Destacado — y ese es el punto.</span></p>
+    <div class="why-grid" style="color: var(--es-ink);">
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">🏠</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Home Services</span><span class="t-es">Servicios para el Hogar</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Roofing · HVAC · Plumbing · Landscaping · Painting · Remodeling · Cleaning · Siding · Gutters · Garage · Paving · Kitchen &amp; Bath · Lighting · Interior Design</span><span class="t-es">Techos · HVAC · Plomería · Paisajismo · Pintura · Remodelación · Limpieza · Revestimiento · Canaletas · Garaje · Pavimentación · Cocina y Baño · Iluminación · Diseño de Interiores</span></p>
+      </div>
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">💼</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Business &amp; Professional</span><span class="t-es">Servicios Profesionales y de Negocios</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Attorney · Accounting · Tax · Insurance · Real Estate (Realtor, Lender, Title, Inspection) · Financial Advisor</span><span class="t-es">Abogado · Contabilidad · Impuestos · Seguros · Bienes Raíces (Agente, Prestamista, Título, Inspección) · Asesor Financiero</span></p>
+      </div>
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">💆</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Personal Services</span><span class="t-es">Servicios Personales</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Hair · Massage · Nails · Waxing · Personal Training · Yoga · Transportation · Tanning</span><span class="t-es">Cabello · Masajes · Uñas · Depilación · Entrenamiento Personal · Yoga · Transporte · Bronceado</span></p>
+      </div>
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">🩺</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Health</span><span class="t-es">Salud</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Dentist · Doctor · Chiropractor · Weight Loss · Wellness</span><span class="t-es">Dentista · Médico · Quiropráctico · Pérdida de Peso · Bienestar</span></p>
+      </div>
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">🍽</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Restaurants &amp; Hospitality</span><span class="t-es">Restaurantes y Hospitalidad</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Hotspots: Happy Hour, Date Night, Live Music, Ice Cream, Craft Beer, Cocktails, Sports Bar, Fun &amp; Games</span><span class="t-es">Hotspots: Happy Hour, Noche de Cita, Música en Vivo, Helados, Cerveza Artesanal, Cócteles, Sports Bar, Diversión y Juegos</span></p>
+      </div>
+      <div class="why-card" style="background: #fff; border-color: var(--es-line);">
+        <div class="ico" style="background: var(--es-green); color: #fff;">🚀</div>
+        <h4 style="color: var(--es-blue);"><span class="t-en">Emerging Small Business</span><span class="t-es">Pequeño Negocio Emergente</span></h4>
+        <p style="color: var(--es-muted);"><span class="t-en">Launching something new? Apply for a Launch Spotlight feature — a structured introduction article in the Local Businesses section.</span><span class="t-es">¿Está lanzando algo nuevo? Aplique para un destacado Launch Spotlight — un artículo de introducción estructurado en la sección de Negocios Locales.</span></p>
+      </div>
+    </div>
+    <p style="color: var(--es-muted); font-size: 14px; margin-top: 24px;"><span class="t-en"><strong style="color: var(--es-blue);">Featured Business eligibility:</strong> verified 5-star public rating in your category, willingness to publish 1–2 content pieces per month, and category availability in your community.</span><span class="t-es"><strong style="color: var(--es-blue);">Elegibilidad para Negocio Destacado:</strong> calificación pública verificada de 5 estrellas en su categoría, disposición a publicar 1–2 piezas de contenido al mes, y disponibilidad de la categoría en su comunidad.</span></p>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section>
+  <div class="container">
+    <h2><span class="t-en">How onboarding works</span><span class="t-es">Cómo funciona el onboarding</span></h2>
+    <p class="section-sub"><span class="t-en">From "I'm interested" to "my first article is live" in under two weeks.</span><span class="t-es">De "me interesa" a "mi primer artículo está publicado" en menos de dos semanas.</span></p>
+    <div class="steps">
+      <div class="step">
+        <div class="num">1</div>
+        <h4><span class="t-en">Apply or Reserve</span><span class="t-es">Aplicar o Reservar</span></h4>
+        <p><span class="t-en">Submit the form below. We confirm category availability in your community within 1 business day.</span><span class="t-es">Envíe el formulario a continuación. Confirmamos la disponibilidad de categoría en su comunidad dentro de 1 día hábil.</span></p>
+      </div>
+      <div class="step">
+        <div class="num">2</div>
+        <h4><span class="t-en">Discovery Call</span><span class="t-es">Llamada de Descubrimiento</span></h4>
+        <p><span class="t-en">15 minutes with your community manager. We map your goals, your customer, and your existing reviews.</span><span class="t-es">15 minutos con su gerente de comunidad. Mapeamos sus objetivos, su cliente y sus reseñas existentes.</span></p>
+      </div>
+      <div class="step">
+        <div class="num">3</div>
+        <h4><span class="t-en">Onboarding + Free Analysis</span><span class="t-es">Onboarding + Análisis Gratuito</span></h4>
+        <p><span class="t-en">We build your profile, deliver your free business report and consultative analysis, and set up your contributor access.</span><span class="t-es">Construimos su perfil, entregamos su informe de negocio gratuito y análisis consultivo, y configuramos su acceso de colaborador.</span></p>
+      </div>
+      <div class="step">
+        <div class="num">4</div>
+        <h4><span class="t-en">First Content Live</span><span class="t-es">Primer Contenido Publicado</span></h4>
+        <p><span class="t-en">Using the AI Content Engine and a 5-minute intake form, we publish your first article + video within 14 days.</span><span class="t-es">Usando el Motor de Contenido con IA y un formulario de admisión de 5 minutos, publicamos su primer artículo y video en 14 días.</span></p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- APPLY -->
+<section id="apply" class="alt">
+  <div class="container">
+    <div class="apply">
+      <h2><span class="t-en">Apply to participate</span><span class="t-es">Aplique para participar</span></h2>
+      <p class="section-sub"><span class="t-en">Tell us about your business. We'll confirm category availability and set up a 15-minute discovery call.</span><span class="t-es">Cuéntenos sobre su negocio. Confirmaremos la disponibilidad de categoría y agendaremos una llamada de descubrimiento de 15 minutos.</span></p>
+      <form class="form-grid" onsubmit="event.preventDefault(); alert('Thanks! Your application is in. We will confirm category availability within 1 business day.');">
+        <div class="field">
+          <label for="bname"><span class="t-en">Business name</span><span class="t-es">Nombre del negocio</span></label>
+          <input id="bname" type="text" required placeholder="Romano's Roofing" />
+        </div>
+        <div class="field">
+          <label for="contact"><span class="t-en">Your name</span><span class="t-es">Su nombre</span></label>
+          <input id="contact" type="text" required placeholder="Joe Romano" />
+        </div>
+        <div class="field">
+          <label for="email"><span class="t-en">Email</span><span class="t-es">Correo electrónico</span></label>
+          <input id="email" type="email" required placeholder="joe@romanoroofing.com" />
+        </div>
+        <div class="field">
+          <label for="phone"><span class="t-en">Phone</span><span class="t-es">Teléfono</span></label>
+          <input id="phone" type="tel" required placeholder="(630) 555-0142" />
+        </div>
+        <div class="field">
+          <label for="city"><span class="t-en">Community / City</span><span class="t-es">Comunidad / Ciudad</span></label>
+          <input id="city" type="text" required placeholder="Addison, IL" />
+        </div>
+        <div class="field">
+          <label for="category"><span class="t-en">Primary business category</span><span class="t-es">Categoría principal del negocio</span></label>
+          <select id="category">
+            <option value="" data-en="— Choose one —" data-es="— Elija uno —"></option>
+            <option data-en="Home Services — Roofing" data-es="Servicios para el Hogar — Techos"></option>
+            <option data-en="Home Services — HVAC" data-es="Servicios para el Hogar — HVAC"></option>
+            <option data-en="Home Services — Plumbing" data-es="Servicios para el Hogar — Plomería"></option>
+            <option data-en="Home Services — Landscaping" data-es="Servicios para el Hogar — Paisajismo"></option>
+            <option data-en="Home Services — Other" data-es="Servicios para el Hogar — Otros"></option>
+            <option data-en="Real Estate — Realtor" data-es="Bienes Raíces — Agente Inmobiliario"></option>
+            <option data-en="Real Estate — Mortgage Lender" data-es="Bienes Raíces — Prestamista Hipotecario"></option>
+            <option data-en="Real Estate — Title / Inspection / Insurance" data-es="Bienes Raíces — Título / Inspección / Seguro"></option>
+            <option data-en="Business Services — Attorney / Accounting / Tax / Insurance" data-es="Servicios de Negocios — Abogado / Contabilidad / Impuestos / Seguros"></option>
+            <option data-en="Personal Services" data-es="Servicios Personales"></option>
+            <option data-en="Health" data-es="Salud"></option>
+            <option data-en="Restaurant / Hospitality" data-es="Restaurante / Hospitalidad"></option>
+            <option data-en="Emerging Small Business — Launch Spotlight" data-es="Pequeño Negocio Emergente — Launch Spotlight"></option>
+            <option data-en="Other" data-es="Otro"></option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="path"><span class="t-en">Which path are you most interested in?</span><span class="t-es">¿Qué camino le interesa más?</span></label>
+          <select id="path">
+            <option value="" data-en="— Choose one —" data-es="— Elija uno —"></option>
+            <option data-en="Special Offer / Hotspot (Path A)" data-es="Oferta Especial / Hotspot (Camino A)"></option>
+            <option data-en="Featured Business with Category Exclusivity (Path B)" data-es="Negocio Destacado con Exclusividad de Categoría (Camino B)"></option>
+            <option data-en="Not sure — help me decide" data-es="No estoy seguro — ayúdenme a decidir"></option>
+          </select>
+        </div>
+        <div class="field full">
+          <label for="notes"><span class="t-en">Anything you want us to know? (optional)</span><span class="t-es">¿Algo más que quisiera contarnos? (opcional)</span></label>
+          <textarea id="notes" data-en="Reviews link, website, or anything else…" data-es="Enlace de reseñas, sitio web o cualquier otra cosa…"></textarea>
+        </div>
+        <div class="submit-row full">
+          <button class="btn btn-primary" type="submit"><span class="t-en">Submit Application →</span><span class="t-es">Enviar Aplicación →</span></button>
+          <p class="fineprint"><span class="t-en">By submitting, you agree to a brief discovery call. No commitment until you've seen the proposal.</span><span class="t-es">Al enviar, usted acepta una breve llamada de descubrimiento. Sin compromiso hasta que haya visto la propuesta.</span></p>
+        </div>
+      </form>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="container">
+    <div class="brandmark">
+      <span class="sign">EASY STREET</span>
+    </div>
+    <div><span class="t-en">For local businesses ready to be the one their neighbors trust.</span><span class="t-es">Para negocios locales listos para ser en quien sus vecinos confían.</span></div>
+    <div style="margin-top: 8px; font-size: 12px; opacity: 0.6;">© EASE Association · easystreet.blog</div>
+  </div>
+</footer>
+
+<script>
+(function() {
+  const html = document.documentElement;
+  const KEY = 'es-lang-pref';
+  function setLang(lang) {
+    html.setAttribute('lang', lang);
+    try { localStorage.setItem(KEY, lang); } catch(e) {}
+    document.querySelectorAll('[data-en][data-es]').forEach(el => {
+      const t = el.getAttribute('data-' + lang);
+      if (el.tagName === 'OPTION') el.textContent = t;
+      else if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA') el.placeholder = t;
+      else el.textContent = t;
+    });
+  }
+  let initial = 'en';
+  try { initial = localStorage.getItem(KEY) || 'en'; } catch(e) {}
+  setLang(initial);
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('lang-toggle');
+    if (btn) btn.addEventListener('click', () => {
+      setLang(html.getAttribute('lang') === 'en' ? 'es' : 'en');
+    });
+  });
+})();
+</script>
+
+</body>
+</html>
