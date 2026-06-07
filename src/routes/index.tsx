@@ -42,6 +42,22 @@ const CATEGORIA_LABELS: Record<string, string> = {
   panaderia: 'Panadería',
 }
 
+const CATEGORIA_LABELS_EN: Record<string, string> = {
+  brunch: 'Brunch',
+  cena: 'Restaurant',
+  gimnasios: 'Gym',
+  masajes_spa: 'Spa & Wellness',
+  medicos: 'Health',
+  cafes: 'Café',
+  bares: 'Bar',
+  yoga: 'Yoga',
+  dentistas: 'Dental',
+  peluquerias: 'Beauty',
+  almuerzo: 'Lunch',
+  estetica: 'Beauty',
+  panaderia: 'Bakery',
+}
+
 const CATEGORIA_COLORS: Record<string, string> = {
   bares: '#14201d',
   brunch: '#f5f0e8',
@@ -87,6 +103,7 @@ function SecTitle({ children, link, linkLabel }: { children: string; link?: stri
 function HomeContent() {
   const { barrio, lang } = useBarrio()
   const t = (es: string, en: string) => lang === 'es' ? es : en
+  const catLabel = (cat: string) => (lang === 'es' ? CATEGORIA_LABELS : CATEGORIA_LABELS_EN)[cat] ?? cat
 
   const [nombre, setNombre] = useState('')
   const [email,  setEmail]  = useState('')
@@ -222,7 +239,7 @@ function HomeContent() {
 
                 <div style={{ padding: 12 }}>
                   <p style={{ fontSize: 11, color: K.muted, marginBottom: 4, margin: '0 0 4px' }}>
-                    {CATEGORIA_LABELS[deal.categoria ?? ''] ?? deal.categoria}
+                    {catLabel(deal.categoria ?? '')}
                     {deal.barrio_nombre ? ` · ${deal.barrio_nombre}` : ''}
                   </p>
                   <p style={{ fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 4px' }}>
@@ -281,7 +298,7 @@ function HomeContent() {
                   padding: '3px 8px', borderRadius: 4,
                   letterSpacing: '0.5px',
                 }}>
-                  ★ {CATEGORIA_LABELS[negocio.categoria] ?? negocio.categoria}
+                  ★ {catLabel(negocio.categoria)}
                 </div>
 
                 {/* Foto o placeholder */}
@@ -335,7 +352,7 @@ function HomeContent() {
                           textDecoration: 'none', fontWeight: 500,
                         }}
                       >
-                        📍 Ver en Maps
+                        {t('📍 Ver en Maps', '📍 View on Maps')}
                       </a>
                     )}
                     {negocio.whatsapp && (

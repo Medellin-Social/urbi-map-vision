@@ -123,7 +123,7 @@ function EventosPage() {
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
           <div>
             <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
-              Eventos
+              {t('Eventos', 'Events')}
             </p>
             <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
               {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
@@ -179,7 +179,7 @@ function EventosPage() {
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas las categorías', 'All categories')} />
             {CATEGORIAS_EVENTOS.map(c => (
-              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${c.label}`} accent />
+              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${lang === 'es' ? c.label : c.labelEn}`} accent />
             ))}
           </div>
           <div style={{ height: 1, background: K.line }} />

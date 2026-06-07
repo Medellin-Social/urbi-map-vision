@@ -229,7 +229,7 @@ function LocalBusinessPage() {
                 border: '0.5px solid #E8E0D0', borderRadius: 20, padding: '6px 16px',
                 fontSize: 13, fontWeight: grupo === g.key ? 600 : 400, cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
               }}>
-                {g.emoji} {lang === 'es' ? g.label : g.key}
+                {g.emoji} {lang === 'es' ? g.label : g.labelEn}
                 {counts?.[g.key] != null && (
                   <span style={{ marginLeft: 5, fontSize: 11, opacity: .7 }}>{counts[g.key].toLocaleString()}</span>
                 )}
@@ -241,7 +241,7 @@ function LocalBusinessPage() {
           {grupoActual && (
             <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
               {[{ key: undefined as string | undefined, label: t('Todos', 'All') },
-                ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.key}` }))
+                ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.labelEn}` }))
               ].map(({ key, label }) => (
                 <button key={key ?? '__all'} onClick={() => { setCategoria(key); reset() }} style={{
                   background: categoria === key ? K.amarillo : '#F5F0E8', color: categoria === key ? '#1A1208' : '#6B5B45',

@@ -37,7 +37,9 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
     fontSize: 13,
     fontWeight: 600,
     textDecoration: 'none',
-    letterSpacing: '.3px',
+    letterSpacing: '.6px',
+    textTransform: 'uppercase',
+    fontFamily: 'inherit',
   };
 
   return (

@@ -52,7 +52,15 @@ const BarrioCtx = createContext<BarrioCtx | null>(null)
 export function BarrioProvider({ children, initialSlug }: { children: ReactNode; initialSlug?: string }) {
   const initial = BARRIOS.find(b => b.slug === initialSlug) ?? BARRIOS[0]
   const [barrio, setBarrio] = useState<Barrio>(initial)
-  const [lang, setLang] = useState<'es' | 'en'>('es')
+  const [lang, setLangState] = useState<'es' | 'en'>(() => {
+    if (typeof window === 'undefined') return 'es'
+    return (localStorage.getItem('ms_lang') as 'es' | 'en') ?? 'es'
+  })
+
+  function setLang(l: 'es' | 'en') {
+    localStorage.setItem('ms_lang', l)
+    setLangState(l)
+  }
 
   useEffect(() => {
     const found = BARRIOS.find(b => b.slug === initialSlug)

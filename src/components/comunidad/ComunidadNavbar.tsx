@@ -69,14 +69,19 @@ function getNoticiaEmoji(titulo: string): string {
   return '📰'
 }
 
-const FALLBACK_ITEMS = [
+const FALLBACK_ITEMS_ES = [
   { tipo: 'noticia' as const, titulo: '🌸 Medellín Social · Tu ciudad, tu barrio, tu historia', link: '/', fecha: null },
+]
+const FALLBACK_ITEMS_EN = [
+  { tipo: 'noticia' as const, titulo: '🌸 Medellín Social · Your city, your barrio, your story', link: '/', fecha: null },
 ]
 
 export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const { barrio, barrios, lang, setLang, setBarrioSlug } = useBarrio()
   const [today, setToday] = useState('')
   const [path,  setPath]  = useState('')
+
+  const t = (es: string, en: string) => lang === 'es' ? es : en
 
   const { data: apiItems = [] } = useTicker(1)
 
@@ -90,7 +95,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
     setToday(d.toLocaleDateString(locale, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }))
   }, [lang])
 
-  const tickerItems = apiItems.length > 0 ? apiItems : FALLBACK_ITEMS
+  const tickerItems = apiItems.length > 0 ? apiItems : (lang === 'es' ? FALLBACK_ITEMS_ES : FALLBACK_ITEMS_EN)
 
   const hasEventos = tickerItems.some(i => i.tipo === 'evento')
 
@@ -98,13 +103,13 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
     if (item.tipo === 'evento') {
       const emoji = CATEGORIA_EMOJI[item.categoria ?? ''] ?? getNoticiaEmoji(item.titulo)
       const fechaStr = item.fecha
-        ? new Date(item.fecha.replace(' ', 'T')).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+        ? new Date(item.fecha.replace(' ', 'T')).toLocaleDateString(lang === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' })
         : ''
       return { ...item, texto: `${emoji} ${item.titulo}${fechaStr ? ` · ${fechaStr}` : ''}` }
     }
     const emoji = getNoticiaEmoji(item.titulo)
     return { ...item, texto: `${emoji} ${item.titulo}` }
-  }), [tickerItems])
+  }), [tickerItems, lang])
 
   const scrollItems = [...formattedItems, ...formattedItems]
   const duracion = Math.max(60, formattedItems.length * 8)
@@ -128,10 +133,10 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const valleAbura = barrios.filter(b => b.grupo === 'Valle de Aburrá')
 
   const links = [
-    { href: '/',                              label: 'HOME' },
-    { href: `/eventos/${barrio.slug}`,         label: 'EVENTOS' },
-    { href: `/local-business/${barrio.slug}`,  label: 'NEGOCIOS' },
-    { href: '/map',                            label: 'INVERSIÓN' },
+    { href: '/',                              label: t('HOME', 'HOME') },
+    { href: `/eventos/${barrio.slug}`,         label: t('EVENTOS', 'EVENTS') },
+    { href: `/local-business/${barrio.slug}`,  label: t('NEGOCIOS', 'BUSINESSES') },
+    { href: '/map',                            label: t('INVERSIÓN', 'INVEST') },
     { href: '#blog',                           label: 'BLOG' },
   ]
 
@@ -171,7 +176,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             </div>
           </a>
           <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
-            TU CIUDAD · TU BARRIO · TU HISTORIA
+            {t('TU CIUDAD · TU BARRIO · TU HISTORIA', 'YOUR CITY · YOUR BARRIO · YOUR STORY')}
           </div>
         </header>
       )}
@@ -250,7 +255,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
               href="/suscribirse"
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
             >
-              Suscríbete
+              {t('Suscríbete', 'Subscribe')}
             </a>
 <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
               {(['es', 'en'] as const).map(l => (
