@@ -1,7 +1,7 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
-import { ComunidadFooter } from '@/components/comunidad/ComunidadFooter'
+import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 
 export const Route = createFileRoute('/afiliado')({
   component: AfiliadoPage,
@@ -176,24 +176,22 @@ function AfiliadoPage() {
     textTransform: 'uppercase', letterSpacing: '.4px',
   }
 
-  return (
-    <div style={{ background: K.paper, minHeight: '100vh' }}>
+  const subNav = (
+    <div style={{ background: K.paper, borderBottom: `1px solid ${K.line}`, padding: '0 26px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'center', height: 44 }}>
+        <a href="#por-que" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Por qué funciona</a>
+        <a href="#compensacion" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Compensación</a>
+        <a href="#kit" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Lo que recibes</a>
+        <a href="#aplicar" style={{
+          marginLeft: 'auto', background: K.coral, color: '#fff', fontWeight: 700,
+          padding: '6px 16px', borderRadius: 8, fontSize: '.85rem', textDecoration: 'none',
+        }}>Aplicar →</a>
+      </div>
+    </div>
+  )
 
-      {/* NAV */}
-      <nav style={{ background: K.ink, padding: '12px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.3rem', color: '#fff', textDecoration: 'none' }}>
-          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
-        </a>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <a href="#por-que" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Por qué funciona</a>
-          <a href="#compensacion" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Compensación</a>
-          <a href="#kit" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Lo que recibes</a>
-          <a href="#aplicar" style={{
-            background: K.coral, color: '#fff', fontWeight: 700,
-            padding: '8px 18px', borderRadius: 8, fontSize: '.9rem', textDecoration: 'none',
-          }}>Aplicar →</a>
-        </div>
-      </nav>
+  return (
+    <ComunidadLayout subNav={subNav} compact>
 
       {/* HERO */}
       <section style={{
@@ -568,7 +566,6 @@ function AfiliadoPage() {
         </div>
       </section>
 
-      <ComunidadFooter lang="es" />
-    </div>
+    </ComunidadLayout>
   )
 }

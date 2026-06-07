@@ -36,6 +36,9 @@ export interface TiendasParams {
   grupo?: string
   categoria?: string
   precio_rango?: string
+  rating_min?: number
+  con_whatsapp?: boolean
+  destacado?: boolean
   limit?: number
   offset?: number
 }
@@ -68,14 +71,19 @@ export function useTiendas(params: TiendasParams) {
     queryKey: ['tiendas', params],
     queryFn: async () => {
       const sp = new URLSearchParams()
-      if (params.grupo)        sp.set('grupo',        params.grupo)
-      if (params.categoria)    sp.set('categoria',    params.categoria)
-      if (params.precio_rango) sp.set('precio_rango', params.precio_rango)
+      if (params.grupo)          sp.set('grupo',        params.grupo)
+      if (params.categoria)      sp.set('categoria',    params.categoria)
+      if (params.precio_rango)   sp.set('precio_rango', params.precio_rango)
+      if (params.rating_min != null) sp.set('rating_min', String(params.rating_min))
+      if (params.con_whatsapp)   sp.set('con_whatsapp', 'true')
+      if (params.destacado != null) sp.set('destacado', String(params.destacado))
       if (params.limit  != null) sp.set('limit',  String(params.limit))
       if (params.offset != null) sp.set('offset', String(params.offset))
 
       let url: string
-      if (params.municipio_nombre) {
+      if (params.municipio_nombre === 'VALLE DE ABURRÁ') {
+        url = `${API_BASE_URL}/comunidad/todos/tiendas?${sp}`
+      } else if (params.municipio_nombre) {
         url = `${API_BASE_URL}/comunidad/municipio/${encodeURIComponent(params.municipio_nombre)}/tiendas?${sp}`
       } else if (params.barrio_id) {
         url = `${API_BASE_URL}/comunidad/${params.barrio_id}/tiendas?${sp}`

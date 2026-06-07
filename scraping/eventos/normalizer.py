@@ -99,6 +99,28 @@ CATEGORIAS_MAP: dict[str, str] = {
     "Educación": "networking",
     "Inclusión": "social",
     "Recreación": "deporte",
+    # Cultura Etérea
+    "teatro": "cultura",
+    "musica_en_vivo": "musica",
+    "jazz": "musica",
+    "hip_hop": "musica",
+    "rock": "musica",
+    "electronica": "musica",
+    "danza": "cultura",
+    "cine": "cultura",
+    "galeria": "cultura",
+    "exposición": "cultura",
+    "exposicion": "cultura",
+    "arte_contemporaneo": "cultura",
+    "arte": "cultura",
+    "literatura": "cultura",
+    "poesia": "cultura",
+    "fotografia": "cultura",
+    "casa_cultura": "cultura",
+    "centro_cultural": "cultura",
+    "festival": "cultura",
+    "feria": "social",
+    "hibrido": "social",
     # Passthrough (already canonical)
     "musica": "musica",
     "networking": "networking",
@@ -146,6 +168,8 @@ _VIRTUAL_KEYWORDS = (
 
 
 def es_evento_virtual(raw: dict) -> bool:
+    if raw.get("is_presencial"):
+        return False
     if raw.get("is_online"):
         return True
     titulo = (raw.get("titulo") or "").lower()
@@ -164,14 +188,14 @@ INSERT INTO public.eventos (
     fuente, fuente_id, titulo, descripcion,
     foto_url, url_externo,
     fecha_inicio, fecha_fin,
-    gratuito, precio, organizador,
+    gratuito, precio, moneda, organizador,
     lat, lon, barrio_id, ciudad_id,
     categoria, tipo_audiencia, activo
 ) VALUES (
     %(fuente)s, %(fuente_id)s, %(titulo)s, %(descripcion)s,
     %(foto_url)s, %(url_externo)s,
     %(fecha_inicio)s, %(fecha_fin)s,
-    %(gratuito)s, %(precio)s, %(organizador)s,
+    %(gratuito)s, %(precio)s, %(moneda)s, %(organizador)s,
     %(lat)s, %(lon)s, %(barrio_id)s, 1,
     %(categoria)s, %(tipo_audiencia)s, TRUE
 )
@@ -182,6 +206,7 @@ DO UPDATE SET
     foto_url      = COALESCE(EXCLUDED.foto_url, public.eventos.foto_url),
     gratuito      = EXCLUDED.gratuito,
     precio        = EXCLUDED.precio,
+    moneda        = EXCLUDED.moneda,
     lat           = COALESCE(EXCLUDED.lat,       public.eventos.lat),
     lon           = COALESCE(EXCLUDED.lon,       public.eventos.lon),
     barrio_id     = COALESCE(EXCLUDED.barrio_id, public.eventos.barrio_id),
@@ -225,6 +250,7 @@ def normalizar(raw: dict) -> dict | None:
         "fecha_fin": fecha_fin,
         "gratuito": bool(raw.get("gratuito", True)),
         "precio": float(raw.get("precio") or 0),
+        "moneda": (raw.get("moneda") or "COP").upper()[:10],
         "organizador": (raw.get("organizador") or "")[:300],
         "lat": raw.get("lat"),
         "lon": raw.get("lon"),
@@ -282,16 +308,19 @@ def run_todos(
     medellin_travel_eventos: list[dict] | None = None,
     tuboleta_eventos: list[dict] | None = None,
     alcaldia_eventos: list[dict] | None = None,
+    cultura_eterea_eventos: list[dict] | None = None,
 ) -> dict:
     medellin_travel_eventos = medellin_travel_eventos or []
     tuboleta_eventos = tuboleta_eventos or []
     alcaldia_eventos = alcaldia_eventos or []
+    cultura_eterea_eventos = cultura_eterea_eventos or []
 
     conn = get_conn()
     try:
         todos = (
             meetup_eventos + eventbrite_eventos + luma_eventos
             + medellin_travel_eventos + tuboleta_eventos + alcaldia_eventos
+            + cultura_eterea_eventos
         )
         insertados, errores, filtrados = cargar_eventos(conn, todos)
         limpiados = limpiar_eventos_pasados(conn)
@@ -308,6 +337,7 @@ def run_todos(
                 "medellin_travel": len(medellin_travel_eventos),
                 "tuboleta": len(tuboleta_eventos),
                 "alcaldia": len(alcaldia_eventos),
+                "cultura_eterea": len(cultura_eterea_eventos),
             },
         }
     finally:

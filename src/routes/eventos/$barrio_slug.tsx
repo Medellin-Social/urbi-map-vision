@@ -120,17 +120,31 @@ function EventosPage() {
     <>
       {/* ── Header ── */}
       <div style={{ background: K.surface, borderBottom: `1px solid ${K.line}`, padding: '36px 26px 28px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
-            Eventos
-          </p>
-          <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
-            {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
-          </h1>
-          <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
-            {t('Todos los eventos, en un solo lugar.', 'Every event, in one place.')}
-            {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {t('eventos', 'events')}</span>}
-          </p>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
+              Eventos
+            </p>
+            <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
+              {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
+            </h1>
+            <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
+              {t('Todos los eventos, en un solo lugar.', 'Every event, in one place.')}
+              {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {t('eventos', 'events')}</span>}
+            </p>
+          </div>
+          <a
+            href="/negocios/unirse"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: K.coral, color: '#fff',
+              fontWeight: 700, fontSize: '.88rem',
+              padding: '10px 20px', borderRadius: 8,
+              textDecoration: 'none', whiteSpace: 'nowrap', flexShrink: 0,
+            }}
+          >
+            + {t('Ingresa tu evento', 'Submit your event')}
+          </a>
         </div>
       </div>
 

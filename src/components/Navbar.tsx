@@ -1,8 +1,18 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Building2, Calculator, GitCompare, LogOut, User } from "lucide-react";
-import { auth, GOAL_LABEL } from "@/lib/auth";
-import { LanguageToggle } from "@/lib/i18n";
+import { ArrowLeft, LogOut } from "lucide-react";
+import { auth } from "@/lib/auth";
+import { useLang } from "@/lib/i18n";
 import type { Neighborhood } from "@/lib/adapters";
+
+const K = {
+  ink:     '#14201d',
+  teal:    '#1D9E75',
+  amarillo:'#ffc928',
+  coral:   '#D85A30',
+  line:    'rgba(255,255,255,0.12)',
+  muted:   'rgba(255,255,255,0.65)',
+  serif:   "'Fraunces', Georgia, serif" as const,
+}
 
 type NavbarProps = {
   mlsBarrio?: Neighborhood | null;
@@ -11,8 +21,9 @@ type NavbarProps = {
 };
 
 export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
-  const user = typeof window !== "undefined" ? auth.get() : null;
+  const user    = typeof window !== "undefined" ? auth.get() : null;
   const navigate = useNavigate();
+  const { lang, toggle } = useLang();
 
   const initials = (user?.name ?? "U")
     .split(/\s+/)
@@ -21,80 +32,112 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
     .join("")
     .toUpperCase();
 
+  const linkStyle: React.CSSProperties = {
+    color: 'rgba(255,255,255,0.85)',
+    fontSize: 13,
+    fontWeight: 600,
+    textDecoration: 'none',
+    letterSpacing: '.3px',
+  };
+
   return (
-    <header className="absolute left-0 right-0 top-0 z-30 flex items-center justify-between gap-4 px-4 py-3 sm:px-6">
-      <Link to="/map" className="flex items-center gap-2">
-        <div className="grid h-8 w-8 place-items-center rounded-md bg-surface/80 text-primary backdrop-blur-md ring-1 ring-border glow-cyan">
-          <Building2 className="h-4 w-4" />
-        </div>
-        <span className="font-display text-base font-semibold tracking-tight">
-          Medellín <span className="text-primary">Social</span>
+    <header style={{
+      position: 'absolute', inset: '0 0 auto 0', zIndex: 30,
+      background: K.ink,
+      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+      padding: '0 24px', height: 52, gap: 16,
+      borderBottom: `1px solid ${K.line}`,
+    }}>
+      {/* LOGO */}
+      <Link to="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
+        <span style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.5px' }}>
+          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
         </span>
       </Link>
 
-      <div className="flex items-center gap-2">
-        {/* Breadcrumb en Vista 2 (listings) */}
+      {/* RIGHT */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
+
+        {/* MLS breadcrumb */}
         {mlsBarrio ? (
           <button
             onClick={onBack}
-            className="flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-1.5 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 8,
+              background: 'none', border: `1px solid ${K.line}`,
+              borderRadius: 8, padding: '6px 14px',
+              color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+            }}
           >
-            <ArrowLeft className="h-3.5 w-3.5 shrink-0" />
+            <ArrowLeft size={14} />
             <span>{mlsBarrio.nombre}</span>
             {mlsTotal != null && mlsTotal > 0 && (
-              <span className="rounded-full bg-primary/20 px-2 py-0.5 text-[11px] font-semibold text-primary">
+              <span style={{
+                background: K.teal, color: '#fff',
+                borderRadius: 999, padding: '1px 8px',
+                fontSize: 11, fontWeight: 700,
+              }}>
                 {mlsTotal}
               </span>
             )}
           </button>
         ) : (
           <>
-            <LanguageToggle />
-            <Link
-              to="/simulador"
-              className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-3 py-1.5 text-xs font-semibold text-primary backdrop-blur-md transition hover:bg-primary/20"
-            >
-              <Calculator className="h-3.5 w-3.5" />
-              Simulador 💰
-            </Link>
-            <Link
-              to="/comparador"
-              className="hidden items-center gap-1.5 rounded-md border border-border bg-surface/70 px-3 py-1.5 text-xs font-medium text-muted-foreground backdrop-blur-md transition hover:text-foreground sm:inline-flex"
-            >
-              <GitCompare className="h-3.5 w-3.5" />
-              Comparador
-            </Link>
-
-            {user?.goal && (
-              <span className="hidden items-center gap-1.5 rounded-full border border-primary/40 bg-primary/10 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-primary md:inline-flex">
-                <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-                {GOAL_LABEL[user.goal]}
-              </span>
-            )}
+            <Link to="/simulador" style={linkStyle}>Simulador 💰</Link>
+            <Link to="/comparador" style={linkStyle}>Comparador</Link>
           </>
         )}
 
-        <Link
-          to="/perfil"
-          title="Configuración de cuenta"
-          className="flex items-center gap-2 rounded-full border border-border bg-surface/80 py-1 pl-1 pr-3 backdrop-blur-md transition hover:border-primary/60 hover:bg-surface"
-        >
-          <div className="grid h-7 w-7 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent text-[11px] font-bold text-background">
-            {user?.avatar ? <img src={user.avatar} alt="avatar" className="h-full w-full object-cover" /> : initials}
+        {/* Language pill */}
+        <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+          {(['es', 'en'] as const).map(l => (
+            <button
+              key={l}
+              onClick={toggle}
+              style={{
+                border: 'none',
+                background: lang === l ? K.amarillo : 'transparent',
+                color: lang === l ? K.ink : '#fff',
+                padding: '4px 10px', fontWeight: 700,
+                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+              }}
+            >
+              {l.toUpperCase()}
+            </button>
+          ))}
+        </div>
+
+        {/* Avatar */}
+        <Link to="/perfil" title="Perfil" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{
+            width: 28, height: 28, borderRadius: '50%',
+            background: `linear-gradient(135deg, ${K.teal}, #085041)`,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 11, fontWeight: 800, color: '#fff', overflow: 'hidden', flexShrink: 0,
+          }}>
+            {user?.avatar
+              ? <img src={user.avatar} alt="avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              : initials}
           </div>
-          <span className="hidden max-w-[140px] truncate text-xs text-muted-foreground sm:block">
+          <span style={{ fontSize: 13, color: 'rgba(255,255,255,0.85)', fontWeight: 600, maxWidth: 110, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
             {user?.name ?? "Invitado"}
           </span>
         </Link>
+
+        {/* Logout */}
         <button
-          onClick={() => {
-            auth.clear();
-            navigate({ to: "/login" });
-          }}
-          className="rounded-full border border-border bg-surface/80 p-1.5 text-muted-foreground backdrop-blur-md transition hover:text-danger"
+          onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
           title="Salir"
+          style={{
+            background: 'none', border: 'none',
+            color: 'rgba(255,255,255,0.55)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', padding: 0,
+          }}
+          onMouseEnter={e => (e.currentTarget.style.color = K.coral)}
+          onMouseLeave={e => (e.currentTarget.style.color = 'rgba(255,255,255,0.55)')}
         >
-          <LogOut className="h-3.5 w-3.5" />
+          <LogOut size={15} />
         </button>
       </div>
     </header>
@@ -102,14 +145,5 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
 }
 
 export function ProfileChipMobile() {
-  const user = typeof window !== "undefined" ? auth.get() : null;
-  if (!user?.goal) return null;
-  return (
-    <div className="absolute left-1/2 top-16 z-20 -translate-x-1/2 md:hidden">
-      <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/40 bg-surface/80 px-3 py-1 text-[11px] font-medium uppercase tracking-wider text-primary backdrop-blur-md">
-        <User className="h-3 w-3" />
-        {GOAL_LABEL[user.goal]}
-      </span>
-    </div>
-  );
+  return null;
 }

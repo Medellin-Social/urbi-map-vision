@@ -73,7 +73,7 @@ const FALLBACK_ITEMS = [
   { tipo: 'noticia' as const, titulo: '🌸 Medellín Social · Tu ciudad, tu barrio, tu historia', link: '/', fecha: null },
 ]
 
-export function ComunidadNavbar() {
+export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const { barrio, barrios, lang, setLang, setBarrioSlug } = useBarrio()
   const [today, setToday] = useState('')
   const [path,  setPath]  = useState('')
@@ -107,7 +107,7 @@ export function ComunidadNavbar() {
   }), [tickerItems])
 
   const scrollItems = [...formattedItems, ...formattedItems]
-  const duracion = Math.max(25, formattedItems.length * 3)
+  const duracion = Math.max(60, formattedItems.length * 8)
 
   function isActive(href: string) {
     if (href === '/') return path === '/'
@@ -162,17 +162,19 @@ export function ComunidadNavbar() {
         .k-nav-link:hover { background: rgba(255,255,255,0.1); }
       `}</style>
 
-      {/* ── Masthead ─────────────────────────────────── */}
-      <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
-        <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
-          <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
-            Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+      {/* ── Masthead (hidden in compact mode) ───────── */}
+      {!compact && (
+        <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
+          <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
+            <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
+              Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+            </div>
+          </a>
+          <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
+            TU CIUDAD · TU BARRIO · TU HISTORIA
           </div>
-        </a>
-        <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
-          TU CIUDAD · TU BARRIO · TU HISTORIA
-        </div>
-      </header>
+        </header>
+      )}
 
       {/* ── Single sticky navbar ──────────────────────── */}
       <nav style={{
@@ -188,36 +190,44 @@ export function ComunidadNavbar() {
           height: 52, gap: 8,
         }}>
 
-          {/* LEFT: date + barrio selector */}
+          {/* LEFT: logo (compact) or date + barrio selector (full) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
-            <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
-              {today}
-            </span>
-            <select
-              value={barrio.slug}
-              onChange={e => handleBarrioChange(e.target.value)}
-              style={{
-                background: 'transparent', color: '#fff',
-                border: '1px solid rgba(255,255,255,0.25)',
-                borderRadius: 6, padding: '4px 8px',
-                fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
-              }}
-            >
-              <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
-                {medellin.map(b => (
-                  <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
-                    {b.nombre}
-                  </option>
-                ))}
-              </optgroup>
-              <optgroup label="── Valle de Aburrá ──" style={{ color: K.ink, background: '#fff' }}>
-                {valleAbura.map(b => (
-                  <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
-                    {b.nombre}
-                  </option>
-                ))}
-              </optgroup>
-            </select>
+            {compact ? (
+              <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
+                Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+              </a>
+            ) : (
+              <>
+                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
+                  {today}
+                </span>
+                <select
+                  value={barrio.slug}
+                  onChange={e => handleBarrioChange(e.target.value)}
+                  style={{
+                    background: 'transparent', color: '#fff',
+                    border: '1px solid rgba(255,255,255,0.25)',
+                    borderRadius: 6, padding: '4px 8px',
+                    fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
+                  }}
+                >
+                  <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
+                    {medellin.map(b => (
+                      <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
+                        {b.nombre}
+                      </option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="── Valle de Aburrá ──" style={{ color: K.ink, background: '#fff' }}>
+                    {valleAbura.map(b => (
+                      <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
+                        {b.nombre}
+                      </option>
+                    ))}
+                  </optgroup>
+                </select>
+              </>
+            )}
           </div>
 
           {/* CENTER: nav links */}
@@ -237,12 +247,12 @@ export function ComunidadNavbar() {
           {/* RIGHT: subscribe + ES/EN */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
             <a
-              href="#subscribe"
+              href="/suscribirse"
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
             >
               Suscríbete
             </a>
-            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+<div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
               {(['es', 'en'] as const).map(l => (
                 <button
                   key={l}

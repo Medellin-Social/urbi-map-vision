@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { BARRIOS } from '@/components/comunidad/BarrioContext'
-import { ComunidadFooter } from '@/components/comunidad/ComunidadFooter'
+import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 
 export const Route = createFileRoute('/embajador')({
   component: EmbajadorPage,
@@ -129,24 +129,22 @@ function EmbajadorPage() {
     textTransform: 'uppercase', letterSpacing: '.4px',
   }
 
-  return (
-    <div style={{ background: K.paper, minHeight: '100vh' }}>
+  const subNav = (
+    <div style={{ background: K.paper, borderBottom: `1px solid ${K.line}`, padding: '0 26px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'center', height: 44 }}>
+        <a href="#que-haras" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Qué harás</a>
+        <a href="#que-obtienes" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Qué obtienes</a>
+        <a href="#herramientas" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Herramientas</a>
+        <a href="#aplicar" style={{
+          marginLeft: 'auto', background: K.coral, color: '#fff', fontWeight: 700,
+          padding: '6px 16px', borderRadius: 8, fontSize: '.85rem', textDecoration: 'none',
+        }}>Aplica →</a>
+      </div>
+    </div>
+  )
 
-      {/* NAV */}
-      <nav style={{ background: K.ink, padding: '12px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.3rem', color: '#fff', textDecoration: 'none' }}>
-          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
-        </a>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <a href="#que-haras" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Qué harás</a>
-          <a href="#que-obtienes" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Qué obtienes</a>
-          <a href="#herramientas" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Herramientas</a>
-          <a href="#aplicar" style={{
-            background: K.coral, color: '#fff', fontWeight: 700,
-            padding: '8px 18px', borderRadius: 8, fontSize: '.9rem', textDecoration: 'none',
-          }}>Aplica →</a>
-        </div>
-      </nav>
+  return (
+    <ComunidadLayout subNav={subNav} compact>
 
       {/* HERO */}
       <section style={{
@@ -491,7 +489,6 @@ function EmbajadorPage() {
         </div>
       </section>
 
-      <ComunidadFooter lang="es" />
-    </div>
+    </ComunidadLayout>
   )
 }

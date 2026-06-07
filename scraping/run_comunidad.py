@@ -25,11 +25,13 @@ def main() -> int:
     from eventos.meetup_scraper import run as meetup_run
     from eventos.alcaldia_scraper import run as alcaldia_run
     from eventos.tuboleta_scraper import run as tuboleta_run
+    from eventos.cultura_eterea_scraper import run as cultura_eterea_run
     from eventos.normalizer import run_todos
     from noticias.rss_scraper import run as rss_run
 
     # Lightweight scrapers first (no Playwright)
     medellin_travel = _run_scraper("medellin_travel", medellin_travel_run)
+    cultura_eterea  = _run_scraper("cultura_eterea",  cultura_eterea_run)
 
     # Playwright scrapers
     eventbrite  = _run_scraper("eventbrite",  eventbrite_run)
@@ -48,6 +50,7 @@ def main() -> int:
             medellin_travel_eventos=medellin_travel,
             tuboleta_eventos=tuboleta,
             alcaldia_eventos=alcaldia,
+            cultura_eterea_eventos=cultura_eterea,
         )
         print(f"[comunidad] eventos stats: {stats}", flush=True)
     except Exception as exc:

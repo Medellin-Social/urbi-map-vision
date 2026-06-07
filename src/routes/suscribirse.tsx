@@ -2,7 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { BARRIOS } from '@/components/comunidad/BarrioContext'
-import { ComunidadFooter } from '@/components/comunidad/ComunidadFooter'
+import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 
 export const Route = createFileRoute('/suscribirse')({
   component: SuscribirsePage,
@@ -111,23 +111,21 @@ function SuscribirsePage() {
     textTransform: 'uppercase', letterSpacing: '.4px',
   }
 
-  return (
-    <div style={{ background: K.paper, minHeight: '100vh' }}>
+  const subNav = (
+    <div style={{ background: K.paper, borderBottom: `1px solid ${K.line}`, padding: '0 26px' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', gap: 24, alignItems: 'center', height: 44 }}>
+        <a href="#beneficios" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Beneficios</a>
+        <a href="#como-funciona" style={{ color: K.muted, fontSize: '.85rem', textDecoration: 'none', fontWeight: 500 }}>Cómo funciona</a>
+        <a href="#form" style={{
+          marginLeft: 'auto', background: K.coral, color: '#fff', fontWeight: 700,
+          padding: '6px 16px', borderRadius: 8, fontSize: '.85rem', textDecoration: 'none',
+        }}>Suscribirme →</a>
+      </div>
+    </div>
+  )
 
-      {/* NAV */}
-      <nav style={{ background: K.ink, padding: '12px 26px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 12 }}>
-        <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.3rem', color: '#fff', textDecoration: 'none' }}>
-          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
-        </a>
-        <nav style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <a href="#beneficios" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Beneficios</a>
-          <a href="#como-funciona" style={{ color: 'rgba(255,255,255,.8)', fontSize: '.9rem', textDecoration: 'none' }}>Cómo funciona</a>
-          <a href="#form" style={{
-            background: K.coral, color: '#fff', fontWeight: 700,
-            padding: '8px 18px', borderRadius: 8, fontSize: '.9rem', textDecoration: 'none',
-          }}>Suscribirme →</a>
-        </nav>
-      </nav>
+  return (
+    <ComunidadLayout subNav={subNav} compact>
 
       {/* HERO */}
       <section style={{
@@ -406,7 +404,6 @@ function SuscribirsePage() {
         </div>
       </section>
 
-      <ComunidadFooter lang="es" />
-    </div>
+    </ComunidadLayout>
   )
 }

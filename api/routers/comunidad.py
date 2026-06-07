@@ -23,6 +23,7 @@ class EventoOut(BaseModel):
     fecha_fin: Optional[str]
     gratuito: bool
     precio: float
+    moneda: str = "COP"
     organizador: Optional[str]
     categoria: Optional[str]
     tipo_audiencia: Optional[str]
@@ -49,6 +50,7 @@ SELECT
     e.fecha_inicio::text AS fecha_inicio,
     e.fecha_fin::text    AS fecha_fin,
     e.gratuito, COALESCE(e.precio, 0) AS precio,
+    COALESCE(e.moneda, 'COP') AS moneda,
     e.organizador, e.categoria, e.tipo_audiencia,
     e.lat, e.lon, e.barrio_id,
     b.nombre AS barrio_nombre,
@@ -84,7 +86,7 @@ async def get_eventos_todos(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     gratuito: Optional[bool] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
@@ -117,6 +119,7 @@ SELECT
     e.fecha_fin::text       AS fecha_fin,
     e.gratuito,
     COALESCE(e.precio, 0)   AS precio,
+    COALESCE(e.moneda, 'COP') AS moneda,
     e.organizador,
     e.categoria,
     e.tipo_audiencia,
@@ -167,7 +170,7 @@ async def get_eventos_barrio(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     gratuito: Optional[bool] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
@@ -197,6 +200,7 @@ SELECT
     e.fecha_inicio::text AS fecha_inicio,
     e.fecha_fin::text    AS fecha_fin,
     e.gratuito, COALESCE(e.precio, 0) AS precio,
+    COALESCE(e.moneda, 'COP') AS moneda,
     e.organizador, e.categoria, e.tipo_audiencia,
     e.lat, e.lon, e.barrio_id,
     b.nombre AS barrio_nombre,
@@ -234,7 +238,7 @@ def _build_evento_out(r) -> EventoOut:
         descripcion=r["descripcion"], foto_url=r["foto_url"],
         url_externo=r["url_externo"], fecha_inicio=r["fecha_inicio"],
         fecha_fin=r["fecha_fin"], gratuito=r["gratuito"],
-        precio=float(r["precio"]), organizador=r["organizador"],
+        precio=float(r["precio"]), moneda=r["moneda"], organizador=r["organizador"],
         categoria=r["categoria"], tipo_audiencia=r["tipo_audiencia"],
         lat=r["lat"], lon=r["lon"], barrio_id=r["barrio_id"],
         barrio_nombre=r["barrio_nombre"], destacado=r["destacado"],
@@ -249,7 +253,7 @@ async def get_eventos_municipio(
     fecha_desde: Optional[date] = Query(None),
     fecha_hasta: Optional[date] = Query(None),
     gratuito: Optional[bool] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
@@ -351,8 +355,11 @@ WHERE t.activo = TRUE
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
+  AND ($5::float IS NULL OR t.rating_google >= $5::float)
+  AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($7::bool IS NULL OR t.destacado = $7::bool)
 ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
-LIMIT $5 OFFSET $6
+LIMIT $8 OFFSET $9
 """
 
 _TIENDAS_COUNT_QUERY = """
@@ -373,6 +380,9 @@ WHERE t.activo = TRUE
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
+  AND ($5::float IS NULL OR t.rating_google >= $5::float)
+  AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($7::bool IS NULL OR t.destacado = $7::bool)
 """
 
 
@@ -390,8 +400,11 @@ WHERE t.activo = TRUE
   AND ($1::text[] IS NULL OR t.categoria = ANY($1::text[]))
   AND ($2::text IS NULL OR t.categoria   = $2)
   AND ($3::text IS NULL OR t.precio_rango = $3)
+  AND ($4::float IS NULL OR t.rating_google >= $4::float)
+  AND (NOT $5::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($6::bool IS NULL OR t.destacado = $6::bool)
 ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
-LIMIT $4 OFFSET $5
+LIMIT $7 OFFSET $8
 """
 
 _TODOS_TIENDAS_COUNT_QUERY = """
@@ -400,6 +413,9 @@ WHERE t.activo = TRUE
   AND ($1::text[] IS NULL OR t.categoria = ANY($1::text[]))
   AND ($2::text IS NULL OR t.categoria   = $2)
   AND ($3::text IS NULL OR t.precio_rango = $3)
+  AND ($4::float IS NULL OR t.rating_google >= $4::float)
+  AND (NOT $5::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($6::bool IS NULL OR t.destacado = $6::bool)
 """
 
 
@@ -408,12 +424,15 @@ async def get_tiendas_todos(
     grupo: Optional[str] = Query(None),
     categoria: Optional[str] = Query(None),
     precio_rango: Optional[str] = Query(None),
-    limit: int = Query(4, ge=1, le=100),
+    rating_min: Optional[float] = Query(None),
+    con_whatsapp: bool = Query(False),
+    destacado: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
     grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
-    args = (grupo_cats, categoria, precio_rango)
+    args = (grupo_cats, categoria, precio_rango, rating_min, con_whatsapp, destacado)
     try:
         rows, total_row = await pool.fetch(
             _TODOS_TIENDAS_QUERY, *args, limit, offset
@@ -442,12 +461,15 @@ async def get_tiendas_barrio(
     grupo: Optional[str] = Query(None),
     categoria: Optional[str] = Query(None),
     precio_rango: Optional[str] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    rating_min: Optional[float] = Query(None),
+    con_whatsapp: bool = Query(False),
+    destacado: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
     grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
-    args = (barrio_id, grupo_cats, categoria, precio_rango)
+    args = (barrio_id, grupo_cats, categoria, precio_rango, rating_min, con_whatsapp, destacado)
 
     try:
         rows, total_row = await pool.fetch(
@@ -599,8 +621,11 @@ WHERE t.activo = TRUE
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
+  AND ($5::float IS NULL OR t.rating_google >= $5::float)
+  AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($7::bool IS NULL OR t.destacado = $7::bool)
 ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
-LIMIT $5 OFFSET $6
+LIMIT $8 OFFSET $9
 """
 
 _MUNICIPIO_TIENDAS_COUNT_QUERY = """
@@ -612,6 +637,9 @@ WHERE t.activo = TRUE
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
+  AND ($5::float IS NULL OR t.rating_google >= $5::float)
+  AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
+  AND ($7::bool IS NULL OR t.destacado = $7::bool)
 """
 
 
@@ -621,12 +649,15 @@ async def get_tiendas_municipio(
     grupo: Optional[str] = Query(None),
     categoria: Optional[str] = Query(None),
     precio_rango: Optional[str] = Query(None),
-    limit: int = Query(20, ge=1, le=100),
+    rating_min: Optional[float] = Query(None),
+    con_whatsapp: bool = Query(False),
+    destacado: Optional[bool] = Query(None),
+    limit: int = Query(20, ge=1, le=500),
     offset: int = Query(0, ge=0),
     pool=Depends(get_pool),
 ):
     grupo_cats: Optional[list[str]] = GRUPOS.get(grupo) if grupo else None
-    args = (municipio, grupo_cats, categoria, precio_rango)
+    args = (municipio, grupo_cats, categoria, precio_rango, rating_min, con_whatsapp, destacado)
 
     try:
         rows, total_row = await pool.fetch(

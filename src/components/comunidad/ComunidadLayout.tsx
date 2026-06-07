@@ -3,7 +3,7 @@ import { BarrioProvider, useBarrio } from './BarrioContext'
 import { ComunidadNavbar } from './ComunidadNavbar'
 import { ComunidadFooter } from './ComunidadFooter'
 
-function Inner({ children }: { children: ReactNode }) {
+function Inner({ children, subNav, compact }: { children: ReactNode; subNav?: ReactNode; compact?: boolean }) {
   const { lang } = useBarrio()
   return (
     <div style={{
@@ -15,17 +15,18 @@ function Inner({ children }: { children: ReactNode }) {
       display: 'flex',
       flexDirection: 'column',
     }}>
-      <ComunidadNavbar />
+      <ComunidadNavbar compact={compact} />
+      {subNav}
       <main style={{ flex: 1 }}>{children}</main>
       <ComunidadFooter lang={lang} />
     </div>
   )
 }
 
-export function ComunidadLayout({ children, initialSlug }: { children: ReactNode; initialSlug: string }) {
+export function ComunidadLayout({ children, initialSlug, subNav, compact }: { children: ReactNode; initialSlug?: string; subNav?: ReactNode; compact?: boolean }) {
   return (
     <BarrioProvider initialSlug={initialSlug}>
-      <Inner>{children}</Inner>
+      <Inner subNav={subNav} compact={compact}>{children}</Inner>
     </BarrioProvider>
   )
 }

@@ -9,6 +9,7 @@ export interface EventoData {
   fecha_fin?: string | null
   gratuito: boolean
   precio: number
+  moneda?: string | null
   organizador?: string | null
   categoria?: string | null
   tipo_audiencia?: string | null
@@ -89,18 +90,23 @@ function ImgWithFallback({ src, alt, categoria }: { src: string; alt: string; ca
   )
 }
 
-function PrecioLabel({ gratuito, precio }: { gratuito: boolean; precio: number }) {
-  const isGratis = gratuito
-  const label = isGratis ? 'Gratis' : precio > 0 ? `$${(precio / 1000).toFixed(0)}k COP` : null
+function formatPrecio(precio: number, moneda?: string | null): string {
+  const m = (moneda || 'COP').toUpperCase()
+  if (m === 'USD') return `$${precio % 1 === 0 ? precio.toFixed(0) : precio.toFixed(2)} USD`
+  return `$${(precio / 1000).toFixed(0)}k COP`
+}
+
+function PrecioLabel({ gratuito, precio, moneda }: { gratuito: boolean; precio: number; moneda?: string | null }) {
+  const label = gratuito ? 'Gratis' : precio > 0 ? formatPrecio(precio, moneda) : null
   if (!label) return null
   return (
     <span style={{
       display: 'inline-block',
-      background: isGratis ? K.teal + '22' : K.amarillo + '44',
-      color: isGratis ? K.tealDeep : '#6b5200',
+      background: gratuito ? K.teal + '22' : K.amarillo + '44',
+      color: gratuito ? K.tealDeep : '#6b5200',
       fontWeight: 700, fontSize: '.66rem', padding: '2px 8px', borderRadius: 6,
     }}>
-      {isGratis ? '🎟️ ' : '💵 '}{label}
+      {gratuito ? '🎟️ ' : '💵 '}{label}
     </span>
   )
 }
@@ -108,7 +114,7 @@ function PrecioLabel({ gratuito, precio }: { gratuito: boolean; precio: number }
 export function EventCardFeatured({ evento }: { evento: EventoData }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)
-  const priceLabel = evento.gratuito ? 'Gratis' : evento.precio > 0 ? `$${(evento.precio / 1000).toFixed(0)}k` : null
+  const priceLabel = evento.gratuito ? 'Gratis' : evento.precio > 0 ? formatPrecio(evento.precio, evento.moneda) : null
 
   return (
     <a
@@ -163,7 +169,7 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
 export function EventCardMini({ evento }: { evento: EventoData }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)
-  const priceLabel = evento.gratuito ? ' · Gratis' : evento.precio > 0 ? ` · $${(evento.precio / 1000).toFixed(0)}k` : ''
+  const priceLabel = evento.gratuito ? ' · Gratis' : evento.precio > 0 ? ` · ${formatPrecio(evento.precio, evento.moneda)}` : ''
 
   return (
     <a
