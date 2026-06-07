@@ -1,13 +1,13 @@
 """feat: eventos — agregar medellin_travel, tuboleta, alcaldia_medellin al CHECK de fuente
 
-Revision ID: 0008
-Revises: 0007
+Revision ID: 0008a
+Revises: 0008
 Create Date: 2026-06-04
 """
 from alembic import op
 
-revision = "0008"
-down_revision = "0007"
+revision = "0008a"
+down_revision = "0008"
 branch_labels = None
 depends_on = None
 
