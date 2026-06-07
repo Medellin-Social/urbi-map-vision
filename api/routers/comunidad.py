@@ -346,8 +346,8 @@ WHERE t.activo = TRUE
     OR t.barrio_id IN (
         SELECT b2.id FROM raw.barrios b2
         WHERE ST_DWithin(
-            b2.geometry,
-            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            b2.geometry::geography,
+            (SELECT geometry::geography FROM raw.barrios WHERE id = $1),
             1500
         )
     )
@@ -371,8 +371,8 @@ WHERE t.activo = TRUE
     OR t.barrio_id IN (
         SELECT b2.id FROM raw.barrios b2
         WHERE ST_DWithin(
-            b2.geometry,
-            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            b2.geometry::geography,
+            (SELECT geometry::geography FROM raw.barrios WHERE id = $1),
             1500
         )
     )
@@ -534,8 +534,8 @@ WHERE t.activo = TRUE
     OR t.barrio_id IN (
         SELECT b2.id FROM raw.barrios b2
         WHERE ST_DWithin(
-            b2.geometry,
-            (SELECT geometry FROM raw.barrios WHERE id = $1),
+            b2.geometry::geography,
+            (SELECT geometry::geography FROM raw.barrios WHERE id = $1),
             1500
         )
     )
