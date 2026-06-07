@@ -68,6 +68,7 @@ def main() -> int:
     ]
     if not args.dry_run:
         steps.append(([python, "update_ts.py"], "TS update"))
+        steps.append(([python, str(SCRIPTS_DIR.parent / "scraping" / "run_comunidad.py")], "comunidad scrapers"))
 
     failed: list[str] = []
     for cmd, label in steps:

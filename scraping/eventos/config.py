@@ -45,4 +45,18 @@ def asignar_barrio(cur, lat, lon) -> int | None:
         LIMIT 1
     """, (lon, lat))
     row = cur.fetchone()
+    if row:
+        return row[0]
+    # Nearest-neighbor fallback: closest barrio within 500m
+    cur.execute("""
+        SELECT id FROM raw.barrios
+        WHERE ST_DWithin(
+            geometry::geography,
+            ST_SetSRID(ST_MakePoint(%s, %s), 4326)::geography,
+            500
+        )
+        ORDER BY geometry <-> ST_SetSRID(ST_MakePoint(%s, %s), 4326)
+        LIMIT 1
+    """, (lon, lat, lon, lat))
+    row = cur.fetchone()
     return row[0] if row else None

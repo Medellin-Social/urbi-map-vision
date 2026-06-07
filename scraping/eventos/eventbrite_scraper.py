@@ -86,6 +86,18 @@ def _decode_evbuc_url(raw_url: str) -> str:
     return raw_url
 
 
+def _decode_next_image_url(url: str) -> str:
+    """Unwrap Next.js image optimizer: /e/_next/image?url=https%3A%2F%2F..."""
+    if "_next/image" not in url:
+        return url
+    match = re.search(r"url=([^&]+)", url)
+    if match:
+        decoded = urllib.parse.unquote(urllib.parse.unquote(match.group(1)))
+        if decoded.startswith("http"):
+            return decoded
+    return url
+
+
 def _extract_foto(raw: dict) -> Optional[str]:
     """Extract best-quality image URL from event dict."""
     img = raw.get("image")
@@ -110,6 +122,14 @@ def _extract_foto(raw: dict) -> Optional[str]:
         if url:
             return _decode_evbuc_url(url)
     return None
+
+
+def _extract_foto_from_page(og_url: str) -> Optional[str]:
+    """Decode og:image from a loaded Eventbrite page (Next.js wrapper or direct)."""
+    if not og_url:
+        return None
+    url = _decode_next_image_url(og_url)
+    return _decode_evbuc_url(url) if url.startswith("http") else None
 
 
 # ─── Valle de Aburrá filter ───────────────────────────────────────────────────
@@ -154,14 +174,17 @@ def _normalizar(raw: dict) -> Optional[dict]:
     # Photo
     foto_url = _extract_foto(raw)
 
-    # Price
+    # Price — keep original currency (USD for international events)
     ta = raw.get("ticket_availability") or {}
     is_free = ta.get("is_free", True)
     precio = 0.0
+    moneda = "COP"
     if not is_free:
         min_price = ta.get("minimum_ticket_price") or {}
+        moneda = min_price.get("currency", "COP") or "COP"
         try:
-            precio = float(str(min_price.get("major_value", "0")).replace(",", "").replace(".", ""))
+            # major_value is a decimal string like "19.15" — only strip commas
+            precio = float(str(min_price.get("major_value", "0")).replace(",", ""))
         except (TypeError, ValueError):
             precio = 0.0
 
@@ -210,6 +233,7 @@ def _normalizar(raw: dict) -> Optional[dict]:
         "fecha_fin": None,
         "gratuito": bool(is_free or precio == 0),
         "precio": precio,
+        "moneda": moneda,
         "organizador": org_name,
         "lat": lat,
         "lon": lon,

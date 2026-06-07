@@ -133,16 +133,10 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND (
-    e.barrio_id = $6
-    OR e.barrio_id IN (
-        SELECT b2.id FROM raw.barrios b2
-        WHERE ST_DWithin(
-            b2.geometry,
-            (SELECT geometry FROM raw.barrios WHERE id = $6),
-            2000
-        )
-    )
+  AND e.barrio_id IN (
+      SELECT b2.id FROM raw.barrios b2
+      WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
+        AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
   )
 ORDER BY e.destacado DESC, e.fecha_inicio ASC
 LIMIT $7 OFFSET $8
@@ -157,16 +151,10 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND (
-    e.barrio_id = $6
-    OR e.barrio_id IN (
-        SELECT b2.id FROM raw.barrios b2
-        WHERE ST_DWithin(
-            b2.geometry,
-            (SELECT geometry FROM raw.barrios WHERE id = $6),
-            2000
-        )
-    )
+  AND e.barrio_id IN (
+      SELECT b2.id FROM raw.barrios b2
+      WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
+        AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
   )
 """
 
@@ -221,7 +209,7 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND UPPER(b.municipio) = UPPER($6)
+  AND ($6::text IS NULL OR UPPER(b.municipio) = UPPER($6))
 ORDER BY e.destacado DESC, e.fecha_inicio ASC
 LIMIT $7 OFFSET $8
 """
@@ -236,7 +224,7 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND UPPER(b.municipio) = UPPER($6)
+  AND ($6::text IS NULL OR UPPER(b.municipio) = UPPER($6))
 """
 
 
@@ -268,7 +256,8 @@ async def get_eventos_municipio(
     hoy = date.today()
     f_desde = fecha_desde or hoy
     f_hasta = fecha_hasta or (hoy + timedelta(days=30))
-    args = (f_desde, f_hasta, categoria, tipo_audiencia, gratuito, municipio)
+    mun_filter = None if municipio.upper() == "VALLE DE ABURRÁ" else municipio
+    args = (f_desde, f_hasta, categoria, tipo_audiencia, gratuito, mun_filter)
     try:
         rows, total_row = await pool.fetch(
             _MUNICIPIO_EVENTOS_QUERY, *args, limit, offset

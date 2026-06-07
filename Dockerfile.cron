@@ -2,19 +2,33 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-# Install cron and pipeline deps
-RUN apt-get update && apt-get install -y --no-install-recommends cron && rm -rf /var/lib/apt/lists/*
+# System deps: cron + libpq for psycopg2 + gcc for some packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    cron libpq-dev gcc \
+    && rm -rf /var/lib/apt/lists/*
 
-COPY api/requirements.txt /tmp/requirements.txt
-RUN pip install --no-cache-dir -r /tmp/requirements.txt
+# API deps (FastAPI, alembic, psycopg2, etc.)
+COPY api/requirements.txt /tmp/api-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/api-requirements.txt
+
+# Scraping deps (requests, bs4, feedparser, playwright, etc.)
+COPY scraping/requirements.txt /tmp/scraping-requirements.txt
+RUN pip install --no-cache-dir -r /tmp/scraping-requirements.txt \
+    && playwright install chromium --with-deps
 
 COPY scripts/ ./scripts/
 COPY api/ ./api/
+COPY scraping/ ./scraping/
 
-# Crontab: run refresh daily at 03:00 UTC
-RUN echo "0 3 * * * root cd /app && python scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
-    > /etc/cron.d/urbidata-refresh \
-    && chmod 0644 /etc/cron.d/urbidata-refresh \
-    && crontab /etc/cron.d/urbidata-refresh
+# Crontab: listings refresh daily at 03:00 UTC
+#          comunidad (eventos/noticias) every 6h
+RUN printf '%s\n' \
+    "0 3 * * * root cd /app && python scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
+    "0 */6 * * * root cd /app && python scraping/run_comunidad.py >> /var/log/comunidad.log 2>&1" \
+    > /etc/cron.d/urbidata \
+    && chmod 0644 /etc/cron.d/urbidata \
+    && crontab /etc/cron.d/urbidata
+
+ENV PYTHONUNBUFFERED=1
 
 CMD ["cron", "-f"]
