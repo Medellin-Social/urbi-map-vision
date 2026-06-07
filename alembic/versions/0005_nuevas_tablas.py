@@ -14,6 +14,16 @@ depends_on = None
 
 def upgrade() -> None:
     op.execute("""
+        CREATE TABLE IF NOT EXISTS public.ciudades (
+            id SERIAL PRIMARY KEY,
+            nombre VARCHAR NOT NULL,
+            pais VARCHAR DEFAULT 'Colombia',
+            created_at TIMESTAMP DEFAULT NOW()
+        )
+    """)
+    op.execute("INSERT INTO public.ciudades (id, nombre) VALUES (1, 'Medellín') ON CONFLICT DO NOTHING")
+
+    op.execute("""
         CREATE TABLE IF NOT EXISTS public.agentes (
             id SERIAL PRIMARY KEY,
             usuario_id INTEGER REFERENCES public.usuarios(id) ON DELETE SET NULL,
@@ -198,3 +208,4 @@ def downgrade() -> None:
     op.drop_table("tiendas", schema="public")
     op.drop_table("listings_propios", schema="public")
     op.drop_table("agentes", schema="public")
+    op.drop_table("ciudades", schema="public")
