@@ -82,6 +82,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
   const catLabel = tienda.categoria ? (CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria) : null
   const catColor = tienda.categoria ? (CATEGORIA_COLORS[tienda.categoria] ?? '#f5f0e8') : '#f5f0e8'
   const catEmoji = tienda.categoria ? (CATEGORIA_EMOJI[tienda.categoria] ?? '⭐') : '⭐'
+
   const wa = tienda.whatsapp
     ? `https://wa.me/${tienda.whatsapp.replace(/\D/g, '')}`
     : tienda.telefono ? `https://wa.me/57${tienda.telefono.replace(/\D/g, '')}` : null
@@ -91,28 +92,26 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tienda.nombre + ' ' + (tienda.barrio_nombre ?? 'Medellín'))}`
       : null
 
+  const primaryBtn = wa || mapsUrl
+  const secondaryBtn = wa ? mapsUrl : null
+
   return (
     <div style={{
-      background: '#f5f0e8', border: '0.5px solid #e9e4d8',
-      borderRadius: 10, overflow: 'hidden', position: 'relative',
+      background: '#fff',
+      border: '1px solid #e9e4d8',
+      borderRadius: 12,
+      overflow: 'hidden',
+      display: 'flex',
+      flexDirection: 'column',
+      height: '100%',
+      boxShadow: '0 2px 8px rgba(20,32,29,.06)',
     }}>
-      {/* Badge categoría */}
-      {catLabel && (
-        <div style={{
-          position: 'absolute', top: 12, left: 12, zIndex: 1,
-          background: '#ffc928', color: '#14201d',
-          fontWeight: 900, fontSize: 11, padding: '3px 8px',
-          borderRadius: 4, letterSpacing: '0.5px',
-        }}>
-          ★ {catLabel}
-        </div>
-      )}
-
-      {/* Foto o placeholder */}
+      {/* Foto */}
       <div style={{
-        height: 130, overflow: 'hidden',
+        height: 120, flexShrink: 0, position: 'relative',
         background: catColor,
         display: 'flex', alignItems: 'center', justifyContent: 'center',
+        overflow: 'hidden',
       }}>
         {tienda.foto_url ? (
           <img
@@ -121,55 +120,105 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
             onError={e => { e.currentTarget.style.display = 'none' }}
           />
         ) : (
-          <span style={{ fontSize: 40 }}>{catEmoji}</span>
+          <span style={{ fontSize: 36 }}>{catEmoji}</span>
+        )}
+        {catLabel && (
+          <div style={{
+            position: 'absolute', top: 8, left: 8,
+            background: '#ffc928', color: '#14201d',
+            fontWeight: 800, fontSize: 10, padding: '3px 7px',
+            borderRadius: 4, letterSpacing: '0.4px', whiteSpace: 'nowrap',
+            maxWidth: 'calc(100% - 16px)', overflow: 'hidden', textOverflow: 'ellipsis',
+          }}>
+            ★ {catLabel}
+          </div>
         )}
       </div>
 
-      <div style={{ padding: '12px 14px' }}>
+      {/* Body */}
+      <div style={{ padding: '12px 14px', display: 'flex', flexDirection: 'column', flex: 1, gap: 4 }}>
+        {/* Barrio */}
         {tienda.barrio_nombre && (
-          <p style={{ fontSize: 11, color: '#62736d', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+          <p style={{
+            fontSize: 10, color: '#62736d', margin: 0,
+            textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
             {tienda.barrio_nombre}
           </p>
         )}
-        <p style={{ fontWeight: 600, fontSize: 15, color: '#14201d', margin: '0 0 6px', lineHeight: 1.2 }}>
+
+        {/* Nombre */}
+        <p style={{
+          fontWeight: 700, fontSize: 14, color: '#14201d',
+          margin: 0, lineHeight: 1.25,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}>
           {tienda.nombre}
         </p>
-        {tienda.rating_google && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
-            <span style={{ color: '#ffc928' }}>★★★★★</span>
-            <span style={{ fontSize: 13, color: '#62736d' }}>{tienda.rating_google.toFixed(1)}</span>
-            {tienda.precio_rango && (
-              <span style={{ fontSize: 12, color: '#9B8B75', marginLeft: 4 }}>· {tienda.precio_rango}</span>
-            )}
-          </div>
+
+        {/* Rating + precio */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
+          {tienda.rating_google ? (
+            <>
+              <span style={{ color: '#ffc928', fontSize: 12, letterSpacing: 1 }}>
+                {'★'.repeat(Math.min(Math.round(tienda.rating_google), 5))}
+              </span>
+              <span style={{ fontSize: 11, color: '#62736d', fontWeight: 600 }}>
+                {tienda.rating_google.toFixed(1)}
+              </span>
+            </>
+          ) : (
+            <span style={{ fontSize: 11, color: '#9B8B75' }}>Sin calificación</span>
+          )}
+        </div>
+
+        {/* Dirección */}
+        {tienda.direccion && (
+          <p style={{
+            fontSize: 11, color: '#9B8B75', margin: 0, lineHeight: 1.3,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {tienda.direccion}
+          </p>
         )}
-        <div style={{ display: 'flex', gap: 8 }}>
-          {mapsUrl && (
-            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{
-              flex: 1, textAlign: 'center', padding: '6px 0',
-              background: '#fbf9f3', border: '0.5px solid #e9e4d8',
-              borderRadius: 6, fontSize: 12, color: '#14201d',
-              textDecoration: 'none', fontWeight: 500,
+
+        {/* Spacer */}
+        <div style={{ flex: 1 }} />
+
+        {/* Botones */}
+        <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
+          {primaryBtn && (
+            <a href={primaryBtn} target="_blank" rel="noopener noreferrer" style={{
+              flex: 1, textAlign: 'center', padding: '7px 0',
+              background: wa ? '#25D366' : '#4285F4',
+              borderRadius: 7, fontSize: 11, color: '#fff',
+              textDecoration: 'none', fontWeight: 700,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              📍 Ver en Maps
+              {wa ? '💬 WhatsApp' : '📍 Maps'}
             </a>
           )}
-          {wa && (
-            <a href={wa} target="_blank" rel="noopener noreferrer" style={{
-              flex: 1, textAlign: 'center', padding: '6px 0',
-              background: '#25D366', borderRadius: 6,
-              fontSize: 12, color: '#fff',
-              textDecoration: 'none', fontWeight: 500,
+          {secondaryBtn && (
+            <a href={secondaryBtn} target="_blank" rel="noopener noreferrer" style={{
+              flex: '0 0 auto', padding: '7px 10px',
+              background: '#f5f0e8', border: '1px solid #e9e4d8',
+              borderRadius: 7, fontSize: 11, color: '#14201d',
+              textDecoration: 'none', fontWeight: 600,
+              whiteSpace: 'nowrap',
             }}>
-              💬 WhatsApp
+              📍
             </a>
           )}
-          {tienda.website && (
+          {!primaryBtn && !secondaryBtn && tienda.website && (
             <a href={tienda.website} target="_blank" rel="noopener noreferrer" style={{
-              flex: 1, textAlign: 'center', padding: '6px 0',
-              background: '#fbf9f3', border: '0.5px solid #e9e4d8',
-              borderRadius: 6, fontSize: 12, color: '#14201d',
-              textDecoration: 'none', fontWeight: 500,
+              flex: 1, textAlign: 'center', padding: '7px 0',
+              background: '#f5f0e8', border: '1px solid #e9e4d8',
+              borderRadius: 7, fontSize: 11, color: '#14201d',
+              textDecoration: 'none', fontWeight: 600,
             }}>
               🌐 Web
             </a>
@@ -201,7 +250,6 @@ export function BusinessCardList({ tienda }: { tienda: TiendaData }) {
               {tienda.categoria}
             </div>
           )}
-          <PriceRange value={tienda.precio_rango} />
         </div>
         {tienda.direccion && (
           <div style={{ fontSize: '.76rem', color: K.muted, marginTop: 3 }}>{tienda.direccion}</div>
