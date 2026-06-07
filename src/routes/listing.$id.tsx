@@ -28,11 +28,13 @@ const SOURCE_LABEL: Record<string, string> = {
 };
 
 function TipoOpBadge({ tipo }: { tipo?: string | null }) {
-  const color = tipo === "arriendo" ? "#3b82f6" : "#00d4ff";
   return (
     <span
-      className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-white"
-      style={{ background: color }}
+      className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
+      style={{
+        background: tipo === "arriendo" ? "#E1F5EE" : "#FAECE7",
+        color:      tipo === "arriendo" ? "#1D9E75" : "#D85A30",
+      }}
     >
       {tipo ?? "—"}
     </span>
@@ -50,7 +52,7 @@ function PriceBadge({
   let label: string, color: string, emoji: string, desc: string;
   if (pctBajoMediana > 10) {
     label = "BUENA OFERTA";
-    color = "#10b981";
+    color = "#085041";
     emoji = "🟢";
     desc =
       tipoOp === "arriendo"
@@ -58,12 +60,12 @@ function PriceBadge({
         : `${pctBajoMediana.toFixed(0)}% bajo la mediana de precio/m²`;
   } else if (pctBajoMediana < -15) {
     label = "SOBRE PRECIO";
-    color = "#ef4444";
+    color = "#E24B4A";
     emoji = "🔴";
     desc = `${Math.abs(pctBajoMediana).toFixed(0)}% sobre la mediana del barrio`;
   } else {
     label = "PRECIO JUSTO";
-    color = "#9ca3af";
+    color = "#9B8B75";
     emoji = "⚪";
     desc = "Dentro del rango habitual del barrio";
   }
@@ -93,11 +95,11 @@ function ScoreBar({
   const color =
     value != null
       ? pct >= 70
-        ? "#10b981"
+        ? "#1D9E75"
         : pct >= 50
-          ? "#f59e0b"
-          : "#ef4444"
-      : "#4b5563";
+          ? "#BA7517"
+          : "#E24B4A"
+      : "#9B8B75";
   return (
     <div className="space-y-1">
       <div className="flex justify-between text-xs">
@@ -124,7 +126,7 @@ function Chip({
   label: string;
 }) {
   return (
-    <div className="flex items-center gap-1.5 rounded-lg border border-border/60 bg-background/40 px-3 py-2 text-sm">
+    <div className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm" style={{ border: '0.5px solid #E8E0D0', background: '#F5F0E8' }}>
       <span className="text-muted-foreground">{icon}</span>
       <span>{label}</span>
     </div>
@@ -133,7 +135,7 @@ function Chip({
 
 function ComingSoon({ title }: { title: string }) {
   return (
-    <div className="rounded-xl border border-dashed border-border/60 p-5 text-center">
+    <div className="rounded-xl p-5 text-center" style={{ border: '1px dashed #E8E0D0' }}>
       <div className="text-sm text-muted-foreground">{title}</div>
       <div className="mt-1 text-xs text-muted-foreground/50">Será agregado próximamente</div>
     </div>
@@ -158,7 +160,7 @@ export function ListingDetailContent({
 
   const heroMapUrl =
     lat != null && lon != null
-      ? `https://api.mapbox.com/styles/v1/mapbox/dark-v11/static/pin-l+00d4ff(${lon},${lat})/${lon},${lat},15,0/800x400@2x?access_token=${MAPBOX_TOKEN}`
+      ? `https://api.mapbox.com/styles/v1/mapbox/light-v11/static/pin-l+1D9E75(${lon},${lat})/${lon},${lat},15,0/800x400@2x?access_token=${MAPBOX_TOKEN}`
       : null;
 
   const waText = encodeURIComponent(
@@ -202,7 +204,7 @@ export function ListingDetailContent({
     <>
       {/* Modal header */}
       {isModal && (
-        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/60 bg-background/95 px-5 py-3 backdrop-blur-sm">
+        <div className="sticky top-0 z-10 flex items-center justify-between border-b border-[#E8E0D0] bg-background/95 px-5 py-3 backdrop-blur-sm">
           <div className="flex items-center gap-2 min-w-0">
             <TipoOpBadge tipo={tipoOp} />
             {listing.tipo_inmueble && (
@@ -241,7 +243,7 @@ export function ListingDetailContent({
           {/* ── LEFT ── */}
           <div className="space-y-8 min-w-0">
             {/* Hero map */}
-            <section className="overflow-hidden rounded-2xl border border-border/60">
+            <section className="overflow-hidden rounded-2xl border border-[#E8E0D0]">
               {heroMapUrl ? (
                 <img
                   src={heroMapUrl}
@@ -253,7 +255,7 @@ export function ListingDetailContent({
                   Sin coordenadas disponibles
                 </div>
               )}
-              <div className="flex items-center gap-2 border-t border-border/60 bg-background/60 px-4 py-2 text-xs text-muted-foreground">
+              <div className="flex items-center gap-2 border-t border-[#E8E0D0] bg-white px-4 py-2 text-xs text-muted-foreground">
                 <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
                 {listing.barrio_nombre && <span>{listing.barrio_nombre}</span>}
                 {listing.municipio && <span>· {listing.municipio}</span>}
@@ -294,7 +296,7 @@ export function ListingDetailContent({
                 )}
               </div>
 
-              <div className="divide-y divide-border/40 overflow-hidden rounded-xl border border-border/60 bg-background/30">
+              <div className="divide-y divide-[#E8E0D0] overflow-hidden rounded-xl border border-[#E8E0D0] bg-[#FAF7F2]">
                 {detailRows.map((row) => (
                   <div
                     key={row.label}
@@ -324,7 +326,7 @@ export function ListingDetailContent({
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold">Análisis de inversión</h2>
                 <div className="grid gap-3 sm:grid-cols-2">
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Yield estimado (renta larga)</div>
                     <div
                       className="text-2xl font-bold"
@@ -341,13 +343,13 @@ export function ListingDetailContent({
                     </div>
                   </div>
 
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">vs mediana del barrio</div>
                     <div
                       className="text-2xl font-bold"
                       style={{
                         color:
-                          (listing.pct_bajo_mediana ?? 0) > 0 ? "#10b981" : "#ef4444",
+                          (listing.pct_bajo_mediana ?? 0) > 0 ? "#085041" : "#E24B4A",
                       }}
                     >
                       {listing.pct_bajo_mediana != null
@@ -362,7 +364,7 @@ export function ListingDetailContent({
                     </div>
                   </div>
 
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Período de recupero estimado</div>
                     <div className="text-2xl font-bold">
                       {listing.yield_estimado && listing.yield_estimado > 0
@@ -372,7 +374,7 @@ export function ListingDetailContent({
                     <div className="text-xs text-muted-foreground">Basado en arriendo mediano del barrio</div>
                   </div>
 
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Arriendo referencia barrio</div>
                     <div className="text-2xl font-bold">
                       {listing.arriendo_p50_barrio
@@ -384,7 +386,7 @@ export function ListingDetailContent({
                     </div>
                   </div>
 
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Ingreso anual estimado</div>
                     <div className="text-2xl font-bold text-primary">
                       {listing.arriendo_p50_barrio
@@ -396,11 +398,11 @@ export function ListingDetailContent({
                     </div>
                   </div>
 
-                  <div className="space-y-1 rounded-xl border border-border/60 bg-background/40 p-4">
+                  <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Valorización anual proyectada</div>
                     <div
                       className="text-2xl font-bold"
-                      style={{ color: listing.var_anual_pct != null ? "#00d4ff" : "#6b7280" }}
+                      style={{ color: listing.var_anual_pct != null ? "#1D9E75" : "#9B8B75" }}
                     >
                       {listing.var_anual_pct != null
                         ? `+${listing.var_anual_pct.toFixed(1)}%`
@@ -428,7 +430,7 @@ export function ListingDetailContent({
             {/* Zona scores */}
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">Contexto de zona</h2>
-              <div className="space-y-4 rounded-xl border border-border/60 bg-background/30 p-5">
+              <div className="space-y-4 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-5">
                 <ScoreBar label="Score corto plazo (airbnb / temporada)" value={listing.score_corto} />
                 <ScoreBar label="Score mediano plazo (renta media)" value={listing.score_mediano} />
                 <ScoreBar label="Score largo plazo (renta larga)" value={listing.score_largo} />
@@ -436,7 +438,7 @@ export function ListingDetailContent({
                 <ScoreBar label="Seguridad" value={listing.seguridad_score} />
                 <ScoreBar label="Índice nómada" value={listing.indice_nomada} max={10} />
                 {listing.yield_bruto_pct != null && (
-                  <div className="flex justify-between border-t border-border/40 pt-3 text-xs">
+                  <div className="flex justify-between border-t border-[#E8E0D0] pt-3 text-xs">
                     <span className="text-muted-foreground">Yield bruto barrio</span>
                     <span className="font-semibold text-primary">
                       {listing.yield_bruto_pct.toFixed(1)}%
@@ -469,7 +471,7 @@ export function ListingDetailContent({
                       key={s.id}
                       to="/listing/$id"
                       params={{ id: String(s.id) }}
-                      className="block rounded-xl border border-border/60 bg-background/40 p-4 transition hover:border-primary/40 hover:bg-primary/5"
+                      className="block rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4 transition hover:border-primary/40 hover:bg-primary/5"
                     >
                       <div className="mb-1 text-xs capitalize text-muted-foreground">
                         {s.tipo_inmueble} · {s.barrio_nombre}
@@ -494,7 +496,7 @@ export function ListingDetailContent({
           {/* ── RIGHT SIDEBAR ── */}
           <aside className={isModal ? "space-y-4 order-first" : "space-y-4 lg:sticky lg:top-24 lg:self-start"}>
             {/* Price hero card */}
-            <div className="space-y-4 rounded-2xl border border-border/60 bg-background/60 p-6 backdrop-blur-sm">
+            <div className="space-y-4 rounded-2xl border border-[#E8E0D0] bg-white p-6 backdrop-blur-sm">
               <div>
                 <div className="font-display text-3xl font-bold leading-tight">
                   {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
@@ -509,19 +511,19 @@ export function ListingDetailContent({
               {/* Key specs */}
               <div className="flex flex-wrap gap-2 text-sm">
                 {listing.habitaciones != null && (
-                  <span className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2.5 py-1">
+                  <span className="flex items-center gap-1 rounded-md border border-[#E8E0D0] bg-white px-2.5 py-1">
                     <Bed className="h-3.5 w-3.5 text-muted-foreground" />
                     {listing.habitaciones}
                   </span>
                 )}
                 {listing.banos != null && (
-                  <span className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2.5 py-1">
+                  <span className="flex items-center gap-1 rounded-md border border-[#E8E0D0] bg-white px-2.5 py-1">
                     <Bath className="h-3.5 w-3.5 text-muted-foreground" />
                     {listing.banos}
                   </span>
                 )}
                 {listing.area_m2 != null && (
-                  <span className="flex items-center gap-1 rounded-md border border-border/60 bg-background/60 px-2.5 py-1">
+                  <span className="flex items-center gap-1 rounded-md border border-[#E8E0D0] bg-white px-2.5 py-1">
                     <Maximize2 className="h-3.5 w-3.5 text-muted-foreground" />
                     {listing.area_m2}m²
                   </span>
@@ -532,7 +534,7 @@ export function ListingDetailContent({
               {(tipoOp === "venta" ? listing.precio_m2 : null) ||
                listing.precio_m2_mediana_barrio ||
                listing.yield_estimado ? (
-                <div className="space-y-1.5 rounded-lg border border-border/40 bg-background/30 p-3 text-xs">
+                <div className="space-y-1.5 rounded-lg border border-[#E8E0D0] bg-[#FAF7F2] p-3 text-xs">
                   {listing.precio_m2 != null && tipoOp === "venta" && (
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Precio/m²</span>
@@ -550,7 +552,7 @@ export function ListingDetailContent({
                     </div>
                   )}
                   {listing.yield_estimado != null && tipoOp === "venta" && (
-                    <div className="mt-0.5 flex justify-between border-t border-border/40 pt-1.5">
+                    <div className="mt-0.5 flex justify-between border-t border-[#E8E0D0] pt-1.5">
                       <span className="flex items-center gap-1 text-muted-foreground">
                         <TrendingUp className="h-3 w-3" /> Yield est.
                       </span>
@@ -607,7 +609,7 @@ export function ListingDetailContent({
                 {isModal && (
                   <button
                     onClick={handleShare}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-border/60 bg-background/40 py-3 text-sm font-semibold text-foreground transition hover:bg-background/60"
+                    className="flex w-full items-center justify-center gap-2 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] py-3 text-sm font-semibold text-foreground transition hover:bg-white"
                   >
                     <Share2 className="h-4 w-4" />
                     Compartir listing
@@ -616,7 +618,7 @@ export function ListingDetailContent({
               </div>
 
               {listing.disponible_actualmente === false && (
-                <div className="flex items-center gap-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-3 py-2 text-xs text-yellow-400">
+                <div className="flex items-center gap-2 rounded-lg px-3 py-2 text-xs" style={{ border: '1px solid rgba(184,117,23,0.35)', background: 'rgba(184,117,23,0.08)', color: '#BA7517' }}>
                   <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
                   Este listing puede ya no estar disponible
                 </div>
@@ -625,13 +627,13 @@ export function ListingDetailContent({
 
             {/* Barrio quick stats */}
             {listing.barrio_id != null && (
-              <div className="space-y-3 rounded-2xl border border-border/60 bg-background/60 p-4">
+              <div className="space-y-3 rounded-2xl border border-[#E8E0D0] bg-white p-4">
                 <div className="text-sm font-semibold">
                   Zona: {listing.barrio_nombre}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   {listing.yield_bruto_pct != null && (
-                    <div className="rounded-lg border border-border/40 bg-background/60 p-2.5 text-center">
+                    <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
                       <div className="font-bold text-primary">
                         {listing.yield_bruto_pct.toFixed(1)}%
                       </div>
@@ -639,7 +641,7 @@ export function ListingDetailContent({
                     </div>
                   )}
                   {listing.score_largo != null && (
-                    <div className="rounded-lg border border-border/40 bg-background/60 p-2.5 text-center">
+                    <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
                       <div className="font-bold text-primary">
                         {listing.score_largo.toFixed(0)}
                       </div>
@@ -647,13 +649,13 @@ export function ListingDetailContent({
                     </div>
                   )}
                   {listing.seguridad_score != null && (
-                    <div className="rounded-lg border border-border/40 bg-background/60 p-2.5 text-center">
+                    <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
                       <div className="font-bold">{listing.seguridad_score.toFixed(0)}</div>
                       <div className="text-muted-foreground">Seguridad</div>
                     </div>
                   )}
                   {listing.indice_nomada != null && (
-                    <div className="rounded-lg border border-border/40 bg-background/60 p-2.5 text-center">
+                    <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
                       <div className="font-bold">{listing.indice_nomada.toFixed(1)}</div>
                       <div className="text-muted-foreground">Índice nómada</div>
                     </div>
@@ -704,7 +706,7 @@ function ListingPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-[#FAF7F2]">
         <SiteNavbar />
         <div className="flex min-h-screen items-center justify-center">
           <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -715,7 +717,7 @@ function ListingPage() {
 
   if (error || !listing) {
     return (
-      <div className="min-h-screen bg-background">
+      <div className="min-h-screen bg-[#FAF7F2]">
         <SiteNavbar />
         <div className="flex min-h-screen items-center justify-center">
           <div className="text-center">
@@ -734,10 +736,21 @@ function ListingPage() {
   const fuente = listing.fuente ?? "";
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-screen bg-[#FAF7F2]">
       <SiteNavbar />
 
-      <main className="mx-auto max-w-7xl px-4 pb-8 pt-20 sm:px-6">
+      <main
+        className="mx-auto max-w-7xl px-4 pb-8 pt-20 sm:px-6"
+        style={{
+          '--background': '#FFFFFF',
+          '--foreground': '#1A1208',
+          '--muted-foreground': '#6B5B45',
+          '--muted': '#F5F0E8',
+          '--border': 'rgb(184 164 138 / 50%)',
+          '--primary': 'oklch(0.62 0.12 164)',
+          '--primary-foreground': 'oklch(0.98 0.005 260)',
+        } as React.CSSProperties}
+      >
         {/* Breadcrumb */}
         <div className="mb-6 flex flex-wrap items-center gap-2">
           <Link
@@ -749,8 +762,11 @@ function ListingPage() {
           </Link>
           <span className="text-muted-foreground/40">·</span>
           <span
-            className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider text-white"
-            style={{ background: tipoOp === "arriendo" ? "#3b82f6" : "#00d4ff" }}
+            className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
+            style={{
+              background: tipoOp === "arriendo" ? "#E1F5EE" : "#FAECE7",
+              color:      tipoOp === "arriendo" ? "#1D9E75" : "#D85A30",
+            }}
           >
             {tipoOp}
           </span>

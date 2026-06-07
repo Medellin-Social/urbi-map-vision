@@ -93,6 +93,30 @@ export const GRUPOS_TIENDAS_MAP = Object.fromEntries(
   GRUPOS_TIENDAS.map((g) => [g.key, g])
 ) as Record<string, GrupoTiendas>
 
+export const CATEGORIA_LABELS: Record<string, string> = {
+  brunch: 'Brunch', cena: 'Restaurante', gimnasios: 'Gimnasio',
+  masajes_spa: 'Spa & Wellness', medicos: 'Salud', cafes: 'Café',
+  bares: 'Bar', yoga: 'Yoga', dentistas: 'Dental', peluquerias: 'Estética',
+  almuerzo: 'Almuerzo', estetica: 'Estética', panaderia: 'Panadería',
+  asiatica: 'Asiática', comida_rapida: 'Rápida', fisioterapia: 'Fisio',
+  dermatologia: 'Dermatología',
+}
+
+export const CATEGORIA_COLORS: Record<string, string> = {
+  bares: '#14201d', brunch: '#f5f0e8', cafes: '#c8a96e', cena: '#2d1b0e',
+  gimnasios: '#1D9E75', masajes_spa: '#d4a5c9', medicos: '#e8f4f8',
+  dentistas: '#e8f4f8', peluquerias: '#fce4ec', yoga: '#e8f5e9',
+  fisioterapia: '#fff8e1', dermatologia: '#fce4ec', estetica: '#fce4ec',
+  almuerzo: '#fff3e0', panaderia: '#fff8e1', comida_rapida: '#fbe9e7',
+}
+
+export const CATEGORIA_EMOJI: Record<string, string> = {
+  bares: '🍺', brunch: '☕', cafes: '☕', cena: '🍽️', gimnasios: '💪',
+  masajes_spa: '🧖', medicos: '🏥', dentistas: '🦷', peluquerias: '✂️',
+  yoga: '🧘', fisioterapia: '🦴', dermatologia: '✨', estetica: '💅',
+  almuerzo: '🍱', panaderia: '🥐', comida_rapida: '🍕', asiatica: '🍜',
+}
+
 export const CATEGORIAS_EVENTOS: CategoriaEvento[] = [
   { key: "networking",  label: "Networking",  emoji: "🤝" },
   { key: "happy_hour",  label: "Happy Hour",  emoji: "🍹" },

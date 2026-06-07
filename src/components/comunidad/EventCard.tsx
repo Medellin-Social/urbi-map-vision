@@ -90,8 +90,9 @@ function ImgWithFallback({ src, alt, categoria }: { src: string; alt: string; ca
 }
 
 function PrecioLabel({ gratuito, precio }: { gratuito: boolean; precio: number }) {
-  const isGratis = gratuito || precio === 0
-  const label = isGratis ? 'Gratis' : `$${(precio / 1000).toFixed(0)}k COP`
+  const isGratis = gratuito
+  const label = isGratis ? 'Gratis' : precio > 0 ? `$${(precio / 1000).toFixed(0)}k COP` : null
+  if (!label) return null
   return (
     <span style={{
       display: 'inline-block',
@@ -107,122 +108,112 @@ function PrecioLabel({ gratuito, precio }: { gratuito: boolean; precio: number }
 export function EventCardFeatured({ evento }: { evento: EventoData }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)
-
-  return (
-    <div style={{
-      display: 'flex', flexDirection: 'column', borderRadius: 18, overflow: 'hidden',
-      background: '#fff', border: `1px solid ${K.line}`,
-      boxShadow: '0 8px 28px rgba(20,32,29,.1)',
-    }}>
-      {/* Imagen */}
-      <div style={{ height: 200, position: 'relative', overflow: 'hidden', flexShrink: 0 }}>
-        {evento.foto_url
-          ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
-          : <ImgPlaceholder categoria={evento.categoria} />
-        }
-        {evento.destacado && (
-          <span style={{
-            position: 'absolute', top: 12, left: 12,
-            background: K.coral, color: '#fff', fontWeight: 800,
-            fontSize: '.68rem', padding: '4px 10px', borderRadius: 6,
-            textTransform: 'uppercase', letterSpacing: '.8px',
-          }}>⭐ Destacado</span>
-        )}
-      </div>
-
-      {/* Contenido */}
-      <div style={{ padding: '16px 20px 20px', display: 'flex', flexDirection: 'column', flex: 1 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 7, flexWrap: 'wrap' }}>
-          {cat && (
-            <span style={{ fontSize: '.68rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.8px', color: cat.color }}>
-              {cat.emoji} {cat.label}
-            </span>
-          )}
-          <PrecioLabel gratuito={evento.gratuito} precio={evento.precio} />
-        </div>
-        <h3 style={{ fontFamily: K.serif, fontWeight: 700, fontSize: '1.08rem', lineHeight: 1.25, margin: '0 0 8px', color: K.ink }}>
-          {evento.titulo}
-        </h3>
-        {evento.descripcion && (
-          <p style={{
-            fontSize: '.8rem', color: K.muted, margin: '0 0 12px', lineHeight: 1.5,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
-          }}>
-            {evento.descripcion}
-          </p>
-        )}
-        <a
-          href={evento.url_externo ?? '#'}
-          target="_blank" rel="noopener noreferrer"
-          style={{
-            display: 'inline-block', background: K.coral, color: '#fff',
-            fontWeight: 800, fontSize: '.82rem', padding: '9px 20px',
-            borderRadius: 999, textDecoration: 'none', alignSelf: 'flex-start',
-          }}
-        >
-          Ver detalles →
-        </a>
-
-        {/* Fecha — debajo del botón */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 14, paddingTop: 12, borderTop: `1px solid ${K.line}` }}>
-          <div style={{ background: K.surface, borderRadius: 8, padding: '5px 10px', textAlign: 'center', minWidth: 42, flexShrink: 0 }}>
-            <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.1rem', lineHeight: 1, color: K.coral }}>{f.day}</div>
-            <div style={{ fontSize: '.58rem', textTransform: 'uppercase', letterSpacing: 1, color: K.muted }}>{f.month}</div>
-          </div>
-          <div>
-            <div style={{ fontSize: '.8rem', color: K.ink, fontWeight: 600 }}>{f.full}</div>
-            {f.hora && f.hora !== '12:00 a. m.' && (
-              <div style={{ fontSize: '.74rem', color: K.muted }}>🕐 {f.hora}</div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  )
-}
-
-export function EventCardMini({ evento }: { evento: EventoData }) {
-  const f = parseFecha(evento.fecha_inicio)
-  const cat = catMeta(evento.categoria)
+  const priceLabel = evento.gratuito ? 'Gratis' : evento.precio > 0 ? `$${(evento.precio / 1000).toFixed(0)}k` : null
 
   return (
     <a
       href={evento.url_externo ?? '#'}
       target="_blank" rel="noopener noreferrer"
       style={{
-        display: 'flex', gap: 14, padding: '16px 0',
-        borderBottom: `1px solid ${K.line}`,
-        textDecoration: 'none', color: K.ink,
+        display: 'block', background: '#FAF7F2',
+        border: '0.5px solid #E8E0D0', borderRadius: 10,
+        overflow: 'hidden', textDecoration: 'none', position: 'relative',
       }}
     >
-      {/* Thumbnail — donde estaba el bloque de fecha */}
-      <div style={{ flexShrink: 0, width: 64, height: 64, borderRadius: 10, overflow: 'hidden' }}>
+      {/* Badge */}
+      <div style={{
+        position: 'absolute', top: 10, left: 10, zIndex: 1,
+        background: K.coral, color: K.coralLight,
+        fontSize: 10, fontWeight: 700,
+        padding: '3px 8px', borderRadius: 4,
+        letterSpacing: '0.5px', textTransform: 'uppercase',
+      }}>
+        Destacado
+      </div>
+
+      {/* Foto */}
+      <div style={{ height: 140, overflow: 'hidden', flexShrink: 0 }}>
         {evento.foto_url
           ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
           : <ImgPlaceholder categoria={evento.categoria} />
         }
       </div>
 
-      {/* Texto */}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginBottom: 3, flexWrap: 'wrap' }}>
+      {/* Info */}
+      <div style={{ padding: '12px 14px' }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
           {cat && (
-            <span style={{ fontSize: '.64rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.8px', color: cat.color }}>
+            <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral }}>
               {cat.emoji} {cat.label}
             </span>
           )}
-          <PrecioLabel gratuito={evento.gratuito} precio={evento.precio} />
+          {priceLabel && <span style={{ fontSize: 10, color: '#9B8B75' }}>· {priceLabel}</span>}
         </div>
-        <h4 style={{ fontFamily: K.serif, fontWeight: 600, fontSize: '1rem', lineHeight: 1.2, margin: '0 0 3px', color: K.ink }}>
+        <h3 style={{ fontFamily: K.serif, fontSize: 15, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 6px' }}>
           {evento.titulo}
-        </h4>
-        {evento.barrio_nombre && (
-          <div style={{ fontSize: '.72rem', color: K.muted, marginBottom: 3 }}>{evento.barrio_nombre}</div>
-        )}
-        {/* Fecha — debajo del texto */}
-        <div style={{ fontSize: '.72rem', color: K.muted, display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ color: K.coral, fontWeight: 700 }}>{f.day} {f.month}</span>
-          {f.hora && f.hora !== '12:00 a. m.' && <span>· {f.hora}</span>}
+        </h3>
+        <p style={{ fontSize: 12, color: '#9B8B75', margin: 0 }}>
+          {evento.organizador ? `${evento.organizador} · ` : ''}{f.day} {f.month}
+        </p>
+      </div>
+    </a>
+  )
+}
+
+export function EventCardMini({ evento }: { evento: EventoData }) {
+  const f = parseFecha(evento.fecha_inicio)
+  const cat = catMeta(evento.categoria)
+  const priceLabel = evento.gratuito ? ' · Gratis' : evento.precio > 0 ? ` · $${(evento.precio / 1000).toFixed(0)}k` : ''
+
+  return (
+    <a
+      href={evento.url_externo ?? '#'}
+      target="_blank" rel="noopener noreferrer"
+      style={{
+        display: 'flex', flexDirection: 'column',
+        background: '#FFFFFF', border: '0.5px solid #E8E0D0',
+        borderRadius: 10, overflow: 'hidden', textDecoration: 'none',
+      }}
+    >
+      {/* Foto */}
+      <div style={{ height: 130, overflow: 'hidden', flexShrink: 0 }}>
+        {evento.foto_url
+          ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
+          : <ImgPlaceholder categoria={evento.categoria} />
+        }
+      </div>
+
+      {/* Footer: fecha box + contenido */}
+      <div style={{ display: 'flex', gap: 12, padding: 12 }}>
+        {/* Fecha box */}
+        <div style={{
+          background: '#F5F0E8', borderRadius: 8,
+          padding: '8px 10px', textAlign: 'center',
+          minWidth: 44, flexShrink: 0,
+          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <div style={{ fontFamily: K.serif, fontSize: 20, fontWeight: 700, color: '#1A1208', lineHeight: 1 }}>
+            {f.day}
+          </div>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B8B75', marginTop: 2 }}>
+            {f.month}
+          </div>
+        </div>
+
+        {/* Contenido */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral, marginBottom: 4 }}>
+            {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
+          </div>
+          <h3 style={{
+            fontSize: 14, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 4px',
+            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+          }}>
+            {evento.titulo}
+          </h3>
+          <p style={{ fontSize: 11, color: '#9B8B75', margin: 0 }}>
+            📍 {evento.barrio_nombre || evento.organizador || 'Medellín'}
+          </p>
         </div>
       </div>
     </a>

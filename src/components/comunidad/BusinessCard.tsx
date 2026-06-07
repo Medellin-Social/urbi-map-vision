@@ -1,5 +1,6 @@
 export type { TiendaData } from '@/hooks/useTiendas'
 import type { TiendaData } from '@/hooks/useTiendas'
+import { CATEGORIA_LABELS, CATEGORIA_COLORS, CATEGORIA_EMOJI } from '@/lib/categorias_comunidad'
 
 const K = {
   ink: '#14201d',
@@ -45,9 +46,11 @@ function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: bool
     : tienda.telefono
       ? `https://wa.me/57${tienda.telefono.replace(/\D/g, '')}`
       : null
-  const mapsUrl = tienda.lat && tienda.lon
-    ? `https://www.google.com/maps/search/?api=1&query=${tienda.lat},${tienda.lon}`
-    : null
+  const mapsUrl = tienda.google_place_id
+    ? `https://www.google.com/maps/place/?q=place_id:${tienda.google_place_id}`
+    : tienda.lat && tienda.lon
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tienda.nombre + ' ' + (tienda.barrio_nombre ?? 'Medellín'))}`
+      : null
 
   if (!wa && !mapsUrl && !tienda.website) return null
 
@@ -76,47 +79,103 @@ function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: bool
 }
 
 export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
-  const bg = tienda.foto_url
-    ? `url('${tienda.foto_url}')`
-    : `linear-gradient(135deg, ${K.teal}, ${K.tealDeep})`
+  const catLabel = tienda.categoria ? (CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria) : null
+  const catColor = tienda.categoria ? (CATEGORIA_COLORS[tienda.categoria] ?? '#f5f0e8') : '#f5f0e8'
+  const catEmoji = tienda.categoria ? (CATEGORIA_EMOJI[tienda.categoria] ?? '⭐') : '⭐'
+  const wa = tienda.whatsapp
+    ? `https://wa.me/${tienda.whatsapp.replace(/\D/g, '')}`
+    : tienda.telefono ? `https://wa.me/57${tienda.telefono.replace(/\D/g, '')}` : null
+  const mapsUrl = tienda.google_place_id
+    ? `https://www.google.com/maps/place/?q=place_id:${tienda.google_place_id}`
+    : (tienda.lat && tienda.lon)
+      ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tienda.nombre + ' ' + (tienda.barrio_nombre ?? 'Medellín'))}`
+      : null
 
   return (
     <div style={{
-      textAlign: 'center', border: `1px solid ${K.line}`,
-      borderRadius: 18, padding: '22px 14px 16px',
-      background: '#fff', cursor: 'pointer',
-      transition: 'transform .15s, box-shadow .15s, border-color .15s',
-    }}
-    onMouseEnter={e => {
-      const el = e.currentTarget as HTMLElement
-      el.style.transform = 'translateY(-4px)'
-      el.style.boxShadow = '0 14px 32px rgba(20,32,29,.12)'
-      el.style.borderColor = 'transparent'
-    }}
-    onMouseLeave={e => {
-      const el = e.currentTarget as HTMLElement
-      el.style.transform = ''
-      el.style.boxShadow = ''
-      el.style.borderColor = K.line
+      background: '#f5f0e8', border: '0.5px solid #e9e4d8',
+      borderRadius: 10, overflow: 'hidden', position: 'relative',
     }}>
+      {/* Badge categoría */}
+      {catLabel && (
+        <div style={{
+          position: 'absolute', top: 12, left: 12, zIndex: 1,
+          background: '#ffc928', color: '#14201d',
+          fontWeight: 900, fontSize: 11, padding: '3px 8px',
+          borderRadius: 4, letterSpacing: '0.5px',
+        }}>
+          ★ {catLabel}
+        </div>
+      )}
+
+      {/* Foto o placeholder */}
       <div style={{
-        width: 72, height: 72, borderRadius: '50%', margin: '0 auto 12px',
-        backgroundImage: bg, backgroundSize: 'cover', backgroundPosition: 'center',
-        boxShadow: '0 6px 16px rgba(0,0,0,.14)',
-      }} />
-      <h4 style={{ fontFamily: K.serif, fontWeight: 600, fontSize: '1rem', margin: '0 0 3px', color: K.ink }}>
-        {tienda.nombre}
-      </h4>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-        {tienda.categoria && (
-          <div style={{ fontSize: '.7rem', color: K.tealDeep, fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.6px' }}>
-            {tienda.categoria}
+        height: 130, overflow: 'hidden',
+        background: catColor,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {tienda.foto_url ? (
+          <img
+            src={tienda.foto_url} alt={tienda.nombre}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : (
+          <span style={{ fontSize: 40 }}>{catEmoji}</span>
+        )}
+      </div>
+
+      <div style={{ padding: '12px 14px' }}>
+        {tienda.barrio_nombre && (
+          <p style={{ fontSize: 11, color: '#62736d', margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            {tienda.barrio_nombre}
+          </p>
+        )}
+        <p style={{ fontWeight: 600, fontSize: 15, color: '#14201d', margin: '0 0 6px', lineHeight: 1.2 }}>
+          {tienda.nombre}
+        </p>
+        {tienda.rating_google && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
+            <span style={{ color: '#ffc928' }}>★★★★★</span>
+            <span style={{ fontSize: 13, color: '#62736d' }}>{tienda.rating_google.toFixed(1)}</span>
+            {tienda.precio_rango && (
+              <span style={{ fontSize: 12, color: '#9B8B75', marginLeft: 4 }}>· {tienda.precio_rango}</span>
+            )}
           </div>
         )}
-        <PriceRange value={tienda.precio_rango} />
+        <div style={{ display: 'flex', gap: 8 }}>
+          {mapsUrl && (
+            <a href={mapsUrl} target="_blank" rel="noopener noreferrer" style={{
+              flex: 1, textAlign: 'center', padding: '6px 0',
+              background: '#fbf9f3', border: '0.5px solid #e9e4d8',
+              borderRadius: 6, fontSize: 12, color: '#14201d',
+              textDecoration: 'none', fontWeight: 500,
+            }}>
+              📍 Ver en Maps
+            </a>
+          )}
+          {wa && (
+            <a href={wa} target="_blank" rel="noopener noreferrer" style={{
+              flex: 1, textAlign: 'center', padding: '6px 0',
+              background: '#25D366', borderRadius: 6,
+              fontSize: 12, color: '#fff',
+              textDecoration: 'none', fontWeight: 500,
+            }}>
+              💬 WhatsApp
+            </a>
+          )}
+          {tienda.website && (
+            <a href={tienda.website} target="_blank" rel="noopener noreferrer" style={{
+              flex: 1, textAlign: 'center', padding: '6px 0',
+              background: '#fbf9f3', border: '0.5px solid #e9e4d8',
+              borderRadius: 6, fontSize: 12, color: '#14201d',
+              textDecoration: 'none', fontWeight: 500,
+            }}>
+              🌐 Web
+            </a>
+          )}
+        </div>
       </div>
-      <Stars rating={tienda.rating_google} />
-      <ActionButtons tienda={tienda} compact />
     </div>
   )
 }

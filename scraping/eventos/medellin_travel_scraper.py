@@ -7,8 +7,10 @@ Strategy:
   2. For each URL: GET individual page → parse Elementor for Fecha/Lugar/Precio
   3. Skip past events (fecha_inicio < today)
 
-eventos-deportivos has real wp-content photos via _embedded['wp:featuredmedia'].
-caleventos and fiestas-y-eventos rarely have photos — use og:description for desc.
+caleventos has no featured_media assigned in WP. Photos come from:
+  a) eventos-deportivos/_embedded cross-reference by title
+  b) WP media library search by title keywords (/wp-json/wp/v2/media?search=)
+  c) og:image / twitter:image fallback from HTML
 
 Usage:
   python scraping/eventos/medellin_travel_scraper.py --test
@@ -17,6 +19,7 @@ import argparse
 import re
 import sys
 import time
+import unicodedata
 from datetime import date, datetime
 from pathlib import Path
 
@@ -42,12 +45,82 @@ _ENDPOINTS = [
     "fiestas-y-eventos",
 ]
 
+# Words to skip when building WP media search keywords
+_SKIP_WORDS = {
+    "y", "de", "la", "el", "en", "a", "los", "las", "un", "una", "del", "al",
+    "con", "por", "para", "su", "sus", "es", "se", "o", "e", "que", "lo",
+}
+# URL fragments that indicate site chrome, not event photos
+_SKIP_URL_FRAGMENTS = {
+    "logo", "cropped", "kit", "icon", "favicon", "portada", "banner",
+    "travel-web", "marca", "sponsor", "header", "footer",
+}
+
 _MONTH_ES = {
     "enero": "January", "febrero": "February", "marzo": "March",
     "abril": "April", "mayo": "May", "junio": "June",
     "julio": "July", "agosto": "August", "septiembre": "September",
     "octubre": "October", "noviembre": "November", "diciembre": "December",
 }
+
+
+def _normalize_str(text: str) -> str:
+    """Remove accents and lowercase."""
+    nfd = unicodedata.normalize("NFD", text)
+    return "".join(c for c in nfd if unicodedata.category(c) != "Mn").lower()
+
+
+def _media_keywords(titulo: str) -> list[str]:
+    """Extract 1-2 search keywords from event title (strip year, common words)."""
+    clean = re.sub(r"\d{4}", "", titulo)
+    words = clean.split()
+    return [w for w in words if len(w) > 3 and w.lower() not in _SKIP_WORDS]
+
+
+def _url_matches_keywords(url: str, keywords: list[str]) -> bool:
+    """Verify that at least one keyword appears in the image filename."""
+    filename = _normalize_str(url.split("/")[-1].split(".")[0].replace("-", " ").replace("_", " "))
+    return any(_normalize_str(kw) in filename for kw in keywords if len(kw) > 3)
+
+
+def get_foto_wp_media(titulo: str) -> str | None:
+    """
+    Search the WP media library for an event image matching the title.
+    caleventos posts have featured_media=0, but images often exist in the
+    media library under the event name. Validates filename contains a keyword.
+    """
+    keywords = _media_keywords(titulo)
+    if not keywords:
+        return None
+
+    searches = []
+    if len(keywords) >= 2:
+        searches.append(" ".join(keywords[:2]))
+    searches.append(keywords[0])
+
+    for term in searches:
+        try:
+            r = requests.get(
+                f"{BASE_DOMAIN}/wp-json/wp/v2/media",
+                params={"search": term, "per_page": 5, "media_type": "image"},
+                headers=HEADERS,
+                timeout=10,
+            )
+            if r.status_code != 200:
+                continue
+            for m in r.json():
+                url = m.get("source_url", "")
+                if not url:
+                    continue
+                if any(frag in url.lower() for frag in _SKIP_URL_FRAGMENTS):
+                    continue
+                if _url_matches_keywords(url, keywords):
+                    return url
+        except Exception:
+            pass
+        time.sleep(0.25)
+
+    return None
 
 
 def _parse_fecha_es(text: str) -> str | None:
@@ -255,6 +328,11 @@ def run(test: bool = False) -> list[dict]:
     for url, title, api_foto in cal_links[:limit]:
         if not api_foto:
             api_foto = _match_foto(title)
+        # Fallback: search WP media library by title keywords
+        if not api_foto:
+            api_foto = get_foto_wp_media(title)
+            if api_foto:
+                print(f"  📷 WP media: {title[:35]} → {api_foto.split('/')[-1]}")
         ev = _scrape_event_page(url, title_hint=title, api_foto=api_foto)
         if ev:
             eventos.append(ev)

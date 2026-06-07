@@ -72,11 +72,11 @@ function PerfilPage() {
   if (!user) return null;
 
   return (
-    <div className="relative min-h-screen bg-background">
+    <div className="relative min-h-screen bg-[#FAF7F2]">
       <Navbar />
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-background/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-[#FAF7F2]/80 to-transparent" />
 
-      <main className="mx-auto max-w-6xl px-4 pb-16 pt-24 sm:px-6">
+      <main className="perfil-light mx-auto max-w-6xl px-4 pb-16 pt-24 sm:px-6">
         <Link
           to="/map"
           className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground transition hover:text-primary"
@@ -103,8 +103,8 @@ function PerfilPage() {
                   onClick={() => setTab(t.id)}
                   className={`group flex items-center gap-2 whitespace-nowrap rounded-xl border px-3 py-2 text-sm transition ${
                     active
-                      ? "border-primary/60 bg-primary/10 text-primary glow-cyan"
-                      : "border-border bg-surface/60 text-muted-foreground hover:text-foreground"
+                      ? "border-[#1D9E75]/50 border-l-[3px] border-l-[#1D9E75] bg-[#E1F5EE] text-[#085041] font-semibold"
+                      : "border-transparent bg-transparent text-[#6B5B45] hover:bg-[#F5F0E8] hover:text-[#1A1208]"
                   }`}
                 >
                   <t.Icon className="h-4 w-4" />
@@ -115,7 +115,7 @@ function PerfilPage() {
           </aside>
 
           {/* Content */}
-          <section className="rounded-2xl border border-border bg-surface/70 p-5 backdrop-blur-md sm:p-6">
+          <section className="rounded-2xl p-5 sm:p-6" style={{ background: '#FFFFFF', border: '0.5px solid #E8E0D0' }}>
             <AnimatePresence mode="wait">
               <motion.div
                 key={tab}
@@ -180,7 +180,7 @@ function CuentaTab({ user }: { user: UrbiUser }) {
 
       <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
         <div className="relative">
-          <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-primary to-accent text-2xl font-bold text-background ring-2 ring-primary/40">
+          <div className="grid h-24 w-24 place-items-center overflow-hidden rounded-full bg-gradient-to-br from-[#1D9E75] to-[#085041] text-2xl font-bold text-[#E1F5EE] ring-2 ring-[#1D9E75]/40">
             {avatar ? <img src={avatar} alt="avatar" className="h-full w-full object-cover" /> : initials || "U"}
           </div>
           <button
@@ -483,7 +483,7 @@ function PagosTab({ user }: { user: UrbiUser }) {
           </div>
         )}
         {list.map((p) => (
-          <div key={p.id} className="flex items-center gap-3 rounded-xl border border-border bg-background/40 p-3">
+          <div key={p.id} className="flex items-center gap-3 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-3">
             <div className="grid h-10 w-14 place-items-center rounded-md bg-gradient-to-br from-primary/20 to-accent/20 text-primary">
               <CreditCard className="h-4 w-4" />
             </div>
@@ -618,7 +618,7 @@ function FavoritosTab({ user: _user }: { user: UrbiUser }) {
       ) : (
         <div className="grid gap-3 sm:grid-cols-2">
           {favs.map((f) => (
-            <div key={f.id} className="rounded-xl border border-border bg-background/40 p-4">
+            <div key={f.id} className="rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-4">
               <div className="flex items-start justify-between">
                 <div>
                   <div className="text-[10px] uppercase tracking-widest text-muted-foreground">
@@ -696,7 +696,7 @@ function HistorialTab({ user: _user }: { user: UrbiUser }) {
             return (
               <div
                 key={h.id}
-                className="flex items-center justify-between rounded-lg border border-border bg-background/40 px-3 py-2 text-sm"
+                className="flex items-center justify-between rounded-lg border border-[#E8E0D0] bg-[#FAF7F2] px-3 py-2 text-sm text-[#1A1208]"
               >
                 <div className="flex items-center gap-2">
                   <span className="grid h-7 w-7 place-items-center rounded-md bg-primary/10 text-primary">
@@ -766,7 +766,7 @@ function MapaTab({ user }: { user: UrbiUser }) {
                 key={id}
                 onClick={() => applyMapStyle(id)}
                 className={`overflow-hidden rounded-xl border text-left transition ${
-                  active ? "border-primary glow-cyan" : "border-border hover:border-primary/40"
+                  active ? "border-[#1D9E75] shadow-sm shadow-[#1D9E75]/20" : "border-[#E8E0D0] hover:border-[#1D9E75]/40"
                 }`}
               >
                 <div className="flex h-16">
@@ -774,9 +774,9 @@ function MapaTab({ user }: { user: UrbiUser }) {
                     <div key={c} className="flex-1" style={{ background: c }} />
                   ))}
                 </div>
-                <div className="flex items-center justify-between bg-background/40 px-3 py-2">
-                  <span className="text-sm font-semibold">{s.label}</span>
-                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Activo</span>}
+                <div className="flex items-center justify-between bg-[#FAF7F2] px-3 py-2">
+                  <span className="text-sm font-semibold text-[#1A1208]">{s.label}</span>
+                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">Activo</span>}
                 </div>
               </button>
             );
@@ -799,7 +799,7 @@ function MapaTab({ user }: { user: UrbiUser }) {
                 key={id}
                 onClick={() => applyScorePalette(id)}
                 className={`overflow-hidden rounded-xl border text-left transition ${
-                  active ? "border-primary glow-cyan" : "border-border hover:border-primary/40"
+                  active ? "border-[#1D9E75] shadow-sm shadow-[#1D9E75]/20" : "border-[#E8E0D0] hover:border-[#1D9E75]/40"
                 }`}
               >
                 <div className="flex h-14">
@@ -812,9 +812,9 @@ function MapaTab({ user }: { user: UrbiUser }) {
                     </div>
                   ))}
                 </div>
-                <div className="flex items-center justify-between bg-background/40 px-3 py-2">
-                  <span className="text-sm font-semibold">{p.label}</span>
-                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-primary">Activa</span>}
+                <div className="flex items-center justify-between bg-[#FAF7F2] px-3 py-2">
+                  <span className="text-sm font-semibold text-[#1A1208]">{p.label}</span>
+                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">Activa</span>}
                 </div>
               </button>
             );
@@ -826,7 +826,7 @@ function MapaTab({ user }: { user: UrbiUser }) {
       </div>
 
       {/* ── Alertas de oportunidad ── */}
-      <div className="rounded-xl border border-border bg-background/40 p-4">
+      <div className="rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-4">
         <div className="flex items-center justify-between gap-4">
           <div>
             <div className="text-sm font-semibold">Alertas de oportunidad</div>
@@ -862,12 +862,12 @@ function MapaTab({ user }: { user: UrbiUser }) {
 /* ---------------- Atoms ---------------- */
 
 const inputCls =
-  "w-full rounded-md border border-border bg-background/50 px-3 py-2 text-sm outline-none transition focus:border-primary focus:ring-1 focus:ring-primary";
+  "w-full rounded-md border border-[#E8E0D0] bg-[#FAF7F2] px-3 py-2 text-sm text-[#1A1208] outline-none transition placeholder:text-[#6B5B45]/60 focus:border-[#1D9E75] focus:ring-2 focus:ring-[#E1F5EE]";
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="block">
-      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-muted-foreground">{label}</div>
+      <div className="mb-1.5 text-[11px] font-bold uppercase tracking-widest text-[#6B5B45]">{label}</div>
       {children}
     </label>
   );
@@ -879,7 +879,7 @@ function Pill({ active, onClick, children }: { active?: boolean; onClick: () => 
       type="button"
       onClick={onClick}
       className={`rounded-md border px-3 py-2 text-xs font-medium transition ${
-        active ? "border-primary bg-primary/15 text-primary glow-cyan" : "border-border bg-surface/60 text-muted-foreground hover:text-foreground"
+        active ? "border-[#1D9E75] bg-[#E1F5EE] text-[#085041] font-semibold" : "border-[#E8E0D0] bg-[#FAF7F2] text-[#6B5B45] hover:bg-[#F5F0E8] hover:text-[#1A1208]"
       }`}
     >
       {children}

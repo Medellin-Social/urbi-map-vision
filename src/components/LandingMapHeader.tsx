@@ -8,7 +8,7 @@ import { BarrioChoiceModal } from "@/components/BarrioChoiceModal";
 
 // Urbi palette thresholds [70, 50, 30] — mirrors mapColors.ts
 function scoreToColor(score: number | null | undefined): string {
-  if (score == null) return "#00d4ff";
+  if (score == null) return "#1D9E75";
   if (score >= 70) return "#10b981";
   if (score >= 50) return "#2BBAA5";
   if (score >= 30) return "#f59e0b";
@@ -143,7 +143,7 @@ export function LandingMapHeader({
           if (seen.has(dedupeKey)) continue;
           seen.add(dedupeKey);
 
-          const color = colorMap.get(dedupeKey) ?? "#00d4ff";
+          const color = colorMap.get(dedupeKey) ?? "#1D9E75";
           const hasData = colorMap.has(dedupeKey) ? 1 : 0;
 
           features.push({
@@ -427,7 +427,7 @@ export function LandingMapHeader({
                   "Simulador de retorno",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm text-white/80">
-                    <span className="text-[#00d4ff]">✅</span>
+                    <span className="text-[#1D9E75]">✅</span>
                     {item}
                   </div>
                 ))}

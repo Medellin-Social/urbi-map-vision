@@ -118,7 +118,7 @@ function sortListings(listings: ApiListing[], key: SortKey): ApiListing[] {
 
 function matchColor(score: number): string {
   if (score >= 75) return "#10b981";
-  if (score >= 55) return "#00d4ff";
+  if (score >= 55) return "#1D9E75";
   if (score >= 35) return "#f59e0b";
   return "#6b7280";
 }
@@ -226,7 +226,8 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
           initial={{ y: 400 }}
           animate={{ y: minimized ? 360 : 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 30 }}
-          className="absolute inset-x-0 bottom-0 z-20 max-h-[78vh] overflow-hidden rounded-t-2xl border-t border-border bg-surface/95 backdrop-blur-xl"
+          className="absolute inset-x-0 bottom-0 z-20 max-h-[78vh] overflow-hidden rounded-t-2xl"
+          style={{ background: '#FAF7F2', borderTop: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)' } as React.CSSProperties}
           drag="y"
           dragConstraints={{ top: 0, bottom: 360 }}
           onDragEnd={(_, info) => setMinimized(info.offset.y > 80)}
@@ -254,7 +255,8 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             onClick={() => setMinimized(false)}
-            className="pointer-events-auto absolute right-4 top-1/2 flex h-32 -translate-y-1/2 items-center justify-center gap-2 rounded-l-xl border border-border bg-surface/90 px-2 text-xs font-medium text-primary backdrop-blur-xl glow-cyan"
+            className="pointer-events-auto absolute right-4 top-1/2 flex h-32 -translate-y-1/2 items-center justify-center gap-2 rounded-l-xl px-2 text-xs font-medium text-[#1D9E75]"
+            style={{ background: '#FAF7F2', border: '0.5px solid #E8E0D0', boxShadow: '0 2px 12px rgba(26,18,8,0.1)' }}
           >
             <ChevronRight className="h-3.5 w-3.5 rotate-180" />
             <span style={{ writingMode: "vertical-rl" }} className="rotate-180 uppercase tracking-widest">
@@ -277,13 +279,23 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
               height: size.height,
               minHeight: 200,
               maxHeight: `calc(100vh - ${pos.top + 20}px)`,
-            }}
-            className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl border border-border bg-surface/85 shadow-2xl backdrop-blur-xl"
+              background: '#FAF7F2',
+              border: '0.5px solid #E8E0D0',
+              boxShadow: '0 8px 32px rgba(26,18,8,0.15)',
+              '--background': '#FFFFFF',
+              '--foreground': '#1A1208',
+              '--surface': '#FAF7F2',
+              '--surface-elevated': '#F5F0E8',
+              '--muted-foreground': '#6B5B45',
+              '--border': 'rgb(184 164 138 / 50%)',
+            } as React.CSSProperties}
+            className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl"
           >
             {/* Drag handle */}
             <div
               onMouseDown={startDrag}
-              className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between border-b border-border/40 bg-background/50 px-3"
+              className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between px-3"
+              style={{ background: '#F5F0E8', borderBottom: '0.5px solid #E8E0D0' }}
             >
               <div className="flex items-center gap-2 text-muted-foreground">
                 <GripVertical className="h-4 w-4" />
@@ -516,14 +528,14 @@ function CityOverview({ goal, onSelect }: { goal?: Goal; onSelect?: (n: Neighbor
               <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} axisLine={false} tickLine={false} />
               <Tooltip
-                cursor={{ fill: "rgba(0,212,255,0.06)" }}
+                cursor={{ fill: "rgba(29,158,117,0.06)" }}
                 contentStyle={tooltipStyle}
                 formatter={(v: unknown) => [`${Number(v).toFixed(1)}%`, "Yield"]}
               />
               <Bar dataKey="yield" radius={[6, 6, 0, 0]} fill="url(#barGrad)" />
               <defs>
                 <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#00d4ff" />
+                  <stop offset="0%" stopColor="#1D9E75" />
                   <stop offset="100%" stopColor="#7c3aed" />
                 </linearGradient>
               </defs>
@@ -587,7 +599,7 @@ function calcValorizStats(estrato: number) {
 
 const SEGURIDAD_COLORS: Record<string, string> = {
   "ALTA":     "#10b981",
-  "MEDIA":    "#00d4ff",
+  "MEDIA":    "#1D9E75",
   "BAJA":     "#f59e0b",
   "MUY BAJA": "#ef4444",
   "SIN DATOS": "#6b7280",
@@ -611,7 +623,7 @@ function verdeColor(ratio: number): string {
 
 const SALUD_COLORS: Record<string, string> = {
   "MUY SALUDABLE": "#10b981",
-  "SALUDABLE":     "#00d4ff",
+  "SALUDABLE":     "#1D9E75",
   "PRECAUCIÓN":    "#f59e0b",
   "ALERTA":        "#ef4444",
 };
@@ -861,7 +873,7 @@ function NomadaSection({ n }: { n: Neighborhood }) {
 
   const PBN_COLORS: Record<string, string> = {
     BAJO: "#10b981",
-    NORMAL: "#00d4ff",
+    NORMAL: "#1D9E75",
     SOBRE: "#ef4444",
   };
   const pbnColor = estadoPrecio ? (PBN_COLORS[estadoPrecio] ?? "#6b7280") : "#6b7280";
@@ -1022,7 +1034,7 @@ function ScoreRow({ label, pts, max, highlight }: { label: string; pts: number |
             className="h-full rounded-full transition-all"
             style={{
               width: `${(val / max) * 100}%`,
-              background: highlight ? "#00d4ff" : "#7c3aed",
+              background: highlight ? "#1D9E75" : "#7c3aed",
             }}
           />
         </div>
@@ -1326,7 +1338,7 @@ function SaludFinancieraSection({ n }: { n: Neighborhood }) {
 const RATIO_VS_CIUDAD_BADGE: Array<{ min: number; label: string; color: string }> = [
   { min: 3.0, label: "BRECHA MUY ALTA",  color: "#ef4444" },
   { min: 1.5, label: "BRECHA ALTA",      color: "#f59e0b" },
-  { min: 0.7, label: "BRECHA NORMAL",    color: "#00d4ff" },
+  { min: 0.7, label: "BRECHA NORMAL",    color: "#1D9E75" },
   { min: 0,   label: "BRECHA BAJA",      color: "#10b981" },
 ];
 
@@ -1390,7 +1402,7 @@ function CatastroSection({ n }: { n: Neighborhood }) {
 
 const TEND_MAP: Record<string, { label: string; color: string }> = {
   aceler:    { label: "↑ Acelerando",    color: "#10b981" },
-  estable:   { label: "→ Estable",       color: "#00d4ff" },
+  estable:   { label: "→ Estable",       color: "#1D9E75" },
   desacel:   { label: "↓ Desacelerando", color: "#f59e0b" },
 };
 
@@ -1615,7 +1627,7 @@ function ListingsView({
             value={sliderPrecio}
             disabled={isLoading || maxPrecioData === 0}
             onChange={(e) => setPrecioMax(Number(e.target.value))}
-            className="w-full accent-[#00d4ff] disabled:opacity-40"
+            className="w-full accent-[#1D9E75] disabled:opacity-40"
           />
         </FilterRow>
         <FilterRow
@@ -1630,7 +1642,7 @@ function ListingsView({
             value={areaMin}
             disabled={isLoading}
             onChange={(e) => setAreaMin(Number(e.target.value))}
-            className="w-full accent-[#00d4ff] disabled:opacity-40"
+            className="w-full accent-[#1D9E75] disabled:opacity-40"
           />
         </FilterRow>
       </div>
@@ -1753,7 +1765,7 @@ function titleCase(s: string) {
 
 const tooltipStyle: React.CSSProperties = {
   background: "rgba(17,24,39,0.95)",
-  border: "1px solid rgba(0,212,255,0.4)",
+  border: "1px solid rgba(29,158,117,0.4)",
   borderRadius: 8,
   fontSize: 11,
   color: "#f9fafb",
@@ -1870,7 +1882,7 @@ function OpportunityBanner({ n }: { n: Neighborhood }) {
   const apiOpp = n.oportunidad;
   if (!apiOpp?.detectada) return null;
   const tipo = (apiOpp.tipo ?? "ALTO RENDIMIENTO").toUpperCase();
-  const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#0077B6";
+  const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#085041";
   const emoji = OPP_EMOJIS[tipo] ?? "📊";
   return (
     <motion.div

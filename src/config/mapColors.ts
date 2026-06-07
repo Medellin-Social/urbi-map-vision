@@ -5,8 +5,8 @@ export const SCORE_OPACITY = {
 
 export const OPP_COLORS = {
   "PRECIO BAJO MERCADO": "#7B2FBE",
-  "ALTO RENDIMIENTO":    "#00B4D8",
-  "INVERSIÓN SEGURA":    "#0077B6",
+  "ALTO RENDIMIENTO":    "#1D9E75",
+  "INVERSIÓN SEGURA":    "#085041",
 } as const;
 
 // ── Score palettes ─────────────────────────────────────────────────────────────

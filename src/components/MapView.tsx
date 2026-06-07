@@ -118,10 +118,11 @@ function buildListingPopupHTML(
   const fuente       = ((props.fuente      as string) ?? "").toLowerCase();
   const url          = (props.url          as string) ?? "";
 
-  const tipoOpColor  = tipo_op === "arriendo" ? "#3b82f6" : "#00d4ff";
-  const tipoBadge    = `<span style="background:${tipoOpColor};color:#fff;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em;">${tipo_op.toUpperCase()}</span>`;
+  const tipoBg    = tipo_op === "arriendo" ? "#E1F5EE" : "#FAECE7";
+  const tipoColor = tipo_op === "arriendo" ? "#1D9E75" : "#D85A30";
+  const tipoBadge = `<span style="background:${tipoBg};color:${tipoColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em;">${tipo_op.toUpperCase()}</span>`;
   const inmBadge     = tipo_inmueble
-    ? `<span style="background:rgba(255,255,255,.1);color:#d1d5db;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;">${tipo_inmueble}</span>`
+    ? `<span style="background:rgba(26,18,8,.07);color:#6B5B45;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;">${tipo_inmueble}</span>`
     : "";
 
   const specs = [
@@ -134,24 +135,24 @@ function buildListingPopupHTML(
   if (tipo_op === "venta" && precio_m2 && mediana && mediana > 0) {
     const diff = (precio_m2 - mediana) / mediana * 100;
     if (diff < -10)
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#10b981;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div><div style="color:#6b7280;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#085041;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div><div style="color:#9B8B75;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div></div>`;
     else if (diff > 15)
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#ef4444;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div><div style="color:#6b7280;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#E24B4A;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div><div style="color:#9B8B75;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div></div>`;
     else
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#9ca3af;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div><div style="color:#6b7280;font-size:11px;">Dentro del rango del barrio</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#9B8B75;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div><div style="color:#9B8B75;font-size:11px;">Dentro del rango del barrio</div></div>`;
   }
 
   let yieldHTML = "";
   if (tipo_op === "venta" && precio_cop && barrio?.mercado?.arriendo_p50_cop) {
     const y = barrio.mercado.arriendo_p50_cop * 12 / precio_cop * 100;
     if (y > 0 && y < 30)
-      yieldHTML = `<div style="color:#9ca3af;font-size:11px;">Yield estimado: <strong style="color:#f0f9ff;">${y.toFixed(1)}%</strong></div>`;
+      yieldHTML = `<div style="color:#9B8B75;font-size:11px;">Yield estimado: <strong style="color:#1A1208;">${y.toFixed(1)}%</strong></div>`;
   }
 
   let scoreHTML = "";
   if (barrio?.scores?.score_activo != null) {
     const s = barrio.scores.score_activo;
-    scoreHTML = `<div style="color:#9ca3af;font-size:11px;">Score zona: <strong style="color:#00d4ff;">${s}</strong> · ${_scoreLabel(s)}</div>`;
+    scoreHTML = `<div style="color:#9B8B75;font-size:11px;">Score zona: <strong style="color:#1D9E75;">${s}</strong> · ${_scoreLabel(s)}</div>`;
   }
 
   const sourceMap: Record<string, string> = {
@@ -166,19 +167,19 @@ function buildListingPopupHTML(
   const waUrl   = `https://wa.me/+573122502394?text=${waText}`;
   const btnBase = `cursor:pointer;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid;`;
   const btnSrc  = url
-    ? `<button onclick="window.open('${url.replace(/'/g,"\\'")}','_blank')" style="${btnBase}background:rgba(0,212,255,.12);border-color:rgba(0,212,255,.35);color:#00d4ff;">${sourceLabel}</button>`
+    ? `<button onclick="window.open('${url.replace(/'/g,"\\'")}','_blank')" style="${btnBase}background:transparent;border-color:#E8E0D0;color:#6B5B45;">${sourceLabel}</button>`
     : "";
-  const btnWa   = `<button onclick="window.open('${waUrl}','_blank')" style="${btnBase}background:rgba(16,185,129,.12);border-color:rgba(16,185,129,.35);color:#10b981;">Agente 💬</button>`;
+  const btnWa   = `<button onclick="window.open('${waUrl}','_blank')" style="${btnBase}background:#1D9E75;border-color:#1D9E75;color:#E1F5EE;">Agente 💬</button>`;
 
   return `
-<div style="font-family:system-ui,sans-serif;min-width:220px;max-width:290px;color:#f0f9ff;">
+<div style="font-family:system-ui,sans-serif;min-width:220px;max-width:290px;color:#1A1208;">
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tipoBadge}${inmBadge}</div>
-  <div style="color:#9ca3af;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
-  ${precio_cop  ? `<div style="font-size:18px;font-weight:700;">${_fmtCOP(precio_cop)} COP</div>` : ""}
-  ${precio_usd  ? `<div style="color:#9ca3af;font-size:11px;margin-bottom:6px;">~$${(precio_usd/1000).toFixed(0)}k USD</div>` : ""}
-  ${specs       ? `<div style="font-size:12px;color:#d1d5db;margin:6px 0;">${specs}</div>` : ""}
-  ${precio_m2   ? `<div style="font-size:11px;color:#9ca3af;">Precio/m²: <strong style="color:#f0f9ff;">${_fmtM2(precio_m2)}</strong></div>` : ""}
-  ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#9ca3af;">Mediana zona: <strong style="color:#f0f9ff;">${_fmtM2(mediana)}</strong></div>` : ""}
+  <div style="color:#9B8B75;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
+  ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#1A1208;">${_fmtCOP(precio_cop)} COP</div>` : ""}
+  ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~$${(precio_usd/1000).toFixed(0)}k USD</div>` : ""}
+  ${specs       ? `<div style="font-size:12px;color:#6B5B45;margin:6px 0;">${specs}</div>` : ""}
+  ${precio_m2   ? `<div style="font-size:11px;color:#9B8B75;">Precio/m²: <strong style="color:#1A1208;">${_fmtM2(precio_m2)}</strong></div>` : ""}
+  ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Mediana zona: <strong style="color:#1A1208;">${_fmtM2(mediana)}</strong></div>` : ""}
   ${badgeHTML}
   ${yieldHTML || scoreHTML ? `<div style="margin-top:6px;">${yieldHTML}${scoreHTML}</div>` : ""}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${btnSrc}${btnWa}</div>
@@ -373,7 +374,7 @@ export function MapView({
         type: "line",
         source: "comunas",
         paint: {
-          "line-color": "#00d4ff",
+          "line-color": "#1D9E75",
           "line-opacity": 0.85,
           "line-width": [
             "case",
@@ -527,7 +528,7 @@ export function MapView({
           ? `<span style="color:#9ca3af;font-size:11px;">No disponible</span>`
           : sinDatos
           ? `<span style="color:#9ca3af;font-size:11px;">${cat}</span>`
-          : `<span style="color:#00d4ff;font-weight:700;">${score}</span><span style="color:#9ca3af;font-size:11px;"> ${cat}</span>`;
+          : `<span style="color:#1D9E75;font-weight:700;">${score}</span><span style="color:#9B8B75;font-size:11px;"> ${cat}</span>`;
         popup
           .setLngLat(e.lngLat)
           .setHTML(
@@ -595,11 +596,11 @@ export function MapView({
         filter: ["has", "point_count"],
         layout: { visibility: "none" },
         paint: {
-          "circle-color": "#00d4ff",
+          "circle-color": ["step", ["get", "point_count"], "#5DCAA5", 10, "#1D9E75", 50, "#085041"],
           "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 50, 40],
           "circle-opacity": 0.88,
           "circle-stroke-width": 2,
-          "circle-stroke-color": "rgba(0,212,255,0.3)",
+          "circle-stroke-color": "rgba(29,158,117,0.3)",
         },
       });
 
@@ -632,8 +633,8 @@ export function MapView({
           "circle-color": [
             "case",
             ["==", ["get", "buena_oferta"], true], "#10b981",
-            ["==", ["get", "tipo_op"], "arriendo"], "#3b82f6",
-            "#00d4ff",
+            ["==", ["get", "tipo_op"], "arriendo"], "#5DCAA5",
+            "#1D9E75",
           ],
           "circle-stroke-width": [
             "case",
@@ -830,9 +831,9 @@ export function MapView({
 
     if (!map.getSource(SRC)) {
       map.addSource(SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      map.addLayer({ id: FILL, type: "fill",   source: SRC, filter: ["==", "$type", "Polygon"],    paint: { "fill-color": "#00d4ff", "fill-opacity": 0.15 } });
-      map.addLayer({ id: LINE, type: "line",   source: SRC, filter: ["==", "$type", "LineString"], paint: { "line-color": "#00d4ff", "line-width": 2, "line-dasharray": [3, 2] } });
-      map.addLayer({ id: DOTS, type: "circle", source: SRC, filter: ["==", "$type", "Point"],      paint: { "circle-radius": 5, "circle-color": "#00d4ff", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
+      map.addLayer({ id: FILL, type: "fill",   source: SRC, filter: ["==", "$type", "Polygon"],    paint: { "fill-color": "#1D9E75", "fill-opacity": 0.15 } });
+      map.addLayer({ id: LINE, type: "line",   source: SRC, filter: ["==", "$type", "LineString"], paint: { "line-color": "#1D9E75", "line-width": 2, "line-dasharray": [3, 2] } });
+      map.addLayer({ id: DOTS, type: "circle", source: SRC, filter: ["==", "$type", "Point"],      paint: { "circle-radius": 5, "circle-color": "#1D9E75", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
     }
 
     const setPreview = (mouse?: [number, number]) => {

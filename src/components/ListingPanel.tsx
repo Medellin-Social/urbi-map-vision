@@ -123,11 +123,11 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
   if (tipoOp === "venta" && pm2 && mediana && mediana > 0) {
     const diff = ((pm2 - mediana) / mediana) * 100;
     if (diff < -10)
-      badge = { label: "BUENA OFERTA", color: "#10b981", emoji: "🟢", desc: `${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio` };
+      badge = { label: "BUENA OFERTA", color: "#085041", emoji: "🟢", desc: `${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio` };
     else if (diff > 15)
-      badge = { label: "SOBRE PRECIO",  color: "#ef4444", emoji: "🔴", desc: `${diff.toFixed(0)}% sobre la mediana` };
+      badge = { label: "SOBRE PRECIO",  color: "#E24B4A", emoji: "🔴", desc: `${diff.toFixed(0)}% sobre la mediana` };
     else
-      badge = { label: "PRECIO JUSTO",  color: "#9ca3af", emoji: "⚪", desc: "Dentro del rango del barrio" };
+      badge = { label: "PRECIO JUSTO",  color: "#9B8B75", emoji: "⚪", desc: "Dentro del rango del barrio" };
   }
 
   let yieldEst: number | null = null;
@@ -137,7 +137,7 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
   }
 
   const score  = barrio?.scores.score_activo ?? null;
-  const opColor = tipoOp === "arriendo" ? "#3b82f6" : "#00d4ff";
+  const opColor = tipoOp === "arriendo" ? "#5DCAA5" : "#1D9E75";
 
   const waText = encodeURIComponent(
     `Hola, me interesa una propiedad en ${listing.barrio_nombre ?? ""} de ${listing.precio_cop ? formatCOP(listing.precio_cop) : "—"} COP. ¿Pueden ayudarme?`,
@@ -146,31 +146,44 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
 
   return (
     <div
-      className="pointer-events-auto absolute z-30 flex flex-col overflow-hidden rounded-2xl border border-border bg-surface/90 shadow-2xl backdrop-blur-xl"
+      className="pointer-events-auto absolute z-30 flex flex-col overflow-hidden rounded-2xl"
       style={{
         left:      pos.left,
         top:       pos.top,
         width:     PANEL_W,
         height:    minimized ? "auto" : height,
         minHeight: PANEL_MIN_H,
-      }}
+        background: '#FAF7F2',
+        border: '0.5px solid #E8E0D0',
+        boxShadow: '0 8px 32px rgba(26,18,8,0.15)',
+        '--background': '#FFFFFF',
+        '--foreground': '#1A1208',
+        '--surface': '#FAF7F2',
+        '--surface-elevated': '#F5F0E8',
+        '--muted-foreground': '#6B5B45',
+        '--border': 'rgb(184 164 138 / 50%)',
+      } as React.CSSProperties}
     >
       {/* Drag handle */}
       <div
         onMouseDown={startDrag}
-        className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between border-b border-border/40 bg-background/50 px-3"
+        className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between px-3"
+        style={{ background: '#F5F0E8', borderBottom: '0.5px solid #E8E0D0' }}
       >
         <div className="flex items-center gap-2">
           <GripVertical className="h-4 w-4 text-muted-foreground" />
           <div className="flex items-center gap-1.5">
             <span
-              className="rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider text-white"
-              style={{ background: opColor }}
+              className="rounded px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{
+                background: tipoOp === "arriendo" ? "#E1F5EE" : "#FAECE7",
+                color:      tipoOp === "arriendo" ? "#1D9E75" : "#D85A30",
+              }}
             >
               {tipoOp}
             </span>
             {tipoInm && (
-              <span className="rounded bg-white/10 px-2 py-0.5 text-[11px] capitalize text-muted-foreground">
+              <span className="rounded px-2 py-0.5 text-[11px] capitalize text-[#6B5B45]" style={{ background: 'rgba(26,18,8,.07)' }}>
                 {tipoInm}
               </span>
             )}
@@ -227,7 +240,7 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
               </div>
             )}
 
-            <div className="rounded-lg border border-border/60 bg-background/30 p-3 text-xs space-y-1.5">
+            <div className="rounded-lg p-3 text-xs space-y-1.5" style={{ background: '#F5F0E8', border: '0.5px solid #E8E0D0' }}>
               {/* precio/m² solo para venta */}
               {pm2 && tipoOp === "venta" && (
                 <div className="flex justify-between">
@@ -272,7 +285,8 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
             {/* Ver detalle completo → abre modal */}
             <button
               onClick={onOpenDetail}
-              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md border border-border/60 bg-background/60 py-2 text-[11px] font-semibold text-foreground transition hover:bg-background"
+              className="inline-flex w-full items-center justify-center gap-1.5 rounded-md py-2 text-[11px] font-semibold text-[#1A1208] transition hover:bg-[#E8E0D0]"
+              style={{ border: '0.5px solid #E8E0D0', background: '#F5F0E8' }}
             >
               <ExpandIcon className="h-3 w-3" />
               Ver detalle completo
@@ -284,7 +298,8 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
                   href={listing.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex flex-1 items-center justify-center rounded-md border border-primary/40 bg-primary/10 py-2 text-[11px] font-semibold text-primary transition hover:bg-primary/20"
+                  className="inline-flex flex-1 items-center justify-center rounded-md py-2 text-[11px] font-semibold text-[#6B5B45] transition hover:bg-[#E8E0D0]"
+                  style={{ border: '0.5px solid #E8E0D0', background: 'transparent' }}
                 >
                   {SOURCE_LABEL[fuente] ?? "Ver listado →"}
                 </a>
@@ -293,7 +308,8 @@ export function ListingPanel({ listing, barrio, initialPos, onClose, onOpenDetai
                 href={waUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex flex-1 items-center justify-center rounded-md border border-emerald-500/40 bg-emerald-500/10 py-2 text-[11px] font-semibold text-emerald-400 transition hover:bg-emerald-500/20"
+                className="inline-flex flex-1 items-center justify-center rounded-md py-2 text-[11px] font-semibold text-[#E1F5EE] transition hover:opacity-90"
+                  style={{ background: '#1D9E75', border: 'none' }}
               >
                 Agente 💬
               </a>

@@ -133,78 +133,76 @@ function LocalBusinessPage() {
 
   return (
     <>
-      {/* Header */}
-      <div style={{ background: K.surface, borderBottom: `1px solid ${K.line}`, padding: '36px 26px 28px' }}>
+      {/* ── Header ── */}
+      <div style={{ padding: '2rem 2rem 1.5rem', background: '#FAF7F2', borderBottom: '0.5px solid #E8E0D0' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
-            Local Business
+          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B8B75', margin: '0 0 4px' }}>
+            {barrio.nombre} · {t('Medellín', 'Medellín')}
           </p>
-          <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
-            {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
+          <h1 style={{ fontFamily: K.serif, fontSize: 28, fontWeight: 700, color: '#1A1208', margin: '0 0 4px' }}>
+            {t('Negocios locales', 'Local Businesses')}
           </h1>
-          <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
-            {t('Directorio local curado por la comunidad.', 'Local directory curated by the community.')}
-            {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.teal }}>{total} {t('negocios', 'businesses')}</span>}
+          <p style={{ fontSize: 13, color: '#6B5B45', margin: 0 }}>
+            {isLoading ? '…' : `${total} ${t('negocios verificados en', 'verified businesses in')} ${barrio.nombre} ${t('y alrededores', 'and surroundings')}`}
           </p>
         </div>
       </div>
 
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 26px' }}>
-        {/* Grupo tabs */}
-        <div style={{ display: 'flex', borderBottom: `2px solid ${K.line}`, marginBottom: grupoActual ? 16 : 28, overflowX: 'auto', gap: 0 }}>
-          {/* Tab "Todos" */}
-          <button onClick={() => { setGrupo(null); setCategoria(undefined); setPage(0) }} style={{
-            border: 'none', background: 'transparent',
-            borderBottom: grupo === null ? `3px solid ${K.coral}` : '3px solid transparent',
-            color: grupo === null ? K.coral : K.muted,
-            fontWeight: 700, fontSize: '.88rem', padding: '10px 18px',
-            cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', marginBottom: -2,
-          }}>
-            {t('Todos', 'All')}
-            {counts && <span style={{ marginLeft: 5, fontSize: '.72rem', opacity: .7 }}>
-              {Object.values(counts).reduce((a, b) => a + b, 0).toLocaleString()}
-            </span>}
-          </button>
-          {GRUPOS_TIENDAS.map(g => (
-            <button key={g.key} onClick={() => { setGrupo(g.key); setCategoria(undefined); setPage(0) }} style={{
-              border: 'none', background: 'transparent',
-              borderBottom: grupo === g.key ? `3px solid ${K.coral}` : '3px solid transparent',
-              color: grupo === g.key ? K.coral : K.muted,
-              fontWeight: 700, fontSize: '.88rem', padding: '10px 18px',
-              cursor: 'pointer', fontFamily: 'inherit', whiteSpace: 'nowrap', marginBottom: -2,
+      {/* ── Filtros ── */}
+      <div style={{ padding: '1rem 2rem', borderBottom: '0.5px solid #E8E0D0', background: '#FAF7F2', overflowX: 'auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          {/* Grupos */}
+          <div style={{ display: 'flex', gap: 8, marginBottom: grupoActual ? 10 : 0, flexWrap: 'wrap' }}>
+            <button onClick={() => { setGrupo(null); setCategoria(undefined); setPage(0) }} style={{
+              background: !grupo ? '#1A1208' : 'transparent',
+              color: !grupo ? '#FAF7F2' : '#6B5B45',
+              border: '0.5px solid #E8E0D0', borderRadius: 20,
+              padding: '6px 16px', fontSize: 13, fontWeight: !grupo ? 600 : 400,
+              cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
             }}>
-              {g.emoji} {lang === 'es' ? g.label : g.key}
-              {counts?.[g.key] != null && (
-                <span style={{ marginLeft: 5, fontSize: '.72rem', opacity: .7 }}>
-                  {counts[g.key].toLocaleString()}
-                </span>
-              )}
+              {t('Todos', 'All')}
+              {counts && <span style={{ marginLeft: 5, fontSize: 11, opacity: .7 }}>
+                {Object.values(counts).reduce((a, b) => a + b, 0).toLocaleString()}
+              </span>}
             </button>
-          ))}
-        </div>
-
-        {/* Subcategorías — solo cuando hay grupo activo */}
-        {grupoActual && (
-          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 28 }}>
-            {[{ key: undefined, label: t('Todos', 'All') }, ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.key}` }))].map(({ key, label }) => (
-              <button key={key ?? '__all'} onClick={() => { setCategoria(key); setPage(0) }} style={{
-                border: categoria === key ? `2px solid ${K.teal}` : `2px solid ${K.line}`,
-                background: categoria === key ? K.tealDeep + '18' : 'transparent',
-                color: categoria === key ? K.tealDeep : K.muted,
-                fontWeight: 700, fontSize: '.78rem', padding: '5px 14px', borderRadius: 999,
-                cursor: 'pointer', fontFamily: 'inherit',
+            {GRUPOS_TIENDAS.map(g => (
+              <button key={g.key} onClick={() => { setGrupo(g.key); setCategoria(undefined); setPage(0) }} style={{
+                background: grupo === g.key ? '#1A1208' : 'transparent',
+                color: grupo === g.key ? '#FAF7F2' : '#6B5B45',
+                border: '0.5px solid #E8E0D0', borderRadius: 20,
+                padding: '6px 16px', fontSize: 13, fontWeight: grupo === g.key ? 600 : 400,
+                cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
               }}>
-                {label}
+                {g.emoji} {lang === 'es' ? g.label : g.key}
+                {counts?.[g.key] != null && (
+                  <span style={{ marginLeft: 5, fontSize: 11, opacity: .7 }}>{counts[g.key].toLocaleString()}</span>
+                )}
               </button>
             ))}
           </div>
-        )}
 
+          {/* Subcategorías */}
+          {grupoActual && (
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {[{ key: undefined as string | undefined, label: t('Todos', 'All') }, ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.key}` }))].map(({ key, label }) => (
+                <button key={key ?? '__all'} onClick={() => { setCategoria(key); setPage(0) }} style={{
+                  background: categoria === key ? K.amarillo : '#F5F0E8',
+                  color: categoria === key ? '#1A1208' : '#6B5B45',
+                  border: '0.5px solid #E8E0D0', borderRadius: 16,
+                  padding: '4px 12px', fontSize: 12, cursor: 'pointer',
+                  whiteSpace: 'nowrap', fontFamily: 'inherit',
+                }}>
+                  {label}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '24px 26px' }}>
         {/* View toggle */}
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-          <span style={{ color: K.muted, fontSize: '.88rem' }}>
-            {isLoading ? '…' : `${tiendas.length} de ${total}`}
-          </span>
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 20 }}>
           <div style={{ display: 'flex', gap: 4 }}>
             {(['grid', 'list', 'mapa'] as ViewMode[]).map(m => (
               <button key={m} onClick={() => setView(m)} style={{
@@ -240,7 +238,7 @@ function LocalBusinessPage() {
           ) : view === 'mapa' ? (
             <TiendasMap tiendas={tiendas} centerLng={barrio.lon ?? -75.5636} centerLat={barrio.lat ?? 6.2087} />
           ) : view === 'grid' ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(170px,1fr))', gap: 18 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 12 }}>
               {tiendas.map(t => <BusinessCardDirectory key={t.id} tienda={t} />)}
             </div>
           ) : (

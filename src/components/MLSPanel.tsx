@@ -71,8 +71,8 @@ function getTipoBadgeClass(tipo: string): string {
 
 function tierColor(l: ApiListing): string {
   if (l.buena_oferta) return "#10b981";
-  if (l.tipo_operacion === "arriendo") return "#3b82f6";
-  return "#00d4ff";
+  if (l.tipo_operacion === "arriendo") return "#5DCAA5";
+  return "#1D9E75";
 }
 
 function diasLabel(dias: number | null | undefined): string | null {
@@ -112,7 +112,7 @@ function ListingCard({
       ? `$${(_pm2 / 1_000_000).toFixed(1)}M/m²`
       : "N/A";
   const tipo = listing.tipo_operacion?.toUpperCase() ?? "—";
-  const tipoColor = listing.tipo_operacion === "arriendo" ? "#3b82f6" : "#00d4ff";
+  const tipoColor = listing.tipo_operacion === "arriendo" ? "#5DCAA5" : "#1D9E75";
   const badgeColor = tierColor(listing);
   const showBuenaOferta = listing.buena_oferta;
   const tipoInmueble = listing.tipo_inmueble ?? "";
@@ -128,11 +128,11 @@ function ListingCard({
     <div
       ref={cardRef}
       onClick={(e) => onSelect(e)}
-      className={`cursor-pointer rounded-lg border p-3 transition-all ${
-        highlighted
-          ? "border-cyan-400/60 bg-cyan-400/10 shadow-md shadow-cyan-400/20"
-          : "border-border bg-surface/60 hover:border-border/80 hover:bg-surface/90"
-      }`}
+      className="cursor-pointer rounded-lg border p-3 transition-all hover:bg-[#F5F0E8]"
+      style={highlighted
+        ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+        : { border: '0.5px solid #E8E0D0', background: '#FFFFFF' }
+      }
     >
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {listing.tier === "agencia_premium" && (
@@ -147,15 +147,18 @@ function ListingCard({
         )}
         {showBuenaOferta && listing.disponible_actualmente !== false && (
           <span
-            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-            style={{ background: badgeColor }}
+            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}
           >
             BUENA OFERTA
           </span>
         )}
         <span
-          className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-          style={{ background: tipoColor }}
+          className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            background: listing.tipo_operacion === "arriendo" ? "#E1F5EE" : "#FAECE7",
+            color:      listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+          }}
         >
           {tipo}
         </span>
@@ -172,7 +175,7 @@ function ListingCard({
       <div className="text-[11px] text-muted-foreground">{m2}</div>
 
       {(listing.pct_bajo_mediana ?? 0) > 5 && (
-        <div className="mt-1.5 text-[11px] font-medium text-emerald-400">
+        <div className="mt-1.5 text-[11px] font-medium text-[#085041]">
           {listing.pct_bajo_mediana?.toFixed(0)}% bajo la mediana del barrio
         </div>
       )}
@@ -181,12 +184,12 @@ function ListingCard({
         <div
           className={`mt-1.5 text-[11px] font-medium ${
             (listing.dias_en_mercado ?? 0) < 7
-              ? "text-emerald-400"
+              ? "text-[#085041]"
               : (listing.dias_en_mercado ?? 0) < 30
-              ? "text-muted-foreground"
+              ? "text-[#6B5B45]"
               : (listing.dias_en_mercado ?? 0) < 90
-              ? "text-amber-400"
-              : "text-rose-400"
+              ? "text-[#BA7517]"
+              : "text-[#E24B4A]"
           }`}
           title={listing.fecha_publicacion ? `Publicado el ${listing.fecha_publicacion}` : undefined}
         >
@@ -422,7 +425,8 @@ export function MLSPanel({
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 280 }}
-        className="absolute right-0 top-0 z-20 flex h-full w-[380px] max-w-full flex-col border-l border-border bg-background/95 backdrop-blur-xl shadow-2xl"
+        className="absolute right-0 top-0 z-20 flex h-full w-[380px] max-w-full flex-col shadow-2xl"
+        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)' } as React.CSSProperties}
       >
         {/* Header */}
         <div className="border-b border-border px-4 pb-3 pt-16">
@@ -470,7 +474,8 @@ export function MLSPanel({
         {allBarrios && allBarrios.length > 0 && (
           <div className="border-b border-border px-4 py-2 space-y-1.5">
             <select
-              className="w-full rounded-md border border-border bg-background/80 px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              className="w-full rounded-md px-2 py-1.5 text-xs text-[#1A1208] focus:outline-none focus:ring-1 focus:ring-[#1D9E75]/50"
+              style={{ border: '0.5px solid #E8E0D0', background: '#FFFFFF' }}
               value={navComuna ?? ""}
               onChange={(e) => {
                 setNavComuna(e.target.value || null);
@@ -483,7 +488,8 @@ export function MLSPanel({
             </select>
             {navComuna && navBarriosDeComuna.length > 0 && (
               <select
-                className="w-full rounded-md border border-primary/40 bg-background/80 px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                className="w-full rounded-md px-2 py-1.5 text-xs text-[#1A1208] focus:outline-none focus:ring-1 focus:ring-[#1D9E75]/50"
+                style={{ border: '1px solid #1D9E75', background: '#FFFFFF' }}
                 value=""
                 onChange={(e) => {
                   const id = Number(e.target.value);
@@ -560,7 +566,7 @@ export function MLSPanel({
                 const v = Number(e.target.value);
                 setFilters((f) => ({ ...f, precioMax: v >= maxPrecioReal ? null : v }));
               }}
-              className="w-full accent-cyan-400 cursor-pointer"
+              className="w-full accent-[#1D9E75] cursor-pointer"
             />
           </div>
 
@@ -609,11 +615,11 @@ export function MLSPanel({
             Buena oferta
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-blue-500" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#5DCAA5]" />
             Arriendo
           </div>
           <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-cyan-400" />
+            <span className="h-2.5 w-2.5 rounded-full bg-[#1D9E75]" />
             Venta
           </div>
         </div>

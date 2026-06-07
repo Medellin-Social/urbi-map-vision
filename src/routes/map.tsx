@@ -65,7 +65,19 @@ function ListingDetailModal({
     >
       {/* Panel */}
       <div
-        className="relative w-full max-h-screen sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-2xl border border-border/60 bg-background shadow-2xl sm:max-w-2xl"
+        className="relative w-full max-h-screen sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-2xl sm:max-w-2xl"
+        style={{
+          background: '#FAF7F2',
+          border: '0.5px solid #E8E0D0',
+          boxShadow: '0 8px 40px rgba(26,18,8,0.18)',
+          '--background': '#FFFFFF',
+          '--foreground': '#1A1208',
+          '--muted-foreground': '#6B5B45',
+          '--muted': '#F5F0E8',
+          '--border': 'rgb(184 164 138 / 50%)',
+          '--primary': 'oklch(0.62 0.12 164)',
+          '--primary-foreground': 'oklch(0.98 0.005 260)',
+        } as React.CSSProperties}
         onClick={(e) => e.stopPropagation()}
       >
         {isLoading || !listing ? (

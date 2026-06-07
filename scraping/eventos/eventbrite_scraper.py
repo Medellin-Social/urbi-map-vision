@@ -1,41 +1,54 @@
 """
-Eventbrite scraper — web scraping via requests + BeautifulSoup.
+Eventbrite scraper — Playwright + API interception.
 
-Public search API was removed in 2020. Extracts JSON-LD (application/ld+json)
-and window.__SERVER_DATA__ embedded in HTML.
+Strategy:
+  1. Load each search URL with Playwright (headless Chromium)
+  2. Intercept /api/v3/destination/events/ responses automatically fired by the page
+     → returns full event objects with image.url, venue lat/lon, ticket_availability
+  3. Paginate via ?page=N within the same browser context
+  4. Deduplicate by event ID, filter Valle de Aburrá + presencial events
+
+All 19 events/page come with photo URLs from the API — no detail page needed.
 
 Usage:
-  python scraping/eventos/eventbrite_scraper.py --test
+  python scraping/eventos/eventbrite_scraper.py [--test]
 """
 import argparse
+import asyncio
 import json
 import re
 import sys
 import time
+import urllib.parse
+from datetime import date, datetime, timezone
 from pathlib import Path
-from typing import Any
-
-import requests
-from bs4 import BeautifulSoup
+from typing import Optional
 
 sys.path.insert(0, str(Path(__file__).parent))
 
 FUENTE = "eventbrite"
 
-CATEGORIAS = [
-    "music",
-    "business",
-    "food-and-drink",
-    "community",
-    "arts",
-    "sports-and-fitness",
-    "health",
-    "science-and-tech",
-    "travel-and-outdoor",
-    "charity-and-causes",
+EVENTBRITE_URLS = [
+    # Medellín general
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/all-events/",
+    "https://www.eventbrite.co/d/colombia--antioquia/all-events/",
+    # Medellín por categoría
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/free--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/music--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/food-and-drink--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/health--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/arts--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/community--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/sports--events/",
+    "https://www.eventbrite.co/d/colombia--medell%C3%ADn/nightlife--events/",
+    # Municipios Valle de Aburrá
+    "https://www.eventbrite.co/d/colombia--envigado/all-events/",
+    "https://www.eventbrite.co/d/colombia--sabaneta/all-events/",
+    "https://www.eventbrite.co/d/colombia--itagui/all-events/",
+    "https://www.eventbrite.co/d/colombia--bello/all-events/",
+    "https://www.eventbrite.co/d/colombia--la-estrella/all-events/",
+    "https://www.eventbrite.co/d/colombia--caldas/all-events/",
 ]
-
-BASE_URL = "https://www.eventbrite.com/d/colombia--medell%C3%ADn/{categoria}/"
 
 HEADERS = {
     "User-Agent": (
@@ -44,260 +57,297 @@ HEADERS = {
         "Chrome/124.0.0.0 Safari/537.36"
     ),
     "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Encoding": "gzip, deflate, br",
 }
 
-_SERVER_DATA_RE = re.compile(r'window\.__SERVER_DATA__\s*=\s*(\{.+?\})(?:;|\s*</script>)', re.DOTALL)
-_NEXT_DATA_RE = re.compile(r'<script[^>]+id="__NEXT_DATA__"[^>]*>(.+?)</script>', re.DOTALL)
+BBOX_VALLE = {
+    "lat_min": 5.9, "lat_max": 6.5,
+    "lon_min": -75.8, "lon_max": -75.3,
+}
 
-_DESC_SELECTORS = [
-    {"name": "div", "attrs": {"data-testid": "structured-content-rich-text"}},
-    {"name": "div", "class_": "structured-content-rich-text"},
-    {"name": "div", "class_": "eds-text--left"},
-    {"name": "section", "class_": "event-description"},
-    {"name": "div", "class_": "event-description"},
-]
+_MUNICIPIOS_VALLE = {
+    "medellín", "medellin", "envigado", "sabaneta",
+    "itagüí", "itagui", "bello", "la estrella",
+    "copacabana", "caldas", "girardota", "barbosa",
+    "antioquia",
+}
 
 
-def _fetch_detail(url: str) -> dict:
-    """Fetch event detail page and extract description + foto_url."""
-    result: dict = {"descripcion": "", "foto_url": None}
-    if not url:
-        return result
+# ─── Image URL helpers ────────────────────────────────────────────────────────
+
+def _decode_evbuc_url(raw_url: str) -> str:
+    """Unwrap proxy URLs like https://img.evbuc.com/https%3A%2F%2Fcdn.evbuc.com/..."""
+    if not raw_url:
+        return raw_url
+    if "img.evbuc.com/" in raw_url:
+        encoded = raw_url.split("img.evbuc.com/", 1)[-1]
+        decoded = urllib.parse.unquote(encoded)
+        if decoded.startswith("http"):
+            return decoded
+    return raw_url
+
+
+def _extract_foto(raw: dict) -> Optional[str]:
+    """Extract best-quality image URL from event dict."""
+    img = raw.get("image")
+    if isinstance(img, dict):
+        url = (
+            img.get("url")
+            or (img.get("original") or {}).get("url")
+            or img.get("edge_color_url")
+        )
+        if url:
+            return _decode_evbuc_url(url)
+    if isinstance(img, str) and img:
+        return _decode_evbuc_url(img)
+    # Fallback fields
+    for fld in ("logo_url", "image_url", "thumbnail"):
+        v = raw.get(fld)
+        if v and isinstance(v, str):
+            return _decode_evbuc_url(v)
+    logo = raw.get("logo")
+    if isinstance(logo, dict):
+        url = logo.get("url") or (logo.get("original") or {}).get("url")
+        if url:
+            return _decode_evbuc_url(url)
+    return None
+
+
+# ─── Valle de Aburrá filter ───────────────────────────────────────────────────
+
+def _es_del_valle(lat: Optional[float], lon: Optional[float], extra_text: str = "") -> bool:
+    if lat is not None and lon is not None:
+        return (
+            BBOX_VALLE["lat_min"] <= lat <= BBOX_VALLE["lat_max"]
+            and BBOX_VALLE["lon_min"] <= lon <= BBOX_VALLE["lon_max"]
+        )
+    # Fallback: text search
+    texto = extra_text.lower()
+    return any(m in texto for m in _MUNICIPIOS_VALLE)
+
+
+# ─── Normalizer ───────────────────────────────────────────────────────────────
+
+def _normalizar(raw: dict) -> Optional[dict]:
+    # Drop online / cancelled events
+    if raw.get("is_online_event") or raw.get("is_cancelled"):
+        return None
+
+    venue = raw.get("primary_venue") or {}
+    venue_name = (venue.get("name") or "").lower()
+    if venue_name in ("online", "online event", "virtual"):
+        return None
+
+    addr = venue.get("address") or {}
+    city = (addr.get("city") or "").lower()
+    region = (addr.get("region") or "").lower()
+
     try:
-        r = requests.get(url, headers=HEADERS, timeout=15)
-        if r.status_code != 200:
-            return result
-        soup = BeautifulSoup(r.content, "html.parser")
-        # JSON-LD — most reliable for both description and image
-        for script in soup.find_all("script", type="application/ld+json"):
+        lat = float(addr["latitude"]) if addr.get("latitude") else None
+        lon = float(addr["longitude"]) if addr.get("longitude") else None
+    except (TypeError, ValueError):
+        lat = lon = None
+
+    extra = f"{city} {region} {raw.get('name', '')}"
+    if not _es_del_valle(lat, lon, extra):
+        return None
+
+    # Photo
+    foto_url = _extract_foto(raw)
+
+    # Price
+    ta = raw.get("ticket_availability") or {}
+    is_free = ta.get("is_free", True)
+    precio = 0.0
+    if not is_free:
+        min_price = ta.get("minimum_ticket_price") or {}
+        try:
+            precio = float(str(min_price.get("major_value", "0")).replace(",", "").replace(".", ""))
+        except (TypeError, ValueError):
+            precio = 0.0
+
+    # Date — API returns start_date + start_time separately
+    start_date = raw.get("start_date") or ""
+    start_time = raw.get("start_time") or ""
+    if start_date and start_time:
+        fecha_inicio = f"{start_date}T{start_time}"
+    elif start_date:
+        fecha_inicio = start_date
+    else:
+        start_obj = raw.get("start") or {}
+        fecha_inicio = start_obj.get("local") or start_obj.get("utc") or ""
+
+    if not fecha_inicio:
+        return None
+
+    # Skip past events
+    try:
+        fecha_dt = datetime.fromisoformat(fecha_inicio.replace("Z", "+00:00"))
+        now = datetime.now(timezone.utc).replace(tzinfo=None)
+        if fecha_dt.replace(tzinfo=None) < now:
+            return None
+    except (ValueError, TypeError):
+        pass
+
+    # Organizer
+    org = raw.get("primary_organizer") or raw.get("organizer") or {}
+    org_name = org.get("name", "") if isinstance(org, dict) else str(org)
+
+    # Category from tags
+    cat = ""
+    for tag in (raw.get("tags") or []):
+        if isinstance(tag, dict) and tag.get("prefix") == "EventbriteCategory":
+            cat = tag.get("display_name", "")
+            break
+
+    return {
+        "fuente": FUENTE,
+        "fuente_id": str(raw.get("id") or raw.get("eid") or raw.get("eventbrite_event_id") or ""),
+        "titulo": raw.get("name", ""),
+        "descripcion": (raw.get("summary") or "")[:500],
+        "foto_url": foto_url,
+        "url_externo": raw.get("url", ""),
+        "fecha_inicio": fecha_inicio,
+        "fecha_fin": None,
+        "gratuito": bool(is_free or precio == 0),
+        "precio": precio,
+        "organizador": org_name,
+        "lat": lat,
+        "lon": lon,
+        "direccion": addr.get("localized_address_display") or addr.get("address_1") or "",
+        "categoria_raw": cat,
+    }
+
+
+# ─── Playwright scraping ──────────────────────────────────────────────────────
+
+_SERVER_DATA_RE = re.compile(
+    r'window\.__SERVER_DATA__\s*=\s*(\{.+?\});',
+    re.DOTALL,
+)
+
+
+async def _scrape_url(
+    context,  # Playwright BrowserContext
+    url: str,
+    max_pages: int = 5,
+) -> list[dict]:
+    """Load one search URL, intercept destination/events API, paginate."""
+    page = await context.new_page()
+    captured: list[dict] = []
+
+    async def on_response(resp):
+        if "/api/v3/destination/events/" in resp.url and resp.status == 200:
             try:
-                data = json.loads(script.string or "")
-                items = data if isinstance(data, list) else [data]
-                for item in items:
-                    if item.get("@type") == "Event":
-                        if not result["descripcion"] and item.get("description"):
-                            result["descripcion"] = item["description"][:2000]
-                        if not result["foto_url"]:
-                            img = item.get("image")
-                            if isinstance(img, list):
-                                result["foto_url"] = img[0] if img else None
-                            elif isinstance(img, str):
-                                result["foto_url"] = img
-                        if result["descripcion"] and result["foto_url"]:
-                            return result
+                data = await resp.json()
+                evts = data.get("events") or []
+                if evts:
+                    captured.extend(evts)
             except Exception:
                 pass
-        # DOM fallback for description
-        if not result["descripcion"]:
-            for sel in _DESC_SELECTORS:
-                klass = sel.pop("class_", None)
-                kwargs = {**sel}
-                if klass:
-                    kwargs["class_"] = klass
-                el = soup.find(**kwargs)
-                if el:
-                    result["descripcion"] = el.get_text(separator=" ", strip=True)[:2000]
-                    break
-        # OG image fallback
-        if not result["foto_url"]:
-            og = soup.find("meta", property="og:image")
-            if og:
-                result["foto_url"] = og.get("content")
-        # Make relative URLs absolute and unwrap Next.js image proxy
-        if result["foto_url"]:
-            fu = result["foto_url"]
-            if fu.startswith("/"):
-                fu = "https://www.eventbrite.com" + fu
-            # Unwrap Next.js proxy: /e/_next/image?url=<encoded>&...
-            import urllib.parse as _up
-            if "_next/image" in fu:
-                qs = _up.urlparse(fu).query
-                inner = _up.parse_qs(qs).get("url", [""])[0]
-                if inner:
-                    fu = _up.unquote(inner)
-            result["foto_url"] = fu
-    except Exception:
-        pass
-    return result
 
+    page.on("response", on_response)
 
-def _extract_jsonld(soup: BeautifulSoup) -> list[dict]:
-    eventos = []
-    for script in soup.find_all("script", type="application/ld+json"):
-        try:
-            data = json.loads(script.string or "")
-            if isinstance(data, list):
-                eventos.extend(
-                    item for item in data if isinstance(item, dict)
-                    and item.get("@type") == "Event"
+    page_count = 1
+    for pg in range(1, max_pages + 1):
+        pg_url = url if pg == 1 else f"{url}?page={pg}"
+        # Retry once on network error
+        for attempt in range(2):
+            try:
+                await page.goto(pg_url, wait_until="networkidle", timeout=30000)
+                await asyncio.sleep(2)
+                break
+            except Exception as exc:
+                if attempt == 0:
+                    await asyncio.sleep(3)
+                    continue
+                print(f"  [eventbrite] goto error pg{pg}: {exc}")
+                pg = max_pages  # break outer loop
+                break
+
+        # Read page_count once from __SERVER_DATA__
+        if pg == 1:
+            try:
+                raw_sd = await page.evaluate(
+                    "() => { const el = document.getElementById('__SERVER_DATA__'); return el ? el.textContent : null; }"
                 )
-            elif isinstance(data, dict) and data.get("@type") == "Event":
-                eventos.append(data)
-        except Exception:
-            pass
-    return eventos
+                if raw_sd:
+                    sd = json.loads(raw_sd)
+                    page_count = int(sd.get("page_count") or 1)
+            except Exception:
+                pass
+
+        if pg >= page_count:
+            break
+
+    await page.close()
+    return captured
 
 
-def _extract_server_data(html: str) -> list[dict]:
-    m = _SERVER_DATA_RE.search(html)
-    if not m:
-        return []
-    try:
-        data = json.loads(m.group(1))
-        # Navigate to search_data.events.results
-        results = (
-            data.get("search_data", {})
-            .get("events", {})
-            .get("results", [])
+async def _run_async(urls: list[str]) -> list[dict]:
+    from playwright.async_api import async_playwright
+
+    async with async_playwright() as pw:
+        browser = await pw.chromium.launch(
+            headless=True,
+            args=["--no-sandbox", "--disable-dev-shm-usage"],
         )
-        return results if isinstance(results, list) else []
-    except Exception:
-        return []
+        context = await browser.new_context(
+            user_agent=HEADERS["User-Agent"],
+            locale="es-CO",
+            extra_http_headers={"Accept-Language": HEADERS["Accept-Language"]},
+        )
+
+        seen_ids: set[str] = set()
+        all_events: list[dict] = []
+        total_raw = 0
+
+        for url in urls:
+            short = url.split("eventbrite.co/d/")[-1].rstrip("/")
+            print(f"[eventbrite] {short}")
+            try:
+                raw_events = await _scrape_url(context, url)
+            except Exception as exc:
+                print(f"  error: {exc}")
+                raw_events = []
+
+            new_raw = 0
+            for raw in raw_events:
+                ev_id = str(
+                    raw.get("id") or raw.get("eid") or raw.get("eventbrite_event_id") or ""
+                )
+                if not ev_id or ev_id in seen_ids:
+                    continue
+                seen_ids.add(ev_id)
+                new_raw += 1
+                total_raw += 1
+
+                ev = _normalizar(raw)
+                if ev and ev["fuente_id"] and ev["titulo"]:
+                    all_events.append(ev)
+
+            print(f"  +{new_raw} únicos → {len(all_events)} total Valle")
+            await asyncio.sleep(2)
+
+        await browser.close()
+        print(f"[eventbrite] {total_raw} eventos únicos brutos → {len(all_events)} Valle de Aburrá")
+        return all_events
 
 
-def normalizar_jsonld(raw: dict, categoria: str) -> dict | None:
-    loc = raw.get("location") or {}
-    # VirtualLocation → descartar
-    loc_type = loc.get("@type", "")
-    if "Virtual" in loc_type or "Online" in loc_type:
-        return None
-    venue_name = (loc.get("name") or "").lower()
-    if venue_name in ("online", "online event", "virtual"):
-        return None
-
-    geo = loc.get("geo") or {}
-    org = raw.get("organizer") or {}
-    offers = raw.get("offers") or {}
-    if isinstance(offers, list):
-        offers = offers[0] if offers else {}
-
-    precio = 0.0
-    try:
-        precio = float(offers.get("price", 0) or 0)
-    except (TypeError, ValueError):
-        pass
-
-    gratuito = raw.get("isAccessibleForFree", precio == 0)
-
-    return {
-        "fuente": FUENTE,
-        "fuente_id": raw.get("identifier") or raw.get("url", "").split("-")[-1],
-        "titulo": raw.get("name", ""),
-        "descripcion": (raw.get("description") or "")[:2000],
-        "foto_url": raw.get("image") or None,
-        "url_externo": raw.get("url", ""),
-        "fecha_inicio": raw.get("startDate"),
-        "fecha_fin": raw.get("endDate"),
-        "gratuito": bool(gratuito),
-        "precio": precio,
-        "organizador": org.get("name", "") if isinstance(org, dict) else str(org),
-        "lat": float(geo["latitude"]) if geo.get("latitude") else None,
-        "lon": float(geo["longitude"]) if geo.get("longitude") else None,
-        "categoria_raw": categoria,
-    }
-
-
-def normalizar_server_event(raw: dict, categoria: str) -> dict | None:
-    """Normalize event from window.__SERVER_DATA__ results format."""
-    if raw.get("isVirtual") or raw.get("is_online"):
-        return None
-    primary_venue = raw.get("primary_venue") or {}
-    venue_name = (primary_venue.get("name") or "").lower()
-    if venue_name in ("online", "online event", "virtual"):
-        return None
-    address = primary_venue.get("address") or {}
-    lat = address.get("latitude")
-    lon = address.get("longitude")
-
-    precio = 0.0
-    try:
-        cost = raw.get("converted_donation_settings") or raw.get("ticket_availability") or {}
-        min_price = cost.get("minimum_ticket_price") or {}
-        precio = float(min_price.get("major_value", 0) or 0)
-    except (TypeError, ValueError):
-        pass
-
-    return {
-        "fuente": FUENTE,
-        "fuente_id": str(raw.get("id", "")),
-        "titulo": raw.get("name", {}).get("text", "") if isinstance(raw.get("name"), dict) else raw.get("name", ""),
-        "descripcion": (raw.get("description") or {}).get("text", "")[:2000] if isinstance(raw.get("description"), dict) else "",
-        "foto_url": (raw.get("logo") or {}).get("url") if isinstance(raw.get("logo"), dict) else None,
-        "url_externo": raw.get("url", ""),
-        "fecha_inicio": (raw.get("start") or {}).get("utc") if isinstance(raw.get("start"), dict) else raw.get("start_date"),
-        "fecha_fin": (raw.get("end") or {}).get("utc") if isinstance(raw.get("end"), dict) else raw.get("end_date"),
-        "gratuito": raw.get("is_free", precio == 0),
-        "precio": precio,
-        "organizador": "",
-        "lat": float(lat) if lat else None,
-        "lon": float(lon) if lon else None,
-        "categoria_raw": categoria,
-    }
-
-
-def scrape_categoria(categoria: str) -> list[dict]:
-    url = BASE_URL.format(categoria=categoria)
-    try:
-        r = requests.get(url, headers=HEADERS, timeout=20)
-        if r.status_code != 200:
-            print(f"[eventbrite] HTTP {r.status_code} para {categoria}")
-            return []
-    except Exception as exc:
-        print(f"[eventbrite] request error {categoria}: {exc}")
-        return []
-
-    soup = BeautifulSoup(r.content, "html.parser")
-    eventos: list[dict] = []
-
-    # Priority: JSON-LD (most structured)
-    jsonld = _extract_jsonld(soup)
-    if jsonld:
-        eventos = [normalizar_jsonld(e, categoria) for e in jsonld]
-    else:
-        # Fallback: window.__SERVER_DATA__
-        server_events = _extract_server_data(r.text)
-        eventos = [normalizar_server_event(e, categoria) for e in server_events]
-
-    return [e for e in eventos if e is not None and e["fuente_id"] and e["titulo"]]
-
+# ─── Public interface ─────────────────────────────────────────────────────────
 
 def run(test: bool = False) -> list[dict]:
-    seen_ids: set[str] = set()
-    todos: list[dict] = []
-
-    for cat in CATEGORIAS:
-        items = scrape_categoria(cat)
-        for item in items:
-            if item["fuente_id"] not in seen_ids:
-                seen_ids.add(item["fuente_id"])
-                todos.append(item)
-        if not test:
-            time.sleep(1.5)
-
-    # Enriquecer desde página de detalle: descripción + foto
-    sin_detalle = [e for e in todos if not e.get("descripcion") or not e.get("foto_url")]
-    if sin_detalle:
-        print(f"[eventbrite] enriqueciendo {len(sin_detalle)} eventos (desc+foto)...")
-        for i, evento in enumerate(sin_detalle):
-            detail = _fetch_detail(evento.get("url_externo", ""))
-            if detail["descripcion"] and not evento.get("descripcion"):
-                evento["descripcion"] = detail["descripcion"]
-            if detail["foto_url"] and not evento.get("foto_url"):
-                evento["foto_url"] = detail["foto_url"]
-            time.sleep(0.5 if test else 1.0)
-            if (i + 1) % 10 == 0:
-                print(f"[eventbrite]   {i+1}/{len(sin_detalle)} eventos")
+    urls = EVENTBRITE_URLS[:4] if test else EVENTBRITE_URLS
+    eventos = asyncio.run(_run_async(urls))
 
     if test:
-        con_desc  = sum(1 for e in todos if e.get("descripcion"))
-        con_foto  = sum(1 for e in todos if e.get("foto_url"))
-        print(f"[eventbrite] {len(todos)} eventos | {con_desc} con descripción | {con_foto} con foto")
-        for e in todos[:3]:
-            print(f"  - {e['titulo']} | foto={'✓' if e.get('foto_url') else '✗'} | desc={len(e.get('descripcion',''))} chars")
+        con_foto   = sum(1 for e in eventos if e.get("foto_url"))
+        con_coords = sum(1 for e in eventos if e.get("lat"))
+        gratis     = sum(1 for e in eventos if e.get("gratuito"))
+        print(f"[eventbrite] {len(eventos)} eventos | {con_foto} con foto | {con_coords} con coords | {gratis} gratis")
+        for e in eventos[:5]:
+            print(f"  - {e['titulo'][:50]} | foto={'✓' if e.get('foto_url') else '✗'} | {e.get('lat','?')},{e.get('lon','?')}")
 
-    return todos
+    return eventos
 
 
 if __name__ == "__main__":

@@ -54,8 +54,8 @@
   --popover: oklch(0.21 0.02 260);
   --popover-foreground: oklch(0.98 0.005 260);
 
-  --primary: oklch(0.78 0.16 215);             /* cyan #00d4ff */
-  --primary-foreground: oklch(0.15 0.02 260);
+  --primary: oklch(0.62 0.12 164);             /* teal #1D9E75 */
+  --primary-foreground: oklch(0.98 0.005 260);
   --secondary: oklch(0.28 0.02 260);
   --secondary-foreground: oklch(0.98 0.005 260);
   --muted: oklch(0.28 0.02 260);
@@ -63,7 +63,7 @@
   --accent: oklch(0.55 0.22 295);              /* purple #7c3aed */
   --accent-foreground: oklch(0.98 0.005 260);
 
-  --cyan: oklch(0.78 0.16 215);
+  --cyan: oklch(0.62 0.12 164);
   --purple: oklch(0.55 0.22 295);
   --success: oklch(0.7 0.17 165);              /* #10b981 */
   --warning: oklch(0.78 0.17 75);              /* #f59e0b */
@@ -73,7 +73,7 @@
 
   --border: oklch(0.3 0.02 260 / 80%);         /* #1f2937-ish */
   --input: oklch(0.3 0.02 260);
-  --ring: oklch(0.78 0.16 215);
+  --ring: oklch(0.62 0.12 164);
 }
 
 .dark {
@@ -107,14 +107,14 @@ body {
   filter: invert(1) hue-rotate(180deg);
 }
 .mapboxgl-popup-content {
-  background: rgba(17, 24, 39, 0.95) !important;
-  color: #f9fafb !important;
-  border: 1px solid rgba(0, 212, 255, 0.4) !important;
-  border-radius: 8px !important;
+  background: rgba(250, 247, 242, 0.98) !important;
+  color: #1A1208 !important;
+  border: 1px solid rgba(184, 164, 138, 0.5) !important;
+  border-radius: 10px !important;
   font-family: var(--font-sans);
   font-size: 12px;
   padding: 8px 12px !important;
-  box-shadow: 0 0 20px rgba(0, 212, 255, 0.2) !important;
+  box-shadow: 0 8px 32px rgba(26, 18, 8, 0.15) !important;
 }
 .mapboxgl-popup-tip { display: none; }
 .mapboxgl-canvas:focus { outline: none; }
@@ -126,8 +126,8 @@ body {
 }
 
 /* Glow utility */
-.glow-cyan { box-shadow: 0 0 24px -4px rgba(0, 212, 255, 0.45); }
-.text-glow-cyan { text-shadow: 0 0 18px rgba(0, 212, 255, 0.55); }
+.glow-cyan { box-shadow: 0 0 24px -4px rgba(29, 158, 117, 0.45); }
+.text-glow-cyan { text-shadow: 0 0 18px rgba(29, 158, 117, 0.55); }
 
 /* Opportunity pulse dot */
 @keyframes opp-pulse {
@@ -157,7 +157,21 @@ body {
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(0,212,255,0.4); }
+::-webkit-scrollbar-thumb:hover { background: rgba(29,158,117,0.4); }
+
+/* Perfil / Settings page — light paper theme */
+.perfil-light {
+  --background: #FFFFFF;
+  --foreground: #1A1208;
+  --surface: #FAF7F2;
+  --surface-elevated: #F5F0E8;
+  --card: #FFFFFF;
+  --card-foreground: #1A1208;
+  --muted: #F5F0E8;
+  --muted-foreground: #6B5B45;
+  --border: rgb(184 164 138 / 50%);
+  --input: #FAF7F2;
+}
 
 /* Landing map — responsive height */
 @media (min-width: 640px) {

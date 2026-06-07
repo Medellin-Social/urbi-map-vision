@@ -118,7 +118,7 @@ function EventosPage() {
 
   return (
     <>
-      {/* Header */}
+      {/* ── Header ── */}
       <div style={{ background: K.surface, borderBottom: `1px solid ${K.line}`, padding: '36px 26px 28px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
@@ -134,13 +134,38 @@ function EventosPage() {
         </div>
       </div>
 
+      {/* ── Destacados — row above filters ── */}
+      {!isLoading && hasData && featured.length > 0 && (
+        <section style={{ background: '#FAF7F2', borderBottom: `0.5px solid #E8E0D0`, padding: '28px 26px' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem' }}>
+              <h2 style={{ fontFamily: K.serif, fontSize: '20px', fontWeight: 700, color: '#1A1208', margin: 0 }}>
+                {t('Eventos destacados', 'Featured Events')}
+              </h2>
+              <span style={{ fontSize: '11px', color: '#9B8B75', fontWeight: 500, letterSpacing: '0.05em' }}>
+                {t('PATROCINADO', 'SPONSORED')}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              {featured.map(e => <EventCardFeatured key={e.id} evento={e} />)}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* ── Todos los eventos + filtros ── */}
       <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 26px' }}>
+        {/* Título sección */}
+        <h2 style={{ fontFamily: K.serif, fontWeight: 700, fontSize: '1.1rem', color: K.ink, margin: '0 0 20px' }}>
+          {t('Todos los eventos', 'All events')}
+        </h2>
+
         {/* Filtros */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas las categorías', 'All categories')} />
             {CATEGORIAS_EVENTOS.map(c => (
-              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${c.label}`} />
+              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${c.label}`} accent />
             ))}
           </div>
           <div style={{ height: 1, background: K.line }} />
@@ -153,7 +178,7 @@ function EventosPage() {
               <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
             ))}
             <div style={{ width: 1, height: 18, background: K.line, margin: '0 4px' }} />
-            <button onClick={() => { setGratuito(g => !g); reset() }} style={{ border: gratuito ? `2px solid ${K.amarillo}` : `2px solid ${K.line}`, background: gratuito ? K.amarillo + '30' : 'transparent', color: gratuito ? K.ink : K.muted, fontWeight: 700, fontSize: '.8rem', padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>
+            <button onClick={() => { setGratuito(g => !g); reset() }} style={{ border: gratuito ? `2px solid ${K.teal}` : `2px solid ${K.line}`, background: gratuito ? K.teal + '18' : 'transparent', color: gratuito ? K.tealDeep : K.muted, fontWeight: 700, fontSize: '.8rem', padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>
               🎟️ {t('Solo gratis', 'Free only')}
             </button>
           </div>
@@ -169,19 +194,8 @@ function EventosPage() {
           </div>
         )}
 
-        {!isLoading && hasData && featured.length > 0 && (
-          <div style={{ marginBottom: 40 }}>
-            <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.3rem', color: K.ink, margin: '0 0 18px' }}>
-              ⭐ {t('Destacados', 'Featured')}
-            </h2>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(280px,1fr))', gap: 24 }}>
-              {featured.map(e => <EventCardFeatured key={e.id} evento={e} />)}
-            </div>
-          </div>
-        )}
-
         {!isLoading && hasData && (
-          regular.length === 0 && featured.length === 0 ? (
+          regular.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '60px 0' }}>
               <p style={{ color: K.muted, fontSize: '1.05rem', marginBottom: 12 }}>
                 {t('Aún no hay eventos aquí.', 'No events here yet.')}
@@ -191,7 +205,7 @@ function EventosPage() {
               </a>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(340px,1fr))', gap: '0 48px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
               {regular.map(e => <EventCardMini key={e.id} evento={e} />)}
             </div>
           )
