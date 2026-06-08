@@ -20,6 +20,7 @@ Run:
 import argparse
 import json
 import time
+from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import requests
@@ -174,6 +175,21 @@ def normalize_listing(raw: dict, slug: str, tipo_negocio: str, tipo_inmueble: st
         garajes = raw.get("garage")
         precio_usd = raw.get("price_amount_usd")
 
+        # Photos — images[].image contains full CDN URLs
+        fotos = [
+            img["image"] for img in (raw.get("images") or [])
+            if img.get("image")
+        ][:12]
+
+        # Publish date — created_at in ISO format
+        fecha_pub_str = raw.get("created_at") or raw.get("updated_at")
+        fecha_pub: date | None = None
+        if fecha_pub_str:
+            try:
+                fecha_pub = datetime.fromisoformat(str(fecha_pub_str)[:10]).date()
+            except ValueError:
+                pass
+
         return {
             "barrio": barrio,
             "municipio_slug": slug,
@@ -195,15 +211,29 @@ def normalize_listing(raw: dict, slug: str, tipo_negocio: str, tipo_inmueble: st
             "habitaciones": int(habitaciones) if habitaciones else None,
             "banos": int(banos) if banos else None,
             "garajes": int(garajes) if garajes else None,
+            "fotos": fotos,
+            "fecha_publicacion": fecha_pub.isoformat() if fecha_pub else None,
         }
     except Exception:
         return None
 
 
-def scrape_municipio_tipo(slug: str, operacion: str, tipo_inmueble: str, tipo_url: str, max_pages: int) -> list[dict]:
-    """Scrape all pages for one (municipio, operacion, tipo_inmueble) combination."""
+def scrape_municipio_tipo(
+    slug: str,
+    operacion: str,
+    tipo_inmueble: str,
+    tipo_url: str,
+    max_pages: int,
+    since_date: date | None = None,
+) -> list[dict]:
+    """Scrape pages for one (municipio, operacion, tipo_inmueble) combination.
+
+    If since_date is set, stops pagination once ALL listings on a page were
+    published before that date (incremental mode).
+    """
     url_base = BASE_URL.format(operacion=operacion, tipo_url=tipo_url, slug=slug)
-    print(f"  → {url_base} (max {max_pages} pages)")
+    mode = f"since {since_date}" if since_date else f"max {max_pages} pages"
+    print(f"  → {url_base} ({mode})")
 
     listings: list[dict] = []
     seen_ids: set = set()
@@ -229,23 +259,34 @@ def scrape_municipio_tipo(slug: str, operacion: str, tipo_inmueble: str, tipo_ur
         total_listings = pag.get("total", "?")
 
         page_listings = []
+        old_count = 0
         for raw in raw_listings:
             lid = raw.get("id")
             if lid in seen_ids:
                 continue
             seen_ids.add(lid)
             normalized = normalize_listing(raw, slug, operacion, tipo_inmueble)
-            if normalized:
-                page_listings.append(normalized)
+            if not normalized:
+                continue
+            if since_date and normalized.get("fecha_publicacion"):
+                pub = date.fromisoformat(normalized["fecha_publicacion"])
+                if pub < since_date:
+                    old_count += 1
+                    continue
+            page_listings.append(normalized)
 
         listings.extend(page_listings)
         print(
             f"  page {page}/{min(max_pages, total_pages)}: "
-            f"+{len(page_listings)} valid (total_raw={len(raw_listings)}, "
-            f"cumulative={len(listings)}, server_total={total_listings})"
+            f"+{len(page_listings)} valid, {old_count} old "
+            f"(cumulative={len(listings)}, server_total={total_listings})"
         )
 
-        # Stop if no more pages or no new unique listings
+        # Incremental stop: entire page was older than cutoff
+        if since_date and old_count > 0 and len(page_listings) == 0:
+            print(f"  all listings on page {page} predate {since_date} — stopping")
+            break
+
         if not pag.get("hasMorePages") or page >= total_pages:
             print(f"  no more pages at page {page}")
             break
@@ -278,7 +319,18 @@ def main():
         default=DEFAULT_MAX_PAGES,
         help=f"Max pages per combination (default={DEFAULT_MAX_PAGES})",
     )
+    parser.add_argument(
+        "--since-days",
+        type=int,
+        default=None,
+        help="Incremental mode: only scrape listings published in the last N days",
+    )
     args = parser.parse_args()
+
+    since_date: date | None = None
+    if args.since_days is not None:
+        since_date = date.today() - timedelta(days=args.since_days)
+        print(f"Incremental mode: only listings since {since_date}")
 
     slugs = [args.slug] if args.slug else [m["slug"] for m in MUNICIPIOS]
     operaciones = [args.operacion] if args.operacion else TIPOSNEGOCIOS
@@ -298,7 +350,10 @@ def main():
                 print(f"\n{'='*60}")
                 print(f"Scraping: {slug} / {tipo_inmueble} / {operacion}")
                 print(f"{'='*60}")
-                listings = scrape_municipio_tipo(slug, operacion, tipo_inmueble, tipo_url, args.max_pages)
+                listings = scrape_municipio_tipo(
+                    slug, operacion, tipo_inmueble, tipo_url,
+                    args.max_pages, since_date=since_date,
+                )
                 save_raw(slug, tipo_inmueble, operacion, listings)
                 total_saved += len(listings)
                 time.sleep(DELAY * 2)

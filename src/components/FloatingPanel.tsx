@@ -38,6 +38,7 @@ import type { Neighborhood } from "@/lib/adapters";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";
 import { OPP_COLORS, getScoreColor, getScoreLabel } from "@/config/mapColors";
 import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
+import { useTarget, TARGET_OPTIONS } from "@/contexts/TargetContext";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
@@ -642,6 +643,7 @@ const _GOAL_TO_PERFIL: Record<string, string> = {
 function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal; onGoToMLS?: (n: Neighborhood) => void }) {
   const perfil = _GOAL_TO_PERFIL[goal ?? ""];
   const risk = auth.get()?.risk;
+  const { target, setTarget } = useTarget();
   const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil, risk);
   const scoreLbl = getScoreLabel(n.score_activo ?? null, perfil, risk);
 
@@ -732,12 +734,57 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
         </Link>
       </div>
 
-      <div className="grid grid-cols-2 gap-2">
-        <Metric label="Precio m² (venta)" value={formatCOP(n.precio_m2)} />
-        <Metric label="Arriendo prom." value={`${formatCOP(n.arriendo)}/mes`} />
-        <Metric label="Yield bruto" value={formatPct(n.yield)} accent="cyan" />
-        <Metric label="Años recupero" value={n.anos_recupero != null ? `${n.anos_recupero.toFixed(1)} años` : "—"} />
+      {/* Target selector */}
+      <div className="flex gap-1.5 flex-wrap">
+        {TARGET_OPTIONS.map((opt) => (
+          <button
+            key={opt.value}
+            onClick={() => setTarget(opt.value)}
+            className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all"
+            style={target === opt.value
+              ? { background: '#1D9E75', color: '#FFFFFF', border: '0.5px solid #1D9E75' }
+              : { background: '#F5F0E8', color: '#6B5B45', border: '0.5px solid #E8E0D0' }
+            }
+          >
+            <span>{opt.icon}</span>
+            <span>{opt.labelEs}</span>
+          </button>
+        ))}
       </div>
+
+      {/* Target-specific metrics */}
+      {target === 'buyer' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Metric label="Precio m²" value={formatCOP(n.precio_m2)} />
+          <Metric label="Años recupero" value={n.anos_recupero != null ? `${n.anos_recupero.toFixed(1)} años` : "—"} />
+        </div>
+      )}
+      {target === 'seller' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Metric label="Liquidez zona" value={n.liquidez_api?.score != null ? `${n.liquidez_api.score}/100` : "—"} accent="cyan" />
+          <Metric label="Tiempo estimado venta" value={n.liquidez_api?.tiempo_estimado_venta ?? "—"} />
+        </div>
+      )}
+      {target === 'landlord' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Metric label="Yield bruto" value={formatPct(n.yield)} accent="cyan" />
+          <Metric label="Arriendo prom." value={`${formatCOP(n.arriendo)}/mes`} />
+        </div>
+      )}
+      {target === 'renter' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Metric label="Arriendo mediana" value={`${formatCOP(n.arriendo)}/mes`} />
+          <Metric label="Precio m²" value={formatCOP(n.precio_m2)} />
+        </div>
+      )}
+      {target === 'investor' && (
+        <div className="grid grid-cols-2 gap-2">
+          <Metric label="Precio m² (venta)" value={formatCOP(n.precio_m2)} />
+          <Metric label="Arriendo prom." value={`${formatCOP(n.arriendo)}/mes`} />
+          <Metric label="Yield bruto" value={formatPct(n.yield)} accent="cyan" />
+          <Metric label="Años recupero" value={n.anos_recupero != null ? `${n.anos_recupero.toFixed(1)} años` : "—"} />
+        </div>
+      )}
 
       <Section title="Corrección inmobiliaria">
         <div style={{ borderRadius: 10, border: '1px solid rgb(184 164 138 / 55%)', background: 'rgba(255,255,255,0.55)', padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>

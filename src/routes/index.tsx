@@ -86,16 +86,18 @@ const CATEGORIA_EMOJI: Record<string, string> = {
 
 function SecTitle({ children, link, linkLabel }: { children: string; link?: string; linkLabel?: string }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'baseline', gap: 16, marginBottom: 24 }}>
-      <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.7rem', whiteSpace: 'nowrap', letterSpacing: '-.5px', color: K.ink, margin: 0 }}>
-        {children}
-      </h2>
-      <div style={{ height: 2, background: K.ink, flex: 1, opacity: .1, transform: 'translateY(-5px)' }} />
-      {link && (
-        <a href={link} style={{ fontSize: '.76rem', fontWeight: 800, textTransform: 'uppercase', color: K.tealDeep, whiteSpace: 'nowrap', letterSpacing: '.5px', textDecoration: 'none' }}>
-          {linkLabel ?? 'Ver todo →'}
-        </a>
-      )}
+    <div style={{ marginBottom: 24 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, flexWrap: 'wrap', rowGap: 6 }}>
+        <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.25rem, 4.5vw, 1.7rem)', letterSpacing: '-.5px', color: K.ink, margin: 0, flexShrink: 0 }}>
+          {children}
+        </h2>
+        <div style={{ height: 2, background: K.ink, flex: '1 1 20px', minWidth: 20, opacity: .1, alignSelf: 'center' }} />
+        {link && (
+          <a href={link} style={{ fontSize: '.76rem', fontWeight: 800, textTransform: 'uppercase', color: K.tealDeep, whiteSpace: 'nowrap', letterSpacing: '.5px', textDecoration: 'none', flexShrink: 0 }}>
+            {linkLabel ?? 'Ver todo →'}
+          </a>
+        )}
+      </div>
     </div>
   )
 }
@@ -144,13 +146,13 @@ function HomeContent() {
       )}
 
       {/* ── SECCIÓN 1 — LO ÚLTIMO DEL BARRIO ─────────── */}
-      <section style={{ padding: '48px 26px 36px', borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: '48px 26px 36px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link="/blog" linkLabel={t('Todas las noticias →', 'All news →')}>
             {t('Lo último del barrio', 'Latest from the Barrio')}
           </SecTitle>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }} className="noticias-grid">
             {noticias.length === 0 ? (
               <p style={{ color: K.muted, gridColumn: '1/-1' }}>
                 {t('Cargando noticias...', 'Loading news...')}
@@ -187,13 +189,13 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 2 — HOTSPOTS & DEALS ─────────────── */}
-      <section style={{ padding: '48px 26px 36px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: '48px 26px 36px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
             {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
           </SecTitle>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <div className="deals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             {dealsLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
                 {t('Cargando deals...', 'Loading deals...')}
@@ -256,7 +258,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 3 — DIRECTORIO 5 ESTRELLAS ───────── */}
-      <section style={{ padding: '48px 26px', borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: '48px 26px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todo →', 'Browse all →')}>
             {t('Directorio 5 Estrellas', '5-Star Directory')}
@@ -268,7 +270,7 @@ function HomeContent() {
             )}
           </p>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <div className="directorio-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             {dirLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
                 {t('Cargando directorio...', 'Loading directory...')}
@@ -378,11 +380,11 @@ function HomeContent() {
       </section>
 
       {/* ── REAL ESTATE ───────────────────────────────── */}
-      <section style={{ padding: '48px 26px' }}>
+      <section className="section-padding" style={{ padding: '48px 26px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: '#fff', border: `1px solid ${K.line}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 14px 38px rgba(20,32,29,.1)' }}>
+          <div className="real-estate-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: '#fff', border: `1px solid ${K.line}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 14px 38px rgba(20,32,29,.1)' }}>
             <div style={{ minHeight: 320, backgroundImage: `url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80'), radial-gradient(120% 120% at 80% 10%, #2a5bdc 0%, #143cc4 45%, #0a8a4f 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-            <div style={{ padding: 44, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+            <div style={{ padding: 'clamp(20px, 5vw, 44px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
               <span style={{ display: 'inline-block', background: K.amarillo, color: K.ink, fontWeight: 800, fontSize: '.68rem', letterSpacing: '1.6px', textTransform: 'uppercase', padding: '6px 13px', borderRadius: 6, alignSelf: 'flex-start', marginBottom: 14 }}>
                 {t('Inversión Inmobiliaria', 'Real Estate Investment')}
               </span>
@@ -414,8 +416,8 @@ function HomeContent() {
       </section>
 
       {/* ── SUSCRIPCIÓN ───────────────────────────────── */}
-      <section id="subscribe" style={{ padding: '0 26px 60px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(120deg, rgba(214,33,126,.92), rgba(255,122,26,.86) 55%, rgba(255,201,40,.82))', borderRadius: 22, padding: '56px 34px', textAlign: 'center', color: '#fff', boxShadow: '0 22px 60px rgba(214,33,126,.3)' }}>
+      <section id="subscribe" className="section-padding" style={{ padding: '0 16px 60px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(120deg, rgba(214,33,126,.92), rgba(255,122,26,.86) 55%, rgba(255,201,40,.82))', borderRadius: 22, padding: 'clamp(28px, 5vw, 56px) clamp(16px, 4vw, 34px)', textAlign: 'center', color: '#fff', boxShadow: '0 22px 60px rgba(214,33,126,.3)' }}>
           <span style={{ fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', fontSize: '.76rem', background: 'rgba(0,0,0,.26)', display: 'inline-block', padding: '7px 16px', borderRadius: 999, marginBottom: 18 }}>
             🎉 {t('Miembros Fundadores · Invitación a la Fiesta', 'Founding Members · Launch Party Invite')}
           </span>
@@ -434,9 +436,9 @@ function HomeContent() {
             </p>
           ) : (
             <form onSubmit={e => { e.preventDefault(); setSuscrito(true) }} style={{ display: 'flex', gap: 11, maxWidth: 580, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <input type="text" required value={nombre} onChange={e => setNombre(e.target.value)} placeholder={t('Tu nombre', 'Your name')} style={{ flex: 1, minWidth: 180, padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder={t('Tu correo', 'Your email')} style={{ flex: 1, minWidth: 200, padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
-              <button type="submit" style={{ background: K.ink, color: '#fff', border: 'none', fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: 'pointer', fontSize: '.96rem', fontFamily: 'inherit' }}>
+              <input type="text" required value={nombre} onChange={e => setNombre(e.target.value)} placeholder={t('Tu nombre', 'Your name')} style={{ flex: '1 1 160px', width: '100%', padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder={t('Tu correo', 'Your email')} style={{ flex: '1 1 180px', width: '100%', padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
+              <button type="submit" style={{ width: '100%', background: K.ink, color: '#fff', border: 'none', fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: 'pointer', fontSize: '.96rem', fontFamily: 'inherit' }}>
                 {t('Quiero mi Invitación 🎟️', 'Get My Invite 🎟️')}
               </button>
             </form>

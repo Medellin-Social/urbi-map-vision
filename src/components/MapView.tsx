@@ -4,6 +4,7 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
+import { useTarget } from "@/contexts/TargetContext";
 import { useBarriosRaw, useScoreThresholds } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 import {
@@ -33,7 +34,6 @@ type Props = {
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
-  onListingDblClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   // Draw-to-filter
   drawModeActive?: boolean;
@@ -202,7 +202,6 @@ export function MapView({
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
-  onListingDblClickFromMap,
   activeBarrioName,
   drawModeActive = false,
   onDrawPolygon,
@@ -237,8 +236,6 @@ export function MapView({
   const onListingClickFromMapRef = useRef(onListingClickFromMap);
   useEffect(() => { onListingClickFromMapRef.current = onListingClickFromMap; }, [onListingClickFromMap]);
 
-  const onListingDblClickFromMapRef = useRef(onListingDblClickFromMap);
-  useEffect(() => { onListingDblClickFromMapRef.current = onListingDblClickFromMap; }, [onListingDblClickFromMap]);
 
   const riskRef = useRef(risk);
   const [scorePalette, setScorePalette] = useState<ScorePaletteId>(() => getActivePaletteId(risk));
@@ -261,12 +258,13 @@ export function MapView({
   }, [thresholdsData]);
 
   const { data: barriosRaw } = useBarriosRaw(perfil);
+  const { target } = useTarget();
 
   const geoJsonData = useMemo(() => {
     if (!barriosRaw?.length) return null;
     barriosRef.current = barriosRaw;
-    return barriosToGeoJSON(barriosRaw, scorePalette, perfil, budgetRange, risk);
-  }, [barriosRaw, scorePalette, perfil, budgetRange, risk, thresholdVersion]);
+    return barriosToGeoJSON(barriosRaw, scorePalette, perfil, budgetRange, risk, target);
+  }, [barriosRaw, scorePalette, perfil, budgetRange, risk, thresholdVersion, target]);
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
@@ -672,14 +670,6 @@ export function MapView({
           point.x,
           point.y,
         );
-      });
-
-      // Doble click en punto individual → abrir modal de detalle
-      map.on("dblclick", "listings-mls-unclustered", (e) => {
-        e.preventDefault(); // evita zoom de doble click
-        if (!e.features?.length) return;
-        const props = e.features[0].properties as Record<string, unknown>;
-        onListingDblClickFromMapRef.current?.(props.id as number);
       });
 
       map.on("mouseenter", "listings-mls-clusters",    () => { map.getCanvas().style.cursor = "pointer"; });

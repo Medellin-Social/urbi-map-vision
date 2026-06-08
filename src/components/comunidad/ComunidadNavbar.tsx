@@ -78,10 +78,21 @@ const FALLBACK_ITEMS_EN = [
 
 export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const { barrio, barrios, lang, setLang, setBarrioSlug } = useBarrio()
-  const [today, setToday] = useState('')
-  const [path,  setPath]  = useState('')
+  const [today,       setToday]       = useState('')
+  const [path,        setPath]        = useState('')
+  const [menuAbierto, setMenuAbierto] = useState(false)
 
   const t = (es: string, en: string) => lang === 'es' ? es : en
+
+  useEffect(() => {
+    const handleClick = (e: MouseEvent) => {
+      if (menuAbierto && !(e.target as Element).closest('nav')) {
+        setMenuAbierto(false)
+      }
+    }
+    document.addEventListener('click', handleClick)
+    return () => document.removeEventListener('click', handleClick)
+  }, [menuAbierto])
 
   const { data: apiItems = [] } = useTicker(1)
 
@@ -136,7 +147,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
     { href: '/',                              label: t('HOME', 'HOME') },
     { href: `/eventos/${barrio.slug}`,         label: t('EVENTOS', 'EVENTS') },
     { href: `/local-business/${barrio.slug}`,  label: t('NEGOCIOS', 'BUSINESSES') },
-    { href: '/map',                            label: t('INVERSIÓN', 'INVEST') },
+    { href: '/real-estate',                    label: 'REAL ESTATE' },
     { href: '#blog',                           label: 'BLOG' },
   ]
 
@@ -165,13 +176,23 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           white-space: nowrap;
         }
         .k-nav-link:hover { background: rgba(255,255,255,0.1); }
+        @media (max-width: 768px) {
+          .mobile-menu-btn { display: flex !important; align-items: center; justify-content: center; }
+          .desktop-nav-links { display: none !important; }
+          .desktop-only { display: none !important; }
+          .desktop-nav-right { display: none !important; }
+        }
+        @media (min-width: 769px) {
+          .mobile-menu-btn { display: none !important; }
+          .mobile-only { display: none !important; }
+        }
       `}</style>
 
       {/* ── Masthead (hidden in compact mode) ───────── */}
       {!compact && (
         <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
           <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
-            <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
+            <div className="masthead-logo" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
               Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
             </div>
           </a>
@@ -190,12 +211,12 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
         borderBottom: '1px solid rgba(255,255,255,0.08)',
       }}>
         <div style={{
-          maxWidth: 1200, margin: '0 auto', padding: '0 26px',
+          maxWidth: 1200, margin: '0 auto', padding: '0 16px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           height: 52, gap: 8,
         }}>
 
-          {/* LEFT: logo (compact) or date + barrio selector (full) */}
+          {/* LEFT: logo (compact always) or date+barrio (desktop only — masthead has logo on mobile) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             {compact ? (
               <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
@@ -203,7 +224,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
               </a>
             ) : (
               <>
-                <span style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
+                <span className="desktop-only" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
                   {today}
                 </span>
                 <select
@@ -214,6 +235,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                     border: '1px solid rgba(255,255,255,0.25)',
                     borderRadius: 6, padding: '4px 8px',
                     fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
+                    flex: 1, minWidth: 0, maxWidth: 220,
                   }}
                 >
                   <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
@@ -235,8 +257,8 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             )}
           </div>
 
-          {/* CENTER: nav links */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          {/* CENTER: nav links — desktop only */}
+          <div className="desktop-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             {links.map(({ href, label }) => (
               <a
                 key={label}
@@ -249,15 +271,15 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             ))}
           </div>
 
-          {/* RIGHT: subscribe + ES/EN */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          {/* RIGHT: subscribe + ES/EN — desktop only */}
+          <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
             <a
               href="/suscribirse"
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
             >
               {t('Suscríbete', 'Subscribe')}
             </a>
-<div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
               {(['es', 'en'] as const).map(l => (
                 <button
                   key={l}
@@ -276,7 +298,115 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             </div>
           </div>
 
+          {/* Hamburger — mobile only */}
+          <button
+            onClick={() => setMenuAbierto(prev => !prev)}
+            className="mobile-menu-btn"
+            aria-label="Menú"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: '#fff',
+              fontSize: 22,
+              cursor: 'pointer',
+              padding: 4,
+              lineHeight: 1,
+              flexShrink: 0,
+            }}
+          >
+            {menuAbierto ? '✕' : '☰'}
+          </button>
+
         </div>
+
+        {/* Mobile dropdown */}
+        {menuAbierto && (
+          <div style={{
+            background: '#14201d',
+            padding: '12px 16px 16px',
+            borderTop: '0.5px solid rgba(255,255,255,0.1)',
+          }}>
+            {!compact && (
+              <select
+                value={barrio.slug}
+                onChange={e => { handleBarrioChange(e.target.value); setMenuAbierto(false) }}
+                style={{
+                  width: '100%',
+                  background: 'rgba(255,255,255,0.1)',
+                  color: '#fff',
+                  border: '0.5px solid rgba(255,255,255,0.2)',
+                  borderRadius: 6,
+                  padding: 8,
+                  marginBottom: 12,
+                  fontSize: 14,
+                  fontFamily: 'inherit',
+                }}
+              >
+                <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
+                  {medellin.map(b => (
+                    <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
+                      {b.nombre}
+                    </option>
+                  ))}
+                </optgroup>
+                <optgroup label="── Valle de Aburrá ──" style={{ color: K.ink, background: '#fff' }}>
+                  {valleAbura.map(b => (
+                    <option key={b.slug} value={b.slug} style={{ color: K.ink, background: '#fff' }}>
+                      {b.nombre}
+                    </option>
+                  ))}
+                </optgroup>
+              </select>
+            )}
+
+            {links.map(link => (
+              <a
+                key={link.href}
+                href={link.href}
+                onClick={() => setMenuAbierto(false)}
+                style={{
+                  display: 'block',
+                  color: isActive(link.href) ? K.amarillo : 'rgba(255,255,255,0.85)',
+                  padding: '10px 0',
+                  fontSize: 15,
+                  fontWeight: isActive(link.href) ? 700 : 500,
+                  textDecoration: 'none',
+                  borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                {link.label}
+              </a>
+            ))}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
+              <a
+                href="/suscribirse"
+                onClick={() => setMenuAbierto(false)}
+                style={{ color: K.amarillo, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
+              >
+                {t('Suscríbete →', 'Subscribe →')}
+              </a>
+              <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+                {(['es', 'en'] as const).map(l => (
+                  <button
+                    key={l}
+                    onClick={() => setLang(l)}
+                    style={{
+                      border: 'none',
+                      background: lang === l ? K.amarillo : 'transparent',
+                      color: lang === l ? K.ink : '#fff',
+                      padding: '4px 10px', fontWeight: 700,
+                      cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                    }}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
       </nav>
 
       {/* ── Ticker ───────────────────────────────────── */}

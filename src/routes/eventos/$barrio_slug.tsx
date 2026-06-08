@@ -160,7 +160,7 @@ function EventosPage() {
                 {t('PATROCINADO', 'SPONSORED')}
               </span>
             </div>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
               {featured.map(e => <EventCardFeatured key={e.id} evento={e} />)}
             </div>
           </div>
@@ -176,14 +176,14 @@ function EventosPage() {
 
         {/* Filtros */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
             <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas las categorías', 'All categories')} />
             {CATEGORIAS_EVENTOS.map(c => (
               <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${lang === 'es' ? c.label : c.labelEn}`} accent />
             ))}
           </div>
           <div style={{ height: 1, background: K.line }} />
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
             {FILTROS_FECHA.map(f => (
               <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
             ))}
@@ -219,7 +219,7 @@ function EventosPage() {
               </a>
             </div>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
               {regular.map(e => <EventCardMini key={e.id} evento={e} />)}
             </div>
           )

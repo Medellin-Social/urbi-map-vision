@@ -88,6 +88,7 @@ import {
   getScoreFillOpacity,
   type ScorePaletteId,
 } from "@/config/mapColors";
+import type { Target } from "@/contexts/TargetContext";
 
 // ── Backend response shapes (mirrors api/routers/barrios.py) ──────────────────
 
@@ -206,6 +207,19 @@ export type ApiBarrio = {
   } | null;
 };
 
+export type SimilarListing = {
+  id: number;
+  url: string;
+  precio_cop?: number | null;
+  area_m2?: number | null;
+  habitaciones?: number | null;
+  banos?: number | null;
+  barrio_nombre?: string | null;
+  dias_en_mercado?: number | null;
+  foto_principal?: string | null;
+  tipo_inmueble?: string | null;
+};
+
 export type ApiListing = {
   id: number;
   fuente?: string | null;
@@ -234,6 +248,7 @@ export type ApiListing = {
   // URL availability — present after validate_listings_urls.py has run
   disponible_actualmente?: boolean | null;
   fecha_ultima_verificacion?: string | null;
+  favoritos_count?: number | null;
   // Personalization — present when user is authenticated with a perfil
   relevancia_score?: number | null;
   match_label?: string | null;
@@ -246,6 +261,13 @@ export type ApiListingDetail = ApiListing & {
   descripcion?: string | null;
   arriendo_p50_barrio?: number | null;
   yield_estimado?: number | null;
+  // Free-tier descriptive fields
+  fotos?: string[] | null;
+  administracion?: number | null;
+  antiguedad?: string | null;
+  vistas?: number | null;
+  precio_historia?: { precio: number; fecha: string; delta_pct?: number | null }[] | null;
+  // Barrio context (paid tier)
   yield_bruto_pct?: number | null;
   score_corto?: number | null;
   score_mediano?: number | null;
@@ -431,12 +453,68 @@ export function parseBudgetCop(budget?: string | null): [number, number] | null 
   return null;
 }
 
+// Fixed palette per spec — same for all palettes/risk levels
+const TC = {
+  verde: "#639922",
+  teal:  "#1D9E75",
+  amber: "#BA7517",
+  rojo:  "#E24B4A",
+  gris:  "#888780",
+} as const;
+
+export function getTargetBarrioColor(barrio: ApiBarrio, target: Target, _palette?: ScorePaletteId): string {
+  switch (target) {
+    case 'buyer': {
+      const pm2 = barrio.mercado.precio_m2_cop;
+      if (pm2 == null) return TC.gris;
+      if (pm2 < 3_000_000) return TC.verde;
+      if (pm2 < 5_000_000) return TC.teal;
+      if (pm2 < 8_000_000) return TC.amber;
+      return TC.rojo;
+    }
+    case 'seller': {
+      const s = barrio.liquidez?.score;
+      if (s == null) return TC.gris;
+      if (s > 70) return TC.verde;
+      if (s >= 50) return TC.teal;
+      if (s >= 30) return TC.amber;
+      return TC.rojo;
+    }
+    case 'landlord': {
+      const y = barrio.mercado.yield_bruto_pct;
+      if (y == null) return TC.gris;
+      if (y > 8) return TC.verde;
+      if (y >= 6) return TC.teal;
+      if (y >= 4) return TC.amber;
+      return TC.rojo;
+    }
+    case 'renter': {
+      const arr = barrio.mercado.arriendo_p50_cop;
+      if (arr == null) return TC.gris;
+      if (arr < 1_500_000) return TC.verde;
+      if (arr < 2_500_000) return TC.teal;
+      if (arr < 4_000_000) return TC.amber;
+      return TC.rojo;
+    }
+    default: {
+      // investor
+      const s = barrio.scores.score_activo;
+      if (s == null) return TC.gris;
+      if (s >= 75) return TC.verde;
+      if (s >= 55) return TC.teal;
+      if (s >= 35) return TC.amber;
+      return TC.rojo;
+    }
+  }
+}
+
 export function barriosToGeoJSON(
   barrios: ApiBarrio[],
   palette?: ScorePaletteId,
   perfil?: string,
   budgetRange?: [number, number] | null,
   risk?: string,
+  target?: Target,
 ) {
   return {
     type: "FeatureCollection" as const,
@@ -462,7 +540,7 @@ export function barriosToGeoJSON(
           municipio: (b.municipio ?? "").toUpperCase(),
           cd_comuna: b.cd_comuna ?? null,
           yield: b.mercado.yield_bruto_pct ?? 6,
-          color_hex: excluir ? "#374151" : getScoreColor(score, palette, perfil, risk),
+          color_hex: excluir ? "#374151" : getTargetBarrioColor(b, target ?? 'investor', palette),
           fill_opacity: getScoreFillOpacity(score, excluir, palette),
           has_score: score !== null && !excluir,
           score_activo: score ?? 0,

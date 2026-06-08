@@ -212,7 +212,7 @@ function LocalBusinessPage() {
       <div style={{ padding: '1rem 2rem', borderBottom: '0.5px solid #E8E0D0', background: '#FAF7F2' }}>
         <div style={{ maxWidth: 1440, margin: '0 auto' }}>
           {/* Grupos */}
-          <div style={{ display: 'flex', gap: 8, marginBottom: grupoActual ? 10 : 0, flexWrap: 'wrap' }}>
+          <div className="filtros-tabs" style={{ display: 'flex', gap: 8, marginBottom: grupoActual ? 10 : 0, flexWrap: 'wrap' }}>
             <button onClick={() => { setGrupo(null); setCategoria(undefined); reset() }} style={{
               background: !grupo ? '#1A1208' : 'transparent', color: !grupo ? '#FAF7F2' : '#6B5B45',
               border: '0.5px solid #E8E0D0', borderRadius: 20, padding: '6px 16px',
@@ -239,7 +239,7 @@ function LocalBusinessPage() {
 
           {/* Subcategorías */}
           {grupoActual && (
-            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
+            <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 10 }}>
               {[{ key: undefined as string | undefined, label: t('Todos', 'All') },
                 ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.labelEn}` }))
               ].map(({ key, label }) => (
@@ -255,7 +255,7 @@ function LocalBusinessPage() {
           )}
 
           {/* Filtros adicionales */}
-          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '0.5px solid #E8E0D0', paddingTop: 10 }}>
+          <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', borderTop: '0.5px solid #E8E0D0', paddingTop: 10 }}>
             <button onClick={() => { setSoloTop(v => !v); reset() }} style={{
               background: soloTop ? K.amarillo : 'transparent', color: soloTop ? '#1A1208' : '#6B5B45',
               border: `1.5px solid ${soloTop ? K.amarillo : '#E8E0D0'}`, borderRadius: 20,
@@ -277,10 +277,10 @@ function LocalBusinessPage() {
       </div>
 
       {/* ── Lista + Mapa ── */}
-      <div style={{ display: 'flex', height: PANEL_H, overflow: 'hidden' }}>
+      <div className="negocios-panel" style={{ display: 'flex', height: PANEL_H, overflow: 'hidden' }}>
 
         {/* Lista — izquierda, scrollable */}
-        <div style={{ flex: '0 0 400px', overflowY: 'auto', borderRight: `0.5px solid ${K.line}`, background: '#fff' }}>
+        <div className="negocios-lista" style={{ flex: '0 0 400px', overflowY: 'auto', borderRight: `0.5px solid ${K.line}`, background: '#fff' }}>
           {isLoading && (
             <p style={{ color: K.muted, padding: '2rem' }}>{t('Cargando…', 'Loading…')}</p>
           )}
@@ -336,7 +336,7 @@ function LocalBusinessPage() {
         </div>
 
         {/* Mapa — derecha */}
-        <div style={{ flex: 1, padding: 12, background: K.surface }}>
+        <div className="negocios-mapa" style={{ flex: 1, padding: 12, background: K.surface }}>
           <TiendasMap
             tiendas={mapTiendas}
             centerLng={barrio.lon ?? -75.5636}

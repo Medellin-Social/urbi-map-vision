@@ -24,7 +24,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
 
   return (
     <footer style={{ background: K.ink, color: '#bccfc8', padding: '46px 26px 30px' }}>
-      <div style={{
+      <div className="footer-grid" style={{
         display: 'grid',
         gridTemplateColumns: '1.4fr 1fr 1fr 1fr',
         gap: 34, maxWidth: 1200, margin: '0 auto',

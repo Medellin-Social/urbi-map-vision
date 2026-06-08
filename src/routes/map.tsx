@@ -1,22 +1,20 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { TargetProvider } from "@/contexts/TargetContext";
 import { Navbar, ProfileChipMobile } from "@/components/Navbar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
-import { ListingPanel } from "@/components/ListingPanel";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
 import { MLSPanel } from "@/components/MLSPanel";
 import type { Neighborhood } from "@/lib/adapters";
-import type { ApiListing, ApiListingDetail } from "@/lib/adapters";
+import type { ApiListing } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
+import { track } from "@/lib/tracking";
 import { useListings, useBarriosRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/adapters";
 import { useMemo } from "react";
 import { point, booleanPointInPolygon } from "@turf/turf";
-import { apiFetch } from "@/lib/apiClient";
-import { API_ENDPOINTS } from "@/config/api";
-import { ListingDetailContent } from "./listing.$id";
+import { ListingDrawer } from "@/components/ListingDrawer";
 
 export const Route = createFileRoute("/map")({
   beforeLoad: () => {
@@ -35,65 +33,16 @@ const GOAL_TO_PERFIL: Record<string, string> = {
   nomadas: "mediano_plazo",
 };
 
-// ─── Listing detail modal ──────────────────────────────────────────────────────
-function ListingDetailModal({
-  listingId,
-  onClose,
-  flyToRef,
-}: {
-  listingId: number;
-  onClose: () => void;
-  flyToRef: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
-}) {
-  const { data: listing, isLoading } = useQuery<ApiListingDetail>({
-    queryKey: ["listing-modal", listingId],
-    queryFn: () => apiFetch(API_ENDPOINTS.listing(listingId)),
-  });
-
-  useEffect(() => {
-    if (listing?.lat && listing?.lon) {
-      flyToRef.current?.(listing.lat, listing.lon);
-    }
-  }, [listing?.id]);
-
+// ─── Map page ──────────────────────────────────────────────────────────────────
+function MapPage() {
   return (
-    /* Backdrop */
-    <div
-      className="pointer-events-auto absolute inset-0 z-40 flex items-start justify-center overflow-y-auto bg-black/50 p-0 sm:p-10"
-      style={{ right: 0 }}
-      onClick={onClose}
-    >
-      {/* Panel */}
-      <div
-        className="relative w-full max-h-screen sm:max-h-[90vh] overflow-y-auto rounded-none sm:rounded-2xl sm:max-w-2xl"
-        style={{
-          background: '#FAF7F2',
-          border: '0.5px solid #E8E0D0',
-          boxShadow: '0 8px 40px rgba(26,18,8,0.18)',
-          '--background': '#FFFFFF',
-          '--foreground': '#1A1208',
-          '--muted-foreground': '#6B5B45',
-          '--muted': '#F5F0E8',
-          '--border': 'rgb(184 164 138 / 50%)',
-          '--primary': 'oklch(0.62 0.12 164)',
-          '--primary-foreground': 'oklch(0.98 0.005 260)',
-        } as React.CSSProperties}
-        onClick={(e) => e.stopPropagation()}
-      >
-        {isLoading || !listing ? (
-          <div className="flex h-64 items-center justify-center">
-            <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-          </div>
-        ) : (
-          <ListingDetailContent listing={listing} isModal onClose={onClose} />
-        )}
-      </div>
-    </div>
+    <TargetProvider>
+      <MapPageInner />
+    </TargetProvider>
   );
 }
 
-// ─── Map page ──────────────────────────────────────────────────────────────────
-function MapPage() {
+function MapPageInner() {
   const [selected, setSelected] = useState<Neighborhood | null>(null);
   const [mostrarOportunidades, setMostrarOportunidades] = useState(
     () => auth.get()?.mostrarOportunidades ?? false
@@ -109,8 +58,6 @@ function MapPage() {
   const [highlightedListingId, setHighlightedListingId] = useState<number | null>(null);
   const [activeBarrioInComune, setActiveBarrioInComune] = useState<string | null>(null);
   const flyToListingRef = useRef<((lat: number, lng: number) => void) | null>(null);
-  const [selectedListing, setSelectedListing] = useState<ApiListing | null>(null);
-  const [listingPanelPos, setListingPanelPos] = useState<{ x: number; y: number } | null>(null);
 
   // Listing detail modal
   const [listingDetailId, setListingDetailId] = useState<number | null>(null);
@@ -199,6 +146,16 @@ function MapPage() {
     return () => window.removeEventListener("perfil-updated", onPerfilUpdated);
   }, []);
 
+  useEffect(() => {
+    const onOpenDrawer = (e: Event) => {
+      const id = (e as CustomEvent<{ id: number }>).detail?.id;
+      if (id) openListingDetail(id);
+    };
+    window.addEventListener("open-listing-drawer", onOpenDrawer);
+    return () => window.removeEventListener("open-listing-drawer", onOpenDrawer);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function openListingDetail(id: number) {
     setListingDetailId(id);
     window.history.pushState({}, "", `/map?listing=${id}`);
@@ -269,25 +226,24 @@ function MapPage() {
     }
   }
 
-  // Card click in MLSPanel → flyTo + highlight + panel at click pos
-  function handleListingSelect(listing: ApiListing, screenX: number, screenY: number) {
+  // Card click in MLSPanel → flyTo + highlight + open drawer
+  function handleListingSelect(listing: ApiListing, _screenX: number, _screenY: number) {
     setHighlightedListingId(listing.id ?? null);
-    setSelectedListing(listing);
-    setListingPanelPos({ x: screenX, y: screenY });
     if (listing.lat && listing.lon) {
       flyToListingRef.current?.(listing.lat, listing.lon);
     }
+    track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    if (listing.id) openListingDetail(listing.id);
   }
 
-  // Point click on map → highlight card + show ListingPanel at click pos
-  function handleListingClickFromMap(id: number, screenX: number, screenY: number) {
+  // Point click on map → highlight + open drawer
+  function handleListingClickFromMap(id: number, _screenX: number, _screenY: number) {
     setHighlightedListingId(id);
-    // Use full mlsListings (not filtered mapListings) so venta listings work when arriendo tab is active
     const listing = mlsListings.find((l) => l.id === id);
     if (listing) {
-      setSelectedListing(listing);
-      setListingPanelPos({ x: screenX, y: screenY });
+      track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     }
+    openListingDetail(id);
   }
 
   // MLSPanel reports which listings pass its filters → update map GeoJSON
@@ -328,7 +284,6 @@ function MapPage() {
         highlightedListingId={highlightedListingId}
         flyToListingRef={flyToListingRef}
         onListingClickFromMap={handleListingClickFromMap}
-        onListingDblClickFromMap={openListingDetail}
         activeBarrioName={activeBarrioInComune}
         drawModeActive={drawModeActive}
         onDrawPolygon={handleDrawPolygon}
@@ -367,17 +322,6 @@ function MapPage() {
         </>
       )}
 
-      {/* Panel de listing seleccionado (popup flotante) */}
-      {selectedListing && !listingDetailId && (
-        <ListingPanel
-          listing={selectedListing}
-          barrio={barriosRaw?.find((b) => b.barrio_id === selectedListing.barrio_id) ?? null}
-          initialPos={listingPanelPos ?? undefined}
-          onClose={() => { setSelectedListing(null); setListingPanelPos(null); }}
-          onOpenDetail={() => openListingDetail(selectedListing.id)}
-        />
-      )}
-
       {/* Vista 2: panel de listings */}
       {mapView === "listings" && mlsBarrio && (
         <MLSPanel
@@ -407,14 +351,8 @@ function MapPage() {
         />
       )}
 
-      {/* Listing detail modal — overlay sobre el mapa */}
-      {listingDetailId && (
-        <ListingDetailModal
-          listingId={listingDetailId}
-          onClose={closeListingDetail}
-          flyToRef={flyToListingRef}
-        />
-      )}
+      {/* Listing detail drawer — slide-in (desktop) / bottom sheet (mobile) */}
+      <ListingDrawer listingId={listingDetailId} onClose={closeListingDetail} />
     </div>
   );
 }

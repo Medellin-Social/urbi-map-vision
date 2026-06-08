@@ -6,6 +6,7 @@ import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
 import { useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { auth } from "@/lib/auth";
+import { useTarget, TARGET_OPTIONS, targetTipoOperacion } from "@/contexts/TargetContext";
 
 type Props = {
   barrio: Neighborhood;
@@ -40,6 +41,9 @@ type Filters = {
   areaMin: number | null;
   habitaciones: number | null;
   tipoInmueble: string | null;
+  modalidad: "corto" | "medio" | "largo" | null;
+  scoreMin: number | null;
+  yieldMin: number | null;
 };
 
 const TIPO_LABELS: Record<string, string> = {
@@ -250,6 +254,93 @@ function toTitleCase(s: string): string {
   return s.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
+// ── Per-target barrio metrics strip ───────────────────────────────────────────
+
+type BarrioStatsProps = {
+  barrio: import("@/lib/adapters").Neighborhood;
+  target: import("@/contexts/TargetContext").Target;
+  nVenta: number;
+  nArriendo: number;
+  precioMinVenta: number | null;
+  precioMaxVenta: number | null;
+};
+
+function StatChip({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div
+      className="flex flex-col gap-0.5 rounded-lg px-3 py-2"
+      style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}
+    >
+      <span className="text-[10px] uppercase tracking-wider text-[#6B5B45]">{label}</span>
+      <span className="text-sm font-bold text-[#1A1208]">{value}</span>
+      {sub && <span className="text-[10px] text-[#9B8B75]">{sub}</span>}
+    </div>
+  );
+}
+
+function BarrioStats({ barrio, target, nVenta, nArriendo, precioMinVenta, precioMaxVenta }: BarrioStatsProps) {
+  const pm2   = barrio.precio_m2;
+  const canon = barrio.arriendo;
+  const yld   = barrio.yield;
+  const score = barrio.score_activo;
+
+  const fmtM  = (n: number) => `$${(n / 1_000_000).toFixed(0)}M`;
+  const fmtPct= (n: number) => `${n.toFixed(1)}%`;
+
+  if (target === 'buyer') {
+    return (
+      <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+        <StatChip label="Precio/m²" value={fmtM(pm2)} />
+        <StatChip label="Listings venta" value={String(nVenta)} />
+        {precioMinVenta && <StatChip label="Mín venta" value={formatCOP(precioMinVenta)} />}
+        {precioMaxVenta && <StatChip label="Máx venta" value={formatCOP(precioMaxVenta)} />}
+      </div>
+    );
+  }
+
+  if (target === 'seller') {
+    const liqLabel = barrio.liquidez_api?.categoria ?? null;
+    return (
+      <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+        <StatChip label="Precio/m²" value={fmtM(pm2)} />
+        <StatChip label="Listings activos" value={String(nVenta)} />
+        <StatChip label="Arriendo ref." value={formatCOP(canon)} sub="/mes" />
+        {liqLabel && <StatChip label="Liquidez zona" value={liqLabel} />}
+      </div>
+    );
+  }
+
+  if (target === 'landlord') {
+    return (
+      <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+        <StatChip label="Canon promedio" value={formatCOP(canon)} sub="/mes" />
+        {yld != null && <StatChip label="Yield estimado" value={fmtPct(yld)} />}
+        <StatChip label="Listings arriendo" value={String(nArriendo)} />
+        {score != null && <StatChip label="Score inversión" value={String(score)} sub="/100" />}
+      </div>
+    );
+  }
+
+  if (target === 'renter') {
+    return (
+      <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+        <StatChip label="Canon promedio" value={formatCOP(canon)} sub="/mes" />
+        <StatChip label="Listings arriendo" value={String(nArriendo)} />
+      </div>
+    );
+  }
+
+  // investor (default)
+  return (
+    <div className="grid grid-cols-2 gap-2 border-b border-border px-4 py-3">
+      {score != null && <StatChip label="Score inversión" value={String(score)} sub="/100" />}
+      <StatChip label="Precio/m²" value={fmtM(pm2)} />
+      <StatChip label="Canon promedio" value={formatCOP(canon)} sub="/mes" />
+      <StatChip label="En venta" value={String(nVenta)} />
+    </div>
+  );
+}
+
 export function MLSPanel({
   barrio,
   listings,
@@ -281,9 +372,29 @@ export function MLSPanel({
     areaMin: null,
     habitaciones: null,
     tipoInmueble: null,
+    modalidad: null,
+    scoreMin: null,
+    yieldMin: null,
   });
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
+  const { target, setTarget } = useTarget();
+
+  // Reset filters when target changes
+  useEffect(() => {
+    const forced = targetTipoOperacion(target);
+    setFilters({
+      tipoOp: forced ?? "todos",
+      soloPromium: false,
+      precioMax: null,
+      areaMin: null,
+      habitaciones: null,
+      tipoInmueble: null,
+      modalidad: null,
+      scoreMin: null,
+      yieldMin: null,
+    });
+  }, [target]);
 
   // 2-level navigation state
   const [navComuna, setNavComuna] = useState<string | null>(null);
@@ -344,6 +455,19 @@ export function MLSPanel({
   const nArriendo = useMemo(
     () => listings.filter((l) => l.tipo_operacion === "arriendo").length,
     [listings],
+  );
+
+  const ventaListings = useMemo(
+    () => listings.filter((l) => l.tipo_operacion === "venta" && l.precio_cop != null),
+    [listings],
+  );
+  const precioMinVenta = useMemo(
+    () => ventaListings.length ? Math.min(...ventaListings.map((l) => l.precio_cop!)) : null,
+    [ventaListings],
+  );
+  const precioMaxVenta = useMemo(
+    () => ventaListings.length ? Math.max(...ventaListings.map((l) => l.precio_cop!)) : null,
+    [ventaListings],
   );
 
   // Premium state — must be declared before filtered useMemo
@@ -437,6 +561,25 @@ export function MLSPanel({
             <ArrowLeft className="h-3.5 w-3.5" />
             Volver al análisis
           </button>
+
+          {/* Target selector */}
+          <div className="mb-3 flex gap-1.5 flex-wrap">
+            {TARGET_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => setTarget(opt.value)}
+                className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all"
+                style={target === opt.value
+                  ? { background: '#1D9E75', color: '#FFFFFF', border: '0.5px solid #1D9E75' }
+                  : { background: '#F5F0E8', color: '#6B5B45', border: '0.5px solid #E8E0D0' }
+                }
+              >
+                <span>{opt.icon}</span>
+                <span>{opt.labelEs}</span>
+              </button>
+            ))}
+          </div>
+
           <div className="flex flex-col gap-0.5">
             <h2 className="font-display text-base font-semibold">{headerName}</h2>
             {barrio.comuna && barrio.comuna.toUpperCase() !== barrio.nombre.toUpperCase() && (
@@ -469,6 +612,18 @@ export function MLSPanel({
             </p>
           )}
         </div>
+
+        {/* Barrio stats per target */}
+        {!isLoading && (
+          <BarrioStats
+            barrio={barrio}
+            target={target}
+            nVenta={nVenta}
+            nArriendo={nArriendo}
+            precioMinVenta={precioMinVenta}
+            precioMaxVenta={precioMaxVenta}
+          />
+        )}
 
         {/* Navegación 2 niveles: comuna → barrio */}
         {allBarrios && allBarrios.length > 0 && (
@@ -508,123 +663,225 @@ export function MLSPanel({
           </div>
         )}
 
-        {/* Badge área dibujada — disabled, revisar filtros antes de habilitar */}
-
-        {/* Filtros */}
-        <div className="border-b border-border px-4 py-3 space-y-3">
-          {/* Tipo operación + Premium + Dibujar área */}
-          <div className="flex gap-2 flex-wrap">
-            {(["todos", "venta", "arriendo"] as const).map((t) => (
-              <button
-                key={t}
-                onClick={() => setFilters((f) => ({ ...f, tipoOp: t }))}
-                className={btnFilter(filters.tipoOp === t)}
-              >
-                {t === "todos" ? "Todos" : t.charAt(0).toUpperCase() + t.slice(1)}
-              </button>
-            ))}
-            <button
-              onClick={() => setFilters((f) => ({ ...f, soloPromium: !f.soloPromium }))}
-              className={`rounded-md px-2.5 py-1 text-xs font-medium transition border ${
-                filters.soloPromium
-                  ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
-                  : "bg-surface/60 text-muted-foreground border-border hover:text-foreground"
-              }`}
-            >
-              ✦ Premium
-            </button>
-            {/* Botón dibujar área — disabled, revisar filtros antes de habilitar
-            <button onClick={onToggleDrawMode} className={...}>Área</button>
-            */}
-          </div>
-
-          {/* Precio slider */}
-          <div className="space-y-1">
-            <div className="flex items-center justify-between">
-              <span className="text-[11px] text-muted-foreground">Precio máx:</span>
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] font-medium text-foreground">
-                  {filters.precioMax === null ? "Sin límite" : formatCOP(filters.precioMax)}
+        {/* Filtros — target-aware */}
+        {target !== 'seller' && (
+          <div className="border-b border-border px-4 py-3 space-y-3">
+            {/* Tipo operación */}
+            <div className="flex gap-2 flex-wrap">
+              {target === 'buyer' || target === 'renter' ? (
+                <span
+                  className="rounded-md px-2.5 py-1 text-xs font-medium border"
+                  style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}
+                >
+                  {target === 'buyer' ? 'Venta' : 'Arriendo'} (fijo)
                 </span>
-                {filters.precioMax !== null && (
+              ) : (
+                (["todos", "venta", "arriendo"] as const).map((t) => (
                   <button
-                    onClick={() => setFilters((f) => ({ ...f, precioMax: null }))}
-                    className="text-[10px] text-primary hover:text-primary/80 transition"
+                    key={t}
+                    onClick={() => setFilters((f) => ({ ...f, tipoOp: t }))}
+                    className={btnFilter(filters.tipoOp === t)}
                   >
-                    Reset
+                    {t === "todos" ? "Todos" : t.charAt(0).toUpperCase() + t.slice(1)}
                   </button>
-                )}
-              </div>
-            </div>
-            <input
-              type="range"
-              min={0}
-              max={maxPrecioReal}
-              step={50_000_000}
-              value={filters.precioMax ?? maxPrecioReal}
-              onChange={(e) => {
-                const v = Number(e.target.value);
-                setFilters((f) => ({ ...f, precioMax: v >= maxPrecioReal ? null : v }));
-              }}
-              className="w-full accent-[#1D9E75] cursor-pointer"
-            />
-          </div>
-
-          {/* Habitaciones */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground">Habs:</span>
-            {([null, 1, 2, 3, 4] as (number | null)[]).map((h) => (
+                ))
+              )}
               <button
-                key={String(h)}
-                onClick={() => setFilters((f) => ({ ...f, habitaciones: h }))}
-                className={btnFilter(filters.habitaciones === h)}
+                onClick={() => setFilters((f) => ({ ...f, soloPromium: !f.soloPromium }))}
+                className={`rounded-md px-2.5 py-1 text-xs font-medium transition border ${
+                  filters.soloPromium
+                    ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
+                    : "bg-surface/60 text-muted-foreground border-border hover:text-foreground"
+                }`}
               >
-                {h === null ? "Todos" : h === 4 ? "4+" : String(h)}
+                ✦ Premium
               </button>
-            ))}
-          </div>
+            </div>
 
-          {/* Tipo inmueble */}
-          <div className="flex items-center gap-2">
-            <span className="text-[11px] text-muted-foreground shrink-0">Tipo:</span>
-            <select
-              value={filters.tipoInmueble ?? ""}
-              onChange={(e) => setFilters((f) => ({ ...f, tipoInmueble: e.target.value || null }))}
-              className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            >
-              <option value="">Todos los tipos ({listings.length.toLocaleString()})</option>
-              {TIPO_GRUPOS.map((grupo) => (
-                <optgroup key={grupo.label} label={grupo.label}>
-                  {grupo.tipos
-                    .filter((t) => tipoCount[t] > 0)
-                    .map((t) => (
-                      <option key={t} value={t}>
-                        {TIPO_LABELS[t]} ({(tipoCount[t] ?? 0).toLocaleString()})
-                      </option>
-                    ))}
-                </optgroup>
-              ))}
-            </select>
-          </div>
-        </div>
+            {/* LANDLORD: modalidad filter */}
+            {target === 'landlord' && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground shrink-0">Modalidad:</span>
+                {([null, 'corto', 'medio', 'largo'] as const).map((m) => (
+                  <button
+                    key={String(m)}
+                    onClick={() => setFilters((f) => ({ ...f, modalidad: m }))}
+                    className={btnFilter(filters.modalidad === m)}
+                  >
+                    {m === null ? 'Todas' : m === 'corto' ? 'Corto' : m === 'medio' ? 'Medio' : 'Largo'}
+                  </button>
+                ))}
+              </div>
+            )}
 
-        {/* Leyenda */}
-        <div className="flex items-center gap-4 border-b border-border px-4 py-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            Buena oferta
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#5DCAA5]" />
-            Arriendo
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1D9E75]" />
-            Venta
-          </div>
-        </div>
+            {/* INVESTOR: score + yield sliders */}
+            {target === 'investor' && (
+              <>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Score mín:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium">
+                        {filters.scoreMin === null ? 'Sin filtro' : `${filters.scoreMin}`}
+                      </span>
+                      {filters.scoreMin !== null && (
+                        <button onClick={() => setFilters((f) => ({ ...f, scoreMin: null }))} className="text-[10px] text-primary">Reset</button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="range" min={0} max={100} step={5}
+                    value={filters.scoreMin ?? 0}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setFilters((f) => ({ ...f, scoreMin: v === 0 ? null : v }));
+                    }}
+                    className="w-full accent-[#1D9E75] cursor-pointer"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] text-muted-foreground">Yield mín:</span>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] font-medium">
+                        {filters.yieldMin === null ? 'Sin filtro' : `${filters.yieldMin}%`}
+                      </span>
+                      {filters.yieldMin !== null && (
+                        <button onClick={() => setFilters((f) => ({ ...f, yieldMin: null }))} className="text-[10px] text-primary">Reset</button>
+                      )}
+                    </div>
+                  </div>
+                  <input
+                    type="range" min={0} max={15} step={0.5}
+                    value={filters.yieldMin ?? 0}
+                    onChange={(e) => {
+                      const v = Number(e.target.value);
+                      setFilters((f) => ({ ...f, yieldMin: v === 0 ? null : v }));
+                    }}
+                    className="w-full accent-[#1D9E75] cursor-pointer"
+                  />
+                </div>
+              </>
+            )}
 
-        {/* Lista */}
+            {/* Precio slider */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] text-muted-foreground">Precio máx:</span>
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] font-medium text-foreground">
+                    {filters.precioMax === null ? "Sin límite" : formatCOP(filters.precioMax)}
+                  </span>
+                  {filters.precioMax !== null && (
+                    <button
+                      onClick={() => setFilters((f) => ({ ...f, precioMax: null }))}
+                      className="text-[10px] text-primary hover:text-primary/80 transition"
+                    >
+                      Reset
+                    </button>
+                  )}
+                </div>
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={maxPrecioReal}
+                step={50_000_000}
+                value={filters.precioMax ?? maxPrecioReal}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setFilters((f) => ({ ...f, precioMax: v >= maxPrecioReal ? null : v }));
+                }}
+                className="w-full accent-[#1D9E75] cursor-pointer"
+              />
+            </div>
+
+            {/* Habitaciones — buyer/renter */}
+            {(target === 'buyer' || target === 'renter') && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground">Habs:</span>
+                {([null, 1, 2, 3, 4] as (number | null)[]).map((h) => (
+                  <button
+                    key={String(h)}
+                    onClick={() => setFilters((f) => ({ ...f, habitaciones: h }))}
+                    className={btnFilter(filters.habitaciones === h)}
+                  >
+                    {h === null ? "Todos" : h === 4 ? "4+" : String(h)}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {/* Tipo inmueble — buyer/landlord/investor */}
+            {(target === 'buyer' || target === 'landlord' || target === 'investor') && (
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-muted-foreground shrink-0">Tipo:</span>
+                <select
+                  value={filters.tipoInmueble ?? ""}
+                  onChange={(e) => setFilters((f) => ({ ...f, tipoInmueble: e.target.value || null }))}
+                  className="flex-1 rounded-md border border-border bg-surface px-2 py-1 text-[11px] text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                >
+                  <option value="">Todos los tipos ({listings.length.toLocaleString()})</option>
+                  {TIPO_GRUPOS.map((grupo) => (
+                    <optgroup key={grupo.label} label={grupo.label}>
+                      {grupo.tipos
+                        .filter((t) => tipoCount[t] > 0)
+                        .map((t) => (
+                          <option key={t} value={t}>
+                            {TIPO_LABELS[t]} ({(tipoCount[t] ?? 0).toLocaleString()})
+                          </option>
+                        ))}
+                    </optgroup>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Leyenda — hide for seller */}
+        {target !== 'seller' && (
+          <div className="flex items-center gap-4 border-b border-border px-4 py-2">
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              Buena oferta
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#5DCAA5]" />
+              Arriendo
+            </div>
+            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
+              <span className="h-2.5 w-2.5 rounded-full bg-[#1D9E75]" />
+              Venta
+            </div>
+          </div>
+        )}
+
+        {/* SELLER: no listing cards — analysis-only view */}
+        {target === 'seller' && (
+          <div className="flex flex-1 flex-col items-center justify-center gap-4 px-6 py-12 text-center">
+            <div className="text-4xl">💰</div>
+            <div className="space-y-1">
+              <p className="text-sm font-semibold text-[#1A1208]">Vista de Vendedor</p>
+              <p className="text-xs text-[#6B5B45]">
+                Las métricas del barrio arriba muestran el contexto de mercado para fijar precio.
+                Cambia a Comprador o Inversor para explorar listings.
+              </p>
+            </div>
+            {barrio.liquidez_api?.tiempo_estimado_venta && (
+              <div
+                className="w-full rounded-xl px-4 py-3 text-left text-xs"
+                style={{ background: '#F5F0E8', border: '0.5px solid #E8E0D0' }}
+              >
+                <span className="text-[#6B5B45]">Tiempo estimado de venta: </span>
+                <span className="font-semibold text-[#1A1208]">{barrio.liquidez_api.tiempo_estimado_venta}</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Lista — buyer/renter/landlord/investor */}
+        {target !== 'seller' && (
         <div ref={listContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
           {isLoading && (
             <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
@@ -663,6 +920,7 @@ export function MLSPanel({
             />
           ))}
         </div>
+        )}
       </motion.aside>
     </AnimatePresence>
   );

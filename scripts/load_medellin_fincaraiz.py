@@ -33,12 +33,13 @@ INSERT INTO raw.listings_fincaraiz
     (fuente, tipo_operacion, tipo_inmueble, precio, area_m2,
      habitaciones, banos, direccion_raw, barrio_id, url,
      barrio_raw, municipio_raw, raw_data, activo,
-     lat, lon, estrato_real, descripcion, amenidades, fecha_scraping)
+     lat, lon, estrato_real, descripcion, amenidades, fotos, fecha_scraping)
 VALUES
-    ('fincaraiz',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,true,%s,%s,%s,%s,%s,NOW())
+    ('fincaraiz',%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s::jsonb,true,%s,%s,%s,%s,%s,%s,NOW())
 ON CONFLICT (url) DO UPDATE SET
     descripcion    = EXCLUDED.descripcion,
     amenidades     = EXCLUDED.amenidades,
+    fotos          = CASE WHEN array_length(EXCLUDED.fotos,1) > 0 THEN EXCLUDED.fotos ELSE listings_fincaraiz.fotos END,
     precio         = EXCLUDED.precio,
     area_m2        = EXCLUDED.area_m2,
     habitaciones   = EXCLUDED.habitaciones,
@@ -49,6 +50,7 @@ ON CONFLICT (url) DO UPDATE SET
 WHERE
     EXCLUDED.descripcion IS NOT NULL
     OR EXCLUDED.amenidades IS NOT NULL
+    OR EXCLUDED.fotos IS NOT NULL
     OR listings_fincaraiz.descripcion IS NULL
 """
 
@@ -109,6 +111,8 @@ def load_file(cur, json_path: Path, dry_run: bool) -> tuple[int, int]:
             "amenidades": amenidades_list,
         })
 
+        fotos_list = lst.get("fotos") or []
+
         if not dry_run:
             cur.execute(UPSERT_SQL, (
                 lst.get("tipo"),                        # tipo_operacion
@@ -128,6 +132,7 @@ def load_file(cur, json_path: Path, dry_run: bool) -> tuple[int, int]:
                 lst.get("estrato") or None,
                 lst.get("descripcion"),
                 amenidades_list if amenidades_list else None,
+                fotos_list if fotos_list else None,
             ))
         inserted += 1
 
