@@ -7,6 +7,7 @@ import {
   ArrowRight, Shield, TrendingUp,
 } from "lucide-react";
 import { useTarget } from "@/contexts/TargetContext";
+import { useIsPro, LockedField } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
@@ -44,10 +45,20 @@ function PhotoGallery({ fotos, titulo }: { fotos?: string[] | null; titulo?: str
   if (!photos.length) {
     return (
       <div
-        className="flex h-56 items-center justify-center text-4xl"
-        style={{ background: "#F5F0E8", borderBottom: "0.5px solid #E8E0D0" }}
+        className="flex h-56 items-center justify-center"
+        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)", borderBottom: "0.5px solid #E8E0D0" }}
       >
-        🏠
+        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 64, height: 64, opacity: 0.4 }}>
+          <rect x="10" y="20" width="40" height="50" rx="2" fill="white"/>
+          <rect x="50" y="32" width="22" height="38" rx="2" fill="white"/>
+          <rect x="16" y="28" width="7" height="7" fill="#1D9E75"/>
+          <rect x="30" y="28" width="7" height="7" fill="#1D9E75"/>
+          <rect x="16" y="40" width="7" height="7" fill="#1D9E75"/>
+          <rect x="30" y="40" width="7" height="7" fill="#1D9E75"/>
+          <rect x="21" y="53" width="10" height="17" fill="#1D9E75"/>
+          <rect x="56" y="40" width="7" height="7" fill="#1D9E75"/>
+          <rect x="56" y="52" width="7" height="7" fill="#1D9E75"/>
+        </svg>
       </div>
     );
   }
@@ -138,6 +149,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const isMobile = useIsMobile();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
   const { target } = useTarget();
+  const isPro = useIsPro();
   const closedRef = useRef(false);
 
   const { data: listing, isLoading } = useQuery<ApiListingDetail>({
@@ -240,7 +252,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                   >
                     {tipoOp}
                   </span>
-                  {listing.buena_oferta && (
+                  {listing.buena_oferta && isPro && (
                     <span
                       className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
                       style={{ background: "#E1F5EE", color: "#085041", border: "0.5px solid #1D9E75" }}
@@ -299,48 +311,59 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             )}
 
             {/* ── Target-specific investment metrics ── */}
-            {(target === 'investor' || target === 'landlord') && (listing.yield_estimado || listing.yield_bruto_pct || listing.score_corto != null || listing.var_anual_pct != null) && (
-              <div
-                className="divide-y overflow-hidden rounded-xl"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", "--tw-divide-opacity": 1 } as React.CSSProperties}
-              >
-                {(listing.yield_estimado || listing.yield_bruto_pct) && (
-                  <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="flex items-center gap-2 text-[#6B5B45]">
-                      <TrendingUp className="h-3.5 w-3.5" /> Yield estimado
-                    </span>
-                    <span className="font-semibold text-[#1D9E75]">
-                      {((listing.yield_estimado ?? listing.yield_bruto_pct) ?? 0).toFixed(1)}%
-                    </span>
-                  </div>
-                )}
+            {(target === 'investor' || target === 'landlord') && (
+              <>
+                {/* FREE: arriendo mediana — always visible */}
                 {listing.arriendo_p50_barrio && (
-                  <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="flex items-center gap-2 text-[#6B5B45]">
-                      💰 Arriendo mediana barrio
-                    </span>
-                    <span className="font-medium">{formatCOP(listing.arriendo_p50_barrio)}/mes</span>
+                  <div
+                    className="flex items-center justify-between rounded-xl px-4 py-3 text-sm"
+                    style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}
+                  >
+                    <span className="text-[#6B5B45]">Canon mediana barrio</span>
+                    <span className="font-semibold">{formatCOP(listing.arriendo_p50_barrio)}/mes</span>
                   </div>
                 )}
-                {listing.var_anual_pct != null && (
-                  <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="flex items-center gap-2 text-[#6B5B45]">
-                      📈 Valorización anual
-                    </span>
-                    <span className={`font-semibold ${listing.var_anual_pct >= 0 ? "text-[#1D9E75]" : "text-[#E24B4A]"}`}>
-                      {listing.var_anual_pct >= 0 ? "+" : ""}{listing.var_anual_pct.toFixed(1)}%
-                    </span>
-                  </div>
+                {/* PAGO: yield, score, valorización */}
+                {isPro ? (
+                  (listing.yield_estimado || listing.yield_bruto_pct || listing.score_corto != null || listing.var_anual_pct != null) && (
+                    <div
+                      className="divide-y overflow-hidden rounded-xl"
+                      style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", "--tw-divide-opacity": 1 } as React.CSSProperties}
+                    >
+                      {(listing.yield_estimado || listing.yield_bruto_pct) && (
+                        <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                          <span className="flex items-center gap-2 text-[#6B5B45]">
+                            <TrendingUp className="h-3.5 w-3.5" /> Yield estimado
+                          </span>
+                          <span className="font-semibold text-[#1D9E75]">
+                            {((listing.yield_estimado ?? listing.yield_bruto_pct) ?? 0).toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+                      {listing.var_anual_pct != null && (
+                        <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                          <span className="flex items-center gap-2 text-[#6B5B45]">
+                            📈 Valorización anual
+                          </span>
+                          <span className={`font-semibold ${listing.var_anual_pct >= 0 ? "text-[#1D9E75]" : "text-[#E24B4A]"}`}>
+                            {listing.var_anual_pct >= 0 ? "+" : ""}{listing.var_anual_pct.toFixed(1)}%
+                          </span>
+                        </div>
+                      )}
+                      {listing.score_corto != null && (
+                        <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                          <span className="flex items-center gap-2 text-[#6B5B45]">
+                            🏆 Score zona
+                          </span>
+                          <span className="font-medium">{listing.score_corto}/100</span>
+                        </div>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <LockedField label="Yield detallado + score desglosado" preview="7.2% · Score 81/100" />
                 )}
-                {listing.score_corto != null && (
-                  <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                    <span className="flex items-center gap-2 text-[#6B5B45]">
-                      🏆 Score zona
-                    </span>
-                    <span className="font-medium">{listing.score_corto}/100</span>
-                  </div>
-                )}
-              </div>
+              </>
             )}
             {target === 'renter' && listing.arriendo_p50_barrio && (
               <div
@@ -352,29 +375,33 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               </div>
             )}
 
-            {/* ── Price history (buyer + investor) ── */}
-            {(target === 'buyer' || target === 'investor') && listing.precio_historia && listing.precio_historia.length > 0 && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-[#1A1208]">Historial de precios</h3>
-                <div
-                  className="divide-y overflow-hidden rounded-xl"
-                  style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" } as React.CSSProperties}
-                >
-                  {listing.precio_historia.map((h, i) => (
-                    <div key={i} className="flex items-center justify-between px-4 py-2 text-xs">
-                      <span className="text-[#6B5B45]">{h.fecha.slice(0, 10)}</span>
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium">{formatCOP(h.precio)}</span>
-                        {h.delta_pct != null && (
-                          <span className={h.delta_pct < 0 ? "text-[#1D9E75]" : "text-[#E24B4A]"}>
-                            {h.delta_pct > 0 ? "+" : ""}{h.delta_pct.toFixed(1)}%
-                          </span>
-                        )}
+            {/* ── Price history (buyer + investor) — PAGO ── */}
+            {(target === 'buyer' || target === 'investor') && (
+              isPro && listing.precio_historia && listing.precio_historia.length > 0 ? (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-[#1A1208]">Historial de precios</h3>
+                  <div
+                    className="divide-y overflow-hidden rounded-xl"
+                    style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" } as React.CSSProperties}
+                  >
+                    {listing.precio_historia.map((h, i) => (
+                      <div key={i} className="flex items-center justify-between px-4 py-2 text-xs">
+                        <span className="text-[#6B5B45]">{h.fecha.slice(0, 10)}</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{formatCOP(h.precio)}</span>
+                          {h.delta_pct != null && (
+                            <span className={h.delta_pct < 0 ? "text-[#1D9E75]" : "text-[#E24B4A]"}>
+                              {h.delta_pct > 0 ? "+" : ""}{h.delta_pct.toFixed(1)}%
+                            </span>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
-              </div>
+              ) : !isPro ? (
+                <LockedField label="Historial de bajadas de precio" preview="3 bajadas detectadas" />
+              ) : null
             )}
 
             {/* ── Details ── */}
@@ -544,7 +571,22 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                             loading="lazy"
                           />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-3xl">🏠</div>
+                          <div
+                            className="flex h-full w-full items-center justify-center"
+                            style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}
+                          >
+                            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 28, height: 28, opacity: 0.45 }}>
+                              <rect x="6" y="12" width="24" height="30" rx="1" fill="white"/>
+                              <rect x="30" y="20" width="14" height="22" rx="1" fill="white"/>
+                              <rect x="10" y="16" width="4" height="4" fill="#1D9E75"/>
+                              <rect x="18" y="16" width="4" height="4" fill="#1D9E75"/>
+                              <rect x="10" y="24" width="4" height="4" fill="#1D9E75"/>
+                              <rect x="18" y="24" width="4" height="4" fill="#1D9E75"/>
+                              <rect x="13" y="32" width="6" height="10" fill="#1D9E75"/>
+                              <rect x="34" y="24" width="4" height="4" fill="#1D9E75"/>
+                              <rect x="34" y="30" width="4" height="4" fill="#1D9E75"/>
+                            </svg>
+                          </div>
                         )}
                       </div>
                       {/* Info */}
@@ -586,9 +628,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       <AnimatePresence>
         {listingId && (
           <>
-            {/* Invisible click-away area (doesn't cover MLSPanel) */}
+            {/* Semi-transparent overlay behind drawer */}
             <div
-              className="pointer-events-auto absolute inset-0 z-30"
+              className="pointer-events-auto absolute inset-0 z-30 bg-black/25"
               onClick={onClose}
             />
             <motion.div

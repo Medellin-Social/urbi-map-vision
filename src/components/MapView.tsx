@@ -259,6 +259,8 @@ export function MapView({
 
   const { data: barriosRaw } = useBarriosRaw(perfil);
   const { target } = useTarget();
+  const targetRef = useRef(target);
+  useEffect(() => { targetRef.current = target; }, [target]);
 
   const geoJsonData = useMemo(() => {
     if (!barriosRaw?.length) return null;
@@ -518,21 +520,50 @@ export function MapView({
         map.setFeatureState({ source: "barrios", id }, { hover: true });
         map.getCanvas().style.cursor = "pointer";
         const nombre = f.properties?.nombre ?? "";
-        const score = f.properties?.score_activo as number | null;
-        const cat = f.properties?.cat_activo ?? "—";
         const excluido = f.properties?.excluir_inversion === true;
-        const sinDatos = !excluido && (score === null || score < 20);
-        const scoreHtml = excluido
-          ? `<span style="color:#9ca3af;font-size:11px;">No disponible</span>`
-          : sinDatos
-          ? `<span style="color:#9ca3af;font-size:11px;">${cat}</span>`
-          : `<span style="color:#1D9E75;font-weight:700;">${score}</span><span style="color:#9B8B75;font-size:11px;"> ${cat}</span>`;
+        const t = targetRef.current;
+
+        const fmtCOP = (n: number) =>
+          n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(0)}M` : `$${n.toLocaleString()}`;
+
+        let metricHtml = "";
+        if (excluido) {
+          metricHtml = `<span style="color:#9ca3af;font-size:11px;">No disponible</span>`;
+        } else if (t === "buyer") {
+          const pm2 = f.properties?.precio_m2_cop as number | null;
+          metricHtml = pm2
+            ? `<span style="color:#639922;font-weight:700;">${fmtCOP(pm2)}/m²</span>`
+            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
+        } else if (t === "seller") {
+          const liq = f.properties?.liquidez_tiempo as string | null;
+          metricHtml = liq
+            ? `<span style="color:#1D9E75;font-size:11px;">${liq}</span>`
+            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
+        } else if (t === "landlord") {
+          const y = f.properties?.yield_bruto_pct as number | null;
+          metricHtml = y
+            ? `<span style="color:#1D9E75;font-weight:700;">${y.toFixed(1)}% yield</span>`
+            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
+        } else if (t === "renter") {
+          const canon = f.properties?.arriendo_p50_cop as number | null;
+          metricHtml = canon
+            ? `<span style="color:#BA7517;font-weight:700;">${fmtCOP(canon)}/mes</span>`
+            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
+        } else {
+          // investor
+          const score = f.properties?.score_activo as number | null;
+          const cat = f.properties?.cat_activo ?? "—";
+          metricHtml = (score === null || score < 20)
+            ? `<span style="color:#9ca3af;font-size:11px;">${cat}</span>`
+            : `<span style="color:#1D9E75;font-weight:700;">${score}</span><span style="color:#9B8B75;font-size:11px;"> ${cat}</span>`;
+        }
+
         popup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="display:flex;align-items:center;gap:8px;">
               <span style="font-weight:600;letter-spacing:.04em;">${nombre}</span>
-              ${scoreHtml}
+              ${metricHtml}
             </div>`
           )
           .addTo(map);

@@ -249,6 +249,10 @@ export type ApiListing = {
   disponible_actualmente?: boolean | null;
   fecha_ultima_verificacion?: string | null;
   favoritos_count?: number | null;
+  foto_principal?: string | null;
+  // Barrio context — always included (from analytics.barrios_contexto JOIN)
+  barrio_score?: number | null;  // ctx.score_corto
+  barrio_yield?: number | null;  // ctx.yield_bruto_pct
   // Personalization — present when user is authenticated with a perfil
   relevancia_score?: number | null;
   match_label?: string | null;
@@ -547,6 +551,13 @@ export function barriosToGeoJSON(
           cat_activo: excluir ? "No disponible" : scoreLabel(score, perfil, risk),
           excluir_inversion: excluir,
           in_budget,
+          // Target-specific hover metrics
+          precio_m2_cop: b.mercado.precio_m2_cop ?? null,
+          arriendo_p50_cop: b.mercado.arriendo_p50_cop ?? null,
+          yield_bruto_pct: b.mercado.yield_bruto_pct ?? null,
+          liquidez_tiempo: b.liquidez?.tiempo_estimado_venta ?? null,
+          listings_venta_count: null,
+          listings_arriendo_count: null,
         },
         geometry: b.geometry ?? { type: "Polygon", coordinates: [[]] },
       };

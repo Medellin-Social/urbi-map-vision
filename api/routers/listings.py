@@ -53,6 +53,10 @@ class ListingFull(BaseModel):
     estrato_real: Optional[int] = None
     tier: Optional[str] = None
     favoritos_count: Optional[int] = None
+    foto_principal: Optional[str] = None
+    # Barrio context — always included (from analytics.barrios_contexto JOIN)
+    barrio_score: Optional[float] = None   # ctx.score_corto
+    barrio_yield: Optional[float] = None   # ctx.yield_bruto_pct
     # Personalization fields — populated when user is authenticated with a perfil
     relevancia_score: Optional[float] = None
     match_label: Optional[str] = None
@@ -110,7 +114,8 @@ WITH lraw AS (
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
                WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
                ELSE NULL
-           END AS pm2
+           END AS pm2,
+           fotos[1] AS foto_principal
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -166,8 +171,10 @@ SELECT
                                   AS dias_en_mercado,
     NULL::timestamp               AS fecha_ultima_verificacion,
     ctx.yield_bruto_pct,
+    ctx.yield_bruto_pct              AS barrio_yield,
     ctx.n_listings_airbnb,
     ctx.score_corto,
+    ctx.score_corto                  AS barrio_score,
     ctx.score_mediano,
     ctx.score_largo,
     ctx.liquidez_score,
@@ -176,7 +183,8 @@ SELECT
     ctx.var_anual_pct,
     ctx.pct_wifi,
     g.estrato_real,
-    COALESCE(_fav.favoritos_count, 0) AS favoritos_count
+    COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
+    l.foto_principal
 FROM lraw l
 JOIN raw.barrios b                    ON b.id = l.barrio_id
 JOIN analytics.listings_georef g      ON g.url = l.url

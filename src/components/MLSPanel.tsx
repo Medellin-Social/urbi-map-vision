@@ -43,7 +43,9 @@ type Filters = {
   tipoInmueble: string | null;
   modalidad: "corto" | "medio" | "largo" | null;
   scoreMin: number | null;
+  scoreMax: number | null;
   yieldMin: number | null;
+  yieldMax: number | null;
 };
 
 const TIPO_LABELS: Record<string, string> = {
@@ -132,12 +134,51 @@ function ListingCard({
     <div
       ref={cardRef}
       onClick={(e) => onSelect(e)}
-      className="cursor-pointer rounded-lg border p-3 transition-all hover:bg-[#F5F0E8]"
+      className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F5F0E8]"
       style={highlighted
         ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
         : { border: '0.5px solid #E8E0D0', background: '#FFFFFF' }
       }
     >
+      {/* Photo */}
+      <div className="relative h-[140px] w-full overflow-hidden" style={{ background: '#F5F0E8' }}>
+        {listing.foto_principal ? (
+          <img
+            src={listing.foto_principal}
+            alt=""
+            className="h-full w-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <div
+            className="flex h-full w-full items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #085041 100%)' }}
+          >
+            <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 36, height: 36, opacity: 0.45 }}>
+              <rect x="6" y="12" width="24" height="30" rx="1" fill="white"/>
+              <rect x="30" y="20" width="14" height="22" rx="1" fill="white"/>
+              <rect x="10" y="16" width="4" height="4" fill="#1D9E75"/>
+              <rect x="18" y="16" width="4" height="4" fill="#1D9E75"/>
+              <rect x="10" y="24" width="4" height="4" fill="#1D9E75"/>
+              <rect x="18" y="24" width="4" height="4" fill="#1D9E75"/>
+              <rect x="13" y="32" width="6" height="10" fill="#1D9E75"/>
+              <rect x="34" y="24" width="4" height="4" fill="#1D9E75"/>
+              <rect x="34" y="30" width="4" height="4" fill="#1D9E75"/>
+            </svg>
+          </div>
+        )}
+        {/* VENTA/ARRIENDO badge over photo */}
+        <span
+          className="absolute top-2 left-2 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+          style={{
+            background: listing.tipo_operacion === "arriendo" ? "#E1F5EE" : "#FAECE7",
+            color:      listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+          }}
+        >
+          {tipo}
+        </span>
+      </div>
+      <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {listing.tier === "agencia_premium" && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30">
@@ -245,6 +286,7 @@ function ListingCard({
             {isFav ? "❤️" : "🤍"}
           </button>
         </div>
+      </div>
       </div>
     </div>
   );
@@ -374,7 +416,9 @@ export function MLSPanel({
     tipoInmueble: null,
     modalidad: null,
     scoreMin: null,
+    scoreMax: null,
     yieldMin: null,
+    yieldMax: null,
   });
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
@@ -392,7 +436,9 @@ export function MLSPanel({
       tipoInmueble: null,
       modalidad: null,
       scoreMin: null,
+      scoreMax: null,
       yieldMin: null,
+      yieldMax: null,
     });
   }, [target]);
 
@@ -497,6 +543,10 @@ export function MLSPanel({
         if (!ti.includes(filters.tipoInmueble)) return false;
       }
       if (filters.soloPromium && l.tier !== "agencia_premium") return false;
+      if (filters.scoreMin !== null && (l.barrio_score ?? 0) < filters.scoreMin) return false;
+      if (filters.scoreMax !== null && (l.barrio_score ?? 0) > filters.scoreMax) return false;
+      if (filters.yieldMin !== null && (l.barrio_yield ?? 0) < filters.yieldMin) return false;
+      if (filters.yieldMax !== null && (l.barrio_yield ?? 0) > filters.yieldMax) return false;
       return true;
     });
   }, [listings, filters, premiumFilterActive, premiumInCurrent, premiumExpanded]);
@@ -562,9 +612,9 @@ export function MLSPanel({
             Volver al análisis
           </button>
 
-          {/* Target selector */}
+          {/* Target selector — only buyer + renter in listings panel */}
           <div className="mb-3 flex gap-1.5 flex-wrap">
-            {TARGET_OPTIONS.map((opt) => (
+            {TARGET_OPTIONS.filter((opt) => opt.value === 'buyer' || opt.value === 'renter').map((opt) => (
               <button
                 key={opt.value}
                 onClick={() => setTarget(opt.value)}
@@ -714,52 +764,84 @@ export function MLSPanel({
               </div>
             )}
 
-            {/* INVESTOR: score + yield sliders */}
+            {/* INVESTOR: score + yield range sliders */}
             {target === 'investor' && (
               <>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Score mín:</span>
+                    <span className="text-[11px] text-muted-foreground">Score:</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium">
-                        {filters.scoreMin === null ? 'Sin filtro' : `${filters.scoreMin}`}
+                      <span className="text-[11px] font-medium text-foreground">
+                        {filters.scoreMin ?? 0} – {filters.scoreMax ?? 100}
                       </span>
-                      {filters.scoreMin !== null && (
-                        <button onClick={() => setFilters((f) => ({ ...f, scoreMin: null }))} className="text-[10px] text-primary">Reset</button>
+                      {(filters.scoreMin !== null || filters.scoreMax !== null) && (
+                        <button
+                          onClick={() => setFilters((f) => ({ ...f, scoreMin: null, scoreMax: null }))}
+                          className="text-[10px] text-primary"
+                        >Reset</button>
                       )}
                     </div>
                   </div>
-                  <input
-                    type="range" min={0} max={100} step={5}
-                    value={filters.scoreMin ?? 0}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setFilters((f) => ({ ...f, scoreMin: v === 0 ? null : v }));
-                    }}
-                    className="w-full accent-[#1D9E75] cursor-pointer"
-                  />
+                  <div className="space-y-0.5">
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={filters.scoreMin ?? 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        const curMax = filters.scoreMax ?? 100;
+                        setFilters((f) => ({ ...f, scoreMin: v === 0 ? null : v, scoreMax: v > curMax ? (v === 100 ? null : v) : f.scoreMax }));
+                      }}
+                      className="w-full accent-[#1D9E75] cursor-pointer"
+                    />
+                    <input
+                      type="range" min={0} max={100} step={5}
+                      value={filters.scoreMax ?? 100}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        const curMin = filters.scoreMin ?? 0;
+                        setFilters((f) => ({ ...f, scoreMax: v === 100 ? null : v, scoreMin: v < curMin ? (v === 0 ? null : v) : f.scoreMin }));
+                      }}
+                      className="w-full accent-[#1D9E75] cursor-pointer"
+                    />
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] text-muted-foreground">Yield mín:</span>
+                    <span className="text-[11px] text-muted-foreground">Yield:</span>
                     <div className="flex items-center gap-2">
-                      <span className="text-[11px] font-medium">
-                        {filters.yieldMin === null ? 'Sin filtro' : `${filters.yieldMin}%`}
+                      <span className="text-[11px] font-medium text-foreground">
+                        {filters.yieldMin ?? 0}% – {filters.yieldMax ?? 15}%
                       </span>
-                      {filters.yieldMin !== null && (
-                        <button onClick={() => setFilters((f) => ({ ...f, yieldMin: null }))} className="text-[10px] text-primary">Reset</button>
+                      {(filters.yieldMin !== null || filters.yieldMax !== null) && (
+                        <button
+                          onClick={() => setFilters((f) => ({ ...f, yieldMin: null, yieldMax: null }))}
+                          className="text-[10px] text-primary"
+                        >Reset</button>
                       )}
                     </div>
                   </div>
-                  <input
-                    type="range" min={0} max={15} step={0.5}
-                    value={filters.yieldMin ?? 0}
-                    onChange={(e) => {
-                      const v = Number(e.target.value);
-                      setFilters((f) => ({ ...f, yieldMin: v === 0 ? null : v }));
-                    }}
-                    className="w-full accent-[#1D9E75] cursor-pointer"
-                  />
+                  <div className="space-y-0.5">
+                    <input
+                      type="range" min={0} max={15} step={0.5}
+                      value={filters.yieldMin ?? 0}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        const curMax = filters.yieldMax ?? 15;
+                        setFilters((f) => ({ ...f, yieldMin: v === 0 ? null : v, yieldMax: v > curMax ? (v >= 15 ? null : v) : f.yieldMax }));
+                      }}
+                      className="w-full accent-[#1D9E75] cursor-pointer"
+                    />
+                    <input
+                      type="range" min={0} max={15} step={0.5}
+                      value={filters.yieldMax ?? 15}
+                      onChange={(e) => {
+                        const v = Number(e.target.value);
+                        const curMin = filters.yieldMin ?? 0;
+                        setFilters((f) => ({ ...f, yieldMax: v >= 15 ? null : v, yieldMin: v < curMin ? (v === 0 ? null : v) : f.yieldMin }));
+                      }}
+                      className="w-full accent-[#1D9E75] cursor-pointer"
+                    />
+                  </div>
                 </div>
               </>
             )}
