@@ -599,8 +599,8 @@ export function MLSPanel({
         animate={{ x: 0 }}
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 280 }}
-        className="absolute right-0 top-0 z-20 flex h-full w-[380px] max-w-full flex-col shadow-2xl"
-        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)' } as React.CSSProperties}
+        className="max-md:relative max-md:w-full max-md:h-[55vh] md:absolute md:right-0 md:top-0 z-20 flex md:h-full md:w-[380px] max-w-full flex-col shadow-2xl"
+        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties}
       >
         {/* Header */}
         <div className="border-b border-border px-4 pb-3 pt-16">
