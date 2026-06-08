@@ -19,6 +19,8 @@ export const API_ENDPOINTS = {
   listings: (id: number) => `${API_BASE_URL}/barrios/${id}/listings`,
   allListings: `${API_BASE_URL}/listings`,
   listing: (id: number) => `${API_BASE_URL}/listings/${id}`,
+  listingVista: (id: number) => `${API_BASE_URL}/listings/${id}/vista`,
+  listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,
@@ -43,6 +45,15 @@ export const API_ENDPOINTS = {
   ticker: (ciudadId = 1) => `${API_BASE_URL}/comunidad/ticker?ciudad_id=${ciudadId}`,
   todosEventos: `${API_BASE_URL}/comunidad/todos/eventos?limit=20`,
   todosTiendas: `${API_BASE_URL}/comunidad/todos/tiendas?limit=4`,
+
+  // Agentes
+  agentesRegistro: `${API_BASE_URL}/agentes/registro`,
+  agentesAprobados: `${API_BASE_URL}/agentes/aprobados/lista`,
+  agentePerfil: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil`,
+  adminAgentes: `${API_BASE_URL}/agentes/admin`,
+  adminAgenteDetalle: (id: number) => `${API_BASE_URL}/agentes/admin/${id}`,
+  adminAgenteAprobar: (id: number) => `${API_BASE_URL}/agentes/${id}/aprobar`,
+  adminAgenteRechazar: (id: number) => `${API_BASE_URL}/agentes/${id}/rechazar`,
 } as const;
 
 export { API_BASE_URL };

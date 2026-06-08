@@ -16,7 +16,7 @@ from api.db import create_pool, close_pool, get_pool
 from api import parametros
 from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
-from api.routers import admin, afiliados, auth, barrios, business, calculadora, comunidad, embajadores, favoritos, historial, listings, oportunidades, stats, tracking, usuario
+from api.routers import admin, afiliados, agentes, auth, barrios, business, calculadora, comunidad, embajadores, favoritos, historial, listings, oportunidades, stats, tracking, usuario
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -135,6 +135,7 @@ app.include_router(comunidad.router,     prefix="/api/v1/comunidad",        tags
 app.include_router(business.router,      prefix="/api/v1/business",          tags=["business"])
 app.include_router(embajadores.router,   prefix="/api/v1/embajadores",       tags=["embajadores"])
 app.include_router(afiliados.router,     prefix="/api/v1/afiliados",         tags=["afiliados"])
+app.include_router(agentes.router,       prefix="/api/v1/agentes",            tags=["agentes"])
 
 
 @app.get("/", tags=["meta"])

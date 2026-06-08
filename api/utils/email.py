@@ -1,0 +1,120 @@
+"""Simple email sender via SMTP.
+
+Env vars required:
+  SMTP_HOST   — default: smtp.gmail.com
+  SMTP_PORT   — default: 587
+  SMTP_USER   — Gmail address used to send
+  SMTP_PASS   — Gmail app password
+  EMAIL_FROM  — display name + address, default = SMTP_USER
+  ADMIN_EMAIL — Eduard/Ken notification address
+"""
+from __future__ import annotations
+
+import os
+import smtplib
+import asyncio
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from typing import Optional
+
+_SMTP_HOST  = os.getenv("SMTP_HOST", "smtp.gmail.com")
+_SMTP_PORT  = int(os.getenv("SMTP_PORT", "587"))
+_SMTP_USER  = os.getenv("SMTP_USER", "")
+_SMTP_PASS  = os.getenv("SMTP_PASS", "")
+_FROM       = os.getenv("EMAIL_FROM", _SMTP_USER)
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "edwardgiraldo101@gmail.com")
+
+
+def _send_sync(to: str, subject: str, html: str) -> None:
+    if not _SMTP_USER or not _SMTP_PASS:
+        # Dev fallback: print to stdout so the feature doesn't break
+        print(f"[EMAIL STUB] To={to} Subject={subject}")
+        return
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"]    = _FROM
+    msg["To"]      = to
+    msg.attach(MIMEText(html, "html"))
+
+    with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
+        server.ehlo()
+        server.starttls()
+        server.login(_SMTP_USER, _SMTP_PASS)
+        server.sendmail(_FROM, [to], msg.as_string())
+
+
+async def send_email(to: str, subject: str, html: str) -> None:
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, _send_sync, to, subject, html)
+
+
+# ── Templates ─────────────────────────────────────────────────────────────────
+
+def _wrap(body: str) -> str:
+    return f"""
+    <div style="font-family:Inter,sans-serif;max-width:600px;margin:0 auto;padding:24px;color:#14201d">
+      <div style="background:#1D9E75;padding:16px 24px;border-radius:8px 8px 0 0">
+        <h2 style="color:#fff;margin:0;font-family:Georgia,serif">Medellín Social</h2>
+      </div>
+      <div style="background:#fff;padding:24px;border:1px solid #e9e4d8;border-top:none;border-radius:0 0 8px 8px">
+        {body}
+      </div>
+      <p style="font-size:11px;color:#999;text-align:center;margin-top:16px">
+        Medellín Social · Valle de Aburrá, Colombia
+      </p>
+    </div>
+    """
+
+
+async def notify_admin_new_agente(nombre: str, cedula: str, email: str, telefono: str, admin_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Nueva solicitud de agente</h3>
+      <table style="width:100%;border-collapse:collapse">
+        <tr><td style="padding:6px;color:#62736d;width:140px">Nombre</td><td style="padding:6px;font-weight:600">{nombre}</td></tr>
+        <tr><td style="padding:6px;color:#62736d">Cédula</td><td style="padding:6px">{cedula}</td></tr>
+        <tr><td style="padding:6px;color:#62736d">Email</td><td style="padding:6px">{email}</td></tr>
+        <tr><td style="padding:6px;color:#62736d">Teléfono</td><td style="padding:6px">{telefono}</td></tr>
+      </table>
+      <div style="margin-top:20px">
+        <a href="{admin_url}" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+          Ver en panel admin
+        </a>
+      </div>
+    """)
+    await send_email(ADMIN_EMAIL, f"Nueva solicitud de agente — {nombre}", html)
+
+
+async def notify_agente_aprobado(email: str, nombre: str, dashboard_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">¡Tu cuenta de agente fue aprobada!</h3>
+      <p>Hola {nombre},</p>
+      <p>Tu solicitud ha sido revisada y aprobada. Ya puedes publicar listings en Medellín Social.</p>
+      <div style="margin-top:20px">
+        <a href="{dashboard_url}" style="background:#1D9E75;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+          Ir a mi perfil
+        </a>
+      </div>
+      <p style="margin-top:16px;font-size:13px;color:#62736d">
+        Para publicar tu primer listing ve a la sección Real Estate desde el menú principal.
+      </p>
+    """)
+    await send_email(email, "¡Tu cuenta de agente en Medellín Social fue aprobada!", html)
+
+
+async def notify_agente_rechazado(email: str, nombre: str, motivo: str, formulario_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#D85A30">Solicitud — información adicional requerida</h3>
+      <p>Hola {nombre},</p>
+      <p>Revisamos tu solicitud y necesitamos que corrijas lo siguiente:</p>
+      <blockquote style="border-left:3px solid #D85A30;padding:8px 16px;background:#FAECE7;border-radius:0 6px 6px 0;color:#14201d">
+        {motivo}
+      </blockquote>
+      <p>Una vez corregida la información puedes reenviar tu solicitud:</p>
+      <div style="margin-top:16px">
+        <a href="{formulario_url}" style="background:#D85A30;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+          Corregir y reenviar
+        </a>
+      </div>
+    """)
+    await send_email(email, "Solicitud de agente — información adicional requerida", html)

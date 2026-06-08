@@ -30,6 +30,8 @@ import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
+import { Route as AgentesRegistroRouteImport } from './routes/agentes/registro'
+import { Route as AdminAgentesRouteImport } from './routes/admin/agentes'
 
 const SuscribirseRoute = SuscribirseRouteImport.update({
   id: '/suscribirse',
@@ -137,6 +139,16 @@ const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
   path: '/eventos/$barrio_slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
+  id: '/agentes/registro',
+  path: '/agentes/registro',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAgentesRoute = AdminAgentesRouteImport.update({
+  id: '/admin/agentes',
+  path: '/admin/agentes',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -156,6 +168,8 @@ export interface FileRoutesByFullPath {
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -179,6 +193,8 @@ export interface FileRoutesByTo {
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -203,6 +219,8 @@ export interface FileRoutesById {
   '/simulador': typeof SimuladorRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -228,6 +246,8 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/stores'
     | '/suscribirse'
+    | '/admin/agentes'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -251,6 +271,8 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/stores'
     | '/suscribirse'
+    | '/admin/agentes'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -274,6 +296,8 @@ export interface FileRouteTypes {
     | '/simulador'
     | '/stores'
     | '/suscribirse'
+    | '/admin/agentes'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -298,6 +322,8 @@ export interface RootRouteChildren {
   SimuladorRoute: typeof SimuladorRoute
   StoresRoute: typeof StoresRoute
   SuscribirseRoute: typeof SuscribirseRoute
+  AdminAgentesRoute: typeof AdminAgentesRoute
+  AgentesRegistroRoute: typeof AgentesRegistroRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
@@ -453,6 +479,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosBarrio_slugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agentes/registro': {
+      id: '/agentes/registro'
+      path: '/agentes/registro'
+      fullPath: '/agentes/registro'
+      preLoaderRoute: typeof AgentesRegistroRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/agentes': {
+      id: '/admin/agentes'
+      path: '/admin/agentes'
+      fullPath: '/admin/agentes'
+      preLoaderRoute: typeof AdminAgentesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -474,6 +514,8 @@ const rootRouteChildren: RootRouteChildren = {
   SimuladorRoute: SimuladorRoute,
   StoresRoute: StoresRoute,
   SuscribirseRoute: SuscribirseRoute,
+  AdminAgentesRoute: AdminAgentesRoute,
+  AgentesRegistroRoute: AgentesRegistroRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
