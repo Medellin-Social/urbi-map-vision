@@ -24,7 +24,7 @@ type Props = {
   risk?: string;
   mostrarOportunidades?: boolean;
   budgetRange?: [number, number] | null;
-  onViewLevelChange?: (level: "comunas" | "barrios", comunaNombre: string | null) => void;
+  onViewLevelChange?: (level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null) => void;
   returnToComunasRef?: React.MutableRefObject<(() => void) | null>;
   onGoToMLS?: (n: Neighborhood) => void;
   // Vista 2 — MLS
@@ -296,7 +296,7 @@ export function MapView({
     map.fitBounds(bounds, { padding: 60, maxZoom: 14, speed: 0.85 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
-    onViewLevelChangeRef.current?.("barrios", nombre);
+    onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null);
   }
 
   // Exponer goToComunas al padre via ref
@@ -618,15 +618,26 @@ export function MapView({
     if (!map || !mapLoadedRef.current || !comunasGeoJSON) return;
     const source = map.getSource("comunas") as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
-    // Fetch non-Medellín static files and merge with API Medellín features
+    // Load ALL static files; API Medellín communes override static ones by cd_comuna
     Promise.all(
-      COMUNAS_FILES.filter((f) => !f.includes("medellin")).map((f) =>
+      COMUNAS_FILES.map((f) =>
         fetch(f)
           .then((r) => r.json())
           .catch(() => ({ type: "FeatureCollection", features: [] }))
       )
     ).then((results: { features: unknown[] }[]) => {
-      const staticFeatures = results.flatMap((fc) => fc.features ?? []);
+      // cd_comunas already covered by the API (Medellín communes with metrics)
+      const apiCdComunas = new Set(
+        comunasGeoJSON.features.map((f) => f.properties?.cd_comuna).filter((c) => c != null)
+      );
+      // Keep static features only if API doesn't already have that cd_comuna
+      const staticFeatures = results
+        .flatMap((fc) => fc.features ?? [])
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        .filter((f: any) => {
+          const cd = f.properties?.cd_comuna;
+          return cd == null || !apiCdComunas.has(cd);
+        });
       source.setData({
         type: "FeatureCollection",
         features: [...comunasGeoJSON.features, ...staticFeatures],

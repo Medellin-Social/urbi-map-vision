@@ -134,23 +134,29 @@ function MapPageInner() {
   // Drill-down state
   const [viewLevel, setViewLevel] = useState<"comunas" | "barrios">("comunas");
   const [activeComuna, setActiveComuna] = useState<string | null>(null);
+  const [activeMunicipio, setActiveMunicipio] = useState<string | null>(null);
   const returnToComunasRef = useRef<(() => void) | null>(null);
 
-  // Commune-level listings query (fires when a commune is selected but no specific barrio)
-  const comunaQueryName = mlsBarrio == null ? (activeComuna ?? undefined) : undefined;
-  const { data: comunaData, isLoading: comunaIsLoading } = useListings(null, 500, 0, undefined, false, apiFilters, comunaQueryName);
+  // Derive query params: commune or municipality filter (only when no specific barrio)
+  const comunaQueryName    = mlsBarrio == null && !activeMunicipio ? (activeComuna    ?? undefined) : undefined;
+  const municipioQueryName = mlsBarrio == null                     ? (activeMunicipio ?? undefined) : undefined;
 
-  // Merged listings: barrio-level OR commune-level
+  const { data: comunaData, isLoading: comunaIsLoading } = useListings(
+    null, 500, 0, undefined, false, apiFilters, comunaQueryName, municipioQueryName,
+  );
+
+  // Merged listings: specific barrio OR commune/municipality-level
   const mergedListings = mlsBarrio ? mlsListings : (comunaData?.listings ?? []);
-  const mergedLoading = mlsBarrio ? mlsIsLoading : comunaIsLoading;
+  const mergedLoading  = mlsBarrio ? mlsIsLoading : comunaIsLoading;
   const mlsTotal = mergedListings.length;
 
-  // Barrio shown in the panel — real barrio or synthetic commune placeholder
-  const panelBarrio: Neighborhood | null = mlsBarrio ?? (activeComuna ? {
+  // Panel zone label — real barrio > active commune > active municipality
+  const activePanelName = activeComuna ?? activeMunicipio;
+  const panelBarrio: Neighborhood | null = mlsBarrio ?? (activePanelName ? {
     id: -1,
-    nombre: activeComuna,
-    comuna: activeComuna,
-    municipio: "MEDELLÍN",
+    nombre: activePanelName,
+    comuna: activePanelName,
+    municipio: activeMunicipio ?? "MEDELLÍN",
     estrato: 0,
     precio_m2: 0, arriendo: 0, yield: 0, anos_recupero: 0,
     dist_metro: 0, dist_parque: 0, dist_mall: 0,
@@ -223,12 +229,22 @@ function MapPageInner() {
     window.history.pushState({}, "", "/map");
   }
 
-  function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null) {
+  function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null) {
     setViewLevel(level);
-    setActiveComuna(comunaNombre);
     if (level === "comunas") {
+      setActiveComuna(null);
+      setActiveMunicipio(null);
       setSelected(null);
     } else if (level === "barrios" && comunaNombre) {
+      if (municipioFilter) {
+        // Non-Medellín municipality block → filter by municipio
+        setActiveMunicipio(municipioFilter);
+        setActiveComuna(null);
+      } else {
+        // Medellín commune → filter by comuna
+        setActiveComuna(comunaNombre);
+        setActiveMunicipio(null);
+      }
       setMlsBarrio(null);
       setFilteredListings(null);
       setMapView("listings");
@@ -293,6 +309,7 @@ function MapPageInner() {
     setMapView("zonas");
     setMlsBarrio(null);
     setActiveComuna(null);
+    setActiveMunicipio(null);
     setViewLevel("comunas");
     setHighlightedListingId(null);
     setActiveBarrioInComune(null);
