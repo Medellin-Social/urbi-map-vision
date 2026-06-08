@@ -215,6 +215,7 @@ export function MapView({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
+  const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
   // Nivel de vista actual — ref para acceso dentro de closures de Mapbox
   const viewLevelRef = useRef<"comunas" | "barrios">("comunas");
@@ -280,7 +281,7 @@ export function MapView({
     map.setLayoutProperty("barrios-line",  "visibility", "none");
     map.setLayoutProperty("barrios-label", "visibility", "none");
     // Volver a vista Valle de Aburrá
-    map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: 35, bearing: -10, speed: 0.9 });
+    map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed: 0.9 });
     viewLevelRef.current = "comunas";
     activeComunaRef.current = null;
     onViewLevelChangeRef.current?.("comunas", null);
@@ -330,17 +331,24 @@ export function MapView({
     if (tokenError || !containerRef.current || mapRef.current) return;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
-    const styleId = auth.get()?.mapStyle ?? "dark";
+    const styleId = auth.get()?.mapStyle ?? "light";
+    const isMobile = window.innerWidth < 768;
+    isMobileRef.current = isMobile;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/dark-v11",
+      style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/light-v11",
       center: [-75.5812, 6.2442],
       zoom: 11.5,
-      pitch: 35,
-      bearing: -10,
+      pitch: isMobile ? 0 : 35,
+      bearing: isMobile ? 0 : -10,
       antialias: true,
     });
     mapRef.current = map;
+
+    if (isMobile) {
+      map.dragRotate.disable();
+      map.touchZoomRotate.disableRotation();
+    }
 
     map.addControl(new mapboxgl.NavigationControl({ visualizePitch: true, showCompass: true }), "bottom-right");
 
@@ -396,8 +404,8 @@ export function MapView({
           "text-transform": "uppercase",
         },
         paint: {
-          "text-color": "#f9fafb",
-          "text-halo-color": "rgba(10, 14, 26, 0.9)",
+          "text-color": "#1A1208",
+          "text-halo-color": "rgba(250,247,242,0.9)",
           "text-halo-width": 1.5,
         },
       });
@@ -416,11 +424,11 @@ export function MapView({
           "fill-color": ["get", "color_hex"],
           "fill-opacity": [
             "case",
-            ["boolean", ["feature-state", "selected"], false], 0.85,
-            ["boolean", ["feature-state", "hover"], false], 0.75,
+            ["boolean", ["feature-state", "selected"], false], 0.88,
+            ["boolean", ["feature-state", "hover"], false], 0.78,
             ["==", ["get", "in_budget"], false], 0.07,
             ["==", ["get", "color_hex"], "#00d4ff"], 0.2,
-            0.5,
+            0.6,
           ],
         },
       });
@@ -431,8 +439,8 @@ export function MapView({
         source: "barrios",
         layout: { visibility: "none" },
         paint: {
-          "line-color": "#ffffff",
-          "line-opacity": 0.45,
+          "line-color": "#1A1208",
+          "line-opacity": 0.5,
           "line-width": [
             "case",
             ["boolean", ["feature-state", "selected"], false], 2.5,
@@ -456,9 +464,9 @@ export function MapView({
           "text-transform": "uppercase",
         },
         paint: {
-          "text-color": "#f9fafb",
-          "text-halo-color": "rgba(10, 14, 26, 0.9)",
-          "text-halo-width": 1.4,
+          "text-color": "#FAF7F2",
+          "text-halo-color": "rgba(14,10,6,0.88)",
+          "text-halo-width": 1.6,
         },
       });
 
@@ -741,6 +749,13 @@ export function MapView({
         maxzoom: 14,
       });
       map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
+      map.setFog({
+        color: "#FAF7F2",
+        "high-color": "#d4c9b8",
+        "horizon-blend": 0.08,
+        "space-color": "#FAF7F2",
+        "star-intensity": 0,
+      });
     });
 
     return () => {

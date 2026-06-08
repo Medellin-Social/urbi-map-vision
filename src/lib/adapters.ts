@@ -459,11 +459,11 @@ export function parseBudgetCop(budget?: string | null): [number, number] | null 
 
 // Fixed palette per spec — same for all palettes/risk levels
 const TC = {
-  verde: "#639922",
-  teal:  "#1D9E75",
-  amber: "#BA7517",
-  rojo:  "#E24B4A",
-  gris:  "#888780",
+  verde: "#3d6b0e",
+  teal:  "#0d7a58",
+  amber: "#7a4c0a",
+  rojo:  "#9e2424",
+  gris:  "#4a4945",
 } as const;
 
 export function getTargetBarrioColor(barrio: ApiBarrio, target: Target, _palette?: ScorePaletteId): string {
