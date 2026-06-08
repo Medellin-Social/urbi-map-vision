@@ -108,7 +108,6 @@ function MapPageInner() {
   // comunaQueryName resolved after activeComuna state is declared (below)
   const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0, undefined, false, apiFilters);
   const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
-  const mlsTotal = mlsListings.length;
   const mlsRadio = mlsData?.radio_usado_metros ?? null;
   const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
 
@@ -144,6 +143,7 @@ function MapPageInner() {
   // Merged listings: barrio-level OR commune-level
   const mergedListings = mlsBarrio ? mlsListings : (comunaData?.listings ?? []);
   const mergedLoading = mlsBarrio ? mlsIsLoading : comunaIsLoading;
+  const mlsTotal = mergedListings.length;
 
   // Barrio shown in the panel — real barrio or synthetic commune placeholder
   const panelBarrio: Neighborhood | null = mlsBarrio ?? (activeComuna ? {

@@ -641,6 +641,10 @@ export function MapView({
     const mlsLayers = ["listings-mls-clusters", "listings-mls-cluster-count", "listings-mls-unclustered"] as const;
 
     if (mapView === "listings") {
+      // Hide commune polygons — only listing dots in MLS mode
+      for (const id of ["comunas-fill", "comunas-line", "comunas-label"] as const) {
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+      }
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
       }
