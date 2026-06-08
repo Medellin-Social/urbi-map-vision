@@ -5,7 +5,7 @@ import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useTarget } from "@/contexts/TargetContext";
-import { useBarriosRaw, useScoreThresholds } from "@/hooks/useBarrios";
+import { useBarriosRaw, useScoreThresholds, useComunasGeoJSON } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 import {
   OPP_COLORS,
@@ -34,6 +34,7 @@ type Props = {
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
+  onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   // Draw-to-filter
   drawModeActive?: boolean;
@@ -202,6 +203,7 @@ export function MapView({
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
+  onListingDoubleClickFromMap,
   activeBarrioName,
   drawModeActive = false,
   onDrawPolygon,
@@ -236,6 +238,8 @@ export function MapView({
 
   const onListingClickFromMapRef = useRef(onListingClickFromMap);
   useEffect(() => { onListingClickFromMapRef.current = onListingClickFromMap; }, [onListingClickFromMap]);
+  const onListingDoubleClickFromMapRef = useRef(onListingDoubleClickFromMap);
+  useEffect(() => { onListingDoubleClickFromMapRef.current = onListingDoubleClickFromMap; }, [onListingDoubleClickFromMap]);
 
 
   const riskRef = useRef(risk);
@@ -268,6 +272,8 @@ export function MapView({
     barriosRef.current = barriosRaw;
     return barriosToGeoJSON(barriosRaw, scorePalette, perfil, budgetRange, risk, target);
   }, [barriosRaw, scorePalette, perfil, budgetRange, risk, thresholdVersion, target]);
+
+  const { data: comunasGeoJSON } = useComunasGeoJSON(perfil, target ?? "investor");
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
@@ -368,11 +374,12 @@ export function MapView({
         type: "fill",
         source: "comunas",
         paint: {
-          "fill-color": "#1e3a5f",
+          "fill-color": ["coalesce", ["get", "color_hex"], "#1e3a5f"],
           "fill-opacity": [
             "case",
-            ["boolean", ["feature-state", "hover"], false], 0.65,
-            0.42,
+            ["boolean", ["feature-state", "hover"], false], 0.78,
+            ["==", ["get", "has_data"], true], 0.55,
+            0.38,
           ],
         },
       });
@@ -485,10 +492,34 @@ export function MapView({
         map.setFeatureState({ source: "comunas", id }, { hover: true });
         map.getCanvas().style.cursor = "pointer";
         const nombre = f.properties?.nombre ?? "";
+        const t = targetRef.current;
+        const fmtM = (n: number) => `$${(n / 1_000_000).toFixed(1)}M/m²`;
+        const fmtCOP = (n: number) => `$${(n / 1_000_000).toFixed(0)}M`;
+        let metricHtml = "";
+        const hasData = f.properties?.has_data === true;
+        if (hasData) {
+          if (t === "buyer") {
+            const pm2 = f.properties?.precio_m2_cop as number | null;
+            metricHtml = pm2 ? `<span style="color:#639922;font-weight:700;">${fmtM(pm2)}</span>` : "";
+          } else if (t === "seller") {
+            const liq = f.properties?.liquidez_score as number | null;
+            metricHtml = liq != null ? `<span style="color:#1D9E75;font-weight:700;">Liquidez ${liq}</span>` : "";
+          } else if (t === "landlord") {
+            const y = f.properties?.yield_promedio as number | null;
+            metricHtml = y ? `<span style="color:#1D9E75;font-weight:700;">${y.toFixed(1)}% yield</span>` : "";
+          } else if (t === "renter") {
+            const arr = f.properties?.arriendo_cop as number | null;
+            metricHtml = arr ? `<span style="color:#BA7517;font-weight:700;">${fmtCOP(arr)}/mes</span>` : "";
+          } else {
+            const sc = f.properties?.score_promedio as number | null;
+            metricHtml = sc != null ? `<span style="color:#1D9E75;font-weight:700;">Score ${sc}</span>` : "";
+          }
+        }
         comunaPopup
           .setLngLat(e.lngLat)
           .setHTML(
             `<div style="font-weight:600;letter-spacing:.05em;font-size:13px;">${nombre}</div>
+             ${metricHtml ? `<div style="font-size:11px;margin-top:3px;">${metricHtml}</div>` : ""}
              <div style="color:#9ca3af;font-size:11px;margin-top:2px;">Click para ver barrios</div>`
           )
           .addTo(map);
@@ -694,21 +725,30 @@ export function MapView({
         );
       });
 
-      // Click en punto individual → resaltar en panel
+      // Click en punto individual → mini popup (debounced to distinguish dblclick)
+      let _pendingClick: ReturnType<typeof setTimeout> | null = null;
       map.on("click", "listings-mls-unclustered", (e) => {
         if (!e.features?.length) return;
         const props = e.features[0].properties as Record<string, unknown>;
         const coords = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
-        // Ajuste para copias del mundo cuando zoom out
         while (Math.abs(e.lngLat.lng - coords[0]) > 180) {
           coords[0] += e.lngLat.lng > coords[0] ? 360 : -360;
         }
         const point = map.project(coords);
-        onListingClickFromMapRef.current?.(
-          props.id as number,
-          point.x,
-          point.y,
-        );
+        if (_pendingClick !== null) return;
+        _pendingClick = setTimeout(() => {
+          _pendingClick = null;
+          onListingClickFromMapRef.current?.(props.id as number, point.x, point.y);
+        }, 220);
+      });
+
+      // Doble click en punto → abrir drawer directo
+      map.on("dblclick", "listings-mls-unclustered", (e) => {
+        e.preventDefault();
+        if (_pendingClick !== null) { clearTimeout(_pendingClick); _pendingClick = null; }
+        if (!e.features?.length) return;
+        const props = e.features[0].properties as Record<string, unknown>;
+        onListingDoubleClickFromMapRef.current?.(props.id as number);
       });
 
       map.on("mouseenter", "listings-mls-clusters",    () => { map.getCanvas().style.cursor = "pointer"; });
@@ -781,6 +821,28 @@ export function MapView({
       markersRef.current = [];
     }
   }, [geoJsonData, mostrarOportunidades]);
+
+  // ── Actualizar capa comunas con datos de API (Medellín coloreado) ────────────
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || !comunasGeoJSON) return;
+    const source = map.getSource("comunas") as mapboxgl.GeoJSONSource | undefined;
+    if (!source) return;
+    // Fetch non-Medellín static files and merge with API Medellín features
+    Promise.all(
+      COMUNAS_FILES.filter((f) => !f.includes("medellin")).map((f) =>
+        fetch(f)
+          .then((r) => r.json())
+          .catch(() => ({ type: "FeatureCollection", features: [] }))
+      )
+    ).then((results: { features: unknown[] }[]) => {
+      const staticFeatures = results.flatMap((fc) => fc.features ?? []);
+      source.setData({
+        type: "FeatureCollection",
+        features: [...comunasGeoJSON.features, ...staticFeatures],
+      } as GeoJSON.FeatureCollection);
+    });
+  }, [comunasGeoJSON]);
 
   // ── Sync selección de barrio ─────────────────────────────────────────────────
   useEffect(() => {

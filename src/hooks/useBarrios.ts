@@ -576,15 +576,23 @@ export function useAllListings(filters: AllListingsFilters) {
   });
 }
 
+export type ListingsApiFilters = {
+  area_min?: number | null;
+  area_max?: number | null;
+  banos?: number | null;
+  antiguedad?: string | null;
+};
+
 export function useListings(
   barrioId: number | null,
   limit = 50,
   offset = 0,
   tipoOperacion?: "venta" | "arriendo",
   onlyPremium = false,
+  extraFilters?: ListingsApiFilters,
 ) {
   return useQuery({
-    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium],
+    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null],
     queryFn: async (): Promise<ApiListingsResponse> => {
       // Static path for synthetic barrios (non-API municipalities)
       const fake = barrioId != null ? _fakeBarrioIndex.get(barrioId) : undefined;
@@ -622,6 +630,10 @@ export function useListings(
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
       if (barrioId != null) params.set("barrio_id", String(barrioId));
       if (onlyPremium) params.set("only_premium", "true");
+      if (extraFilters?.area_min != null) params.set("area_min", String(extraFilters.area_min));
+      if (extraFilters?.area_max != null) params.set("area_max", String(extraFilters.area_max));
+      if (extraFilters?.banos != null) params.set("banos", String(extraFilters.banos));
+      if (extraFilters?.antiguedad) params.set("antiguedad", extraFilters.antiguedad);
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
     enabled: barrioId != null,
@@ -666,6 +678,42 @@ export function useBarriosPorComuna(key: string | null) {
       ),
     enabled: key !== null,
     staleTime: 5 * 60 * 1000,
+    retry: 1,
+  });
+}
+
+// ── Comunas GeoJSON — polígonos con métricas agregadas para la capa visual ───
+
+export type ComunaFeatureProps = {
+  cd_comuna: number;
+  nombre: string;
+  municipio: string;
+  color_hex: string;
+  score_promedio: number | null;
+  precio_m2_cop: number | null;
+  yield_promedio: number | null;
+  arriendo_cop: number | null;
+  liquidez_score: number | null;
+  total_barrios: number;
+  n_venta: number;
+  n_arriendo: number;
+  has_data: boolean;
+  slug_municipio: string;
+  source: string;
+};
+
+export function useComunasGeoJSON(perfil?: string, target?: string) {
+  return useQuery<GeoJSON.FeatureCollection>({
+    queryKey: ["comunas-geojson", perfil ?? null, target ?? "investor"],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (perfil) params.set("perfil", perfil);
+      if (target) params.set("target", target);
+      return apiFetch<GeoJSON.FeatureCollection>(
+        `${API_ENDPOINTS.comunasGeoJSON}?${params}`,
+      );
+    },
+    staleTime: 24 * 60 * 60 * 1000, // 24 h — coincide con caché del backend
     retry: 1,
   });
 }

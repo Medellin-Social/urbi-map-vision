@@ -394,41 +394,8 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.score_mediano_plazo       sm  ON b.id = sm.barrio_id
     LEFT JOIN analytics.barrios_airbnb_real       ab  ON b.id = ab.barrio_id
     LEFT JOIN analytics.barrios_amenities         am  ON b.id = am.barrio_id
-    LEFT JOIN LATERAL (
-        SELECT
-            COUNT(*)::int                                                   AS total_predios,
-            ROUND(
-                SUM(CASE WHEN ds_uso_tipo ILIKE '%4 O M_S%'
-                         OR  ds_uso_tipo ILIKE '%4 O MAS%'
-                    THEN 1 ELSE 0 END)
-                * 100.0 / NULLIF(COUNT(*), 0), 1
-            )                                                               AS pct_apartamento,
-            ROUND(
-                PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY nm_ar_constru)
-                FILTER (
-                    WHERE nm_ar_constru BETWEEN 30 AND 10000
-                      AND (   ds_uso_tipo ILIKE '%4 O M_S%'
-                           OR ds_uso_tipo ILIKE '%4 O MAS%')
-                      AND ds_uso_tipo ILIKE '%RESIDENCIAL%'
-                )
-            )::int                                                          AS area_mediana_apto_m2,
-            ROUND(
-                PERCENTILE_CONT(0.5) WITHIN GROUP (
-                    ORDER BY vl_av_constru::float / nm_ar_constru
-                ) FILTER (
-                    WHERE nm_ar_constru > 20
-                      AND ds_uso_tipo ILIKE '%RESIDENCIAL%'
-                      AND (   ds_uso_tipo ILIKE '%4 O M_S%'
-                           OR ds_uso_tipo ILIKE '%4 O MAS%')
-                )
-            )::int                                                          AS avaluo_m2
-        -- Constraint: raw.catastro_medellin.ds_comuna must match raw.barrios.comuna exactly
-        -- (after UPPER+TRIM). 20 comunas in Medellín — all-caps, no accents. Verified: 0 mismatches.
-        -- Run scripts/validate_catastro_join.py to check coverage before adding new barrio data.
-        FROM raw.catastro_medellin
-        WHERE UPPER(TRIM(ds_comuna)) = UPPER(TRIM(b.comuna))
-          AND cd_ind_ru_ur = 'U'
-    ) cat ON true
+    LEFT JOIN analytics.catastro_comunas_stats cat
+           ON UPPER(TRIM(b.comuna)) = cat.comuna
 """
 
 

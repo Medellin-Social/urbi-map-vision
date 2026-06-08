@@ -1,7 +1,9 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { TargetProvider } from "@/contexts/TargetContext";
-import { Navbar, ProfileChipMobile } from "@/components/Navbar";
+import { TargetProvider, useTarget, type Target } from "@/contexts/TargetContext";
+import { ProfileChipMobile } from "@/components/Navbar";
+import { MapNavbar, type MapTab } from "@/components/MapNavbar";
+import { MapFilterBar, EMPTY_SHARED_FILTERS, TAB_TIPO_OP, type SharedFilters } from "@/components/MapFilterBar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
@@ -10,11 +12,12 @@ import type { Neighborhood } from "@/lib/adapters";
 import type { ApiListing } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
 import { track } from "@/lib/tracking";
-import { useListings, useBarriosRaw } from "@/hooks/useBarrios";
+import { useListings, useBarriosRaw, type ListingsApiFilters } from "@/hooks/useBarrios";
 import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/adapters";
 import { useMemo } from "react";
 import { point, booleanPointInPolygon } from "@turf/turf";
 import { ListingDrawer } from "@/components/ListingDrawer";
+import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 
 export const Route = createFileRoute("/map")({
   beforeLoad: () => {
@@ -42,7 +45,19 @@ function MapPage() {
   );
 }
 
+const TAB_TO_TARGET: Record<MapTab, Target | null> = {
+  buy:   "buyer",
+  rent:  "renter",
+  sell:  "seller",
+  agent: null,
+};
+
 function MapPageInner() {
+  const { setTarget } = useTarget();
+  const [activeTab, setActiveTab] = useState<MapTab>("buy");
+  const [sharedFilters, setSharedFilters] = useState<SharedFilters>({
+    ...EMPTY_SHARED_FILTERS, tipoOp: "venta",
+  });
   const [selected, setSelected] = useState<Neighborhood | null>(null);
   const [mostrarOportunidades, setMostrarOportunidades] = useState(
     () => auth.get()?.mostrarOportunidades ?? false
@@ -62,6 +77,9 @@ function MapPageInner() {
   // Listing detail modal
   const [listingDetailId, setListingDetailId] = useState<number | null>(null);
 
+  // Mini popup (single-click on card or map point)
+  const [miniPopupData, setMiniPopupData] = useState<{ listing: ApiListing; x: number; y: number } | null>(null);
+
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
@@ -70,8 +88,16 @@ function MapPageInner() {
   const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Feature | null>(null);
   const clearDrawRef = useRef<(() => void) | null>(null);
 
+  // API-level filters derived from sharedFilters — trigger refetch when changed
+  const apiFilters = useMemo<ListingsApiFilters>(() => ({
+    area_min:   sharedFilters.areaMin,
+    area_max:   sharedFilters.areaMax,
+    banos:      sharedFilters.banos,
+    antiguedad: sharedFilters.antiguedad,
+  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad]);
+
   // Single unified call — backend fetches venta + arriendo concurrently (half each) and merges.
-  const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0);
+  const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0, undefined, false, apiFilters);
   const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
   const mlsTotal = mlsListings.length;
   const mlsRadio = mlsData?.radio_usado_metros ?? null;
@@ -163,6 +189,7 @@ function MapPageInner() {
 
   function closeListingDetail() {
     setListingDetailId(null);
+    setMiniPopupData(null);
     window.history.pushState({}, "", "/map");
   }
 
@@ -174,6 +201,24 @@ function MapPageInner() {
 
   function handleBack() {
     returnToComunasRef.current?.();
+  }
+
+  // Tab click — switches target, resets filters, handles SELL/AGENT special cases
+  function handleTabChange(tab: MapTab) {
+    setActiveTab(tab);
+    const tipoOp = TAB_TIPO_OP[tab];
+    setSharedFilters({ ...EMPTY_SHARED_FILTERS, tipoOp });
+    const t = TAB_TO_TARGET[tab];
+    if (t) setTarget(t);
+    if (tab === "sell") { setMapView("zonas"); setMlsBarrio(null); }
+  }
+
+  function handleFiltersChange(partial: Partial<SharedFilters>) {
+    setSharedFilters((f) => ({ ...f, ...partial }));
+  }
+
+  function handleResetFilters() {
+    setSharedFilters({ ...EMPTY_SHARED_FILTERS, tipoOp: TAB_TIPO_OP[activeTab] });
   }
 
   // Called from barrio popup "Ver inversiones"
@@ -226,23 +271,31 @@ function MapPageInner() {
     }
   }
 
-  // Card click in MLSPanel → flyTo + highlight + open drawer
-  function handleListingSelect(listing: ApiListing, _screenX: number, _screenY: number) {
+  // Card click in MLSPanel → flyTo + highlight + show mini popup
+  function handleListingSelect(listing: ApiListing, screenX: number, screenY: number) {
     setHighlightedListingId(listing.id ?? null);
     if (listing.lat && listing.lon) {
       flyToListingRef.current?.(listing.lat, listing.lon);
     }
     track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
-    if (listing.id) openListingDetail(listing.id);
+    setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 
-  // Point click on map → highlight + open drawer
-  function handleListingClickFromMap(id: number, _screenX: number, _screenY: number) {
+  // Single click on map point → show mini popup
+  function handleListingClickFromMap(id: number, screenX: number, screenY: number) {
     setHighlightedListingId(id);
     const listing = mlsListings.find((l) => l.id === id);
-    if (listing) {
-      track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
-    }
+    if (!listing) return;
+    track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    setMiniPopupData({ listing, x: screenX, y: screenY });
+  }
+
+  // Double click on map point → open drawer directly
+  function handleListingDoubleClickFromMap(id: number) {
+    setHighlightedListingId(id);
+    setMiniPopupData(null);
+    const listing = mlsListings.find((l) => l.id === id);
+    if (listing) track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     openListingDetail(id);
   }
 
@@ -268,37 +321,40 @@ function MapPageInner() {
   const mapListings = filteredListings ?? polygonFilteredListings;
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background">
-      <MapView
-        selectedId={selected?.id ?? null}
-        onSelect={setSelected}
-        perfil={perfil}
-        risk={risk}
-        mostrarOportunidades={mostrarOportunidades}
-        onViewLevelChange={handleViewLevelChange}
-        returnToComunasRef={returnToComunasRef}
-        onGoToMLS={handleGoToMLS}
-        mapView={mapView}
-        mlsBarrioId={mlsBarrio?.id ?? null}
-        mlsListings={mapListings}
-        highlightedListingId={highlightedListingId}
-        flyToListingRef={flyToListingRef}
-        onListingClickFromMap={handleListingClickFromMap}
-        activeBarrioName={activeBarrioInComune}
-        drawModeActive={drawModeActive}
-        onDrawPolygon={handleDrawPolygon}
-        onDrawDelete={handleDrawDelete}
-        clearDrawRef={clearDrawRef}
-      />
+    <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
+      <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0">
+        <MapView
+          selectedId={selected?.id ?? null}
+          onSelect={setSelected}
+          perfil={perfil}
+          risk={risk}
+          mostrarOportunidades={mostrarOportunidades}
+          onViewLevelChange={handleViewLevelChange}
+          returnToComunasRef={returnToComunasRef}
+          onGoToMLS={handleGoToMLS}
+          mapView={mapView}
+          mlsBarrioId={mlsBarrio?.id ?? null}
+          mlsListings={mapListings}
+          highlightedListingId={highlightedListingId}
+          flyToListingRef={flyToListingRef}
+          onListingClickFromMap={handleListingClickFromMap}
+          onListingDoubleClickFromMap={handleListingDoubleClickFromMap}
+          activeBarrioName={activeBarrioInComune}
+          drawModeActive={drawModeActive}
+          onDrawPolygon={handleDrawPolygon}
+          onDrawDelete={handleDrawDelete}
+          clearDrawRef={clearDrawRef}
+        />
+      </div>
 
       {/* Gradiente superior */}
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-background/80 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[108px] bg-gradient-to-b from-background/40 to-transparent" />
 
       {/* Botón volver a comunas — solo en vista de barrios y cuando no estamos en listings */}
       {viewLevel === "barrios" && mapView === "zonas" && (
         <button
           onClick={handleBack}
-          className="absolute left-4 top-20 z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-2 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
+          className="absolute left-4 top-[108px] z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-2 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
         >
           <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
             <path d="M10 12L6 8l4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
@@ -307,10 +363,20 @@ function MapPageInner() {
         </button>
       )}
 
-      <Navbar
+      <MapNavbar
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
         mlsBarrio={mlsBarrio}
         mlsTotal={mlsTotal}
         onBack={handleBackToZonas}
+      />
+      <MapFilterBar
+        activeTab={activeTab}
+        filters={sharedFilters}
+        onFiltersChange={handleFiltersChange}
+        onResetAll={handleResetFilters}
+        allBarrios={allBarrioOptions}
+        onBarrioNavigate={handleBarrioNavigate}
       />
       <ProfileChipMobile />
 
@@ -343,11 +409,21 @@ function MapPageInner() {
           premiumRadio={premiumRadio}
           premiumBarriosIncluidos={premiumBarriosIncluidos}
           onPremiumExpand={setPremiumExpand}
-          // Draw-to-filter — disabled, revisar filtros antes de habilitar
-          // drawModeActive={drawModeActive}
-          // drawnPolygon={drawnPolygon}
-          // onToggleDrawMode={handleToggleDrawMode}
-          // onClearDraw={handleClearDraw}
+          externalFilters={sharedFilters}
+        />
+      )}
+
+      {/* Mini popup — single click on card or map point */}
+      {miniPopupData && (
+        <ListingMiniPopup
+          listing={miniPopupData.listing}
+          x={miniPopupData.x}
+          y={miniPopupData.y}
+          onClose={() => setMiniPopupData(null)}
+          onViewMore={(id) => {
+            setMiniPopupData(null);
+            openListingDetail(id);
+          }}
         />
       )}
 

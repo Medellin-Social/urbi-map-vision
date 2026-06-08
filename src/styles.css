@@ -182,6 +182,27 @@ body {
   --input: #FAF7F2;
 }
 
+/* Simulador / Comparador — full paper theme (overrides all dark tokens) */
+.paper-theme {
+  --background: #FAF7F2;
+  --foreground: #1A1208;
+  --surface: #F5F0E8;
+  --surface-elevated: #F5F0E8;
+  --card: #F5F0E8;
+  --card-foreground: #1A1208;
+  --muted: #F5F0E8;
+  --muted-foreground: #6B5B45;
+  --border: rgb(184 164 138 / 50%);
+  --input: #FAF7F2;
+  --primary: #1D9E75;
+  --primary-foreground: #FFFFFF;
+  --accent: #085041;
+  --accent-foreground: #FFFFFF;
+  --success: #1D9E75;
+  --warning: #BA7517;
+  --danger: #D85A30;
+}
+
 /* Landing map — responsive height */
 @media (min-width: 640px) {
   .landing-map-wrapper {

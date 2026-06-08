@@ -10,6 +10,8 @@ import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { formatCOP, yieldColor, yieldLabel } from "@/lib/format";
 import type { ApiListingDetail } from "@/lib/adapters";
 import { SiteNavbar } from "@/components/SiteNavbar";
+import { PhotoGallery } from "@/components/PhotoGallery";
+import { useIsPro, LockedField } from "@/components/LockedField";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/listing/$id")({
@@ -157,6 +159,7 @@ export function ListingDetailContent({
   const { lat, lon } = listing;
   const fuente = (listing.fuente ?? "").toLowerCase();
   const tipoOp = listing.tipo_operacion ?? "venta";
+  const isPro = useIsPro();
 
   const heroMapUrl =
     lat != null && lon != null
@@ -321,10 +324,14 @@ export function ListingDetailContent({
               )}
             </section>
 
-            {/* Investment analysis — venta only */}
+            {/* Investment analysis — venta only, PRO gated */}
             {tipoOp === "venta" && (
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold">Análisis de inversión</h2>
+                {!isPro ? (
+                  <LockedField label="Análisis completo de inversión" preview={listing.yield_estimado != null ? `Yield ${listing.yield_estimado.toFixed(1)}% · Recupero ${listing.yield_estimado > 0 ? (100 / listing.yield_estimado).toFixed(1) : "—"} años` : "Yield · Recupero · Valorización"} />
+                ) : (
+                <>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
                     <div className="text-xs text-muted-foreground">Yield estimado (renta larga)</div>
@@ -424,35 +431,48 @@ export function ListingDetailContent({
                     Usar simulador completo →
                   </Link>
                 </div>
+                </>
+                )}
               </section>
             )}
 
-            {/* Zona scores */}
+            {/* Zona scores — PRO gated */}
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">Contexto de zona</h2>
-              <div className="space-y-4 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-5">
-                <ScoreBar label="Score corto plazo (airbnb / temporada)" value={listing.score_corto} />
-                <ScoreBar label="Score mediano plazo (renta media)" value={listing.score_mediano} />
-                <ScoreBar label="Score largo plazo (renta larga)" value={listing.score_largo} />
-                <ScoreBar label="Liquidez del mercado" value={listing.liquidez_score} />
-                <ScoreBar label="Seguridad" value={listing.seguridad_score} />
-                <ScoreBar label="Índice nómada" value={listing.indice_nomada} max={10} />
-                {listing.yield_bruto_pct != null && (
-                  <div className="flex justify-between border-t border-[#E8E0D0] pt-3 text-xs">
-                    <span className="text-muted-foreground">Yield bruto barrio</span>
-                    <span className="font-semibold text-primary">
-                      {listing.yield_bruto_pct.toFixed(1)}%
-                    </span>
-                  </div>
-                )}
-              </div>
+              {!isPro ? (
+                <LockedField label="Scores de zona detallados" preview="Score largo · Liquidez · Seguridad · Índice nómada" />
+              ) : (
+                <div className="space-y-4 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-5">
+                  <ScoreBar label="Score corto plazo (airbnb / temporada)" value={listing.score_corto} />
+                  <ScoreBar label="Score mediano plazo (renta media)" value={listing.score_mediano} />
+                  <ScoreBar label="Score largo plazo (renta larga)" value={listing.score_largo} />
+                  <ScoreBar label="Liquidez del mercado" value={listing.liquidez_score} />
+                  <ScoreBar label="Seguridad" value={listing.seguridad_score} />
+                  <ScoreBar label="Índice nómada" value={listing.indice_nomada} max={10} />
+                  {listing.yield_bruto_pct != null && (
+                    <div className="flex justify-between border-t border-[#E8E0D0] pt-3 text-xs">
+                      <span className="text-muted-foreground">Yield bruto barrio</span>
+                      <span className="font-semibold text-primary">
+                        {listing.yield_bruto_pct.toFixed(1)}%
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
             </section>
 
-            {/* Coming soon sections */}
+            {/* Gallery + coming soon extras */}
+            {(listing.fotos?.length ?? 0) > 0 && (
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold">Galería de fotos</h2>
+                <div className="overflow-hidden rounded-2xl border border-[#E8E0D0]">
+                  <PhotoGallery fotos={listing.fotos} titulo={listing.tipo_inmueble ?? undefined} height={320} />
+                </div>
+              </section>
+            )}
             <section className="space-y-4">
               <h2 className="text-lg font-semibold">Más información</h2>
               <div className="grid gap-3 sm:grid-cols-2">
-                <ComingSoon title="Galería de fotos" />
                 <ComingSoon title="Tour virtual 360°" />
                 <ComingSoon title="Historial de precios" />
                 <ComingSoon title="Avalúo catastral" />
@@ -747,8 +767,8 @@ function ListingPage() {
           '--muted-foreground': '#6B5B45',
           '--muted': '#F5F0E8',
           '--border': 'rgb(184 164 138 / 50%)',
-          '--primary': 'oklch(0.62 0.12 164)',
-          '--primary-foreground': 'oklch(0.98 0.005 260)',
+          '--primary': '#1D9E75',
+          '--primary-foreground': '#FFFFFF',
         } as React.CSSProperties}
       >
         {/* Breadcrumb */}

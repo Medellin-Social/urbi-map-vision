@@ -95,12 +95,12 @@ function tipoToApi(t: Tipo): "airbnb" | "renta_larga" | "renta_media" {
   return "airbnb";
 }
 
-function scoreToRating(score: number): { label: string; stars: number; toneClass: string } {
-  if (score >= 80) return { label: "EXCELENTE", stars: 5, toneClass: "from-success/30 to-success/5 border-success/50 text-success" };
-  if (score >= 60) return { label: "BUENO", stars: 4, toneClass: "from-primary/30 to-primary/5 border-primary/50 text-primary" };
-  if (score >= 40) return { label: "MODERADO", stars: 3, toneClass: "from-warning/30 to-warning/5 border-warning/50 text-warning" };
-  if (score >= 20) return { label: "BAJO", stars: 2, toneClass: "from-orange-500/30 to-orange-500/5 border-orange-500/50 text-orange-400" };
-  return { label: "MUY BAJO", stars: 1, toneClass: "from-danger/30 to-danger/5 border-danger/50 text-danger" };
+function scoreToRating(score: number): { label: string; stars: number; bg: string; border: string; color: string } {
+  if (score >= 80) return { label: "EXCELENTE", stars: 5, bg: "rgba(8,80,65,0.10)", border: "#085041", color: "#085041" };
+  if (score >= 60) return { label: "BUENO", stars: 4, bg: "rgba(29,158,117,0.10)", border: "#1D9E75", color: "#1D9E75" };
+  if (score >= 40) return { label: "MODERADO", stars: 3, bg: "rgba(186,117,23,0.10)", border: "#BA7517", color: "#BA7517" };
+  if (score >= 20) return { label: "BAJO", stars: 2, bg: "rgba(216,90,48,0.10)", border: "#D85A30", color: "#D85A30" };
+  return { label: "MUY BAJO", stars: 1, bg: "rgba(216,90,48,0.14)", border: "#D85A30", color: "#D85A30" };
 }
 
 
@@ -141,13 +141,13 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
             }}
             onMouseLeave={() => setActiveIndex(null)}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#ffffff" }} axisLine={false} tickLine={false} />
+            <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,91,69,0.15)" vertical={false} />
+            <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#6B5B45" }} axisLine={false} tickLine={false} />
             <YAxis hide domain={[minVal - pad, maxVal + pad]} />
             <Tooltip
               active={true}
               defaultIndex={displayIndex}
-              cursor={{ stroke: "rgba(0,212,255,0.3)", strokeWidth: 1 }}
+              cursor={{ stroke: "rgba(29,158,117,0.3)", strokeWidth: 1 }}
               content={({ payload }) => {
                 if (!payload?.length) return null;
                 const d = payload[0].payload as { label: string; valor: number; rentaAcum: number };
@@ -188,10 +188,10 @@ function ValorizacionTimeline({ r, horizonte }: { r: SimulacionResponse; horizon
             <Line
               type="monotone"
               dataKey="valor"
-              stroke="#00d4ff"
+              stroke="#1D9E75"
               strokeWidth={2}
-              dot={{ r: 6, fill: "#00d4ff", stroke: "#00d4ff", strokeWidth: 0 }}
-              activeDot={{ r: 9, fill: "#00d4ff", strokeWidth: 2, stroke: "rgba(0,212,255,0.4)" }}
+              dot={{ r: 6, fill: "#1D9E75", stroke: "#1D9E75", strokeWidth: 0 }}
+              activeDot={{ r: 9, fill: "#1D9E75", strokeWidth: 2, stroke: "rgba(29,158,117,0.4)" }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -321,9 +321,9 @@ function SimuladorPage() {
   };
 
   return (
-    <div className="relative min-h-screen w-full overflow-x-hidden bg-background">
+    <div className="paper-theme relative min-h-screen w-full overflow-x-hidden bg-background">
       <Navbar />
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-0 h-72 bg-gradient-to-b from-primary/10 via-accent/5 to-transparent" />
+
 
       <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-24 sm:px-6">
         <button
@@ -334,8 +334,8 @@ function SimuladorPage() {
         </button>
 
         {listingRef && (
-          <div className="mb-4 flex items-center justify-between rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-4 py-2.5">
-            <span className="text-xs text-cyan-300">
+          <div className="mb-4 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-4 py-2.5">
+            <span className="text-xs text-primary">
               Simulando inversión para esta propiedad
             </span>
             {listingRef.url && (
@@ -343,7 +343,7 @@ function SimuladorPage() {
                 href={listingRef.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[11px] text-cyan-400 hover:text-cyan-200 transition"
+                className="text-[11px] text-primary/70 hover:text-primary transition"
               >
                 Ver en {listingRef.fuente ?? "portal"} →
               </a>
@@ -353,7 +353,7 @@ function SimuladorPage() {
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[420px_1fr]">
           {/* LEFT */}
-          <section className="rounded-2xl border border-border bg-surface/70 p-6 backdrop-blur-xl">
+          <section className="rounded-2xl border border-border bg-surface/70 p-6">
             <div className="mb-5">
               <div className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-primary">
                 <Calculator className="h-3 w-3" /> Simulador
@@ -488,7 +488,7 @@ function SimuladorPage() {
                   setPresupuestoStr(String(n));
                   reset();
                 }}
-                className="mt-3 w-full accent-[#00d4ff]"
+                className="mt-3 w-full accent-[#1D9E75]"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {PRESETS.map((p) => (
@@ -523,7 +523,7 @@ function SimuladorPage() {
                     }}
                     className={`rounded-lg border p-3 text-left transition ${
                       tipo === t.id
-                        ? "border-primary bg-primary/10 glow-cyan"
+                        ? "border-primary bg-primary/10"
                         : "border-border bg-background/40 hover:border-primary/40"
                     }`}
                   >
@@ -557,7 +557,7 @@ function SimuladorPage() {
             <button
               onClick={handleCalcular}
               disabled={isPending || !presupuesto || presupuesto <= 0 || barrioId === 0}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 glow-cyan disabled:opacity-60"
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-md bg-primary py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90 disabled:opacity-60"
             >
               {isPending ? (
                 <>
@@ -617,7 +617,7 @@ function SimuladorPage() {
 function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horizonte: Horizonte; barrioId: number }) {
   const navigate = useNavigate();
   // FIX 2: stars + card color from zone score; text label from yield-based rating
-  const { stars, toneClass } = scoreToRating(r.score_oportunidad);
+  const { stars, bg, border, color } = scoreToRating(r.score_oportunidad);
   const rentabilidadLabel = r.rating_oportunidad;  // yield-based (from API)
 
   const tipoLabel = {
@@ -639,7 +639,7 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
       className="space-y-4"
     >
       {/* Rating header */}
-      <div className={`rounded-2xl border bg-gradient-to-br ${toneClass} p-5`}>
+      <div className="rounded-2xl border p-5" style={{ background: bg, borderColor: border, color }}>
         <div className="text-[11px] font-medium uppercase tracking-widest opacity-60">
           {titleCase(r.barrio)} · {tipoLabel} · {formatCOP(r.presupuesto_cop)}
         </div>
@@ -659,7 +659,7 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
         </div>
         {/* Zona — score-based, separate from rentabilidad */}
         {r.zona_score != null && (
-          <div className="mt-2 flex items-center gap-2 rounded-md border border-white/20 bg-white/10 px-2.5 py-1.5 text-[11px]">
+          <div className="mt-2 flex items-center gap-2 rounded-md px-2.5 py-1.5 text-[11px]" style={{ border: `1px solid ${border}60`, background: 'rgba(255,255,255,0.35)' }}>
             <span className="font-medium uppercase tracking-wider opacity-60">Zona</span>
             <span className="font-semibold">
               {r.zona_categoria ?? "—"}
@@ -726,7 +726,7 @@ function ResultsPanel({ r, horizonte, barrioId }: { r: SimulacionResponse; horiz
       {/* Row 3 - Retorno total */}
       <Card>
         <CardTitle>Retorno total · 5 años</CardTitle>
-        <div className="mt-2 font-display text-4xl font-bold text-primary text-glow-cyan">
+        <div className="mt-2 font-display text-4xl font-bold text-primary">
           {formatCOP(r.valorizacion.retorno_total_5anos_cop)}
         </div>
         <div className="mt-3 space-y-1 text-xs">
@@ -937,7 +937,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 function Card({ children }: { children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border border-border bg-surface/70 p-5 backdrop-blur-xl">
+    <div className="rounded-2xl border border-border bg-surface/70 p-5">
       {children}
     </div>
   );
@@ -969,7 +969,7 @@ function BigMetric({
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.3, delay }}
-      className="rounded-xl border border-border bg-surface/70 p-4 backdrop-blur-xl"
+      className="rounded-xl border border-border bg-surface/70 p-4"
     >
       <div className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
         {label}
@@ -1004,7 +1004,7 @@ function RowItem({
   return (
     <div className={`flex items-center justify-between ${muted ? "text-muted-foreground" : ""}`}>
       <span>{label}</span>
-      <span className={bold ? "font-display text-base font-bold text-success" : "font-medium"}>
+      <span className={bold ? "font-display text-base font-bold" : "font-medium"} style={bold ? { color: '#1D9E75' } : undefined}>
         {value}
       </span>
     </div>

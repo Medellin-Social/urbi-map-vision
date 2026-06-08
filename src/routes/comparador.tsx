@@ -1,10 +1,10 @@
 import { createFileRoute, redirect, Link } from "@tanstack/react-router";
-import { getScoreColor } from "@/config/mapColors";
 import { useEffect, useMemo, useState } from "react";
 import { ArrowLeft, Plus, X } from "lucide-react";
 import { Navbar } from "@/components/Navbar";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
-import { useBarrios, useCompararRaw } from "@/hooks/useBarrios";
+import { useBarriosRaw, useCompararRaw } from "@/hooks/useBarrios";
+import { barrioToNeighborhood } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
 import type { ApiBarrio } from "@/lib/adapters";
 
@@ -23,7 +23,13 @@ export const Route = createFileRoute("/comparador")({
   component: ComparadorPage,
 });
 
-const COLORS = ["#00d4ff", "#f59e0b", "#a855f7"];
+const COLORS = ["#1D9E75", "#BA7517", "#6B5B45"];
+
+function getPaperScoreColor(score: number): string {
+  if (score >= 60) return "#1D9E75";
+  if (score >= 40) return "#BA7517";
+  return "#D85A30";
+}
 
 function scoreToCategory(score: number): string {
   if (score >= 80) return "EXCELENTE";
@@ -60,7 +66,8 @@ const BAR_METRICS: {
 ];
 
 function ComparadorPage() {
-  const { data: barrios = [], isPlaceholderData } = useBarrios();
+  const { data: barriosRaw = [], isPlaceholderData } = useBarriosRaw();
+  const barrios = useMemo(() => barriosRaw.map(barrioToNeighborhood), [barriosRaw]);
   const [ids, setIds] = useState<number[]>([]);
 
   // Once real barrios arrive (not placeholder mock), initialize or repair selection
@@ -84,7 +91,7 @@ function ComparadorPage() {
   const userGoal = useMemo(() => auth.get()?.goal, []);
 
   return (
-    <div className="relative min-h-screen bg-background pb-16">
+    <div className="paper-theme relative min-h-screen bg-background pb-16">
       <Navbar />
       <main className="mx-auto max-w-6xl px-4 pt-24 sm:px-6">
         <Link
@@ -103,8 +110,8 @@ function ComparadorPage() {
           {ids.map((id, i) => (
             <div
               key={i}
-              className="flex items-center gap-1 rounded-md border bg-surface px-2 py-1"
-              style={{ borderColor: COLORS[i] }}
+              className="flex items-center gap-1 rounded-md border px-2 py-1"
+              style={{ borderColor: COLORS[i], background: `${COLORS[i]}18` }}
             >
               <span className="h-2 w-2 rounded-full" style={{ background: COLORS[i] }} />
               <select
@@ -136,7 +143,8 @@ function ComparadorPage() {
                 const next = barrios.find((n) => !ids.includes(n.id));
                 if (next) setIds([...ids, next.id]);
               }}
-              className="inline-flex items-center gap-1 rounded-md border border-dashed border-primary/50 px-3 py-1 text-xs font-medium text-primary transition hover:bg-primary/10"
+              className="inline-flex items-center gap-1 rounded-md border border-dashed px-3 py-1 text-xs font-medium transition hover:bg-accent/10"
+              style={{ borderColor: '#085041', color: '#085041' }}
             >
               <Plus className="h-3 w-3" /> Añadir barrio
             </button>
@@ -160,10 +168,10 @@ function ComparadorPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="text-left text-[10px] uppercase tracking-widest text-muted-foreground">
-                      <th className="py-2 font-medium">Métrica</th>
+                    <tr className="text-left text-[10px] uppercase tracking-widest" style={{ background: '#085041', color: '#FFFFFF' }}>
+                      <th className="rounded-tl-lg py-2 px-2 font-medium">Métrica</th>
                       {items.map((b, i) => (
-                        <th key={b.barrio_id} className="py-2 pl-3 font-medium" style={{ color: COLORS[i] }}>
+                        <th key={b.barrio_id} className="py-2 pl-3 font-medium opacity-80">
                           {titleCase(b.nombre ?? "")}
                         </th>
                       ))}
@@ -307,7 +315,8 @@ function SectionLabel({ label, colSpan }: { label: string; colSpan: number }) {
     <tr>
       <td
         colSpan={colSpan}
-        className="pb-1 pt-3 text-[9px] font-bold uppercase tracking-widest text-primary/60"
+        className="pb-1 pt-3 text-[9px] font-bold uppercase tracking-widest"
+        style={{ color: '#6B5B45', borderTop: '1px solid #E8E0D0' }}
       >
         {label}
       </td>
@@ -338,7 +347,7 @@ function Row({
 
 function fmtScore(score: number | null, _cat?: string | null): React.ReactNode {
   if (score == null) return "—";
-  const color = getScoreColor(score);
+  const color = getPaperScoreColor(score);
   const label = scoreToCategory(score);
   return (
     <span className="inline-flex items-center gap-1.5">

@@ -17,6 +17,7 @@ import { useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { auth } from "@/lib/auth";
 import { toast } from "sonner";
 import type { ApiListingDetail, SimilarListing } from "@/lib/adapters";
+import { PhotoGallery } from "@/components/PhotoGallery";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -38,70 +39,7 @@ const SOURCE_LABEL: Record<string, string> = {
 
 // ─── sub-components ────────────────────────────────────────────────────────────
 
-function PhotoGallery({ fotos, titulo }: { fotos?: string[] | null; titulo?: string }) {
-  const [idx, setIdx] = useState(0);
-  const photos = fotos?.filter(Boolean) ?? [];
-
-  if (!photos.length) {
-    return (
-      <div
-        className="flex h-56 items-center justify-center"
-        style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)", borderBottom: "0.5px solid #E8E0D0" }}
-      >
-        <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 64, height: 64, opacity: 0.4 }}>
-          <rect x="10" y="20" width="40" height="50" rx="2" fill="white"/>
-          <rect x="50" y="32" width="22" height="38" rx="2" fill="white"/>
-          <rect x="16" y="28" width="7" height="7" fill="#1D9E75"/>
-          <rect x="30" y="28" width="7" height="7" fill="#1D9E75"/>
-          <rect x="16" y="40" width="7" height="7" fill="#1D9E75"/>
-          <rect x="30" y="40" width="7" height="7" fill="#1D9E75"/>
-          <rect x="21" y="53" width="10" height="17" fill="#1D9E75"/>
-          <rect x="56" y="40" width="7" height="7" fill="#1D9E75"/>
-          <rect x="56" y="52" width="7" height="7" fill="#1D9E75"/>
-        </svg>
-      </div>
-    );
-  }
-
-  return (
-    <div className="relative h-56 overflow-hidden" style={{ borderBottom: "0.5px solid #E8E0D0" }}>
-      <img
-        src={photos[idx]}
-        alt={titulo ?? "Foto del inmueble"}
-        className="h-full w-full object-cover transition-opacity duration-300"
-      />
-      {photos.length > 1 && (
-        <>
-          <button
-            onClick={() => setIdx((i) => (i - 1 + photos.length) % photos.length)}
-            className="absolute left-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
-          >
-            ‹
-          </button>
-          <button
-            onClick={() => setIdx((i) => (i + 1) % photos.length)}
-            className="absolute right-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
-          >
-            ›
-          </button>
-          <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
-            {photos.slice(0, 8).map((_, i) => (
-              <button
-                key={i}
-                onClick={() => setIdx(i)}
-                className="h-1.5 rounded-full transition-all"
-                style={{ width: i === idx ? 16 : 6, background: i === idx ? "#fff" : "rgba(255,255,255,0.5)" }}
-              />
-            ))}
-          </div>
-          <span className="absolute bottom-2 right-3 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
-            {idx + 1} / {photos.length}
-          </span>
-        </>
-      )}
-    </div>
-  );
-}
+// PhotoGallery re-exported from @/components/PhotoGallery
 
 function MetricChip({ icon, label }: { icon: React.ReactNode; label: string | number }) {
   return (
@@ -438,12 +376,26 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             )}
 
             {/* ── Description ── */}
-            {listing.descripcion && (
-              <div className="space-y-2">
-                <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
+            <div className="space-y-2">
+              <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
+              {listing.descripcion ? (
                 <CollapsibleDescription text={listing.descripcion} />
-              </div>
-            )}
+              ) : (
+                <p className="text-sm leading-relaxed text-[#9B8B75]">
+                  Descripción no disponible para este listing.{" "}
+                  {listing.url && (
+                    <a
+                      href={listing.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline transition hover:text-[#1D9E75]"
+                    >
+                      Consulta la fuente original →
+                    </a>
+                  )}
+                </p>
+              )}
+            </div>
 
             {/* ── Mini map ── */}
             {heroMapUrl ? (
@@ -622,50 +574,48 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     </div>
   );
 
-  // ── Desktop: slide-in panel from right ──────────────────────────────────────
-  if (!isMobile) {
+  const modalStyle = {
+    "--background": "#FFFFFF",
+    "--foreground": "#1A1208",
+    "--muted-foreground": "#6B5B45",
+    "--border": "rgb(184 164 138 / 50%)",
+  } as React.CSSProperties;
+
+  // ── Mobile: bottom sheet ────────────────────────────────────────────────────
+  if (isMobile) {
     return (
       <AnimatePresence>
         {listingId && (
           <>
-            {/* Semi-transparent overlay behind drawer */}
-            <div
-              className="pointer-events-auto absolute inset-0 z-30 bg-black/25"
+            <motion.div
+              key="drawer-backdrop-mobile"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              className="fixed inset-0 z-40 bg-black/50"
               onClick={onClose}
             />
             <motion.div
-              key="listing-drawer"
-              initial={{ x: "100%" }}
-              animate={{ x: 0 }}
-              exit={{ x: "100%" }}
+              key="listing-drawer-mobile"
+              initial={{ y: "100%" }}
+              animate={{ y: 0 }}
+              exit={{ y: "100%" }}
               transition={{ type: "spring", damping: 32, stiffness: 300 }}
-              className="absolute right-0 top-0 z-40 flex h-full w-[420px] max-w-[90vw] flex-col overflow-hidden shadow-2xl"
-              style={{
-                background: "#FAF7F2",
-                borderLeft: "0.5px solid #E8E0D0",
-                "--background": "#FFFFFF",
-                "--foreground": "#1A1208",
-                "--muted-foreground": "#6B5B45",
-                "--border": "rgb(184 164 138 / 50%)",
-              } as React.CSSProperties}
+              className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl shadow-2xl"
+              style={{ height: "90vh", background: "#FAF7F2", ...modalStyle }}
               onClick={(e) => e.stopPropagation()}
             >
-              {/* Close button */}
-              <div
-                className="flex shrink-0 items-center justify-between px-4 pt-16 pb-3"
-                style={{ borderBottom: "0.5px solid #E8E0D0" }}
-              >
-                <span className="text-[11px] font-medium uppercase tracking-widest text-[#6B5B45]">
-                  Detalle del inmueble
-                </span>
+              {/* Handle + close */}
+              <div className="relative flex shrink-0 items-center justify-center py-3">
+                <div className="h-1 w-10 rounded-full bg-[#C8B8A2]" />
                 <button
                   onClick={onClose}
-                  className="grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8] hover:text-[#1A1208]"
+                  className="absolute right-4 grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8]"
                 >
                   <X className="h-4 w-4" />
                 </button>
               </div>
-
               <div className="flex-1 overflow-y-auto">
                 <Content />
               </div>
@@ -676,45 +626,57 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     );
   }
 
-  // ── Mobile: bottom sheet ────────────────────────────────────────────────────
+  // ── Desktop: centered modal ─────────────────────────────────────────────────
   return (
     <AnimatePresence>
       {listingId && (
         <>
+          {/* Overlay */}
           <motion.div
             key="drawer-backdrop"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="pointer-events-auto absolute inset-0 z-30 bg-black/40"
+            transition={{ duration: 0.15 }}
+            className="fixed inset-0 z-40 bg-black/50"
             onClick={onClose}
           />
+          {/* Modal */}
           <motion.div
-            key="listing-drawer-mobile"
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "spring", damping: 32, stiffness: 300 }}
-            className="absolute inset-x-0 bottom-0 z-40 flex max-h-[88vh] flex-col overflow-hidden rounded-t-2xl shadow-2xl"
+            key="listing-drawer"
+            initial={{ scale: 0.95, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            exit={{ scale: 0.95, opacity: 0 }}
+            transition={{ duration: 0.2, ease: "easeOut" }}
+            className="fixed z-50 flex flex-col overflow-hidden rounded-2xl shadow-2xl"
             style={{
+              top: "50%",
+              left: "50%",
+              transform: "translate(-50%, -50%)",
+              width: "min(680px, 92vw)",
+              maxHeight: "85vh",
               background: "#FAF7F2",
-              "--background": "#FFFFFF",
-              "--foreground": "#1A1208",
-              "--muted-foreground": "#6B5B45",
+              border: "0.5px solid #E8E0D0",
+              boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
+              ...modalStyle,
             } as React.CSSProperties}
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Drag handle */}
-            <div className="flex shrink-0 items-center justify-between px-4 py-3">
-              <div className="mx-auto h-1 w-10 rounded-full bg-[#E8E0D0]" />
+            {/* Sticky header */}
+            <div
+              className="sticky top-0 z-10 flex shrink-0 items-center justify-between bg-[#FAF7F2] px-5 py-3.5"
+              style={{ borderBottom: "0.5px solid #E8E0D0" }}
+            >
+              <span className="text-[11px] font-medium uppercase tracking-widest text-[#6B5B45]">
+                Detalle del inmueble
+              </span>
               <button
                 onClick={onClose}
-                className="absolute right-4 grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8]"
+                className="grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8] hover:text-[#1A1208]"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-
             <div className="flex-1 overflow-y-auto">
               <Content />
             </div>
