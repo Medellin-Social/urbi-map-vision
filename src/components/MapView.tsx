@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
-import { barrioToNeighborhood, barriosToGeoJSON, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
+import { barrioToNeighborhood, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useTarget } from "@/contexts/TargetContext";
 import { useBarriosRaw, useScoreThresholds, useComunasGeoJSON } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
@@ -267,26 +267,18 @@ export function MapView({
   const targetRef = useRef(target);
   useEffect(() => { targetRef.current = target; }, [target]);
 
-  const geoJsonData = useMemo(() => {
-    if (!barriosRaw?.length) return null;
-    barriosRef.current = barriosRaw;
-    return barriosToGeoJSON(barriosRaw, scorePalette, perfil, budgetRange, risk, target);
-  }, [barriosRaw, scorePalette, perfil, budgetRange, risk, thresholdVersion, target]);
+  useEffect(() => {
+    if (barriosRaw?.length) barriosRef.current = barriosRaw;
+  }, [barriosRaw]);
 
   const { data: comunasGeoJSON } = useComunasGeoJSON(perfil, target ?? "investor");
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
   function switchToComunas(map: MapboxMap) {
-    // Mostrar comunas (todos los municipios)
     map.setLayoutProperty("comunas-fill",  "visibility", "visible");
     map.setLayoutProperty("comunas-line",  "visibility", "visible");
     map.setLayoutProperty("comunas-label", "visibility", "visible");
-    // Ocultar barrios — sólo se muestran al hacer drill-down en una comuna
-    map.setLayoutProperty("barrios-fill",  "visibility", "none");
-    map.setLayoutProperty("barrios-line",  "visibility", "none");
-    map.setLayoutProperty("barrios-label", "visibility", "none");
-    // Volver a vista Valle de Aburrá
     map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed: 0.9 });
     viewLevelRef.current = "comunas";
     activeComunaRef.current = null;
@@ -300,22 +292,7 @@ export function MapView({
     bounds: mapboxgl.LngLatBounds,
     municipioFilter?: string | null,
   ) {
-    // municipioFilter set → whole-municipality drill-down (Bello, Envigado, etc.)
-    // otherwise → Medellín commune drill-down by cd_comuna
-    const filter: mapboxgl.FilterSpecification = municipioFilter
-      ? ["==", ["get", "municipio"], municipioFilter]
-      : ["==", ["get", "cd_comuna"], cd];
-    map.setFilter("barrios-fill",  filter);
-    map.setFilter("barrios-line",  filter);
-    map.setFilter("barrios-label", filter);
-    map.setLayoutProperty("barrios-fill",  "visibility", "visible");
-    map.setLayoutProperty("barrios-line",  "visibility", "visible");
-    map.setLayoutProperty("barrios-label", "visibility", "visible");
-    // Ocultar comunas
-    map.setLayoutProperty("comunas-fill",  "visibility", "none");
-    map.setLayoutProperty("comunas-line",  "visibility", "none");
-    map.setLayoutProperty("comunas-label", "visibility", "none");
-    // Ajustar cámara a los límites de la comuna
+    // Zoom to commune bounds — no barrio polygon layer, only listings points show
     map.fitBounds(bounds, { padding: 60, maxZoom: 14, speed: 0.85 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
@@ -417,66 +394,6 @@ export function MapView({
         },
       });
 
-      // ── CAPA 2: Barrios ───────────────────────────────────────────────────
-      // Non-Medellín barrios are visible at all zoom levels.
-      // Medellín barrios only appear after drilling into a commune.
-      map.addSource("barrios", { type: "geojson", data: EMPTY_FC });
-
-      map.addLayer({
-        id: "barrios-fill",
-        type: "fill",
-        source: "barrios",
-        layout: { visibility: "none" },
-        paint: {
-          "fill-color": ["get", "color_hex"],
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.88,
-            ["boolean", ["feature-state", "hover"], false], 0.78,
-            ["==", ["get", "in_budget"], false], 0.07,
-            ["==", ["get", "color_hex"], "#00d4ff"], 0.2,
-            0.6,
-          ],
-        },
-      });
-
-      map.addLayer({
-        id: "barrios-line",
-        type: "line",
-        source: "barrios",
-        layout: { visibility: "none" },
-        paint: {
-          "line-color": "#1A1208",
-          "line-opacity": 0.5,
-          "line-width": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 2.5,
-            ["boolean", ["feature-state", "hover"], false], 1.5,
-            0.8,
-          ],
-        },
-      });
-
-      map.addLayer({
-        id: "barrios-label",
-        type: "symbol",
-        source: "barrios",
-        minzoom: 12,
-        layout: {
-          visibility: "none",
-          "text-field": ["get", "nombre"],
-          "text-size": 11,
-          "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
-          "text-letter-spacing": 0.08,
-          "text-transform": "uppercase",
-        },
-        paint: {
-          "text-color": "#FAF7F2",
-          "text-halo-color": "rgba(14,10,6,0.88)",
-          "text-halo-width": 1.6,
-        },
-      });
-
       // ── Hover: Comunas ─────────────────────────────────────────────────────
       let hoverComunaId: number | null = null;
       const comunaPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
@@ -542,110 +459,6 @@ export function MapView({
         const bounds = featureBounds(f);
         const isMunicipio = f.properties?.is_municipio === true;
         switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
-      });
-
-      // ── Hover: Barrios ─────────────────────────────────────────────────────
-      let hoverId: number | null = null;
-      const popup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
-
-      map.on("mousemove", "barrios-fill", (e) => {
-        if (!e.features?.length) return;
-        const f = e.features[0];
-        const id = f.properties?.id as number;
-        if (hoverId !== null && hoverId !== id) {
-          map.setFeatureState({ source: "barrios", id: hoverId }, { hover: false });
-        }
-        hoverId = id;
-        map.setFeatureState({ source: "barrios", id }, { hover: true });
-        map.getCanvas().style.cursor = "pointer";
-        const nombre = f.properties?.nombre ?? "";
-        const excluido = f.properties?.excluir_inversion === true;
-        const t = targetRef.current;
-
-        const fmtCOP = (n: number) =>
-          n >= 1_000_000 ? `$${(n / 1_000_000).toFixed(0)}M` : `$${n.toLocaleString()}`;
-
-        let metricHtml = "";
-        if (excluido) {
-          metricHtml = `<span style="color:#9ca3af;font-size:11px;">No disponible</span>`;
-        } else if (t === "buyer") {
-          const pm2 = f.properties?.precio_m2_cop as number | null;
-          metricHtml = pm2
-            ? `<span style="color:#639922;font-weight:700;">${fmtCOP(pm2)}/m²</span>`
-            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
-        } else if (t === "seller") {
-          const liq = f.properties?.liquidez_tiempo as string | null;
-          metricHtml = liq
-            ? `<span style="color:#1D9E75;font-size:11px;">${liq}</span>`
-            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
-        } else if (t === "landlord") {
-          const y = f.properties?.yield_bruto_pct as number | null;
-          metricHtml = y
-            ? `<span style="color:#1D9E75;font-weight:700;">${y.toFixed(1)}% yield</span>`
-            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
-        } else if (t === "renter") {
-          const canon = f.properties?.arriendo_p50_cop as number | null;
-          metricHtml = canon
-            ? `<span style="color:#BA7517;font-weight:700;">${fmtCOP(canon)}/mes</span>`
-            : `<span style="color:#9ca3af;font-size:11px;">Sin datos</span>`;
-        } else {
-          // investor
-          const score = f.properties?.score_activo as number | null;
-          const cat = f.properties?.cat_activo ?? "—";
-          metricHtml = (score === null || score < 20)
-            ? `<span style="color:#9ca3af;font-size:11px;">${cat}</span>`
-            : `<span style="color:#1D9E75;font-weight:700;">${score}</span><span style="color:#9B8B75;font-size:11px;"> ${cat}</span>`;
-        }
-
-        popup
-          .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="display:flex;align-items:center;gap:8px;">
-              <span style="font-weight:600;letter-spacing:.04em;">${nombre}</span>
-              ${metricHtml}
-            </div>`
-          )
-          .addTo(map);
-      });
-
-      map.on("mouseleave", "barrios-fill", () => {
-        if (hoverId !== null) map.setFeatureState({ source: "barrios", id: hoverId }, { hover: false });
-        hoverId = null;
-        map.getCanvas().style.cursor = "";
-        popup.remove();
-      });
-
-      map.on("click", "barrios-fill", (e) => {
-        if (!e.features?.length) return;
-        // Skip when clicking on a listing point or cluster
-        if (map.queryRenderedFeatures(e.point, { layers: ["listings-mls-unclustered", "listings-mls-clusters"] }).length > 0) return;
-        const f = e.features[0];
-        if (f.properties?.excluir_inversion === true) return;
-        const id = f.properties?.id as number;
-        const name = (f.properties?.nombre ?? "").toString();
-
-        const barrio = barriosRef.current.find((b) => b.barrio_id === id);
-        let n: Neighborhood;
-        if (barrio) {
-          n = barrioToNeighborhood(barrio);
-        } else {
-          const seed = name.split("").reduce((a: number, c: string) => a + c.charCodeAt(0), 0);
-          const y = Number((f.properties?.yield ?? 6).toString());
-          const [lng, lat] = [e.lngLat.lng, e.lngLat.lat];
-          const precio_m2 = 3_500_000 + (seed % 60) * 100_000;
-          n = {
-            id, nombre: name, comuna: f.properties?.nombre_comuna ?? activeComunaRef.current?.nombre ?? "—",
-            municipio: "MEDELLÍN", estrato: 3, precio_m2,
-            arriendo: Math.round(precio_m2 * 0.0008 * 90),
-            yield: y, anos_recupero: Number((100 / y).toFixed(1)),
-            dist_metro: 1 + (seed % 30) / 10, dist_parque: 0.3 + (seed % 10) / 10,
-            dist_mall: 1 + (seed % 25) / 10, n_venta: 1 + (seed % 8),
-            n_arriendo: 1 + (seed % 5), lat, lng,
-          };
-        }
-
-        map.flyTo({ center: [n.lng, n.lat], zoom: 14.5, speed: 0.8 });
-        onSelect(n);
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
@@ -773,14 +586,6 @@ export function MapView({
         } as GeoJSON.FeatureCollection);
       });
 
-      // Barrios (si ya cargaron antes de que el mapa estuviera listo)
-      if (barriosRef.current.length > 0) {
-        (map.getSource("barrios") as mapboxgl.GeoJSONSource).setData(
-          barriosToGeoJSON(barriosRef.current, getActivePaletteId(riskRef.current), perfil, budgetRange, riskRef.current) as unknown as GeoJSON.FeatureCollection
-        );
-        if (mostrarOportunidades) addOpportunityMarkers(map);
-      }
-
       // ── Terreno 3D ────────────────────────────────────────────────────────────
       map.addSource("mapbox-dem", {
         type: "raster-dem",
@@ -807,21 +612,6 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Actualizar datos de barrios cuando cambian ───────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoadedRef.current || !geoJsonData) return;
-    (map.getSource("barrios") as mapboxgl.GeoJSONSource)?.setData(
-      geoJsonData as unknown as GeoJSON.FeatureCollection
-    );
-    if (mostrarOportunidades && viewLevelRef.current === "barrios") {
-      addOpportunityMarkers(map);
-    } else {
-      markersRef.current.forEach((m) => m.remove());
-      markersRef.current = [];
-    }
-  }, [geoJsonData, mostrarOportunidades]);
-
   // ── Actualizar capa comunas con datos de API (Medellín coloreado) ────────────
   useEffect(() => {
     const map = mapRef.current;
@@ -844,21 +634,6 @@ export function MapView({
     });
   }, [comunasGeoJSON]);
 
-  // ── Sync selección de barrio ─────────────────────────────────────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !map.isStyleLoaded()) return;
-    map.removeFeatureState({ source: "barrios" });
-    if (selectedId != null) {
-      map.setFeatureState({ source: "barrios", id: selectedId }, { selected: true });
-      const n = barriosRef.current.find((b) => b.barrio_id === selectedId);
-      if (n) {
-        const nb = barrioToNeighborhood(n);
-        map.flyTo({ center: [nb.lng, nb.lat], zoom: 14.5, speed: 0.9 });
-      }
-    }
-  }, [selectedId]);
-
   // ── Vista 1 ↔ Vista 2: toggle capas (solo depende de mapView) ──────────────
   useEffect(() => {
     const map = mapRef.current;
@@ -866,17 +641,13 @@ export function MapView({
     const mlsLayers = ["listings-mls-clusters", "listings-mls-cluster-count", "listings-mls-unclustered"] as const;
 
     if (mapView === "listings") {
-      for (const id of ["barrios-fill", "barrios-line", "barrios-label"] as const) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
-      }
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
       }
       map.setTerrain(null);
       map.easeTo({ pitch: 0, duration: 500 });
-
     } else {
-      // Vista 1: ocultar MLS layers
+      // Vista 1: ocultar MLS layers, volver a comunas
       mlsLastFlyToRef.current = null;
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
@@ -885,32 +656,7 @@ export function MapView({
       if (map.getSource("mapbox-dem")) {
         map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
       }
-      // If we were in barrios view before entering MLS, restore it; otherwise go to comunas
-      if (viewLevelRef.current === "barrios" && activeComunaRef.current) {
-        const { cd, nombre, municipioFilter } = activeComunaRef.current;
-        const filter: mapboxgl.FilterSpecification = municipioFilter
-          ? ["==", ["get", "municipio"], municipioFilter]
-          : ["==", ["get", "cd_comuna"], cd];
-        map.setFilter("barrios-fill",  filter);
-        map.setFilter("barrios-line",  filter);
-        map.setFilter("barrios-label", filter);
-        for (const id of ["barrios-fill", "barrios-line", "barrios-label"] as const) {
-          if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
-        }
-        for (const id of ["comunas-fill", "comunas-line", "comunas-label"] as const) {
-          if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
-        }
-        // Smooth zoom-out so the whole commune is visible
-        map.easeTo({
-          zoom: Math.max(map.getZoom() - 1.8, 11),
-          pitch: 0,
-          duration: 750,
-          easing: (t) => t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t,
-        });
-        onViewLevelChangeRef.current?.("barrios", nombre);
-      } else {
-        switchToComunas(map);
-      }
+      switchToComunas(map);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView]);
