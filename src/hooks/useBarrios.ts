@@ -590,18 +590,26 @@ export function useListings(
   tipoOperacion?: "venta" | "arriendo",
   onlyPremium = false,
   extraFilters?: ListingsApiFilters,
+  comunaNombre?: string,
 ) {
   return useQuery({
-    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null],
+    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null, comunaNombre ?? null],
     queryFn: async (): Promise<ApiListingsResponse> => {
       // Static path for synthetic barrios (non-API municipalities)
       const fake = barrioId != null ? _fakeBarrioIndex.get(barrioId) : undefined;
       if (fake) {
         const all = await loadStaticListings(fake.slug);
-        const filtered = all.filter((l) => {
+        let filtered = all.filter((l) => {
           const lb = stripAccents((l.barrio ?? "").toUpperCase());
           return lb === fake.statsNombre && (!tipoOperacion || l.tipo_operacion === tipoOperacion);
         });
+        // Apply extraFilters client-side (static path has no API to delegate to)
+        if (extraFilters) {
+          if (extraFilters.area_min != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 >= extraFilters!.area_min!);
+          if (extraFilters.area_max != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 <= extraFilters!.area_max!);
+          if (extraFilters.banos != null && extraFilters.banos > 0) filtered = filtered.filter((l) => l.banos != null && l.banos >= extraFilters!.banos!);
+          // antiguedad not present in StaticListing — skipped
+        }
         const page = filtered.slice(offset, offset + limit);
         return {
           total: filtered.length,
@@ -629,6 +637,7 @@ export function useListings(
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
       if (barrioId != null) params.set("barrio_id", String(barrioId));
+      if (comunaNombre) params.set("comuna", comunaNombre);
       if (onlyPremium) params.set("only_premium", "true");
       if (extraFilters?.area_min != null) params.set("area_min", String(extraFilters.area_min));
       if (extraFilters?.area_max != null) params.set("area_max", String(extraFilters.area_max));
@@ -636,7 +645,7 @@ export function useListings(
       if (extraFilters?.antiguedad) params.set("antiguedad", extraFilters.antiguedad);
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
-    enabled: barrioId != null,
+    enabled: barrioId != null || !!comunaNombre,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });

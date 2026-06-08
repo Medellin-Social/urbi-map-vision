@@ -88,6 +88,14 @@ function MapPageInner() {
   const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Feature | null>(null);
   const clearDrawRef = useRef<(() => void) | null>(null);
 
+  // Count active filters for hint banner
+  const activeFilterCount = [
+    sharedFilters.precioMax, sharedFilters.precioMin,
+    sharedFilters.habitaciones, sharedFilters.tipoInmueble,
+    sharedFilters.areaMin, sharedFilters.areaMax,
+    sharedFilters.banos, sharedFilters.antiguedad,
+  ].filter((v) => v !== null).length;
+
   // API-level filters derived from sharedFilters — trigger refetch when changed
   const apiFilters = useMemo<ListingsApiFilters>(() => ({
     area_min:   sharedFilters.areaMin,
@@ -97,6 +105,7 @@ function MapPageInner() {
   }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad]);
 
   // Single unified call — backend fetches venta + arriendo concurrently (half each) and merges.
+  // comunaQueryName resolved after activeComuna state is declared (below)
   const { data: mlsData, isLoading: mlsIsLoading } = useListings(mlsBarrio?.id ?? null, 500, 0, undefined, false, apiFilters);
   const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
   const mlsTotal = mlsListings.length;
@@ -116,25 +125,6 @@ function MapPageInner() {
   const premiumRadio = premiumData?.radio_usado_metros ?? null;
   const premiumBarriosIncluidos = premiumData?.barrios_incluidos ?? null;
 
-  // Reset filtered listings when raw data changes (new barrio/commune loaded)
-  useEffect(() => {
-    setFilteredListings(null);
-  }, [mlsListings]);
-
-  // Apply polygon filter on top of raw listings
-  const polygonFilteredListings = useMemo<ApiListing[]>(() => {
-    if (!drawnPolygon) return mlsListings;
-    return mlsListings.filter((l) => {
-      if (!l.lat || !l.lon) return false;
-      return booleanPointInPolygon(point([l.lon, l.lat]), drawnPolygon as GeoJSON.Feature<GeoJSON.Polygon>);
-    });
-  }, [mlsListings, drawnPolygon]);
-
-  // Reset MLSPanel filters when polygon changes so mapListings stays consistent
-  useEffect(() => {
-    setFilteredListings(null);
-  }, [drawnPolygon]);
-
   // All barrios for the municipality selector in MLSPanel
   const { data: barriosRaw } = useBarriosRaw(perfil);
   const allBarrioOptions = useMemo<BarrioOption[]>(
@@ -146,6 +136,46 @@ function MapPageInner() {
   const [viewLevel, setViewLevel] = useState<"comunas" | "barrios">("comunas");
   const [activeComuna, setActiveComuna] = useState<string | null>(null);
   const returnToComunasRef = useRef<(() => void) | null>(null);
+
+  // Commune-level listings query (fires when a commune is selected but no specific barrio)
+  const comunaQueryName = mlsBarrio == null ? (activeComuna ?? undefined) : undefined;
+  const { data: comunaData, isLoading: comunaIsLoading } = useListings(null, 500, 0, undefined, false, apiFilters, comunaQueryName);
+
+  // Merged listings: barrio-level OR commune-level
+  const mergedListings = mlsBarrio ? mlsListings : (comunaData?.listings ?? []);
+  const mergedLoading = mlsBarrio ? mlsIsLoading : comunaIsLoading;
+
+  // Barrio shown in the panel — real barrio or synthetic commune placeholder
+  const panelBarrio: Neighborhood | null = mlsBarrio ?? (activeComuna ? {
+    id: -1,
+    nombre: activeComuna,
+    comuna: activeComuna,
+    municipio: "MEDELLÍN",
+    estrato: 0,
+    precio_m2: 0, arriendo: 0, yield: 0, anos_recupero: 0,
+    dist_metro: 0, dist_parque: 0, dist_mall: 0,
+    n_venta: 0, n_arriendo: 0,
+    lat: 6.2442, lng: -75.5812,
+  } : null);
+
+  // Reset filtered listings when raw data changes (new barrio/commune loaded)
+  useEffect(() => {
+    setFilteredListings(null);
+  }, [mergedListings]);
+
+  // Apply polygon filter on top of raw listings
+  const polygonFilteredListings = useMemo<ApiListing[]>(() => {
+    if (!drawnPolygon) return mergedListings;
+    return mergedListings.filter((l) => {
+      if (!l.lat || !l.lon) return false;
+      return booleanPointInPolygon(point([l.lon, l.lat]), drawnPolygon as GeoJSON.Feature<GeoJSON.Polygon>);
+    });
+  }, [mergedListings, drawnPolygon]);
+
+  // Reset MLSPanel filters when polygon changes so mapListings stays consistent
+  useEffect(() => {
+    setFilteredListings(null);
+  }, [drawnPolygon]);
 
   // Read ?listing=X from URL on mount → open modal automatically
   useEffect(() => {
@@ -196,7 +226,13 @@ function MapPageInner() {
   function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null) {
     setViewLevel(level);
     setActiveComuna(comunaNombre);
-    if (level === "comunas") setSelected(null);
+    if (level === "comunas") {
+      setSelected(null);
+    } else if (level === "barrios" && comunaNombre) {
+      setMlsBarrio(null);
+      setFilteredListings(null);
+      setMapView("listings");
+    }
   }
 
   function handleBack() {
@@ -256,6 +292,8 @@ function MapPageInner() {
   function handleBackToZonas() {
     setMapView("zonas");
     setMlsBarrio(null);
+    setActiveComuna(null);
+    setViewLevel("comunas");
     setHighlightedListingId(null);
     setActiveBarrioInComune(null);
     setFilteredListings(null);
@@ -266,7 +304,7 @@ function MapPageInner() {
   function handleBarrioFilter(barrioNombre: string | null) {
     setActiveBarrioInComune(barrioNombre);
     if (barrioNombre) {
-      const first = mlsListings.find((l) => l.barrio_nombre === barrioNombre && l.lat && l.lon);
+      const first = mergedListings.find((l) => l.barrio_nombre === barrioNombre && l.lat && l.lon);
       if (first?.lat && first?.lon) flyToListingRef.current?.(first.lat, first.lon);
     }
   }
@@ -284,7 +322,7 @@ function MapPageInner() {
   // Single click on map point → show mini popup
   function handleListingClickFromMap(id: number, screenX: number, screenY: number) {
     setHighlightedListingId(id);
-    const listing = mlsListings.find((l) => l.id === id);
+    const listing = mergedListings.find((l) => l.id === id);
     if (!listing) return;
     track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     setMiniPopupData({ listing, x: screenX, y: screenY });
@@ -294,7 +332,7 @@ function MapPageInner() {
   function handleListingDoubleClickFromMap(id: number) {
     setHighlightedListingId(id);
     setMiniPopupData(null);
-    const listing = mlsListings.find((l) => l.id === id);
+    const listing = mergedListings.find((l) => l.id === id);
     if (listing) track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     openListingDetail(id);
   }
@@ -380,6 +418,21 @@ function MapPageInner() {
       />
       <ProfileChipMobile />
 
+      {/* Hint: filtros activos pero sin barrio seleccionado */}
+      {activeFilterCount > 0 && !mlsBarrio && activeTab !== "agent" && (
+        <div
+          style={{
+            position: "absolute", top: 108, left: "50%", transform: "translateX(-50%)",
+            zIndex: 24, background: "rgba(26,18,8,0.82)", color: "#FAF7F2",
+            borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 500,
+            pointerEvents: "none", whiteSpace: "nowrap",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+          }}
+        >
+          Selecciona una zona del mapa para ver los listings filtrados
+        </div>
+      )}
+
       {/* Vista 1: paneles normales */}
       {mapView === "zonas" && (
         <>
@@ -389,11 +442,11 @@ function MapPageInner() {
       )}
 
       {/* Vista 2: panel de listings */}
-      {mapView === "listings" && mlsBarrio && (
+      {mapView === "listings" && panelBarrio && (
         <MLSPanel
-          barrio={mlsBarrio}
-          listings={mlsListings}
-          isLoading={mlsIsLoading}
+          barrio={panelBarrio}
+          listings={mergedListings}
+          isLoading={mergedLoading}
           onBack={handleBackToZonas}
           onListingSelect={handleListingSelect}
           highlightedListingId={highlightedListingId}
