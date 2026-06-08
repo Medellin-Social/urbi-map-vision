@@ -343,6 +343,33 @@ export function MapView({
       map.resize();
       mapLoadedRef.current = true;
 
+      // ── Limpiar POIs del mapa base ────────────────────────────────────────
+      const baseStyle = map.getStyle();
+      if (baseStyle?.layers) {
+        for (const layer of baseStyle.layers) {
+          if (layer.type === "symbol") {
+            const layout = (layer as mapboxgl.SymbolLayer).layout;
+            if (layout && "icon-image" in layout) {
+              map.setLayoutProperty(layer.id, "visibility", "none");
+            }
+          }
+          const srcLayer = (layer as Record<string, unknown>)["source-layer"] as string | undefined;
+          if (layer.type === "background") {
+            map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
+          }
+          if (layer.type === "fill" && srcLayer === "water") {
+            map.setPaintProperty(layer.id, "fill-color", "#C8DFE8");
+          }
+          if (layer.type === "line" && srcLayer === "waterway") {
+            map.setPaintProperty(layer.id, "line-color", "#C8DFE8");
+          }
+          if (layer.type === "fill" && srcLayer === "building") {
+            map.setPaintProperty(layer.id, "fill-color", "#EDE8E0");
+            map.setPaintProperty(layer.id, "fill-opacity", 0.45);
+          }
+        }
+      }
+
       // ── CAPA 1: Comunas (vista inicial) ───────────────────────────────────
       map.addSource("comunas", { type: "geojson", data: EMPTY_FC });
 
