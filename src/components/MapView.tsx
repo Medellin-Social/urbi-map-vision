@@ -24,7 +24,7 @@ type Props = {
   risk?: string;
   mostrarOportunidades?: boolean;
   budgetRange?: [number, number] | null;
-  onViewLevelChange?: (level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null) => void;
+  onViewLevelChange?: (level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null, cdComuna?: number | null) => void;
   returnToComunasRef?: React.MutableRefObject<(() => void) | null>;
   onGoToMLS?: (n: Neighborhood) => void;
   // Vista 2 — MLS
@@ -296,7 +296,7 @@ export function MapView({
     map.fitBounds(bounds, { padding: 60, maxZoom: 14, speed: 0.85 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
-    onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null);
+    onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null, municipioFilter ? null : cd);
   }
 
   // Exponer goToComunas al padre via ref
@@ -314,7 +314,7 @@ export function MapView({
     if (tokenError || !containerRef.current || mapRef.current) return;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
-    const styleId = auth.get()?.mapStyle ?? "light";
+    const styleId = auth.get()?.mapStyle ?? "monochrome";
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
     const map = new mapboxgl.Map({
@@ -347,13 +347,10 @@ export function MapView({
       const baseStyle = map.getStyle();
       if (baseStyle?.layers) {
         for (const layer of baseStyle.layers) {
-          if (layer.type === "symbol") {
-            const layout = (layer as mapboxgl.SymbolLayer).layout;
-            if (layout && "icon-image" in layout) {
-              map.setLayoutProperty(layer.id, "visibility", "none");
-            }
-          }
           const srcLayer = (layer as Record<string, unknown>)["source-layer"] as string | undefined;
+          if (layer.type === "symbol" && srcLayer) {
+            map.setLayoutProperty(layer.id, "visibility", "none");
+          }
           if (layer.type === "background") {
             map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
           }

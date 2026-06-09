@@ -78,6 +78,88 @@ ON CONFLICT (barrio_id) DO UPDATE SET
     refreshed_at      = EXCLUDED.refreshed_at
 """
 
+_TRUNCATE_STG_LISTINGS = "TRUNCATE staging.stg_listings_unificado"
+
+_REFRESH_STG_LISTINGS = """
+INSERT INTO staging.stg_listings_unificado
+WITH todas_fuentes AS (
+    SELECT id::text || '_fc' AS listing_uid, 'fincaraiz' AS fuente, 'standard' AS tier,
+           tipo_operacion, tipo_inmueble, precio AS precio_cop, NULL::bigint AS precio_usd,
+           area_m2, habitaciones, banos::numeric AS banos, barrio_raw, barrio_id,
+           direccion_raw, lat::double precision, lon::double precision, geom, url, fotos,
+           fecha_scraping, dedup_hash, estrato_real
+    FROM raw.listings_fincaraiz WHERE activo = true AND precio > 0 AND area_m2 > 0
+    UNION ALL
+    SELECT id::text || '_mq', 'metrocuadrado', 'standard', tipo_operacion, tipo_inmueble,
+           precio, NULL::bigint, area_m2, habitaciones, banos::numeric, barrio_raw, barrio_id,
+           direccion_raw, lat, lon, geom, url, fotos, fecha_scraping, dedup_hash,
+           COALESCE(estrato_real, estrato)
+    FROM raw.listings_metrocuadrado WHERE activo = true AND precio > 0 AND area_m2 > 0
+    UNION ALL
+    SELECT id::text || '_pr', fuente, COALESCE(fuente_tipo,'standard'), tipo_operacion,
+           tipo_inmueble, precio_cop, precio_usd, area_m2, habitaciones, banos, barrio_raw,
+           barrio_id, direccion_raw, lat::double precision, lon::double precision, geom, url,
+           fotos, fecha_scraping, dedup_hash, NULL::integer
+    FROM raw.listings_premium WHERE precio_cop > 0 AND area_m2 > 0
+    UNION ALL
+    SELECT id::text || '_rm', fuente, 'renta_media', 'arriendo', 'apartamento', precio_mes_cop,
+           NULL::bigint, area_m2, habitaciones, banos, barrio_raw, barrio_id, NULL::text,
+           lat::double precision, lon::double precision,
+           CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+                THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END,
+           url, NULL::text[], fecha_scraping, dedup_hash, NULL::integer
+    FROM raw.listings_renta_media WHERE precio_mes_cop > 0 AND area_m2 > 0
+),
+con_geo AS (
+    SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
+           area_m2, habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
+           url, fotos, fecha_scraping, estrato_real,
+           MIN(precio_cop) OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
+               tipo_operacion, tipo_inmueble, habitaciones, (ROUND(area_m2::numeric/5)*5)) AS precio_min_cluster,
+           MAX(precio_cop) OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
+               tipo_operacion, tipo_inmueble, habitaciones, (ROUND(area_m2::numeric/5)*5)) AS precio_max_cluster,
+           COUNT(*) OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
+               tipo_operacion, tipo_inmueble, habitaciones, (ROUND(area_m2::numeric/5)*5)) AS n_duplicados,
+           ROW_NUMBER() OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
+               tipo_operacion, tipo_inmueble, habitaciones, (ROUND(area_m2::numeric/5)*5)
+               ORDER BY CASE tier WHEN 'agencia_premium' THEN 1 WHEN 'renta_media' THEN 2
+                        WHEN 'standard' THEN 3 ELSE 4 END, fecha_scraping DESC NULLS LAST) AS _rn
+    FROM todas_fuentes WHERE geom IS NOT NULL
+),
+sin_geo AS (
+    SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
+           area_m2, habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
+           url, fotos, fecha_scraping, estrato_real,
+           precio_cop AS precio_min_cluster, precio_cop AS precio_max_cluster,
+           COUNT(*) OVER (PARTITION BY COALESCE(dedup_hash,
+               COALESCE(barrio_id::text,barrio_raw,'x')||'|'||COALESCE(tipo_operacion,'?')||'|'||
+               COALESCE(tipo_inmueble,'?')||'|'||COALESCE(habitaciones::text,'?')||'|'||
+               (ROUND(area_m2::numeric/5)*5)::text)) AS n_duplicados,
+           ROW_NUMBER() OVER (PARTITION BY COALESCE(dedup_hash,
+               COALESCE(barrio_id::text,barrio_raw,'x')||'|'||COALESCE(tipo_operacion,'?')||'|'||
+               COALESCE(tipo_inmueble,'?')||'|'||COALESCE(habitaciones::text,'?')||'|'||
+               (ROUND(area_m2::numeric/5)*5)::text)
+               ORDER BY CASE tier WHEN 'agencia_premium' THEN 1 WHEN 'renta_media' THEN 2
+                        WHEN 'standard' THEN 3 ELSE 4 END, fecha_scraping DESC NULLS LAST) AS _rn
+    FROM todas_fuentes WHERE geom IS NULL
+)
+SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
+       precio_min_cluster, precio_max_cluster,
+       CASE WHEN n_duplicados > 1 AND precio_min_cluster IS DISTINCT FROM precio_max_cluster
+            THEN true ELSE false END AS precio_variable,
+       area_m2, CASE WHEN area_m2 > 0 THEN precio_cop / area_m2 END AS precio_m2,
+       habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
+       url, fotos, fecha_scraping, n_duplicados, estrato_real
+FROM con_geo WHERE _rn = 1
+UNION ALL
+SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
+       precio_min_cluster, precio_max_cluster, false AS precio_variable,
+       area_m2, CASE WHEN area_m2 > 0 THEN precio_cop / area_m2 END AS precio_m2,
+       habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
+       url, fotos, fecha_scraping, n_duplicados, estrato_real
+FROM sin_geo WHERE _rn = 1
+"""
+
 _INSERT_LISTINGS_GEOREF = """
 INSERT INTO analytics.listings_georef (url, lat, lon, url_activa, estrato_real, refreshed_at)
 SELECT DISTINCT ON (l.url)
@@ -105,9 +187,23 @@ ORDER BY l.url
 
 
 async def refresh_listings_cache(pool: Any) -> None:
-    """Refresh all 3 dynamic cache tables. barrios_cd is static — not refreshed here."""
+    """Refresh all dynamic cache tables. barrios_cd is static — not refreshed here."""
     try:
         async with pool.acquire() as conn:
+            # stg_listings_unificado: rebuild from raw tables (normally managed by dbt;
+            # this keeps it fresh on environments where dbt doesn't run, e.g. Railway)
+            stg_exists = await conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM information_schema.tables "
+                "WHERE table_schema='staging' AND table_name='stg_listings_unificado')"
+            )
+            if stg_exists:
+                async with conn.transaction():
+                    await conn.execute(_TRUNCATE_STG_LISTINGS)
+                    await conn.execute(_REFRESH_STG_LISTINGS)
+                logger.info("[cache] stg_listings_unificado refreshed")
+            else:
+                logger.warning("[cache] stg_listings_unificado missing — run migration 0021")
+
             # barrios_medianas: TRUNCATE+INSERT in transaction (PERCENTILE_CONT result set
             # is fully computed before lock, so the lock window is just the INSERT, not the scan)
             async with conn.transaction():

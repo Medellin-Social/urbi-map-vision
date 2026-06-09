@@ -112,7 +112,8 @@ WITH lraw AS (
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
-               WHEN area_m2 > 0 THEN ROUND(precio_cop::float8 / area_m2)::int
+               WHEN area_m2 > 0 AND precio_cop::float8 / area_m2 < 2147483647
+                    THEN ROUND(precio_cop::float8 / area_m2)::int
                ELSE NULL
            END AS pm2,
            fotos[1] AS foto_principal
@@ -209,7 +210,7 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
   AND ($11::float8 IS NULL OR l.banos >= $11)
-  AND ($12::text   IS NULL OR UPPER(b.comuna) = UPPER($12))
+  AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
       SELECT 1 FROM raw.listings_metrocuadrado _lmc
@@ -239,6 +240,7 @@ SELECT COUNT(*)
 FROM lraw l
 JOIN raw.barrios b               ON b.id = l.barrio_id
 JOIN analytics.listings_georef g ON g.url = l.url
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text   IS NULL OR l.tipo_operacion = $3)
@@ -250,7 +252,7 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
   AND ($11::float8 IS NULL OR l.banos >= $11)
-  AND ($12::text   IS NULL OR UPPER(b.comuna) = UPPER($12))
+  AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
       SELECT 1 FROM raw.listings_metrocuadrado _lmc
@@ -394,7 +396,7 @@ async def get_all_listings(
     habitaciones: Optional[int] = Query(default=None),
     area_max: Optional[float] = Query(default=None),
     banos: Optional[float] = Query(default=None),
-    comuna: Optional[str] = Query(default=None),
+    cd_comuna: Optional[int] = Query(default=None),
     estrato_real: Optional[int] = Query(default=None),
     antiguedad: Optional[str] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
@@ -435,7 +437,7 @@ async def get_all_listings(
     def _args(tipo_op: Optional[str]) -> tuple:
         return (municipio, barrio_ids, tipo_op, tipo_inmueble,
                 precio_min, precio_max, area_min, habitaciones, only_premium,
-                area_max, banos, comuna, estrato_real, antiguedad)
+                area_max, banos, cd_comuna, estrato_real, antiguedad)
 
     # Unified venta+arriendo path: 2 parallel fetches → balanced results, 1 HTTP round-trip.
     # Only applies when: no tipo_operacion filter, barrio selected, no premium, no personalization, page 0.
