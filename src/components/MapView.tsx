@@ -348,10 +348,7 @@ export function MapView({
       if (baseStyle?.layers) {
         for (const layer of baseStyle.layers) {
           if (layer.type === "symbol") {
-            const layout = (layer as mapboxgl.SymbolLayer).layout;
-            if (layout && "icon-image" in layout) {
-              map.setLayoutProperty(layer.id, "visibility", "none");
-            }
+            map.setLayoutProperty(layer.id, "visibility", "none");
           }
           const srcLayer = (layer as Record<string, unknown>)["source-layer"] as string | undefined;
           if (layer.type === "background") {
