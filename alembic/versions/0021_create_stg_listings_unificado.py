@@ -16,6 +16,50 @@ down_revision = "0020"
 branch_labels = None
 depends_on = None
 
+_CREATE_STUBS = """
+-- Create stub tables for sources managed by scrapers (not alembic).
+-- These ensure migration 0021 works on Railway where scrapers haven't run yet.
+CREATE TABLE IF NOT EXISTS raw.listings_premium (
+    id            SERIAL PRIMARY KEY,
+    fuente        VARCHAR NOT NULL,
+    fuente_tipo   VARCHAR DEFAULT 'portal',
+    tipo_operacion VARCHAR,
+    tipo_inmueble  VARCHAR,
+    precio_cop    BIGINT,
+    precio_usd    BIGINT,
+    area_m2       NUMERIC,
+    habitaciones  INTEGER,
+    banos         NUMERIC,
+    barrio_raw    VARCHAR,
+    barrio_id     INTEGER,
+    direccion_raw VARCHAR,
+    lat           NUMERIC(10,6),
+    lon           NUMERIC(10,6),
+    geom          GEOMETRY(Point,4326),
+    url           VARCHAR,
+    fotos         TEXT[],
+    fecha_scraping TIMESTAMPTZ DEFAULT now(),
+    dedup_hash    VARCHAR,
+    UNIQUE(dedup_hash)
+);
+
+CREATE TABLE IF NOT EXISTS raw.listings_renta_media (
+    id            SERIAL PRIMARY KEY,
+    fuente        TEXT NOT NULL,
+    precio_mes_cop NUMERIC(12,0),
+    area_m2       NUMERIC(8,2),
+    habitaciones  INTEGER,
+    banos         NUMERIC,
+    barrio_raw    TEXT,
+    barrio_id     INTEGER,
+    lat           NUMERIC(10,6),
+    lon           NUMERIC(10,6),
+    url           TEXT,
+    fecha_scraping TIMESTAMPTZ DEFAULT now(),
+    dedup_hash    VARCHAR
+);
+"""
+
 _CREATE_STG = """
 CREATE SCHEMA IF NOT EXISTS staging;
 
@@ -313,6 +357,7 @@ ON CONFLICT (url) DO UPDATE
 
 
 def upgrade() -> None:
+    op.execute(_CREATE_STUBS)
     op.execute(_CREATE_STG)
     # Refresh georef so listings appear on the map (was empty if stg was missing)
     op.execute(_REFRESH_GEOREF)
