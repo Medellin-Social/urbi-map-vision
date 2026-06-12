@@ -53,11 +53,33 @@ export const API_ENDPOINTS = {
   // Agentes
   agentesRegistro: `${API_BASE_URL}/agentes/registro`,
   agentesAprobados: `${API_BASE_URL}/agentes/aprobados/lista`,
+  agentesAprobadosFiltros: (params?: string) => `${API_BASE_URL}/agentes/aprobados${params ? `?${params}` : ""}`,
   agentePerfil: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil`,
+  agentePerfilPublico: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil-publico`,
+  agentePorSlug: (slug: string) => `${API_BASE_URL}/agentes/por-slug/${slug}`,
+  agenteContacto: (id: number) => `${API_BASE_URL}/agentes/${id}/contacto`,
   adminAgentes: `${API_BASE_URL}/agentes/admin`,
   adminAgenteDetalle: (id: number) => `${API_BASE_URL}/agentes/admin/${id}`,
   adminAgenteAprobar: (id: number) => `${API_BASE_URL}/agentes/${id}/aprobar`,
   adminAgenteRechazar: (id: number) => `${API_BASE_URL}/agentes/${id}/rechazar`,
+
+  // Listings propios
+  listingsPropiosAgente: (id: number) => `${API_BASE_URL}/listings-propios/agente/${id}`,
+  listingsPropios: `${API_BASE_URL}/listings-propios`,
+  listingsPropiosMe: `${API_BASE_URL}/listings-propios/me`,
+  listingsPropiosMis: `${API_BASE_URL}/listings-propios/mis-listings`,
+  listingsPropiosById: (id: number) => `${API_BASE_URL}/listings-propios/${id}`,
+  listingsPropiosBarriosForm: `${API_BASE_URL}/listings-propios/barrios-form`,
+  listingsPropiosAgentes: `${API_BASE_URL}/listings-propios/agentes-para-contactar`,
+  listingsPropiosSolicitudes: `${API_BASE_URL}/listings-propios/solicitudes`,
+  listingsPropiosSolicitudesPendientes: `${API_BASE_URL}/listings-propios/solicitudes/pendientes`,
+  listingsPropiosSolicitudById: (id: number) => `${API_BASE_URL}/listings-propios/solicitudes/${id}`,
+
+  // Suscripciones
+  suscripcionesPlanes: `${API_BASE_URL}/suscripciones/planes`,
+  suscripcionesIniciar: `${API_BASE_URL}/suscripciones/iniciar`,
+  suscripcionesMiPlan: `${API_BASE_URL}/suscripciones/mi-plan`,
+  suscripcionesCancelar: `${API_BASE_URL}/suscripciones/cancelar`,
 } as const;
 
 export { API_BASE_URL };

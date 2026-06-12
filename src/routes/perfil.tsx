@@ -732,7 +732,7 @@ function relativeTime(ts: number): string {
 const SCORE_LABELS = ["≥70", "≥50", "≥30", "<30"] as const;
 
 function MapaTab({ user }: { user: UrbiUser }) {
-  const [style, setStyle] = useState<MapStyleId>(user.mapStyle ?? "dark");
+  const [style, setStyle] = useState<MapStyleId>(user.mapStyle ?? "monochrome");
   const [oportunidades, setOportunidades] = useState(user.mostrarOportunidades ?? false);
   const [scorePalette, setScorePalette] = useState<ScorePaletteId>(getActivePaletteId);
 

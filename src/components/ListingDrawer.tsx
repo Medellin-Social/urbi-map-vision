@@ -21,6 +21,19 @@ import { PhotoGallery } from "@/components/PhotoGallery";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
+const TIPO_INMUEBLE_COLOR: Record<string, string> = {
+  apartamento:   '#1D9E75',
+  casa:          '#D85A30',
+  casa_lote:     '#D85A30',
+  finca:         '#D85A30',
+  apartaestudio: '#5DCAA5',
+  lote:          '#BA7517',
+  local:         '#7F77DD',
+  oficina:       '#378ADD',
+  bodega:        '#9B8B75',
+  consultorio:   '#9B8B75',
+};
+
 function diasLabel(dias: number | null | undefined): string | null {
   if (dias == null || dias < 0) return null;
   if (dias === 0) return "Publicado hoy";
@@ -150,7 +163,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   }
 
   // ─── Shared content ────────────────────────────────────────────────────────
-  const Content = () => (
+  const drawerContent = (
     <div className="flex flex-col">
       {/* Gallery */}
       <PhotoGallery fotos={listing?.fotos} titulo={listing?.tipo_inmueble ?? undefined} />
@@ -181,15 +194,34 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1.5">
+                  {listing.tier === "agencia_premium" && (
+                    <span
+                      className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+                      style={{ background: "#ffc928", color: "#1A1208" }}
+                    >
+                      ✦ Premium
+                    </span>
+                  )}
                   <span
                     className="rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
                     style={{
-                      background: tipoOp === "arriendo" ? "#E1F5EE" : "#FAECE7",
-                      color:      tipoOp === "arriendo" ? "#1D9E75" : "#D85A30",
+                      background: tipoOp === "arriendo" ? "#1D9E75" : "#D85A30",
+                      color:      "#FFFFFF",
                     }}
                   >
                     {tipoOp}
                   </span>
+                  {listing.tipo_inmueble && (
+                    <span
+                      className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider capitalize"
+                      style={{
+                        background: TIPO_INMUEBLE_COLOR[listing.tipo_inmueble] ?? "#9B8B75",
+                        color: "#FFFFFF",
+                      }}
+                    >
+                      {listing.tipo_inmueble.replace(/_/g, " ")}
+                    </span>
+                  )}
                   {listing.buena_oferta && isPro && (
                     <span
                       className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
@@ -617,7 +649,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 </button>
               </div>
               <div className="flex-1 overflow-y-auto">
-                <Content />
+                {drawerContent}
               </div>
             </motion.div>
           </>
@@ -648,11 +680,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.95, opacity: 0 }}
             transition={{ duration: 0.2, ease: "easeOut" }}
+            transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
             className="fixed z-50 flex flex-col overflow-hidden rounded-2xl shadow-2xl"
             style={{
               top: "50%",
               left: "50%",
-              transform: "translate(-50%, -50%)",
               width: "min(680px, 92vw)",
               maxHeight: "85vh",
               background: "#FAF7F2",
@@ -678,7 +710,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <Content />
+              {drawerContent}
             </div>
           </motion.div>
         </>

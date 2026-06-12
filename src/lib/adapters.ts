@@ -245,6 +245,7 @@ export type ApiListing = {
   barrio_nombre?: string | null;
   cd_comuna?: number | null;
   tier?: string | null;
+  estrato_real?: number | null;
   // URL availability — present after validate_listings_urls.py has run
   disponible_actualmente?: boolean | null;
   fecha_ultima_verificacion?: string | null;

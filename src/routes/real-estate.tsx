@@ -1,12 +1,17 @@
 import { createFileRoute } from '@tanstack/react-router'
+import { useQuery } from '@tanstack/react-query'
+import { useState, useMemo } from 'react'
+import { apiFetch } from '@/lib/apiClient'
+import { API_ENDPOINTS } from '@/config/api'
+import type { ApiListingsResponse, ApiListing } from '@/lib/adapters'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 
 export const Route = createFileRoute('/real-estate')({
   component: RealEstateRoot,
   head: () => ({
     meta: [
-      { title: 'Real Estate · Medellín Social' },
-      { name: 'description', content: 'Expertos inmobiliarios en Medellín y el Valle de Aburrá. Compra, vende e invierte con los mejores agentes locales.' },
+      { title: 'Mercado Inmobiliario · Valle de Aburrá · Medellín Social' },
+      { name: 'description', content: '54,000+ propiedades. Datos reales. Compra, arrienda e invierte en el Valle de Aburrá con los mejores agentes locales.' },
     ],
   }),
 })
@@ -19,6 +24,8 @@ function RealEstateRoot() {
   )
 }
 
+// ── Design tokens ──────────────────────────────────────────────────────────────
+
 const K = {
   paper:      '#fbf9f3',
   surface:    '#f5f0e8',
@@ -27,94 +34,131 @@ const K = {
   muted:      '#62736d',
   teal:       '#1D9E75',
   tealDeep:   '#085041',
+  tealLight:  '#E1F5EE',
   coral:      '#D85A30',
   coralLight: '#FAECE7',
   amarillo:   '#ffc928',
   serif:      "'Fraunces', Georgia, serif" as const,
 }
 
-// ── Data (future: fetch from /api/v1/agentes) ──────────────────────────────────
+// ── Types ──────────────────────────────────────────────────────────────────────
 
-type Expert = {
-  name:      string
-  role:      string
-  company:   string
-  initials:  string
-  avatarBg:  string
-  linkedin?: string
-  instagram?: string
-  whatsapp?: string
+type AgenteAprobado = {
+  id: number
+  nombre_completo: string
+  foto_perfil?: string | null
+  especialidad?: string[] | string | null
+  tipo_inmueble?: string[] | string | null
+  zonas_opera?: string[] | string | null
+  anos_experiencia?: number | null
+  transacciones_cerradas?: number | null
+  inmobiliaria_nombre?: string | null
+  es_independiente?: boolean
+  whatsapp?: string | null
+  linkedin?: string | null
+  instagram?: string | null
+  sitio_web?: string | null
 }
 
-const EXPERTS: Expert[] = [
-  {
-    name:      'Ken Munro',
-    role:      'Fundador',
-    company:   'Medellín Social',
-    initials:  'KM',
-    avatarBg:  K.teal,
-    linkedin:  '#',
-    instagram: '#',
-    whatsapp:  '#',
-  },
-  {
-    name:      'Kathy',
-    role:      'Agente Independiente',
-    company:   'Corredor El Poblado → La Estrella',
-    initials:  'K',
-    avatarBg:  K.coral,
-    linkedin:  '#',
-    instagram: '#',
-    whatsapp:  '#',
-  },
-]
+// ── Helpers ────────────────────────────────────────────────────────────────────
 
-// ── Data (future: fetch from /api/v1/blog) ─────────────────────────────────────
-
-type Article = {
-  title:  string
-  date:   string
-  author: string
-  tag:    string
-  tagBg:  string
-  imgBg:  string
+function parseArr(v: string[] | string | null | undefined): string[] {
+  if (!v) return []
+  if (Array.isArray(v)) return v
+  try { return JSON.parse(v) } catch { return [] }
 }
 
-const ARTICLES: Article[] = [
+function getInitials(name: string): string {
+  return name.split(' ').slice(0, 2).map(w => w[0]?.toUpperCase() ?? '').join('')
+}
+
+const AVATAR_COLORS = [K.teal, K.coral, '#7F77DD', '#378ADD', '#BA7517']
+function avatarColor(name: string): string {
+  return AVATAR_COLORS[Math.abs(name.charCodeAt(0)) % AVATAR_COLORS.length]
+}
+
+function waUrl(phone: string | null | undefined): string | null {
+  if (!phone) return null
+  const digits = phone.replace(/\D/g, '')
+  if (!digits) return null
+  const intl = digits.startsWith('57') ? digits : `57${digits}`
+  return `https://wa.me/${intl}`
+}
+
+function fmtCOP(n: number): string {
+  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, '')}B`
+  if (n >= 1_000_000) return `$${Math.round(n / 1_000_000)}M`
+  return `$${n.toLocaleString('es-CO')}`
+}
+
+// ── Static data ────────────────────────────────────────────────────────────────
+
+const KEN_WA = '3122502394'
+
+const FALLBACK_AGENTES: AgenteAprobado[] = [
   {
-    title:  '¿Por qué El Poblado sigue siendo el barrio más codiciado de Medellín?',
-    date:   '5 jun 2026',
-    author: 'Ken Munro',
-    tag:    'Análisis',
-    tagBg:  K.teal,
-    imgBg:  `linear-gradient(135deg, ${K.teal} 0%, ${K.tealDeep} 100%)`,
+    id: -1,
+    nombre_completo:    'Ken Munro',
+    foto_perfil:        null,
+    especialidad:       ['Venta', 'Inversión'],
+    zonas_opera:        ['El Poblado', 'Laureles', 'Envigado'],
+    anos_experiencia:   20,
+    inmobiliaria_nombre: 'Medellín Social',
+    es_independiente:   false,
+    whatsapp:           KEN_WA,
   },
   {
-    title:  'Laureles vs Envigado: Dónde invertir en 2026 según el mercado',
-    date:   '28 may 2026',
-    author: 'Redacción',
-    tag:    'Comparativa',
-    tagBg:  K.coral,
-    imgBg:  `linear-gradient(135deg, ${K.coral} 0%, #a03018 100%)`,
-  },
-  {
-    title:  'IED en Medellín creció 378%: lo que significa para el mercado inmobiliario',
-    date:   '15 may 2026',
-    author: 'Redacción',
-    tag:    'Tendencias',
-    tagBg:  K.tealDeep,
-    imgBg:  `linear-gradient(135deg, ${K.amarillo} 0%, #d4a000 100%)`,
+    id: -2,
+    nombre_completo:    'Kathy',
+    foto_perfil:        null,
+    especialidad:       ['Venta', 'Arriendo', 'Remodelaciones'],
+    zonas_opera:        ['El Poblado', 'La Estrella', 'Sabaneta'],
+    anos_experiencia:   null,
+    inmobiliaria_nombre: null,
+    es_independiente:   true,
+    whatsapp:           null,
   },
 ]
 
 const STATS = [
-  { value: '+378%',        label: 'IED Medellín 2025',         note: 'Inversión extranjera directa' },
-  { value: '$1.5k–$2.5k', label: 'USD precio/m² El Poblado',  note: 'Rango promedio 2025' },
-  { value: '659,097',      label: 'Visitantes internacionales', note: 'Llegadas aéreas 2023' },
-  { value: '15–20%',       label: 'Compradores extranjeros',    note: 'Del mercado nacional' },
+  { value: '+378%',        label: 'IED Medellín 2025',          note: 'Inversión extranjera directa' },
+  { value: '$1.5k–$2.5k', label: 'USD precio/m² El Poblado',   note: 'Rango promedio 2025' },
+  { value: '659,097',      label: 'Visitantes internacionales',  note: 'Llegadas aéreas 2023' },
+  { value: '15–20%',       label: 'Compradores extranjeros',     note: 'Del mercado nacional' },
 ]
 
-// ── Social icons ───────────────────────────────────────────────────────────────
+const CATEGORIAS = [
+  {
+    label:    'Comprar',
+    sub:      'Apartamentos y casas en venta',
+    href:     '/map?tipo_operacion=venta',
+    bg:       `linear-gradient(145deg, ${K.tealDeep} 0%, #0d6b55 100%)`,
+    emoji:    '🏡',
+  },
+  {
+    label:    'Arrendar',
+    sub:      'Arriendos en toda el área metropolitana',
+    href:     '/map?tipo_operacion=arriendo',
+    bg:       `linear-gradient(145deg, #1a3a5c 0%, #2d5986 100%)`,
+    emoji:    '🔑',
+  },
+  {
+    label:    'Vender',
+    sub:      'Publica tu propiedad en minutos',
+    href:     '/vender',
+    bg:       `linear-gradient(145deg, ${K.coral} 0%, #a03018 100%)`,
+    emoji:    '📋',
+  },
+  {
+    label:    'Invertir',
+    sub:      'Analiza barrios con datos reales',
+    href:     '/map',
+    bg:       `linear-gradient(145deg, #4a3500 0%, ${K.amarillo} 100%)`,
+    emoji:    '📈',
+  },
+]
+
+// ── Icons ──────────────────────────────────────────────────────────────────────
 
 function IcoLinkedIn() {
   return (
@@ -140,273 +184,729 @@ function IcoWhatsApp() {
   )
 }
 
-// ── Expert Card ────────────────────────────────────────────────────────────────
-
-function ExpertCard({ expert }: { expert: Expert }) {
+function IcoGlobe() {
   return (
-    <div style={{
-      background: '#fff',
-      border: `1px solid ${K.line}`,
-      borderRadius: 16,
-      padding: '36px 24px 28px',
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      textAlign: 'center',
-    }}>
-      <div style={{
-        width: 100,
-        height: 100,
-        borderRadius: '50%',
-        background: expert.avatarBg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontFamily: K.serif,
-        fontWeight: 900,
-        fontSize: '2.1rem',
-        color: '#fff',
-        letterSpacing: -1,
-        marginBottom: 18,
-        boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
-        flexShrink: 0,
-      }}>
-        {expert.initials}
-      </div>
-
-      <div style={{
-        fontFamily: K.serif,
-        fontWeight: 700,
-        fontSize: '1.2rem',
-        color: K.ink,
-        lineHeight: 1.2,
-      }}>
-        {expert.name}
-      </div>
-
-      <div style={{
-        marginTop: 5,
-        fontSize: '.75rem',
-        fontWeight: 700,
-        color: K.teal,
-        textTransform: 'uppercase',
-        letterSpacing: '.6px',
-      }}>
-        {expert.role}
-      </div>
-
-      <div style={{
-        marginTop: 5,
-        fontSize: '.85rem',
-        color: K.muted,
-        lineHeight: 1.4,
-      }}>
-        {expert.company}
-      </div>
-
-      <div style={{
-        marginTop: 22,
-        display: 'flex',
-        gap: 10,
-        justifyContent: 'center',
-      }}>
-        {expert.linkedin && (
-          <a
-            href={expert.linkedin}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`${expert.name} en LinkedIn`}
-            style={{
-              width: 36, height: 36, borderRadius: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: K.surface, color: K.ink, textDecoration: 'none',
-            }}
-          >
-            <IcoLinkedIn />
-          </a>
-        )}
-        {expert.instagram && (
-          <a
-            href={expert.instagram}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`${expert.name} en Instagram`}
-            style={{
-              width: 36, height: 36, borderRadius: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: K.surface, color: K.ink, textDecoration: 'none',
-            }}
-          >
-            <IcoInstagram />
-          </a>
-        )}
-        {expert.whatsapp && (
-          <a
-            href={expert.whatsapp}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={`WhatsApp de ${expert.name}`}
-            style={{
-              width: 36, height: 36, borderRadius: 8,
-              display: 'flex', alignItems: 'center', justifyContent: 'center',
-              background: '#e8fdf3', color: '#25D366', textDecoration: 'none',
-            }}
-          >
-            <IcoWhatsApp />
-          </a>
-        )}
-      </div>
-    </div>
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
   )
 }
 
-// ── Article Card ───────────────────────────────────────────────────────────────
-
-function ArticleCard({ article }: { article: Article }) {
-  return (
-    <article style={{
-      background: '#fff',
-      border: `1px solid ${K.line}`,
-      borderRadius: 12,
-      overflow: 'hidden',
-      display: 'flex',
-      flexDirection: 'column',
-    }}>
-      <div style={{
-        height: 156,
-        background: article.imgBg,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontSize: '2.8rem',
-      }}>
-        🏙️
-      </div>
-
-      <div style={{ padding: '20px 20px 24px', flex: 1, display: 'flex', flexDirection: 'column' }}>
-        <span style={{
-          display: 'inline-block',
-          background: article.tagBg,
-          color: '#fff',
-          fontSize: '.62rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '1px',
-          padding: '3px 10px',
-          borderRadius: 999,
-          marginBottom: 12,
-          alignSelf: 'flex-start',
-        }}>
-          {article.tag}
-        </span>
-
-        <div style={{
-          fontFamily: K.serif,
-          fontWeight: 700,
-          fontSize: '1rem',
-          color: K.ink,
-          lineHeight: 1.38,
-          marginBottom: 'auto',
-          paddingBottom: 14,
-        }}>
-          {article.title}
-        </div>
-
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 6,
-          fontSize: '.73rem',
-          color: K.muted,
-          paddingTop: 14,
-          borderTop: `1px solid ${K.line}`,
-        }}>
-          <span>{article.date}</span>
-          <span style={{ color: K.line }}>·</span>
-          <span>{article.author}</span>
-        </div>
-      </div>
-    </article>
-  )
-}
-
-// ── Sections ───────────────────────────────────────────────────────────────────
+// ── Section 1: Hero ────────────────────────────────────────────────────────────
 
 function HeroSection() {
+  const [modo, setModo] = useState<'comprar' | 'arrendar' | 'invertir'>('comprar')
+
+  const modoHref = {
+    comprar:  '/map?tipo_operacion=venta',
+    arrendar: '/map?tipo_operacion=arriendo',
+    invertir: '/map',
+  }
+
+  const tabs: { key: typeof modo; label: string }[] = [
+    { key: 'comprar',  label: 'Comprar'  },
+    { key: 'arrendar', label: 'Arrendar' },
+    { key: 'invertir', label: 'Invertir' },
+  ]
+
   return (
     <section style={{
       background: `linear-gradient(160deg, ${K.paper} 55%, rgba(29,158,117,0.07) 100%)`,
       borderBottom: `1px solid ${K.line}`,
-      padding: 'clamp(56px, 10vw, 96px) 24px clamp(48px, 8vw, 80px)',
+      padding: 'clamp(64px, 12vw, 112px) 24px clamp(56px, 10vw, 88px)',
       textAlign: 'center',
     }}>
-      <div style={{ maxWidth: 720, margin: '0 auto' }}>
+      <div style={{ maxWidth: 740, margin: '0 auto' }}>
         <div style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          background: K.teal,
-          color: '#fff',
-          fontSize: '.62rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '1.8px',
-          padding: '5px 14px',
-          borderRadius: 999,
-          marginBottom: 28,
+          display: 'inline-flex', alignItems: 'center', gap: 6,
+          background: K.tealLight, color: K.tealDeep,
+          fontSize: '.62rem', fontWeight: 700,
+          textTransform: 'uppercase', letterSpacing: '1.8px',
+          padding: '5px 14px', borderRadius: 999, marginBottom: 32,
+          border: `1px solid rgba(8,80,65,0.15)`,
         }}>
-          🏡 Real Estate · Medellín Social
+          Medellín Social · Real Estate
         </div>
 
         <h1 style={{
           fontFamily: K.serif,
           fontWeight: 900,
-          fontSize: 'clamp(2.2rem, 6vw, 3.6rem)',
+          fontSize: 'clamp(2.4rem, 7vw, 4rem)',
           color: K.ink,
-          lineHeight: 1.06,
+          lineHeight: 1.05,
           letterSpacing: -2,
-          margin: '0 0 22px',
+          margin: '0 0 24px',
         }}>
-          Expertos Inmobiliarios<br />
-          <span style={{ color: K.teal }}>en Medellín</span>
+          El mercado inmobiliario<br />
+          del Valle de Aburrá,<br />
+          <span style={{ color: K.teal }}>en tus manos.</span>
         </h1>
 
         <p style={{
-          fontSize: 'clamp(.95rem, 2vw, 1.08rem)',
+          fontSize: 'clamp(.95rem, 2vw, 1.1rem)',
           color: K.muted,
           lineHeight: 1.65,
-          maxWidth: 500,
-          margin: '0 auto',
+          maxWidth: 480,
+          margin: '0 auto 40px',
         }}>
-          El equipo que te ayuda a comprar, vender e invertir en el Valle de Aburrá.
+          54,000+ propiedades. Datos reales.<br />
+          Inversores locales y extranjeros.
         </p>
+
+        {/* Filter tabs */}
+        <div style={{
+          display: 'inline-flex',
+          gap: 0,
+          background: K.surface,
+          border: `1px solid ${K.line}`,
+          borderRadius: 12,
+          padding: 4,
+          marginBottom: 28,
+        }}>
+          {tabs.map(t => (
+            <button
+              key={t.key}
+              onClick={() => setModo(t.key)}
+              style={{
+                padding: '9px 22px',
+                borderRadius: 8,
+                border: 'none',
+                cursor: 'pointer',
+                fontWeight: 700,
+                fontSize: '.85rem',
+                letterSpacing: '.1px',
+                transition: 'background .15s, color .15s, box-shadow .15s',
+                background: modo === t.key ? K.teal : 'transparent',
+                color:      modo === t.key ? '#fff'  : K.muted,
+                boxShadow:  modo === t.key ? '0 2px 8px rgba(29,158,117,0.3)' : 'none',
+              }}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        <br />
+
+        <a
+          href={modoHref[modo]}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            background: K.ink, color: '#fff',
+            fontWeight: 700, fontSize: '.92rem',
+            padding: '14px 30px', borderRadius: 10,
+            textDecoration: 'none', letterSpacing: '.1px',
+            boxShadow: '0 4px 20px rgba(20,32,29,0.18)',
+          }}
+        >
+          Ver propiedades →
+        </a>
       </div>
     </section>
   )
 }
 
-function ExpertosSection() {
+// ── Section 2: Listings destacados ────────────────────────────────────────────
+
+function ListingCard({ listing }: { listing: ApiListing }) {
+  const precio = listing.precio_cop
+  const barrio = listing.barrio_nombre ?? '—'
+  const area   = listing.area_m2
+  const hab    = listing.habitaciones
+  const op     = listing.tipo_operacion === 'arriendo' ? 'Arriendo' : 'Venta'
+  const opColor = listing.tipo_operacion === 'arriendo' ? K.teal : K.coral
+
+  return (
+    <a
+      href={listing.id ? `/listing/${listing.id}` : '#'}
+      style={{
+        background: '#fff',
+        border: `1px solid ${K.line}`,
+        borderRadius: 14,
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        textDecoration: 'none',
+        color: 'inherit',
+        transition: 'box-shadow .15s, transform .15s',
+      }}
+      onMouseEnter={e => {
+        const el = e.currentTarget as HTMLAnchorElement
+        el.style.boxShadow = '0 8px 32px rgba(20,32,29,0.12)'
+        el.style.transform = 'translateY(-2px)'
+      }}
+      onMouseLeave={e => {
+        const el = e.currentTarget as HTMLAnchorElement
+        el.style.boxShadow = 'none'
+        el.style.transform = 'none'
+      }}
+    >
+      {/* Photo */}
+      <div style={{
+        height: 178,
+        background: listing.foto_principal
+          ? 'transparent'
+          : `linear-gradient(135deg, ${K.surface} 0%, ${K.line} 100%)`,
+        position: 'relative',
+        flexShrink: 0,
+        overflow: 'hidden',
+      }}>
+        {listing.foto_principal ? (
+          <img
+            src={listing.foto_principal}
+            alt={barrio}
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+          />
+        ) : (
+          <div style={{
+            width: '100%', height: '100%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: '2.4rem', opacity: .35,
+          }}>
+            🏢
+          </div>
+        )}
+        <span style={{
+          position: 'absolute', top: 10, left: 10,
+          background: opColor, color: '#fff',
+          fontSize: '.6rem', fontWeight: 800,
+          textTransform: 'uppercase', letterSpacing: '.8px',
+          padding: '3px 9px', borderRadius: 999,
+        }}>
+          {op}
+        </span>
+        {listing.buena_oferta && (
+          <span style={{
+            position: 'absolute', top: 10, right: 10,
+            background: K.amarillo, color: K.ink,
+            fontSize: '.6rem', fontWeight: 800,
+            textTransform: 'uppercase', letterSpacing: '.8px',
+            padding: '3px 9px', borderRadius: 999,
+          }}>
+            Buena oferta
+          </span>
+        )}
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: '14px 16px 18px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {precio && (
+          <div style={{
+            fontFamily: K.serif, fontWeight: 800,
+            fontSize: '1.15rem', color: K.ink, lineHeight: 1,
+          }}>
+            {fmtCOP(precio)}
+            {listing.tipo_operacion === 'arriendo' && (
+              <span style={{ fontSize: '.7rem', fontWeight: 500, color: K.muted }}> /mes</span>
+            )}
+          </div>
+        )}
+        <div style={{ fontSize: '.78rem', color: K.muted, fontWeight: 600 }}>
+          📍 {barrio}
+        </div>
+        <div style={{
+          display: 'flex', gap: 12,
+          fontSize: '.74rem', color: K.muted, marginTop: 2,
+        }}>
+          {area   && <span>{area} m²</span>}
+          {hab    && <span>{hab} hab</span>}
+        </div>
+      </div>
+    </a>
+  )
+}
+
+function ListingCardSkeleton() {
+  return (
+    <div style={{
+      background: '#fff',
+      border: `1px solid ${K.line}`,
+      borderRadius: 14,
+      overflow: 'hidden',
+    }}>
+      <div style={{ height: 178, background: K.surface }} />
+      <div style={{ padding: '14px 16px 18px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+        <div style={{ height: 20, width: '55%', background: K.line, borderRadius: 6 }} />
+        <div style={{ height: 13, width: '70%', background: K.surface, borderRadius: 6 }} />
+        <div style={{ height: 11, width: '40%', background: K.surface, borderRadius: 6 }} />
+      </div>
+    </div>
+  )
+}
+
+function ListingsDestacadosSection() {
+  const { data, isLoading } = useQuery<ApiListingsResponse>({
+    queryKey: ['featured-listings'],
+    queryFn: () => apiFetch(`${API_ENDPOINTS.allListings}?limit=24`),
+    staleTime: 10 * 60_000,
+  })
+
+  const featured = useMemo(() => {
+    const all = data?.listings ?? []
+    const withPhoto   = all.filter(l => l.foto_principal)
+    const candidates  = withPhoto.length >= 4 ? withPhoto : all
+    return [...candidates]
+      .sort((a, b) => (b.buena_oferta ? 1 : 0) - (a.buena_oferta ? 1 : 0))
+      .slice(0, 6)
+  }, [data])
+
   return (
     <section style={{
       background: K.paper,
       borderBottom: `1px solid ${K.line}`,
       padding: 'clamp(48px, 8vw, 80px) 24px',
     }}>
-      <div style={{ maxWidth: 960, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 44 }}>
-          <h2 style={{
-            fontFamily: K.serif,
-            fontWeight: 800,
-            fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
-            color: K.ink,
-            margin: '0 0 10px',
-            letterSpacing: -.5,
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 16, marginBottom: 36,
+        }}>
+          <div>
+            <h2 style={{
+              fontFamily: K.serif, fontWeight: 800,
+              fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
+              color: K.ink, margin: '0 0 6px', letterSpacing: -.5,
+            }}>
+              Propiedades destacadas
+            </h2>
+            <p style={{ color: K.muted, fontSize: '.88rem', margin: 0 }}>
+              Las mejores ofertas del mercado, actualizadas diariamente.
+            </p>
+          </div>
+          <a
+            href="/map"
+            style={{
+              color: K.teal, fontWeight: 700, fontSize: '.85rem',
+              textDecoration: 'none', flexShrink: 0,
+            }}
+          >
+            Ver todas →
+          </a>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))',
+          gap: 20,
+        }}>
+          {isLoading
+            ? [0,1,2,3,4,5].map(i => <ListingCardSkeleton key={i} />)
+            : featured.map(l => <ListingCard key={l.id} listing={l} />)
+          }
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Section 3: La historia ─────────────────────────────────────────────────────
+
+function HistoriaSection() {
+  const metrics = [
+    { val: '54K+',  lbl: 'listings activos' },
+    { val: '606',   lbl: 'barrios mapeados'  },
+    { val: '12K+',  lbl: 'negocios locales'  },
+    { val: 'reales', lbl: 'datos verificados' },
+  ]
+
+  return (
+    <section style={{
+      background: K.surface,
+      borderBottom: `1px solid ${K.line}`,
+      padding: 'clamp(56px, 9vw, 96px) 24px',
+    }}>
+      <div style={{
+        maxWidth: 1060, margin: '0 auto',
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: 'clamp(36px, 6vw, 72px)',
+        alignItems: 'center',
+      }}>
+        {/* Left: editorial photo placeholder */}
+        <div style={{
+          borderRadius: 18,
+          overflow: 'hidden',
+          aspectRatio: '4/3',
+          background: `linear-gradient(145deg, ${K.tealDeep} 0%, #1a6b50 50%, ${K.teal} 100%)`,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          flexDirection: 'column', gap: 12,
+          minHeight: 260,
+        }}>
+          <div style={{ fontSize: '3.5rem' }}>🌆</div>
+          <div style={{
+            fontSize: '.72rem', fontWeight: 700,
+            color: 'rgba(255,255,255,0.6)',
+            textTransform: 'uppercase', letterSpacing: '1.5px',
           }}>
-            Expertos del Equipo
+            Valle de Aburrá
+          </div>
+        </div>
+
+        {/* Right: copy */}
+        <div>
+          <div style={{
+            fontSize: '.62rem', fontWeight: 700,
+            color: K.teal, textTransform: 'uppercase',
+            letterSpacing: '1.8px', marginBottom: 18,
+          }}>
+            Nuestra historia
+          </div>
+
+          <h2 style={{
+            fontFamily: K.serif, fontWeight: 800,
+            fontSize: 'clamp(1.5rem, 3.5vw, 2rem)',
+            color: K.ink, margin: '0 0 20px', letterSpacing: -.5,
+            lineHeight: 1.2,
+          }}>
+            Nacimos para hacer transparente el mercado más opaco de Colombia
           </h2>
-          <p style={{ color: K.muted, fontSize: '.9rem', margin: 0 }}>
-            Profesionales con experiencia local en el mercado del Valle de Aburrá.
+
+          <p style={{
+            color: K.muted, fontSize: '.95rem',
+            lineHeight: 1.7, margin: '0 0 32px',
+          }}>
+            El mercado inmobiliario colombiano es fragmentado, costoso y difícil de navegar — especialmente para compradores extranjeros. Medellín Social centraliza datos reales de 54,000+ propiedades en 10 municipios del Valle de Aburrá, con precios verificados, análisis de barrios y agentes locales de confianza.
           </p>
+
+          {/* Metrics row */}
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(2, 1fr)',
+            gap: 16,
+          }}>
+            {metrics.map(m => (
+              <div key={m.lbl} style={{
+                background: '#fff',
+                border: `1px solid ${K.line}`,
+                borderRadius: 10,
+                padding: '16px 18px',
+              }}>
+                <div style={{
+                  fontFamily: K.serif, fontWeight: 900,
+                  fontSize: '1.4rem', color: K.teal,
+                  lineHeight: 1, marginBottom: 4,
+                }}>
+                  {m.val}
+                </div>
+                <div style={{ fontSize: '.72rem', color: K.muted, fontWeight: 600 }}>
+                  {m.lbl}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Section 4: Categorías visuales ────────────────────────────────────────────
+
+function CategoriasSection() {
+  return (
+    <section style={{
+      background: K.paper,
+      borderBottom: `1px solid ${K.line}`,
+      padding: 'clamp(48px, 8vw, 80px) 24px',
+    }}>
+      <div style={{ maxWidth: 1060, margin: '0 auto' }}>
+        <h2 style={{
+          fontFamily: K.serif, fontWeight: 800,
+          fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
+          color: K.ink, margin: '0 0 32px', letterSpacing: -.5,
+          textAlign: 'center',
+        }}>
+          ¿Qué estás buscando?
+        </h2>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+          gap: 16,
+        }}>
+          {CATEGORIAS.map(cat => (
+            <a
+              key={cat.label}
+              href={cat.href}
+              style={{
+                background: cat.bg,
+                borderRadius: 16,
+                padding: '36px 24px 28px',
+                display: 'flex', flexDirection: 'column',
+                textDecoration: 'none',
+                color: '#fff',
+                transition: 'transform .15s, box-shadow .15s',
+                minHeight: 180,
+              }}
+              onMouseEnter={e => {
+                const el = e.currentTarget as HTMLAnchorElement
+                el.style.transform = 'translateY(-3px)'
+                el.style.boxShadow = '0 12px 40px rgba(0,0,0,0.2)'
+              }}
+              onMouseLeave={e => {
+                const el = e.currentTarget as HTMLAnchorElement
+                el.style.transform = 'none'
+                el.style.boxShadow = 'none'
+              }}
+            >
+              <div style={{ fontSize: '2rem', marginBottom: 12 }}>{cat.emoji}</div>
+              <div style={{
+                fontFamily: K.serif, fontWeight: 800,
+                fontSize: '1.3rem', marginBottom: 6,
+              }}>
+                {cat.label}
+              </div>
+              <div style={{
+                fontSize: '.8rem', color: 'rgba(255,255,255,0.75)',
+                lineHeight: 1.4, flex: 1,
+              }}>
+                {cat.sub}
+              </div>
+              <div style={{
+                marginTop: 20, fontSize: '.8rem',
+                fontWeight: 700, color: 'rgba(255,255,255,0.85)',
+              }}>
+                Explorar →
+              </div>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Section 5: Métricas del mercado ───────────────────────────────────────────
+
+function StatsSection() {
+  return (
+    <section style={{
+      background: K.ink,
+      padding: 'clamp(40px, 6vw, 64px) 24px',
+    }}>
+      <div style={{ maxWidth: 1060, margin: '0 auto' }}>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+          gap: 0,
+          borderRadius: 16,
+          overflow: 'hidden',
+          border: `1px solid rgba(255,255,255,0.08)`,
+        }}>
+          {STATS.map((s, i) => (
+            <div
+              key={s.label}
+              style={{
+                padding: 'clamp(24px, 4vw, 36px) 28px',
+                borderRight: i < STATS.length - 1 ? `1px solid rgba(255,255,255,0.08)` : 'none',
+                textAlign: 'center',
+              }}
+            >
+              <div style={{
+                fontFamily: K.serif, fontWeight: 900,
+                fontSize: 'clamp(1.6rem, 3vw, 2.2rem)',
+                color: K.amarillo, lineHeight: 1, marginBottom: 8,
+              }}>
+                {s.value}
+              </div>
+              <div style={{
+                fontSize: '.7rem', fontWeight: 700,
+                color: '#fff', textTransform: 'uppercase',
+                letterSpacing: '.7px', marginBottom: 5,
+              }}>
+                {s.label}
+              </div>
+              <div style={{ fontSize: '.7rem', color: 'rgba(255,255,255,0.45)' }}>
+                {s.note}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── Section 6: Agentes ─────────────────────────────────────────────────────────
+
+function AgentCardSkeleton() {
+  return (
+    <div style={{
+      background: '#fff',
+      border: `1px solid ${K.line}`,
+      borderRadius: 16,
+      padding: '36px 24px 28px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12,
+    }}>
+      <div style={{ width: 80, height: 80, borderRadius: '50%', background: K.line }} />
+      <div style={{ width: '60%', height: 18, borderRadius: 6, background: K.line }} />
+      <div style={{ width: '45%', height: 13, borderRadius: 6, background: K.surface }} />
+      <div style={{ width: '80%', height: 11, borderRadius: 6, background: K.surface }} />
+      <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        {[0, 1, 2].map(i => <div key={i} style={{ width: 36, height: 36, borderRadius: 8, background: K.surface }} />)}
+      </div>
+      <div style={{ width: '100%', height: 40, borderRadius: 8, background: K.surface, marginTop: 4 }} />
+    </div>
+  )
+}
+
+function AgentCard({ agente }: { agente: AgenteAprobado }) {
+  const initials  = getInitials(agente.nombre_completo)
+  const bgColor   = avatarColor(agente.nombre_completo)
+  const especArr  = parseArr(agente.especialidad)
+  const zonasArr  = parseArr(agente.zonas_opera)
+  const contactWa = waUrl(agente.whatsapp)
+  const rolLabel  = agente.es_independiente
+    ? 'Agente Independiente'
+    : (agente.inmobiliaria_nombre ?? 'Agente')
+
+  const iconBtn = (label: string, href: string, ico: React.ReactNode, green?: boolean) => (
+    <a
+      href={href} target="_blank" rel="noopener noreferrer"
+      aria-label={label} title={label}
+      style={{
+        width: 36, height: 36, borderRadius: 8,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        background: green ? '#e8fdf3' : K.surface,
+        color: green ? '#25D366' : K.muted,
+        textDecoration: 'none', flexShrink: 0,
+      }}
+    >
+      {ico}
+    </a>
+  )
+
+  return (
+    <div style={{
+      background: '#fff', border: `1px solid ${K.line}`, borderRadius: 16,
+      padding: '36px 24px 28px',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+      textAlign: 'center', gap: 0,
+    }}>
+      {agente.foto_perfil ? (
+        <img
+          src={agente.foto_perfil} alt={agente.nombre_completo}
+          style={{ width: 80, height: 80, borderRadius: '50%', objectFit: 'cover', boxShadow: '0 4px 20px rgba(0,0,0,0.13)', marginBottom: 16 }}
+        />
+      ) : (
+        <div style={{
+          width: 80, height: 80, borderRadius: '50%', background: bgColor,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: K.serif, fontWeight: 900, fontSize: '1.7rem',
+          color: '#fff', letterSpacing: -1,
+          marginBottom: 16, boxShadow: '0 4px 20px rgba(0,0,0,0.13)',
+        }}>
+          {initials}
+        </div>
+      )}
+
+      <div style={{ fontFamily: K.serif, fontWeight: 700, fontSize: '1.15rem', color: K.ink, lineHeight: 1.2 }}>
+        {agente.nombre_completo}
+      </div>
+      <div style={{ marginTop: 5, fontSize: '.75rem', fontWeight: 700, color: K.teal, textTransform: 'uppercase', letterSpacing: '.6px' }}>
+        {rolLabel}
+      </div>
+
+      {especArr.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center', marginTop: 14 }}>
+          {especArr.map(e => (
+            <span key={e} style={{
+              background: K.tealLight, color: '#085041',
+              fontSize: '.65rem', fontWeight: 700,
+              textTransform: 'uppercase', letterSpacing: '.5px',
+              padding: '3px 9px', borderRadius: 999,
+            }}>
+              {e}
+            </span>
+          ))}
+        </div>
+      )}
+
+      {zonasArr.length > 0 && (
+        <div style={{ marginTop: 12, fontSize: '.82rem', color: K.muted, lineHeight: 1.4 }}>
+          📍 {zonasArr.join(', ')}
+        </div>
+      )}
+      {agente.anos_experiencia != null && (
+        <div style={{ marginTop: 6, fontSize: '.82rem', color: K.muted }}>
+          ⭐ {agente.anos_experiencia} años de experiencia
+        </div>
+      )}
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'center', marginTop: 22 }}>
+        {contactWa         && iconBtn(`WhatsApp de ${agente.nombre_completo}`,  contactWa,           <IcoWhatsApp />, true)}
+        {agente.linkedin   && iconBtn(`${agente.nombre_completo} en LinkedIn`,   agente.linkedin,    <IcoLinkedIn />)}
+        {agente.instagram  && iconBtn(`${agente.nombre_completo} en Instagram`,  agente.instagram,   <IcoInstagram />)}
+        {agente.sitio_web  && iconBtn(`Sitio web de ${agente.nombre_completo}`,  agente.sitio_web,   <IcoGlobe />)}
+      </div>
+
+      {contactWa ? (
+        <a
+          href={contactWa} target="_blank" rel="noopener noreferrer"
+          style={{
+            marginTop: 20, display: 'flex', alignItems: 'center', justifyContent: 'center',
+            gap: 8, width: '100%',
+            background: K.teal, color: '#fff',
+            fontWeight: 700, fontSize: '.85rem',
+            padding: '12px 0', borderRadius: 10,
+            textDecoration: 'none',
+          }}
+        >
+          <IcoWhatsApp /> Contactar agente →
+        </a>
+      ) : (
+        <div style={{ marginTop: 20, height: 44 }} />
+      )}
+    </div>
+  )
+}
+
+function AgentesSection() {
+  const { data: agentes = [], isLoading } = useQuery<AgenteAprobado[]>({
+    queryKey: ['agentes-aprobados'],
+    queryFn: () => apiFetch(API_ENDPOINTS.agentesAprobados),
+    staleTime: 5 * 60_000,
+  })
+
+  const list = agentes.length > 0 ? agentes : (isLoading ? null : FALLBACK_AGENTES)
+
+  return (
+    <section style={{
+      background: K.paper,
+      borderBottom: `1px solid ${K.line}`,
+      padding: 'clamp(48px, 8vw, 80px) 24px',
+    }}>
+      <div style={{ maxWidth: 1060, margin: '0 auto' }}>
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between',
+          flexWrap: 'wrap', gap: 16, marginBottom: 44,
+        }}>
+          <div>
+            <h2 style={{
+              fontFamily: K.serif, fontWeight: 800,
+              fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
+              color: K.ink, margin: '0 0 8px', letterSpacing: -.5,
+            }}>
+              El equipo detrás del mercado
+            </h2>
+            <p style={{ color: K.muted, fontSize: '.9rem', margin: 0 }}>
+              Agentes verificados con experiencia local en el Valle de Aburrá.
+            </p>
+          </div>
+          <a
+            href="/agentes"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: K.tealLight, color: '#085041',
+              fontWeight: 700, fontSize: '.82rem',
+              padding: '10px 18px', borderRadius: 8,
+              textDecoration: 'none', flexShrink: 0,
+              border: `1px solid rgba(8,80,65,0.2)`,
+            }}
+          >
+            Ver todos los agentes →
+          </a>
         </div>
 
         <div style={{
@@ -415,176 +915,75 @@ function ExpertosSection() {
           gap: 24,
           justifyContent: 'center',
         }}>
-          {EXPERTS.map(e => <ExpertCard key={e.name} expert={e} />)}
-        </div>
-      </div>
-    </section>
-  )
-}
-
-function ArticulosSection() {
-  return (
-    <section style={{
-      background: K.surface,
-      borderBottom: `1px solid ${K.line}`,
-      padding: 'clamp(48px, 8vw, 80px) 24px',
-    }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ marginBottom: 36 }}>
-          <h2 style={{
-            fontFamily: K.serif,
-            fontWeight: 800,
-            fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
-            color: K.ink,
-            margin: '0 0 8px',
-            letterSpacing: -.5,
-          }}>
-            Tendencias del Mercado Medellín
-          </h2>
-          <p style={{ color: K.muted, fontSize: '.9rem', margin: 0 }}>
-            Análisis editorial sobre el mercado inmobiliario del Valle de Aburrá.
-          </p>
+          {isLoading
+            ? [0, 1, 2].map(i => <AgentCardSkeleton key={i} />)
+            : list?.map(a => <AgentCard key={a.id} agente={a} />)
+          }
         </div>
 
         <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: 20,
+          marginTop: 44, textAlign: 'center',
+          padding: '24px 20px',
+          background: K.surface, borderRadius: 12, border: `1px solid ${K.line}`,
         }}>
-          {ARTICLES.map(a => <ArticleCard key={a.title} article={a} />)}
+          <p style={{ color: K.muted, fontSize: '.9rem', margin: '0 0 14px' }}>
+            ¿Quieres aparecer aquí? Verifica tu perfil como agente.
+          </p>
+          <a
+            href="/agentes/registro"
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              background: K.teal, color: '#fff',
+              fontWeight: 700, fontSize: '.85rem',
+              padding: '11px 22px', borderRadius: 8,
+              textDecoration: 'none',
+            }}
+          >
+            Registrarme como agente →
+          </a>
         </div>
       </div>
     </section>
   )
 }
 
-function MLSBanner() {
+// ── Section 7: CTA final ───────────────────────────────────────────────────────
+
+function FinalCTASection() {
   return (
     <section style={{
       background: K.tealDeep,
-      padding: 'clamp(48px, 8vw, 72px) 24px',
+      padding: 'clamp(56px, 9vw, 88px) 24px',
       textAlign: 'center',
     }}>
-      <div style={{ maxWidth: 600, margin: '0 auto' }}>
-        <div style={{
-          fontSize: '.62rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '2px',
-          color: 'rgba(255,255,255,0.5)',
-          marginBottom: 14,
-        }}>
-          Mapa de Inversión · Medellín Social
-        </div>
-
+      <div style={{ maxWidth: 560, margin: '0 auto' }}>
         <h2 style={{
-          fontFamily: K.serif,
-          fontWeight: 900,
-          fontSize: 'clamp(1.7rem, 4vw, 2.5rem)',
-          color: '#fff',
-          margin: '0 0 16px',
-          lineHeight: 1.12,
-          letterSpacing: -1,
+          fontFamily: K.serif, fontWeight: 900,
+          fontSize: 'clamp(1.8rem, 4.5vw, 2.6rem)',
+          color: '#fff', margin: '0 0 16px',
+          lineHeight: 1.1, letterSpacing: -1,
         }}>
-          Analiza el mercado<br />antes de invertir
+          ¿Listo para encontrar<br />tu propiedad?
         </h2>
-
         <p style={{
-          color: 'rgba(255,255,255,0.68)',
-          fontSize: '.95rem',
-          lineHeight: 1.6,
-          margin: '0 0 36px',
+          color: 'rgba(255,255,255,0.65)',
+          fontSize: '.95rem', lineHeight: 1.6, margin: '0 0 36px',
         }}>
-          Explora 606 barrios del Valle de Aburrá con scores de potencial, precios promedio y tendencias de mercado.
+          Explora 54,000+ propiedades con precios reales, análisis de barrios y agentes verificados.
         </p>
-
         <a
           href="/map"
           style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: 10,
-            background: K.amarillo,
-            color: K.ink,
-            fontWeight: 800,
-            fontSize: '.9rem',
-            padding: '14px 30px',
-            borderRadius: 10,
-            textDecoration: 'none',
-            letterSpacing: '.2px',
+            display: 'inline-flex', alignItems: 'center', gap: 10,
+            background: K.amarillo, color: K.ink,
+            fontWeight: 800, fontSize: '.92rem',
+            padding: '15px 32px', borderRadius: 10,
+            textDecoration: 'none', letterSpacing: '.2px',
+            boxShadow: '0 4px 24px rgba(255,201,40,0.35)',
           }}
         >
-          🗺️ Ver mapa de inversión
+          🗺️ Ver mapa de propiedades →
         </a>
-      </div>
-    </section>
-  )
-}
-
-function StatsSection() {
-  return (
-    <section style={{
-      background: K.paper,
-      borderTop: `1px solid ${K.line}`,
-      padding: 'clamp(48px, 8vw, 80px) 24px',
-    }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
-        <div style={{ textAlign: 'center', marginBottom: 48 }}>
-          <h2 style={{
-            fontFamily: K.serif,
-            fontWeight: 800,
-            fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
-            color: K.ink,
-            margin: 0,
-            letterSpacing: -.5,
-          }}>
-            Tendencias en Números
-          </h2>
-        </div>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          border: `1px solid ${K.line}`,
-          borderRadius: 16,
-          overflow: 'hidden',
-        }}>
-          {STATS.map((s, i) => (
-            <div
-              key={s.label}
-              style={{
-                padding: '36px 24px',
-                background: i % 2 === 0 ? '#fff' : K.surface,
-                borderRight: i < STATS.length - 1 ? `1px solid ${K.line}` : 'none',
-                textAlign: 'center',
-              }}
-            >
-              <div style={{
-                fontFamily: K.serif,
-                fontWeight: 900,
-                fontSize: 'clamp(1.7rem, 3vw, 2.3rem)',
-                color: K.teal,
-                lineHeight: 1,
-                marginBottom: 10,
-              }}>
-                {s.value}
-              </div>
-              <div style={{
-                fontSize: '.72rem',
-                fontWeight: 700,
-                color: K.ink,
-                textTransform: 'uppercase',
-                letterSpacing: '.6px',
-                marginBottom: 6,
-              }}>
-                {s.label}
-              </div>
-              <div style={{ fontSize: '.72rem', color: K.muted }}>
-                {s.note}
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
     </section>
   )
@@ -596,10 +995,12 @@ function RealEstatePage() {
   return (
     <>
       <HeroSection />
-      <ExpertosSection />
-      <ArticulosSection />
-      <MLSBanner />
+      <ListingsDestacadosSection />
+      <HistoriaSection />
+      <CategoriasSection />
       <StatsSection />
+      <AgentesSection />
+      <FinalCTASection />
     </>
   )
 }

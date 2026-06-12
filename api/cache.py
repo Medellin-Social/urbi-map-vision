@@ -109,6 +109,29 @@ WITH todas_fuentes AS (
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END,
            url, NULL::text[], fecha_scraping, dedup_hash, NULL::integer
     FROM raw.listings_renta_media WHERE precio_mes_cop > 0 AND area_m2 > 0
+    UNION ALL
+    SELECT
+        id::text || '_lp'                                        AS listing_uid,
+        'propio'                                                  AS fuente,
+        CASE WHEN agente_id IS NOT NULL THEN 'agente_premium'
+             ELSE 'standard' END                                  AS tier,
+        tipo_operacion, tipo_inmueble,
+        precio_cop, precio_usd::bigint,
+        COALESCE(area_m2, 0)::numeric                            AS area_m2,
+        habitaciones, banos,
+        NULL::text                                                AS barrio_raw,
+        barrio_id,
+        direccion                                                 AS direccion_raw,
+        lat::double precision, lon::double precision,
+        CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+             THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
+        id::text                                                  AS url,
+        fotos,
+        COALESCE(fecha_publicacion, created_at)                  AS fecha_scraping,
+        md5(id::text || '_lp')                                   AS dedup_hash,
+        estrato                                                   AS estrato_real
+    FROM public.listings_propios
+    WHERE estado = 'activo' AND precio_cop > 0
 ),
 con_geo AS (
     SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,

@@ -10,6 +10,13 @@ from api.db import get_pool
 router = APIRouter()
 
 
+def _sanitize_foto(url: Optional[str]) -> Optional[str]:
+    """Return None for googleapis URLs — images not yet migrated to CDN."""
+    if url and "googleapis.com" in url:
+        return None
+    return url
+
+
 # ── Planes ────────────────────────────────────────────────────────────────────
 
 class PlanOut(BaseModel):
@@ -149,7 +156,7 @@ async def get_deals(
         DealOut(
             id=r["id"], tipo_deal=r["tipo_deal"], descripcion=r["descripcion"],
             categoria=r["categoria"], tienda_nombre=r["tienda_nombre"],
-            foto_url=r["foto_url"], lat=r["lat"], lon=r["lon"],
+            foto_url=_sanitize_foto(r["foto_url"]), lat=r["lat"], lon=r["lon"],
             barrio_nombre=r["barrio_nombre"],
         )
         for r in rows
@@ -232,7 +239,7 @@ async def get_directorio(
         DirectorioOut(
             id=r["id"], nombre=r["nombre"], categoria=r["categoria"],
             rating_google=r["rating_google"], google_place_id=r["google_place_id"],
-            foto_url=r["foto_url"], direccion=r["direccion"],
+            foto_url=_sanitize_foto(r["foto_url"]), direccion=r["direccion"],
             whatsapp=r["whatsapp"], website=r["website"],
             lat=r["lat"], lon=r["lon"], barrio_nombre=r["barrio_nombre"],
         )

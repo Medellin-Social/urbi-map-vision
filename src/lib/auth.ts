@@ -47,7 +47,7 @@ export type UrbiUser = {
   horizonteInversion?: string;
   primeraPropiedad?: boolean;
   wantsAgent?: boolean;
-  plan?: 'free' | 'pro';
+  plan?: 'free' | 'pro' | 'agente';
   payments?: PaymentMethod[];
   favorites?: FavoriteBarrio[];
   history?: HistoryEntry[];

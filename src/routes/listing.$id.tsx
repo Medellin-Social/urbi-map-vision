@@ -34,8 +34,8 @@ function TipoOpBadge({ tipo }: { tipo?: string | null }) {
     <span
       className="rounded px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
       style={{
-        background: tipo === "arriendo" ? "#E1F5EE" : "#FAECE7",
-        color:      tipo === "arriendo" ? "#1D9E75" : "#D85A30",
+        background: tipo === "arriendo" ? "#1D9E75" : "#D85A30",
+        color:      "#FFFFFF",
       }}
     >
       {tipo ?? "—"}
@@ -79,7 +79,7 @@ function PriceBadge({
       <div className="text-sm font-bold" style={{ color }}>
         {emoji} {label}
       </div>
-      <div className="mt-0.5 text-xs text-muted-foreground">{desc}</div>
+      <div className="mt-0.5 text-xs" style={{ color: '#6B5B45' }}>{desc}</div>
     </div>
   );
 }
@@ -130,7 +130,7 @@ function Chip({
   return (
     <div className="flex items-center gap-1.5 rounded-lg px-3 py-2 text-sm" style={{ border: '0.5px solid #E8E0D0', background: '#F5F0E8' }}>
       <span className="text-muted-foreground">{icon}</span>
-      <span>{label}</span>
+      <span style={{ color: '#1A1208' }}>{label}</span>
     </div>
   );
 }
@@ -139,7 +139,7 @@ function ComingSoon({ title }: { title: string }) {
   return (
     <div className="rounded-xl p-5 text-center" style={{ border: '1px dashed #E8E0D0' }}>
       <div className="text-sm text-muted-foreground">{title}</div>
-      <div className="mt-1 text-xs text-muted-foreground/50">Será agregado próximamente</div>
+      <div className="mt-1 text-xs italic" style={{ color: '#9B8B75' }}>Será agregado próximamente</div>
     </div>
   );
 }
@@ -268,7 +268,7 @@ export function ListingDetailContent({
 
             {/* Characteristics */}
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold">Características</h2>
+              <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Características</h2>
               <div className="flex flex-wrap gap-2">
                 {listing.habitaciones != null && (
                   <Chip
@@ -306,7 +306,7 @@ export function ListingDetailContent({
                     className="flex justify-between px-4 py-2.5 text-sm"
                   >
                     <span className="text-muted-foreground">{row.label}</span>
-                    <span className="font-medium capitalize">{String(row.value)}</span>
+                    <span className="font-medium capitalize" style={{ color: '#1A1208' }}>{String(row.value)}</span>
                   </div>
                 ))}
               </div>
@@ -314,7 +314,7 @@ export function ListingDetailContent({
 
             {/* Description */}
             <section className="space-y-3">
-              <h2 className="text-lg font-semibold">Descripción</h2>
+              <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Descripción</h2>
               {listing.descripcion ? (
                 <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                   {listing.descripcion}
@@ -327,7 +327,7 @@ export function ListingDetailContent({
             {/* Investment analysis — venta only, PRO gated */}
             {tipoOp === "venta" && (
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold">Análisis de inversión</h2>
+                <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Análisis de inversión</h2>
                 {!isPro ? (
                   <LockedField label="Análisis completo de inversión" preview={listing.yield_estimado != null ? `Yield ${listing.yield_estimado.toFixed(1)}% · Recupero ${listing.yield_estimado > 0 ? (100 / listing.yield_estimado).toFixed(1) : "—"} años` : "Yield · Recupero · Valorización"} />
                 ) : (
@@ -438,7 +438,7 @@ export function ListingDetailContent({
 
             {/* Zona scores — PRO gated */}
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold">Contexto de zona</h2>
+              <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Contexto de zona</h2>
               {!isPro ? (
                 <LockedField label="Scores de zona detallados" preview="Score largo · Liquidez · Seguridad · Índice nómada" />
               ) : (
@@ -464,14 +464,14 @@ export function ListingDetailContent({
             {/* Gallery + coming soon extras */}
             {(listing.fotos?.length ?? 0) > 0 && (
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold">Galería de fotos</h2>
+                <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Galería de fotos</h2>
                 <div className="overflow-hidden rounded-2xl border border-[#E8E0D0]">
                   <PhotoGallery fotos={listing.fotos} titulo={listing.tipo_inmueble ?? undefined} height={320} />
                 </div>
               </section>
             )}
             <section className="space-y-4">
-              <h2 className="text-lg font-semibold">Más información</h2>
+              <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Más información</h2>
               <div className="grid gap-3 sm:grid-cols-2">
                 <ComingSoon title="Tour virtual 360°" />
                 <ComingSoon title="Historial de precios" />
@@ -484,7 +484,7 @@ export function ListingDetailContent({
             {/* Similar listings */}
             {similarList.length > 0 && (
               <section className="space-y-4">
-                <h2 className="text-lg font-semibold">Similares en la zona</h2>
+                <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Similares en la zona</h2>
                 <div className="grid gap-3 sm:grid-cols-2">
                   {similarList.map((s) => (
                     <Link
@@ -518,11 +518,11 @@ export function ListingDetailContent({
             {/* Price hero card */}
             <div className="space-y-4 rounded-2xl border border-[#E8E0D0] bg-white p-6 backdrop-blur-sm">
               <div>
-                <div className="font-display text-3xl font-bold leading-tight">
+                <div className="font-display text-3xl font-bold leading-tight" style={{ color: '#1A1208' }}>
                   {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
                 </div>
                 {listing.precio_usd && (
-                  <div className="mt-0.5 text-sm text-muted-foreground">
+                  <div className="mt-0.5 text-sm" style={{ color: '#6B5B45' }}>
                     ~${(listing.precio_usd / 1000).toFixed(0)}k USD
                   </div>
                 )}
@@ -648,7 +648,7 @@ export function ListingDetailContent({
             {/* Barrio quick stats */}
             {listing.barrio_id != null && (
               <div className="space-y-3 rounded-2xl border border-[#E8E0D0] bg-white p-4">
-                <div className="text-sm font-semibold">
+                <div className="text-sm font-semibold" style={{ color: '#1A1208' }}>
                   Zona: {listing.barrio_nombre}
                 </div>
                 <div className="grid grid-cols-2 gap-2 text-xs">
@@ -670,13 +670,13 @@ export function ListingDetailContent({
                   )}
                   {listing.seguridad_score != null && (
                     <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
-                      <div className="font-bold">{listing.seguridad_score.toFixed(0)}</div>
+                      <div className="font-bold" style={{ color: '#1D9E75' }}>{listing.seguridad_score.toFixed(0)}</div>
                       <div className="text-muted-foreground">Seguridad</div>
                     </div>
                   )}
                   {listing.indice_nomada != null && (
                     <div className="rounded-lg border border-[#E8E0D0] bg-white p-2.5 text-center">
-                      <div className="font-bold">{listing.indice_nomada.toFixed(1)}</div>
+                      <div className="font-bold" style={{ color: '#1D9E75' }}>{listing.indice_nomada.toFixed(1)}</div>
                       <div className="text-muted-foreground">Índice nómada</div>
                     </div>
                   )}
@@ -691,7 +691,7 @@ export function ListingDetailContent({
             )}
 
             {/* Listing ID for reference */}
-            <div className="text-center text-xs text-muted-foreground/40">
+            <div className="text-center text-xs" style={{ color: '#9B8B75' }}>
               Listing ID: {listing.id}
             </div>
           </aside>
@@ -801,7 +801,7 @@ function ListingPage() {
           {listing.municipio && (
             <span className="text-sm text-muted-foreground">· {listing.municipio}</span>
           )}
-          <span className="ml-auto text-xs text-muted-foreground/40">{fuente}</span>
+          <span className="ml-auto text-xs" style={{ color: '#1D9E75' }}>{fuente}</span>
         </div>
 
         <ListingDetailContent

@@ -46,7 +46,8 @@ ON CONFLICT (url) DO UPDATE SET
     banos          = EXCLUDED.banos,
     tipo_inmueble  = EXCLUDED.tipo_inmueble,
     raw_data       = EXCLUDED.raw_data,
-    fecha_scraping = EXCLUDED.fecha_scraping
+    fecha_scraping = EXCLUDED.fecha_scraping,
+    barrio_id      = COALESCE(EXCLUDED.barrio_id, listings_fincaraiz.barrio_id)
 WHERE
     EXCLUDED.descripcion IS NOT NULL
     OR EXCLUDED.amenidades IS NOT NULL

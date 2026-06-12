@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, X, SlidersHorizontal } from "lucide-react";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
@@ -14,6 +14,8 @@ export type SharedFilters = {
   areaMax: number | null;
   banos: number | null;
   antiguedad: string | null;
+  estrato: number[] | null;
+  diasMercado: "nuevo" | "reciente" | "demorado" | "mas30" | "mas60" | null;
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
@@ -26,6 +28,8 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   areaMax: null,
   banos: null,
   antiguedad: null,
+  estrato: null,
+  diasMercado: null,
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
@@ -75,6 +79,14 @@ const ANTIGUEDAD_OPTIONS = [
   { value: "Remodelado",         label: "Remodelado" },
 ];
 
+const ANTIGUEDAD_DIST: { value: string | null; label: string; h: number }[] = [
+  { value: "Entre 0 y 5 años",   label: "0–5a",   h: 0.50 },
+  { value: "Entre 5 y 10 años",  label: "5–10a",  h: 0.72 },
+  { value: "Entre 10 y 20 años", label: "10–20a", h: 0.90 },
+  { value: "Más de 20 años",     label: "+20a",   h: 0.60 },
+  { value: "Remodelado",         label: "Remods",  h: 0.28 },
+];
+
 type DropdownId = "precio" | "habitaciones" | "tipo" | "area" | "banos" | "antiguedad" | "mas";
 
 function countActive(f: SharedFilters, tab: MapTab): number {
@@ -87,6 +99,8 @@ function countActive(f: SharedFilters, tab: MapTab): number {
     if (f.banos !== null) n++;
     if (f.antiguedad !== null) n++;
   }
+  if (f.estrato !== null && f.estrato.length > 0) n++;
+  if (f.diasMercado !== null) n++;
   return n;
 }
 
@@ -98,12 +112,12 @@ function FilterPill({
   label: string;
   active: boolean;
   onClear?: () => void;
-  onClick: () => void;
+  onClick: (anchor: DOMRect) => void;
   isOpen: boolean;
 }) {
   return (
     <button
-      onClick={onClick}
+      onClick={(e) => onClick(e.currentTarget.getBoundingClientRect())}
       style={{
         display: "flex", alignItems: "center", gap: 4,
         background: active ? C.teal : C.white,
@@ -183,7 +197,6 @@ function antiguedadLabel(f: SharedFilters): string {
 // ─── Dropdown panels ──────────────────────────────────────────────────────────
 
 const panelBase: React.CSSProperties = {
-  position: "absolute", top: "calc(100% + 4px)", left: 0, zIndex: 50,
   background: "#fff", borderRadius: 12,
   border: `1px solid ${C.border}`,
   boxShadow: "0 8px 24px rgba(0,0,0,0.10)",
@@ -255,53 +268,159 @@ function PrecioPanel({
   onChange: (f: Partial<SharedFilters>) => void;
   onClose: () => void;
 }) {
+  const TOTAL_MIN = 0;
+  const TOTAL_MAX = isRent ? 5_000_000 : 2_000_000_000;
+  const STEP      = isRent ? 50_000   : 5_000_000;
+
+  const curMin = filters.precioMin ?? TOTAL_MIN;
+  const curMax = filters.precioMax ?? TOTAL_MAX;
+
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const snap  = (v: number) => Math.round(v / STEP) * STEP;
+  const toR   = (v: number) => (v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN);
+  const fromR = (r: number) => snap(TOTAL_MIN + r * (TOTAL_MAX - TOTAL_MIN));
+
+  const minR = toR(curMin);
+  const maxR = toR(curMax);
+
+  const getRatio = (e: React.PointerEvent) => {
+    if (!trackRef.current) return 0;
+    const rect = trackRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  };
+
+  const BARS = 30;
+  const hist = useMemo(() => {
+    const peak  = isRent ? 0.28 : 0.15;
+    const sigma = isRent ? 0.20 : 0.16;
+    const raw   = Array.from({ length: BARS }, (_, i) => {
+      const x = (i + 0.5) / BARS;
+      return Math.exp(-0.5 * ((x - peak) / sigma) ** 2);
+    });
+    const maxH = Math.max(...raw);
+    return raw.map(h => h / maxH);
+  }, [isRent]);
+
   const unit = isRent ? "k" : "M";
   const div  = isRent ? 1_000 : 1_000_000;
-  const quicks = isRent ? [1000, 1500, 2000, 3000, 4000] : [200, 400, 600, 800, 1000];
+  const fmt  = (v: number) => {
+    if (v <= TOTAL_MIN) return "Mín";
+    if (v >= TOTAL_MAX) return "Máx";
+    return `$${Math.round(v / div)}${unit}`;
+  };
+
+  const quicks = isRent
+    ? [500_000, 1_000_000, 1_500_000, 2_500_000, 4_000_000]
+    : [200_000_000, 400_000_000, 600_000_000, 800_000_000, 1_200_000_000];
+
+  const thumbStyle: React.CSSProperties = {
+    position: "absolute", bottom: 2,
+    width: 20, height: 20,
+    background: "#fff", borderRadius: "50%",
+    border: `2.5px solid ${C.teal}`,
+    boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
+    cursor: "ew-resize", touchAction: "none", zIndex: 2,
+    transform: "translateX(-50%)",
+  };
 
   return (
-    <div style={{ ...panelBase, minWidth: 280 }}>
-      <span style={labelSm}>{isRent ? "Precio / mes (COP $k)" : "Rango de precio (COP $M)"}</span>
-      <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Mínimo</div>
-          <NumInput
-            placeholder="0"
-            value={filters.precioMin !== null ? Math.round(filters.precioMin / div) : null}
-            onChange={(v) => onChange({ precioMin: v !== null ? v * div : null })}
-          />
-        </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Máximo</div>
-          <NumInput
-            placeholder="Sin límite"
-            value={filters.precioMax !== null ? Math.round(filters.precioMax / div) : null}
-            onChange={(v) => onChange({ precioMax: v !== null ? v * div : null })}
-          />
-        </div>
+    <div style={{ ...panelBase, minWidth: 300, userSelect: "none" }}>
+      {/* Range labels */}
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMin)}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMax)}</span>
       </div>
-      <span style={labelSm}>Opciones rápidas</span>
-      <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 12 }}>
+
+      {/* Histogram + dual slider */}
+      <div ref={trackRef} style={{ position: "relative", height: 76, marginBottom: 4 }}>
+
+        {/* Histogram bars */}
+        <div style={{
+          position: "absolute", top: 0, left: 0, right: 0, bottom: 24,
+          display: "flex", alignItems: "flex-end", gap: 2,
+        }}>
+          {hist.map((h, i) => {
+            const barR = (i + 0.5) / BARS;
+            const inRange = barR >= minR && barR <= maxR;
+            return (
+              <div
+                key={i}
+                style={{
+                  flex: 1,
+                  height: `${Math.max(h * 100, 4)}%`,
+                  background: inRange ? C.teal : "#D4CEC5",
+                  borderRadius: "2px 2px 0 0",
+                  opacity: inRange ? 0.8 : 0.3,
+                  transition: "background 0.07s, opacity 0.07s",
+                }}
+              />
+            );
+          })}
+        </div>
+
+        {/* Track */}
+        <div style={{
+          position: "absolute", bottom: 8, left: 0, right: 0,
+          height: 4, background: "#DDD8CF", borderRadius: 2,
+        }}>
+          <div style={{
+            position: "absolute",
+            left: `${minR * 100}%`,
+            width: `${(maxR - minR) * 100}%`,
+            height: "100%", background: C.teal, borderRadius: 2,
+          }} />
+        </div>
+
+        {/* Min thumb */}
+        <div
+          style={{ ...thumbStyle, left: `${minR * 100}%` }}
+          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const v = fromR(getRatio(e));
+            onChange({ precioMin: v <= TOTAL_MIN ? null : Math.min(v, curMax - STEP) });
+          }}
+          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+        />
+
+        {/* Max thumb */}
+        <div
+          style={{ ...thumbStyle, left: `${maxR * 100}%` }}
+          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const v = fromR(getRatio(e));
+            onChange({ precioMax: v >= TOTAL_MAX ? null : Math.max(v, curMin + STEP) });
+          }}
+          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+        />
+      </div>
+
+      {/* Quick picks */}
+      <span style={{ ...labelSm, marginTop: 10 }}>Opciones rápidas</span>
+      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
         {quicks.map((q, i) => {
           const isLast = i === quicks.length - 1;
           return (
             <button
               key={q}
               onClick={() => {
-                if (isLast) onChange({ precioMin: q * div, precioMax: null });
-                else        onChange({ precioMax: q * div, precioMin: null });
+                if (isLast) onChange({ precioMin: q, precioMax: null });
+                else        onChange({ precioMax: q, precioMin: null });
               }}
               style={{
-                padding: "4px 10px", borderRadius: 8, fontSize: 12,
+                padding: "4px 10px", borderRadius: 8, fontSize: 11,
                 border: `1px solid ${C.border}`, background: C.surface,
                 color: C.ink, cursor: "pointer",
               }}
             >
-              {isLast ? `$${q}${unit}+` : `$${q}${unit}`}
+              {isLast ? `$${Math.round(q / div)}${unit}+` : `$${Math.round(q / div)}${unit}`}
             </button>
           );
         })}
       </div>
+
       <button
         onClick={onClose}
         style={{
@@ -316,6 +435,192 @@ function PrecioPanel({
   );
 }
 
+// ─── AreaPanel ────────────────────────────────────────────────────────────────
+
+function AreaPanel({
+  filters, onChange, onClose,
+}: {
+  filters: SharedFilters;
+  onChange: (f: Partial<SharedFilters>) => void;
+  onClose: () => void;
+}) {
+  const TOTAL_MIN = 0;
+  const TOTAL_MAX = 600;
+  const STEP      = 5;
+
+  const curMin = filters.areaMin ?? TOTAL_MIN;
+  const curMax = filters.areaMax ?? TOTAL_MAX;
+
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  const snap  = (v: number) => Math.round(v / STEP) * STEP;
+  const toR   = (v: number) => (v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN);
+  const fromR = (r: number) => snap(TOTAL_MIN + r * (TOTAL_MAX - TOTAL_MIN));
+
+  const minR = toR(curMin);
+  const maxR = toR(curMax);
+
+  const getRatio = (e: React.PointerEvent) => {
+    if (!trackRef.current) return 0;
+    const rect = trackRef.current.getBoundingClientRect();
+    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+  };
+
+  const BARS = 30;
+  const hist = useMemo(() => {
+    // Medellín market: peak ~65–80 m² (apartments)
+    const peak  = 0.13;
+    const sigma = 0.13;
+    const raw   = Array.from({ length: BARS }, (_, i) => {
+      const x = (i + 0.5) / BARS;
+      return Math.exp(-0.5 * ((x - peak) / sigma) ** 2);
+    });
+    const maxH = Math.max(...raw);
+    return raw.map(h => h / maxH);
+  }, []);
+
+  const fmt = (v: number) => {
+    if (v <= TOTAL_MIN) return "0";
+    if (v >= TOTAL_MAX) return "Sin límite";
+    return `${v} m²`;
+  };
+
+  const thumbStyle: React.CSSProperties = {
+    position: "absolute", bottom: 2,
+    width: 20, height: 20,
+    background: "#fff", borderRadius: "50%",
+    border: `2.5px solid ${C.teal}`,
+    boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
+    cursor: "ew-resize", touchAction: "none", zIndex: 2,
+    transform: "translateX(-50%)",
+  };
+
+  return (
+    <div style={{ ...panelBase, minWidth: 300, userSelect: "none" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMin)}</span>
+        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMax)}</span>
+      </div>
+
+      <div ref={trackRef} style={{ position: "relative", height: 76, marginBottom: 4 }}>
+        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 24, display: "flex", alignItems: "flex-end", gap: 2 }}>
+          {hist.map((h, i) => {
+            const barR   = (i + 0.5) / BARS;
+            const inRange = barR >= minR && barR <= maxR;
+            return (
+              <div key={i} style={{
+                flex: 1,
+                height: `${Math.max(h * 100, 4)}%`,
+                background: inRange ? C.teal : "#D4CEC5",
+                borderRadius: "2px 2px 0 0",
+                opacity: inRange ? 0.8 : 0.3,
+                transition: "background 0.07s, opacity 0.07s",
+              }} />
+            );
+          })}
+        </div>
+
+        <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, height: 4, background: "#DDD8CF", borderRadius: 2 }}>
+          <div style={{ position: "absolute", left: `${minR * 100}%`, width: `${(maxR - minR) * 100}%`, height: "100%", background: C.teal, borderRadius: 2 }} />
+        </div>
+
+        <div
+          style={{ ...thumbStyle, left: `${minR * 100}%` }}
+          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const v = fromR(getRatio(e));
+            onChange({ areaMin: v <= TOTAL_MIN ? null : Math.min(v, curMax - STEP) });
+          }}
+          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+        />
+
+        <div
+          style={{ ...thumbStyle, left: `${maxR * 100}%` }}
+          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+          onPointerMove={(e) => {
+            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+            const v = fromR(getRatio(e));
+            onChange({ areaMax: v >= TOTAL_MAX ? null : Math.max(v, curMin + STEP) });
+          }}
+          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+        />
+      </div>
+
+      <button
+        onClick={onClose}
+        style={{ width: "100%", padding: "8px", borderRadius: 8, background: C.teal, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+      >
+        Aplicar
+      </button>
+    </div>
+  );
+}
+
+// ─── AntiguedadPanel ──────────────────────────────────────────────────────────
+
+function AntiguedadPanel({
+  filters, onChange, onClose,
+}: {
+  filters: SharedFilters;
+  onChange: (f: Partial<SharedFilters>) => void;
+  onClose: () => void;
+}) {
+  return (
+    <div style={{ ...panelBase, minWidth: 260, userSelect: "none" }}>
+      <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 72, marginBottom: 6 }}>
+        {ANTIGUEDAD_DIST.map((opt) => {
+          const sel = filters.antiguedad === opt.value;
+          return (
+            <button
+              key={String(opt.value)}
+              onClick={() => { onChange({ antiguedad: opt.value as string | null }); onClose(); }}
+              title={opt.label}
+              style={{
+                flex: 1,
+                height: `${opt.h * 100}%`,
+                background: sel ? C.teal : "#D4CEC5",
+                opacity: sel ? 0.9 : 0.35,
+                border: `1.5px solid ${sel ? C.teal : "transparent"}`,
+                borderRadius: "4px 4px 0 0",
+                cursor: "pointer",
+                padding: 0,
+                transition: "background 0.1s, opacity 0.1s",
+              }}
+            />
+          );
+        })}
+      </div>
+
+      <div style={{ display: "flex", gap: 5, marginBottom: 12 }}>
+        {ANTIGUEDAD_DIST.map((opt) => {
+          const sel = filters.antiguedad === opt.value;
+          return (
+            <button
+              key={String(opt.value)}
+              onClick={() => { onChange({ antiguedad: opt.value as string | null }); onClose(); }}
+              style={{
+                flex: 1, fontSize: 9, padding: "2px 0", textAlign: "center",
+                color: sel ? C.teal : C.muted, fontWeight: sel ? 700 : 400,
+                background: "none", border: "none", cursor: "pointer",
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+
+      <button
+        onClick={() => { onChange({ antiguedad: null }); onClose(); }}
+        style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
+      >
+        Todas las antigüedades
+      </button>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MapFilterBar({
@@ -323,14 +628,20 @@ export function MapFilterBar({
 }: MapFilterBarProps) {
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const toggle = (id: DropdownId) => setOpen((p) => (p === id ? null : id));
+  const toggle = (id: DropdownId, a: DOMRect) => {
+    setAnchor(a);
+    setOpen((p) => (p === id ? null : id));
+  };
   const close  = () => setOpen(null);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (barRef.current && !barRef.current.contains(e.target as Node)) close();
+      const t = e.target as Node;
+      if (!barRef.current?.contains(t) && !dropdownRef.current?.contains(t)) close();
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -383,15 +694,9 @@ export function MapFilterBar({
           label={precioLabel(filters, isRent)}
           active={precioActive}
           onClear={() => onFiltersChange({ precioMin: null, precioMax: null })}
-          onClick={() => toggle("precio")}
+          onClick={(a) => toggle("precio", a)}
           isOpen={open === "precio"}
         />
-        {open === "precio" && (
-          <PrecioPanel
-            filters={filters} isRent={isRent}
-            onChange={onFiltersChange} onClose={close}
-          />
-        )}
       </div>
 
       {/* Habitaciones */}
@@ -400,25 +705,9 @@ export function MapFilterBar({
           label={habLabel(filters)}
           active={habActive}
           onClear={() => onFiltersChange({ habitaciones: null })}
-          onClick={() => toggle("habitaciones")}
+          onClick={(a) => toggle("habitaciones", a)}
           isOpen={open === "habitaciones"}
         />
-        {open === "habitaciones" && (
-          <div style={panelBase}>
-            <span style={labelSm}>Habitaciones</span>
-            <BtnGroup
-              options={[
-                { value: null, label: "Cualquiera" },
-                { value: 1, label: "1+" },
-                { value: 2, label: "2+" },
-                { value: 3, label: "3+" },
-                { value: 4, label: "4+" },
-              ]}
-              current={filters.habitaciones}
-              onChange={(v) => { onFiltersChange({ habitaciones: v }); close(); }}
-            />
-          </div>
-        )}
       </div>
 
       {/* Tipo */}
@@ -427,31 +716,9 @@ export function MapFilterBar({
           label={tipoLabel(filters)}
           active={tipoActive}
           onClear={() => onFiltersChange({ tipoInmueble: null })}
-          onClick={() => toggle("tipo")}
+          onClick={(a) => toggle("tipo", a)}
           isOpen={open === "tipo"}
         />
-        {open === "tipo" && (
-          <div style={panelBase}>
-            <span style={labelSm}>Tipo de inmueble</span>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-              {[{ value: null, label: "Todos los tipos" }, ...TIPO_OPTIONS].map((opt) => (
-                <label
-                  key={String(opt.value)}
-                  style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}
-                >
-                  <input
-                    type="radio"
-                    name="tipo-dd"
-                    checked={filters.tipoInmueble === opt.value}
-                    onChange={() => { onFiltersChange({ tipoInmueble: opt.value }); close(); }}
-                    style={{ accentColor: C.teal }}
-                  />
-                  {opt.label}
-                </label>
-              ))}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Área */}
@@ -460,32 +727,9 @@ export function MapFilterBar({
           label={areaLabel(filters)}
           active={areaActive}
           onClear={() => onFiltersChange({ areaMin: null, areaMax: null })}
-          onClick={() => toggle("area")}
+          onClick={(a) => toggle("area", a)}
           isOpen={open === "area"}
         />
-        {open === "area" && (
-          <div style={panelBase}>
-            <span style={labelSm}>Área (m²)</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Mínima</div>
-                <NumInput
-                  placeholder="0"
-                  value={filters.areaMin}
-                  onChange={(v) => onFiltersChange({ areaMin: v })}
-                />
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>Máxima</div>
-                <NumInput
-                  placeholder="Sin límite"
-                  value={filters.areaMax}
-                  onChange={(v) => onFiltersChange({ areaMax: v })}
-                />
-              </div>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* BUY-only */}
@@ -497,24 +741,9 @@ export function MapFilterBar({
               label={banosLabel(filters)}
               active={banosActive}
               onClear={() => onFiltersChange({ banos: null })}
-              onClick={() => toggle("banos")}
+              onClick={(a) => toggle("banos", a)}
               isOpen={open === "banos"}
             />
-            {open === "banos" && (
-              <div style={panelBase}>
-                <span style={labelSm}>Baños</span>
-                <BtnGroup
-                  options={[
-                    { value: null, label: "Cualquiera" },
-                    { value: 1, label: "1+" },
-                    { value: 2, label: "2+" },
-                    { value: 3, label: "3+" },
-                  ]}
-                  current={filters.banos}
-                  onChange={(v) => { onFiltersChange({ banos: v }); close(); }}
-                />
-              </div>
-            )}
           </div>
 
           {/* Antigüedad */}
@@ -523,31 +752,9 @@ export function MapFilterBar({
               label={antiguedadLabel(filters)}
               active={antiguedadActive}
               onClear={() => onFiltersChange({ antiguedad: null })}
-              onClick={() => toggle("antiguedad")}
+              onClick={(a) => toggle("antiguedad", a)}
               isOpen={open === "antiguedad"}
             />
-            {open === "antiguedad" && (
-              <div style={panelBase}>
-                <span style={labelSm}>Antigüedad</span>
-                <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                  {[{ value: null, label: "Todas" }, ...ANTIGUEDAD_OPTIONS].map((opt) => (
-                    <label
-                      key={String(opt.value)}
-                      style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}
-                    >
-                      <input
-                        type="radio"
-                        name="antiguedad-dd"
-                        checked={filters.antiguedad === (opt.value as string | null)}
-                        onChange={() => { onFiltersChange({ antiguedad: opt.value as string | null }); close(); }}
-                        style={{ accentColor: C.teal }}
-                      />
-                      {opt.label}
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
           </div>
         </>
       )}
@@ -557,51 +764,9 @@ export function MapFilterBar({
         <FilterPill
           label={`+ Más${activeCount > 0 ? ` (${activeCount})` : ""}`}
           active={false}
-          onClick={() => toggle("mas")}
+          onClick={(a) => toggle("mas", a)}
           isOpen={open === "mas"}
         />
-        {open === "mas" && (
-          <div style={{ ...panelBase, minWidth: 320 }}>
-            <span style={{ ...labelSm, fontSize: 13, fontWeight: 700, marginBottom: 16 }}>Más filtros</span>
-
-            <span style={labelSm}>{isRent ? "Precio máx./mes" : "Precio máximo"}</span>
-            <NumInput
-              placeholder={isRent ? "COP máx mensual" : "COP máx total"}
-              value={filters.precioMax}
-              onChange={(v) => onFiltersChange({ precioMax: v })}
-            />
-            <div style={{ height: 14 }} />
-
-            <span style={labelSm}>Área (m²)</span>
-            <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-              <NumInput placeholder="Mínima" value={filters.areaMin} onChange={(v) => onFiltersChange({ areaMin: v })} />
-              <NumInput placeholder="Máxima" value={filters.areaMax} onChange={(v) => onFiltersChange({ areaMax: v })} />
-            </div>
-
-            <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
-              <button
-                onClick={() => { onResetAll?.(); close(); }}
-                style={{
-                  flex: 1, padding: "8px", borderRadius: 8,
-                  border: `1px solid ${C.border}`, background: "transparent",
-                  color: C.muted, fontSize: 12, cursor: "pointer",
-                }}
-              >
-                Limpiar todo
-              </button>
-              <button
-                onClick={close}
-                style={{
-                  flex: 1, padding: "8px", borderRadius: 8,
-                  background: C.teal, color: "#fff", border: "none",
-                  fontSize: 12, fontWeight: 600, cursor: "pointer",
-                }}
-              >
-                Aplicar filtros
-              </button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Clear all */}
@@ -743,7 +908,7 @@ export function MapFilterBar({
               <span style={labelSm}>Antigüedad</span>
               <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 {[{ value: null, label: "Todas" }, ...ANTIGUEDAD_OPTIONS].map((opt) => (
-                  <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13 }}>
+                  <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.ink }}>
                     <input
                       type="radio" name="antiguedad-m"
                       checked={filters.antiguedad === (opt.value as string | null)}
@@ -776,13 +941,231 @@ export function MapFilterBar({
     </div>
   );
 
+  // ── Floating dropdown (fixed-positioned sibling to escape stacking context) ──
+  const wrapStyle: React.CSSProperties | null = anchor ? {
+    position: "fixed",
+    top: anchor.bottom + 4,
+    left: Math.min(anchor.left, window.innerWidth - 284),
+    zIndex: 200,
+  } : null;
+
+  const activePanel = open && wrapStyle ? (() => {
+    switch (open) {
+      case "precio":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <PrecioPanel filters={filters} isRent={isRent} onChange={onFiltersChange} onClose={close} />
+          </div>
+        );
+      case "habitaciones":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <div style={panelBase}>
+              <span style={labelSm}>Habitaciones</span>
+              <BtnGroup
+                options={[
+                  { value: null, label: "Cualquiera" },
+                  { value: 1, label: "1+" },
+                  { value: 2, label: "2+" },
+                  { value: 3, label: "3+" },
+                  { value: 4, label: "4+" },
+                ]}
+                current={filters.habitaciones}
+                onChange={(v) => { onFiltersChange({ habitaciones: v }); close(); }}
+              />
+            </div>
+          </div>
+        );
+      case "tipo":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <div style={panelBase}>
+              <span style={labelSm}>Tipo de inmueble</span>
+              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+                {[{ value: null, label: "Todos los tipos" }, ...TIPO_OPTIONS].map((opt) => (
+                  <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.ink }}>
+                    <input
+                      type="radio" name="tipo-dd"
+                      checked={filters.tipoInmueble === opt.value}
+                      onChange={() => { onFiltersChange({ tipoInmueble: opt.value }); close(); }}
+                      style={{ accentColor: C.teal }}
+                    />
+                    {opt.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          </div>
+        );
+      case "area":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <AreaPanel filters={filters} onChange={onFiltersChange} onClose={close} />
+          </div>
+        );
+      case "banos":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <div style={panelBase}>
+              <span style={labelSm}>Baños</span>
+              <BtnGroup
+                options={[
+                  { value: null, label: "Cualquiera" },
+                  { value: 1, label: "1+" },
+                  { value: 2, label: "2+" },
+                  { value: 3, label: "3+" },
+                ]}
+                current={filters.banos}
+                onChange={(v) => { onFiltersChange({ banos: v }); close(); }}
+              />
+            </div>
+          </div>
+        );
+      case "antiguedad":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <AntiguedadPanel filters={filters} onChange={onFiltersChange} onClose={close} />
+          </div>
+        );
+      case "mas": {
+        const tiempoOpts = isRent
+          ? ([
+              { val: "nuevo",  label: "Recién publicado", sub: "< 7 días" },
+              { val: "mas30",  label: "Más de 30 días",   sub: "lleva tiempo" },
+              { val: "mas60",  label: "Más de 60 días",   sub: "negociable" },
+            ] as const)
+          : ([
+              { val: "nuevo",    label: "Nuevo",    sub: "< 7 días" },
+              { val: "reciente", label: "Reciente", sub: "< 30 días" },
+              { val: "demorado", label: "Demorado", sub: "> 90 días" },
+            ] as const);
+
+        const proTeasers = isRent
+          ? [
+              { label: "Canon mediano del barrio", desc: "¿Está por encima o debajo del mercado?" },
+              { label: "Evolución de arriendos",   desc: "Cómo ha cambiado el precio en la zona" },
+              { label: "Historial de disponibilidad", desc: "Cuánto tarda en arrendarse ese tipo" },
+            ]
+          : [
+              { label: "Buenas ofertas", desc: "Propiedades bajo la mediana del barrio" },
+              { label: "Yield mínimo",   desc: "Rentabilidad para inversores" },
+              { label: "Score de zona",  desc: "Calidad y potencial del barrio" },
+            ];
+
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <div style={{ ...panelBase, minWidth: 300 }}>
+              <span style={{ ...labelSm, fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
+                Más filtros
+              </span>
+
+              {/* Estrato */}
+              <span style={labelSm}>Estrato</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                {[1, 2, 3, 4, 5, 6].map((e) => {
+                  const active = (filters.estrato ?? []).includes(e);
+                  return (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        const cur = filters.estrato ?? [];
+                        const next = active ? cur.filter((x) => x !== e) : [...cur, e];
+                        onFiltersChange({ estrato: next.length === 0 ? null : next });
+                      }}
+                      style={{
+                        width: 36, height: 32, borderRadius: 8,
+                        border: `1.5px solid ${active ? C.teal : C.border}`,
+                        background: active ? C.teal : "transparent",
+                        color: active ? "#fff" : C.ink,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      {e}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Tiempo — condicional según tab */}
+              <span style={labelSm}>{isRent ? "Tiempo publicado" : "Tiempo en mercado"}</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                {tiempoOpts.map((opt) => {
+                  const active = filters.diasMercado === opt.val;
+                  return (
+                    <button
+                      key={opt.val}
+                      onClick={() => onFiltersChange({ diasMercado: active ? null : opt.val })}
+                      style={{
+                        flex: 1, padding: "6px 4px", borderRadius: 8, cursor: "pointer",
+                        border: `1.5px solid ${active ? C.teal : C.border}`,
+                        background: active ? C.teal : "transparent",
+                        textAlign: "center",
+                      }}
+                    >
+                      <div style={{ fontSize: 11, fontWeight: 700, color: active ? "#fff" : C.ink, lineHeight: 1.3 }}>{opt.label}</div>
+                      <div style={{ fontSize: 9, color: active ? "rgba(255,255,255,0.75)" : C.muted }}>{opt.sub}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* PRO teasers — distintos por tab */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <span style={labelSm}>Filtros PRO</span>
+                {proTeasers.map((t) => (
+                  <div key={t.label} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "8px 10px", borderRadius: 8,
+                    background: "rgba(255,201,40,0.06)",
+                    border: "1px solid rgba(255,201,40,0.3)",
+                    userSelect: "none",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>🔒 {t.label}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{t.desc}</div>
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, letterSpacing: "1px",
+                      background: "#ffc928", color: "#1A1208",
+                      padding: "2px 7px", borderRadius: 999, flexShrink: 0,
+                    }}>
+                      PRO
+                    </span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
+                <button
+                  onClick={() => { onResetAll?.(); close(); }}
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
+                >
+                  Limpiar todo
+                </button>
+                <button
+                  onClick={close}
+                  style={{ flex: 1, padding: "8px", borderRadius: 8, background: C.teal, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
+                >
+                  Aplicar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+      default:
+        return null;
+    }
+  })() : null;
+
   // ── Bar container ──────────────────────────────────────────────────────────
   return (
     <>
       <div
         ref={barRef}
         style={{
-          position: "absolute", top: 52, left: 0, right: 0, zIndex: 25,
+          position: "absolute", top: 52, left: 0, right: 0, zIndex: 30,
           background: C.white,
           borderBottom: `1px solid ${C.border}`,
           height: 48,
@@ -835,6 +1218,7 @@ export function MapFilterBar({
         </div>
       </div>
 
+      {activePanel}
       {mobileSheet}
     </>
   );

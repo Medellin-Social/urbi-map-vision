@@ -1,11 +1,11 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useTarget } from "@/contexts/TargetContext";
-import { useBarriosRaw, useScoreThresholds, useComunasGeoJSON } from "@/hooks/useBarrios";
+import { useBarriosRaw, useScoreThresholds, useComunasMetrics, type ComunaMetrics } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 import {
   OPP_COLORS,
@@ -15,8 +15,6 @@ import {
   setScoreThresholds,
   type ScorePaletteId,
 } from "@/config/mapColors";
-import { useState } from "react";
-
 type Props = {
   onSelect: (n: Neighborhood) => void;
   selectedId: number | null;
@@ -48,15 +46,14 @@ const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", feature
 // Municipalities not included in map data
 const _HIDDEN_MUNICIPIOS = ["CALDAS", "COPACABANA", "GIRARDOTA", "BARBOSA"];
 
-// Non-Medellín municipalities shown as top-level commune blocks
-const COMUNAS_FILES = [
-  "/data/comunas_medellin.geojson",
-  "/data/comunas_bello.geojson",
-  "/data/comunas_envigado.geojson",
-  "/data/comunas_itagui.geojson",
-  "/data/comunas_sabaneta.geojson",
-  "/data/comunas_la_estrella.geojson",
-];
+// Fallback static files for municipio blocks — only fetched when API omits them
+const MUNICIPIO_STATIC: Record<number, string> = {
+  101: "/data/comunas_bello.geojson",
+  102: "/data/comunas_envigado.geojson",
+  103: "/data/comunas_itagui.geojson",
+  104: "/data/comunas_sabaneta.geojson",
+  105: "/data/comunas_la_estrella.geojson",
+};
 
 const _PERFIL_BADGE_LABEL: Record<string, string> = {
   airbnb: "Renta Corta",
@@ -213,6 +210,8 @@ export function MapView({
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
   const mapLoadedRef = useRef(false);
+  const [mapLoaded, setMapLoaded] = useState(false);
+  const staticFeaturesRef = useRef<GeoJSON.Feature[] | null>(null);
   const barriosRef = useRef<ApiBarrio[]>([]);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
@@ -271,7 +270,8 @@ export function MapView({
     if (barriosRaw?.length) barriosRef.current = barriosRaw;
   }, [barriosRaw]);
 
-  const { data: comunasGeoJSON } = useComunasGeoJSON(perfil, target ?? "investor");
+  const isPro = ["pro", "agente"].includes(auth.get()?.plan ?? "");
+  const { data: comunasMetrics } = useComunasMetrics(perfil, isPro ? (target ?? "investor") : "investor");
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
@@ -314,7 +314,7 @@ export function MapView({
     if (tokenError || !containerRef.current || mapRef.current) return;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
-    const styleId = auth.get()?.mapStyle ?? "monochrome";
+    const styleId = auth.get()?.mapStyle ?? "light";
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
     const map = new mapboxgl.Map({
@@ -342,14 +342,33 @@ export function MapView({
     map.on("load", () => {
       map.resize();
       mapLoadedRef.current = true;
+      setMapLoaded(true);
 
       // ── Limpiar POIs del mapa base ────────────────────────────────────────
       const baseStyle = map.getStyle();
       if (baseStyle?.layers) {
         for (const layer of baseStyle.layers) {
           const srcLayer = (layer as Record<string, unknown>)["source-layer"] as string | undefined;
-          if (layer.type === "symbol" && srcLayer) {
-            map.setLayoutProperty(layer.id, "visibility", "none");
+          if (layer.type === "symbol") {
+            const layout = (layer as mapboxgl.SymbolLayer).layout;
+            const lid = layer.id.toLowerCase();
+            const isStreetLabel =
+              lid.includes("road") ||
+              lid.includes("street") ||
+              lid.includes("transit") ||
+              lid.includes("poi") ||
+              lid.includes("airport") ||
+              lid.includes("ferry");
+            const isPlaceLabel =
+              lid.includes("place") ||
+              lid.includes("settlement") ||
+              lid.includes("neighborhood") ||
+              lid.includes("admin") ||
+              lid.includes("state") ||
+              lid.includes("country");
+            if ((layout && "icon-image" in layout) || (isStreetLabel && !isPlaceLabel)) {
+              map.setLayoutProperty(layer.id, "visibility", "none");
+            }
           }
           if (layer.type === "background") {
             map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
@@ -501,7 +520,7 @@ export function MapView({
         filter: ["has", "point_count"],
         layout: { visibility: "none" },
         paint: {
-          "circle-color": ["step", ["get", "point_count"], "#5DCAA5", 10, "#1D9E75", 50, "#085041"],
+          "circle-color": ["step", ["get", "point_count"], "#1D9E75", 10, "#085041", 50, "#1A1208"],
           "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 50, 40],
           "circle-opacity": 0.88,
           "circle-stroke-width": 2,
@@ -537,8 +556,17 @@ export function MapView({
           ],
           "circle-color": [
             "case",
-            ["==", ["get", "buena_oferta"], true], "#10b981",
-            ["==", ["get", "tipo_op"], "arriendo"], "#5DCAA5",
+            ["==", ["get", "tier"], "agencia_premium"], "#ffc928",
+            ["==", ["get", "tipo_inmueble"], "apartamento"],   "#1D9E75",
+            ["==", ["get", "tipo_inmueble"], "casa"],          "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "casa_lote"],     "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "finca"],         "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "apartaestudio"], "#5DCAA5",
+            ["==", ["get", "tipo_inmueble"], "lote"],          "#BA7517",
+            ["==", ["get", "tipo_inmueble"], "local"],         "#7F77DD",
+            ["==", ["get", "tipo_inmueble"], "oficina"],       "#378ADD",
+            ["==", ["get", "tipo_inmueble"], "bodega"],        "#9B8B75",
+            ["==", ["get", "tipo_inmueble"], "consultorio"],   "#9B8B75",
             "#1D9E75",
           ],
           "circle-stroke-width": [
@@ -593,22 +621,7 @@ export function MapView({
       map.on("mouseenter", "listings-mls-unclustered", () => { map.getCanvas().style.cursor = "pointer"; });
       map.on("mouseleave", "listings-mls-unclustered", () => { map.getCanvas().style.cursor = ""; });
 
-      // ── Cargar datos iniciales ─────────────────────────────────────────────
-      // Comunas GeoJSON: Medellín + municipality blocks for all other municipios
-      Promise.all(
-        COMUNAS_FILES.map((f) =>
-          fetch(f)
-            .then((r) => r.json())
-            .catch(() => ({ type: "FeatureCollection", features: [] }))
-        )
-      ).then((results: { features: unknown[] }[]) => {
-        if (!mapLoadedRef.current) return;
-        const allFeatures = results.flatMap((fc) => fc.features ?? []);
-        (map.getSource("comunas") as mapboxgl.GeoJSONSource)?.setData({
-          type: "FeatureCollection",
-          features: allFeatures,
-        } as GeoJSON.FeatureCollection);
-      });
+      // Source starts empty — useEffect([comunasMetrics]) loads static GeoJSON + enriches with API metrics.
 
       // ── Terreno 3D ────────────────────────────────────────────────────────────
       map.addSource("mapbox-dem", {
@@ -636,38 +649,48 @@ export function MapView({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Actualizar capa comunas con datos de API (Medellín coloreado) ────────────
+  // ── Poblar capa comunas: geometría oficial estática + métricas de la API ──────
   useEffect(() => {
     const map = mapRef.current;
-    if (!map || !mapLoadedRef.current || !comunasGeoJSON) return;
+    if (!map || !mapLoadedRef.current) return;
     const source = map.getSource("comunas") as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
-    // Load ALL static files; API Medellín communes override static ones by cd_comuna
+
+    const enrichAndRender = (features: GeoJSON.Feature[]) => {
+      const enriched = features.map((feat) => {
+        const cd = feat.properties?.cd_comuna as number | null;
+        const m: ComunaMetrics | undefined = cd != null ? comunasMetrics?.[String(cd)] : undefined;
+        return {
+          ...feat,
+          id: cd ?? feat.id,
+          properties: m
+            ? { ...feat.properties, ...m }
+            : { ...feat.properties, color_hex: "#888780", has_data: false },
+        };
+      });
+      source.setData({ type: "FeatureCollection", features: enriched } as GeoJSON.FeatureCollection);
+    };
+
+    if (staticFeaturesRef.current) {
+      enrichAndRender(staticFeaturesRef.current);
+      return;
+    }
+
+    // Primera carga — fetch archivos GeoJSON estáticos oficiales
+    const staticFiles = [
+      "/data/comunas_medellin.geojson",
+      ...Object.values(MUNICIPIO_STATIC),
+    ];
     Promise.all(
-      COMUNAS_FILES.map((f) =>
-        fetch(f)
-          .then((r) => r.json())
-          .catch(() => ({ type: "FeatureCollection", features: [] }))
+      staticFiles.map((f) =>
+        fetch(f).then((r) => r.json()).catch(() => ({ type: "FeatureCollection", features: [] }))
       )
-    ).then((results: { features: unknown[] }[]) => {
-      // cd_comunas already covered by the API (Medellín communes with metrics)
-      const apiCdComunas = new Set(
-        comunasGeoJSON.features.map((f) => f.properties?.cd_comuna).filter((c) => c != null)
-      );
-      // Keep static features only if API doesn't already have that cd_comuna
-      const staticFeatures = results
-        .flatMap((fc) => fc.features ?? [])
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        .filter((f: any) => {
-          const cd = f.properties?.cd_comuna;
-          return cd == null || !apiCdComunas.has(cd);
-        });
-      source.setData({
-        type: "FeatureCollection",
-        features: [...comunasGeoJSON.features, ...staticFeatures],
-      } as GeoJSON.FeatureCollection);
+    ).then((results: { features: GeoJSON.Feature[] }[]) => {
+      const features = results.flatMap((fc) => (fc.features ?? []) as GeoJSON.Feature[]);
+      staticFeaturesRef.current = features;
+      enrichAndRender(features);
     });
-  }, [comunasGeoJSON]);
+  }, [comunasMetrics, mapLoaded]);
 
   // ── Vista 1 ↔ Vista 2: toggle capas (solo depende de mapView) ──────────────
   useEffect(() => {
@@ -798,6 +821,7 @@ export function MapView({
               buena_oferta: l.buena_oferta ?? false,
               tipo_op: l.tipo_operacion ?? "venta",
               tipo_inmueble: l.tipo_inmueble ?? "",
+              tier: l.tier ?? "",
               precio_cop: l.precio_cop ?? null,
               precio_usd: l.precio_usd ?? null,
               precio_m2: l.precio_m2 ?? null,

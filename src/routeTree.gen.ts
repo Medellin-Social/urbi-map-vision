@@ -9,30 +9,44 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VenderRouteImport } from './routes/vender'
 import { Route as SuscribirseRouteImport } from './routes/suscribirse'
 import { Route as StoresRouteImport } from './routes/stores'
+import { Route as SolicitudesRouteImport } from './routes/solicitudes'
 import { Route as SimuladorRouteImport } from './routes/simulador'
 import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as RegisterRouteImport } from './routes/register'
 import { Route as RealEstateRouteImport } from './routes/real-estate'
+import { Route as PublicarRouteImport } from './routes/publicar'
+import { Route as PlanesRouteImport } from './routes/planes'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as EmbajadorRouteImport } from './routes/embajador'
+import { Route as ConectarAgenteRouteImport } from './routes/conectar-agente'
 import { Route as ComunidadRouteImport } from './routes/comunidad'
 import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
 import { Route as AfiliadoRouteImport } from './routes/afiliado'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AgentesIndexRouteImport } from './routes/agentes/index'
+import { Route as SuscripcionExitoRouteImport } from './routes/suscripcion/exito'
+import { Route as SuscripcionCanceladaRouteImport } from './routes/suscripcion/cancelada'
 import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
 import { Route as AgentesRegistroRouteImport } from './routes/agentes/registro'
+import { Route as AgentesSlugRouteImport } from './routes/agentes/$slug'
 import { Route as AdminAgentesRouteImport } from './routes/admin/agentes'
 
+const VenderRoute = VenderRouteImport.update({
+  id: '/vender',
+  path: '/vender',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SuscribirseRoute = SuscribirseRouteImport.update({
   id: '/suscribirse',
   path: '/suscribirse',
@@ -41,6 +55,11 @@ const SuscribirseRoute = SuscribirseRouteImport.update({
 const StoresRoute = StoresRouteImport.update({
   id: '/stores',
   path: '/stores',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SolicitudesRoute = SolicitudesRouteImport.update({
+  id: '/solicitudes',
+  path: '/solicitudes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SimuladorRoute = SimuladorRouteImport.update({
@@ -61,6 +80,16 @@ const RegisterRoute = RegisterRouteImport.update({
 const RealEstateRoute = RealEstateRouteImport.update({
   id: '/real-estate',
   path: '/real-estate',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PublicarRoute = PublicarRouteImport.update({
+  id: '/publicar',
+  path: '/publicar',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanesRoute = PlanesRouteImport.update({
+  id: '/planes',
+  path: '/planes',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PerfilRoute = PerfilRouteImport.update({
@@ -93,6 +122,11 @@ const EmbajadorRoute = EmbajadorRouteImport.update({
   path: '/embajador',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ConectarAgenteRoute = ConectarAgenteRouteImport.update({
+  id: '/conectar-agente',
+  path: '/conectar-agente',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ComunidadRoute = ComunidadRouteImport.update({
   id: '/comunidad',
   path: '/comunidad',
@@ -116,6 +150,21 @@ const AfiliadoRoute = AfiliadoRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesIndexRoute = AgentesIndexRouteImport.update({
+  id: '/agentes/',
+  path: '/agentes/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuscripcionExitoRoute = SuscripcionExitoRouteImport.update({
+  id: '/suscripcion/exito',
+  path: '/suscripcion/exito',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuscripcionCanceladaRoute = SuscripcionCanceladaRouteImport.update({
+  id: '/suscripcion/cancelada',
+  path: '/suscripcion/cancelada',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
@@ -144,6 +193,11 @@ const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
   path: '/agentes/registro',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentesSlugRoute = AgentesSlugRouteImport.update({
+  id: '/agentes/$slug',
+  path: '/agentes/$slug',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminAgentesRoute = AdminAgentesRouteImport.update({
   id: '/admin/agentes',
   path: '/admin/agentes',
@@ -156,24 +210,33 @@ export interface FileRoutesByFullPath {
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/conectar-agente': typeof ConectarAgenteRoute
   '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
+  '/planes': typeof PlanesRoute
+  '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
+  '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
+  '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/agentes/': typeof AgentesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -181,24 +244,33 @@ export interface FileRoutesByTo {
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/conectar-agente': typeof ConectarAgenteRoute
   '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
+  '/planes': typeof PlanesRoute
+  '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
+  '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
+  '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/agentes': typeof AgentesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -207,24 +279,33 @@ export interface FileRoutesById {
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
+  '/conectar-agente': typeof ConectarAgenteRoute
   '/embajador': typeof EmbajadorRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
+  '/planes': typeof PlanesRoute
+  '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
   '/reset-password': typeof ResetPasswordRoute
   '/simulador': typeof SimuladorRoute
+  '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
+  '/agentes/$slug': typeof AgentesSlugRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
+  '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/agentes/': typeof AgentesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -234,24 +315,33 @@ export interface FileRouteTypes {
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/conectar-agente'
     | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
+    | '/planes'
+    | '/publicar'
     | '/real-estate'
     | '/register'
     | '/reset-password'
     | '/simulador'
+    | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/vender'
     | '/admin/agentes'
+    | '/agentes/$slug'
     | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/suscripcion/cancelada'
+    | '/suscripcion/exito'
+    | '/agentes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -259,24 +349,33 @@ export interface FileRouteTypes {
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/conectar-agente'
     | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
+    | '/planes'
+    | '/publicar'
     | '/real-estate'
     | '/register'
     | '/reset-password'
     | '/simulador'
+    | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/vender'
     | '/admin/agentes'
+    | '/agentes/$slug'
     | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/suscripcion/cancelada'
+    | '/suscripcion/exito'
+    | '/agentes'
   id:
     | '__root__'
     | '/'
@@ -284,24 +383,33 @@ export interface FileRouteTypes {
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
+    | '/conectar-agente'
     | '/embajador'
     | '/forgot-password'
     | '/login'
     | '/map'
     | '/onboarding'
     | '/perfil'
+    | '/planes'
+    | '/publicar'
     | '/real-estate'
     | '/register'
     | '/reset-password'
     | '/simulador'
+    | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/vender'
     | '/admin/agentes'
+    | '/agentes/$slug'
     | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/suscripcion/cancelada'
+    | '/suscripcion/exito'
+    | '/agentes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -310,28 +418,44 @@ export interface RootRouteChildren {
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
   ComunidadRoute: typeof ComunidadRoute
+  ConectarAgenteRoute: typeof ConectarAgenteRoute
   EmbajadorRoute: typeof EmbajadorRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
   OnboardingRoute: typeof OnboardingRoute
   PerfilRoute: typeof PerfilRoute
+  PlanesRoute: typeof PlanesRoute
+  PublicarRoute: typeof PublicarRoute
   RealEstateRoute: typeof RealEstateRoute
   RegisterRoute: typeof RegisterRoute
   ResetPasswordRoute: typeof ResetPasswordRoute
   SimuladorRoute: typeof SimuladorRoute
+  SolicitudesRoute: typeof SolicitudesRoute
   StoresRoute: typeof StoresRoute
   SuscribirseRoute: typeof SuscribirseRoute
+  VenderRoute: typeof VenderRoute
   AdminAgentesRoute: typeof AdminAgentesRoute
+  AgentesSlugRoute: typeof AgentesSlugRoute
   AgentesRegistroRoute: typeof AgentesRegistroRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
   NegociosUnirseRoute: typeof NegociosUnirseRoute
+  SuscripcionCanceladaRoute: typeof SuscripcionCanceladaRoute
+  SuscripcionExitoRoute: typeof SuscripcionExitoRoute
+  AgentesIndexRoute: typeof AgentesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/vender': {
+      id: '/vender'
+      path: '/vender'
+      fullPath: '/vender'
+      preLoaderRoute: typeof VenderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/suscribirse': {
       id: '/suscribirse'
       path: '/suscribirse'
@@ -344,6 +468,13 @@ declare module '@tanstack/react-router' {
       path: '/stores'
       fullPath: '/stores'
       preLoaderRoute: typeof StoresRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/solicitudes': {
+      id: '/solicitudes'
+      path: '/solicitudes'
+      fullPath: '/solicitudes'
+      preLoaderRoute: typeof SolicitudesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/simulador': {
@@ -372,6 +503,20 @@ declare module '@tanstack/react-router' {
       path: '/real-estate'
       fullPath: '/real-estate'
       preLoaderRoute: typeof RealEstateRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/publicar': {
+      id: '/publicar'
+      path: '/publicar'
+      fullPath: '/publicar'
+      preLoaderRoute: typeof PublicarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planes': {
+      id: '/planes'
+      path: '/planes'
+      fullPath: '/planes'
+      preLoaderRoute: typeof PlanesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/perfil': {
@@ -416,6 +561,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EmbajadorRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/conectar-agente': {
+      id: '/conectar-agente'
+      path: '/conectar-agente'
+      fullPath: '/conectar-agente'
+      preLoaderRoute: typeof ConectarAgenteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/comunidad': {
       id: '/comunidad'
       path: '/comunidad'
@@ -449,6 +601,27 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes/': {
+      id: '/agentes/'
+      path: '/agentes'
+      fullPath: '/agentes/'
+      preLoaderRoute: typeof AgentesIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/suscripcion/exito': {
+      id: '/suscripcion/exito'
+      path: '/suscripcion/exito'
+      fullPath: '/suscripcion/exito'
+      preLoaderRoute: typeof SuscripcionExitoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/suscripcion/cancelada': {
+      id: '/suscripcion/cancelada'
+      path: '/suscripcion/cancelada'
+      fullPath: '/suscripcion/cancelada'
+      preLoaderRoute: typeof SuscripcionCanceladaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/negocios/unirse': {
@@ -486,6 +659,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AgentesRegistroRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agentes/$slug': {
+      id: '/agentes/$slug'
+      path: '/agentes/$slug'
+      fullPath: '/agentes/$slug'
+      preLoaderRoute: typeof AgentesSlugRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/agentes': {
       id: '/admin/agentes'
       path: '/admin/agentes'
@@ -502,24 +682,33 @@ const rootRouteChildren: RootRouteChildren = {
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
   ComunidadRoute: ComunidadRoute,
+  ConectarAgenteRoute: ConectarAgenteRoute,
   EmbajadorRoute: EmbajadorRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,
   OnboardingRoute: OnboardingRoute,
   PerfilRoute: PerfilRoute,
+  PlanesRoute: PlanesRoute,
+  PublicarRoute: PublicarRoute,
   RealEstateRoute: RealEstateRoute,
   RegisterRoute: RegisterRoute,
   ResetPasswordRoute: ResetPasswordRoute,
   SimuladorRoute: SimuladorRoute,
+  SolicitudesRoute: SolicitudesRoute,
   StoresRoute: StoresRoute,
   SuscribirseRoute: SuscribirseRoute,
+  VenderRoute: VenderRoute,
   AdminAgentesRoute: AdminAgentesRoute,
+  AgentesSlugRoute: AgentesSlugRoute,
   AgentesRegistroRoute: AgentesRegistroRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
   NegociosUnirseRoute: NegociosUnirseRoute,
+  SuscripcionCanceladaRoute: SuscripcionCanceladaRoute,
+  SuscripcionExitoRoute: SuscripcionExitoRoute,
+  AgentesIndexRoute: AgentesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

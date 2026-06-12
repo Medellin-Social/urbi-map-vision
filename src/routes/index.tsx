@@ -231,12 +231,17 @@ function HomeContent() {
                 <div style={{
                   height: 120, background: K.line,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 32, overflow: 'hidden',
+                  fontSize: 32, overflow: 'hidden', position: 'relative',
                 }}>
-                  {deal.foto_url
-                    ? <img src={deal.foto_url} alt={deal.tienda_nombre} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    : <span>{deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}</span>
-                  }
+                  <span>{deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}</span>
+                  {deal.foto_url && (
+                    <img
+                      src={deal.foto_url}
+                      alt={deal.tienda_nombre}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      onError={e => { e.currentTarget.style.display = 'none' }}
+                    />
+                  )}
                 </div>
 
                 <div style={{ padding: 12 }}>
@@ -308,18 +313,18 @@ function HomeContent() {
                   height: 130, overflow: 'hidden',
                   background: CATEGORIA_COLORS[negocio.categoria] ?? K.surface,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  position: 'relative',
                 }}>
-                  {negocio.foto_url ? (
+                  <span style={{ fontSize: 40 }}>
+                    {CATEGORIA_EMOJI[negocio.categoria] ?? '⭐'}
+                  </span>
+                  {negocio.foto_url && (
                     <img
                       src={negocio.foto_url}
                       alt={negocio.nombre}
-                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
                       onError={e => { e.currentTarget.style.display = 'none' }}
                     />
-                  ) : (
-                    <span style={{ fontSize: 40 }}>
-                      {CATEGORIA_EMOJI[negocio.categoria] ?? '⭐'}
-                    </span>
                   )}
                 </div>
 

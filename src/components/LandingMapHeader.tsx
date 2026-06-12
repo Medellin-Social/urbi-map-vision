@@ -37,6 +37,20 @@ export function LandingMapHeader({
   const [clicked, setClicked] = useState<ClickedBarrio | null>(null);
   const [showPaywall, setShowPaywall] = useState(false);
   const [tooltip, setTooltip] = useState<{ nombre: string; municipio: string; x: number; y: number } | null>(null);
+  const [mapActive, setMapActive] = useState(false);
+  const lastTapRef = useRef(0);
+
+  // Deactivate map when user taps outside the map container (mobile only)
+  useEffect(() => {
+    if (window.innerWidth >= 768) return;
+    const onOutsideTap = (e: TouchEvent) => {
+      if (!containerRef.current?.contains(e.target as Node)) {
+        setMapActive(false);
+      }
+    };
+    document.addEventListener("touchstart", onOutsideTap, { passive: true });
+    return () => document.removeEventListener("touchstart", onOutsideTap);
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -45,7 +59,7 @@ export function LandingMapHeader({
 
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: "mapbox://styles/mapbox/dark-v11",
+      style: "mapbox://styles/mapbox/streets-v12",
       center: [-75.5812, 6.2442],
       zoom: 12,
       pitch: 55,
@@ -56,50 +70,6 @@ export function LandingMapHeader({
 
     mapRef.current = map;
 
-    // ── Cinematic rotation ──────────────────────────────────────────────────
-    let bearing = -30;
-    let animationId = 0;
-    let lastTs = 0;
-    let resumeTimeout: ReturnType<typeof setTimeout> | undefined;
-    const DEG_PER_SEC = 4.5; // full rotation in ~80 s
-
-    function rotateMap(ts: number) {
-      if (map.isEasing()) {
-        // flyTo / easeTo in progress — skip bearing update, check next frame
-        lastTs = 0;
-        animationId = requestAnimationFrame(rotateMap);
-        return;
-      }
-      if (lastTs) {
-        bearing += ((ts - lastTs) / 1000) * DEG_PER_SEC;
-        map.setBearing(bearing);
-      }
-      lastTs = ts;
-      animationId = requestAnimationFrame(rotateMap);
-    }
-
-    function stopRotation() {
-      cancelAnimationFrame(animationId);
-      lastTs = 0;
-      clearTimeout(resumeTimeout);
-    }
-
-    function scheduleResume() {
-      clearTimeout(resumeTimeout);
-      resumeTimeout = setTimeout(() => requestAnimationFrame(rotateMap), 3000);
-    }
-
-    // Stop when user scrolls away
-    const onScroll = () => stopRotation();
-    window.addEventListener("scroll", onScroll, { passive: true });
-
-    // Pause on any map interaction, resume 3 s after release
-    map.on("mousedown", stopRotation);
-    map.on("touchstart", stopRotation);
-    map.on("mouseup", scheduleResume);
-    map.on("touchend", scheduleResume);
-    // ───────────────────────────────────────────────────────────────────────
-
     map.on("load", async () => {
       // Terrain DEM for 3D mountain relief
       map.addSource("mapbox-dem", {
@@ -109,6 +79,13 @@ export function LandingMapHeader({
         maxzoom: 14,
       });
       map.setTerrain({ source: "mapbox-dem", exaggeration: 0.8 });
+
+      // Hide all symbol layers (icons + labels) — keep only geometry (fill, line, background)
+      map.getStyle().layers.forEach((layer) => {
+        if (layer.type === "symbol") {
+          map.setLayoutProperty(layer.id, "visibility", "none");
+        }
+      });
 
       try {
         const [valleRes, medellinRes, statsRes] = await Promise.all([
@@ -160,6 +137,9 @@ export function LandingMapHeader({
           generateId: true,
         });
 
+        // Insert below the first symbol layer so base-style labels/POIs render on top
+        const firstSymbolId = map.getStyle().layers.find((l) => l.type === "symbol")?.id;
+
         // Fill
         map.addLayer({
           id: "barrios-landing-fill",
@@ -174,7 +154,7 @@ export function LandingMapHeader({
               0.15,
             ],
           },
-        });
+        }, firstSymbolId);
 
         // Outline
         map.addLayer({
@@ -198,10 +178,8 @@ export function LandingMapHeader({
               0.45,
             ],
           },
-        });
+        }, firstSymbolId);
 
-        // Start rotation once barrios are fully rendered
-        map.once("idle", () => requestAnimationFrame(rotateMap));
       } catch (err) {
         console.error("[LandingMapHeader] failed to load data", err);
       }
@@ -262,17 +240,13 @@ export function LandingMapHeader({
 
     if (flyToRef) {
       flyToRef.current = (lat, lon, zoom = 13) => {
-        stopRotation();
         map.stop();
         map.flyTo({ center: [lon, lat], zoom, pitch: 50, duration: 1800, essential: true });
-        map.once('moveend', scheduleResume);
       };
     }
 
     return () => {
       if (flyToRef) flyToRef.current = null;
-      stopRotation();
-      window.removeEventListener("scroll", onScroll);
       map.remove();
       mapRef.current = null;
     };
@@ -287,6 +261,27 @@ export function LandingMapHeader({
       >
         {/* Mapbox container */}
         <div ref={containerRef} className="absolute inset-0" />
+
+        {/* Mobile overlay — transparent blocker; double-tap activates map interaction */}
+        <div
+          className="absolute inset-0 md:hidden"
+          style={{ zIndex: 10, pointerEvents: mapActive ? "none" : "auto", background: "transparent" }}
+          onTouchEnd={(e) => {
+            const now = Date.now();
+            if (now - lastTapRef.current < 300) {
+              setMapActive(true);
+              e.preventDefault();
+            }
+            lastTapRef.current = now;
+          }}
+        />
+
+        {/* Toast — shown while map is active on mobile */}
+        {mapActive && (
+          <div className="pointer-events-none absolute bottom-16 left-1/2 z-20 flex -translate-x-1/2 items-center gap-1.5 whitespace-nowrap rounded-full border border-white/20 bg-black/75 px-4 py-1.5 text-[11px] font-medium text-white backdrop-blur-sm md:hidden">
+            Mapa activado · Toca fuera para desactivar
+          </div>
+        )}
 
         {/* Bottom fade into page background */}
         {!hideOverlay && (

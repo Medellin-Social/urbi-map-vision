@@ -33,7 +33,7 @@ async def _get_user_from_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revocado")
 
     row = await pool.fetchrow(
-        "SELECT id, email, nombre, apellido, activo FROM usuarios WHERE id = $1",
+        "SELECT id, email, nombre, apellido, activo, plan FROM usuarios WHERE id = $1",
         int(user_id),
     )
     if row is None or not row["activo"]:
@@ -59,3 +59,30 @@ async def get_optional_user(
         return await _get_user_from_token(credentials.credentials)
     except HTTPException:
         return None
+
+
+_PLAN_ORDEN = ["free", "pro", "agente"]
+
+
+def require_plan(plan_minimo: str):
+    """Factory: use as `Depends(require_plan("pro"))` on any route."""
+    async def _check(current_user: dict = Depends(get_current_user)) -> dict:
+        plan_usuario = current_user.get("plan") or "free"
+        try:
+            idx_req = _PLAN_ORDEN.index(plan_minimo)
+            idx_usr = _PLAN_ORDEN.index(plan_usuario)
+        except ValueError:
+            idx_req, idx_usr = 1, 0
+
+        if idx_usr < idx_req:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "error": "plan_requerido",
+                    "plan_actual": plan_usuario,
+                    "plan_minimo": plan_minimo,
+                    "upgrade_url": "/planes",
+                },
+            )
+        return current_user
+    return _check

@@ -99,6 +99,28 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       <nav style={{ display: "flex", alignItems: "stretch", flex: 1 }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
+          if (tab.id === "sell") {
+            return (
+              <button
+                key={tab.id}
+                onClick={() => navigate({ to: "/vender" })}
+                style={{
+                  background: "none", border: "none", padding: "0 14px",
+                  borderBottom: "2px solid transparent",
+                  color: C.muted,
+                  fontWeight: 500,
+                  fontSize: 13, cursor: "pointer",
+                  transition: "color 0.15s",
+                  letterSpacing: "0.1px",
+                  flexShrink: 0,
+                }}
+                onMouseEnter={(e) => { e.currentTarget.style.color = C.ink; }}
+                onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+              >
+                {tab.label}
+              </button>
+            );
+          }
           return (
             <button
               key={tab.id}

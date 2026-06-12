@@ -8,6 +8,7 @@ import { useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { auth } from "@/lib/auth";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
+import { useIsPro } from "@/components/LockedField";
 
 type Props = {
   barrio: Neighborhood;
@@ -66,18 +67,27 @@ const TIPO_GRUPOS = [
   { label: "Terreno",     tipos: ["lote"] },
 ];
 
-function getTipoBadgeClass(tipo: string): string {
-  const residencial = ["apartamento", "apartaestudio", "casa", "casa_lote", "finca"];
-  const comercial   = ["local", "oficina", "bodega", "consultorio"];
-  if (residencial.includes(tipo)) return "bg-teal-700";
-  if (comercial.includes(tipo))   return "bg-amber-600";
-  return "bg-green-700"; // lote
+const TIPO_INMUEBLE_COLOR: Record<string, string> = {
+  apartamento:   '#1D9E75',
+  casa:          '#D85A30',
+  casa_lote:     '#D85A30',
+  finca:         '#D85A30',
+  apartaestudio: '#5DCAA5',
+  lote:          '#BA7517',
+  local:         '#7F77DD',
+  oficina:       '#378ADD',
+  bodega:        '#9B8B75',
+  consultorio:   '#9B8B75',
+};
+
+function getTipoInmuebleBadgeStyle(tipo: string): React.CSSProperties {
+  const bg = TIPO_INMUEBLE_COLOR[tipo] ?? '#9B8B75';
+  return { background: bg, color: '#FFFFFF' };
 }
 
 function tierColor(l: ApiListing): string {
-  if (l.buena_oferta) return "#10b981";
-  if (l.tipo_operacion === "arriendo") return "#5DCAA5";
-  return "#1D9E75";
+  if (l.tier === "agencia_premium") return "#ffc928";
+  return TIPO_INMUEBLE_COLOR[l.tipo_inmueble ?? ""] ?? "#9B8B75";
 }
 
 function diasLabel(dias: number | null | undefined): string | null {
@@ -107,6 +117,7 @@ function ListingCard({
   onToggleFav: () => void;
   onSimular: () => void;
 }) {
+  const isPro = useIsPro();
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
   const precioUsd = listing.precio_usd
     ? `~$${(listing.precio_usd / 1000).toFixed(0)}k USD`
@@ -117,9 +128,6 @@ function ListingCard({
       ? `$${(_pm2 / 1_000_000).toFixed(1)}M/m²`
       : "N/A";
   const tipo = listing.tipo_operacion?.toUpperCase() ?? "—";
-  const tipoColor = listing.tipo_operacion === "arriendo" ? "#5DCAA5" : "#1D9E75";
-  const badgeColor = tierColor(listing);
-  const showBuenaOferta = listing.buena_oferta;
   const tipoInmueble = listing.tipo_inmueble ?? "";
   const specs = [
     listing.habitaciones ? `${listing.habitaciones} hab` : null,
@@ -170,8 +178,8 @@ function ListingCard({
         <span
           className="absolute top-2 left-2 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           style={{
-            background: listing.tipo_operacion === "arriendo" ? "#E1F5EE" : "#FAECE7",
-            color:      listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            color:      "#FFFFFF",
           }}
         >
           {tipo}
@@ -180,7 +188,7 @@ function ListingCard({
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {listing.tier === "agencia_premium" && (
-          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-amber-400 bg-amber-500/10 border border-amber-500/30">
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#ffc928', color: '#1A1208' }}>
             ✦ Premium
           </span>
         )}
@@ -189,7 +197,7 @@ function ListingCard({
             YA NO DISPONIBLE
           </span>
         )}
-        {showBuenaOferta && listing.disponible_actualmente !== false && (
+        {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
           <span
             className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
             style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}
@@ -200,23 +208,23 @@ function ListingCard({
         <span
           className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           style={{
-            background: listing.tipo_operacion === "arriendo" ? "#E1F5EE" : "#FAECE7",
-            color:      listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            color:      "#FFFFFF",
           }}
         >
           {tipo}
         </span>
         {tipoInmueble && (
-          <span className={`rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white ${getTipoBadgeClass(tipoInmueble)}`}>
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={getTipoInmuebleBadgeStyle(tipoInmueble)}>
             {TIPO_LABELS[tipoInmueble] ?? tipoInmueble}
           </span>
         )}
       </div>
 
-      <div className="text-base font-bold leading-tight">{precio}</div>
-      {precioUsd && <div className="text-[11px] text-muted-foreground">{precioUsd}</div>}
-      {specs && <div className="mt-1 text-xs text-muted-foreground">{specs}</div>}
-      <div className="text-[11px] text-muted-foreground">{m2}</div>
+      <div className="text-base font-bold leading-tight text-[#1A1208]">{precio}</div>
+      {precioUsd && <div className="text-[11px] text-[#6B5B45]">{precioUsd}</div>}
+      {specs && <div className="mt-1 text-xs text-[#6B5B45]">{specs}</div>}
+      <div className="text-[11px] text-[#6B5B45]">{m2}</div>
 
       {(listing.pct_bajo_mediana ?? 0) > 5 && (
         <div className="mt-1.5 text-[11px] font-medium text-[#085041]">
@@ -226,7 +234,15 @@ function ListingCard({
 
       {diasLabel(listing.dias_en_mercado) && (
         <div
-          className={`mt-1.5 text-[11px] font-medium ${
+          className="mt-1.5 flex items-center gap-1.5 text-[11px] font-medium"
+          title={listing.fecha_publicacion ? `Publicado el ${listing.fecha_publicacion}` : undefined}
+        >
+          {(listing.dias_en_mercado ?? 0) < 7 && (
+            <span className="rounded px-1.5 py-0 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#ffc928', color: '#1A1208' }}>
+              NUEVO
+            </span>
+          )}
+          <span className={
             (listing.dias_en_mercado ?? 0) < 7
               ? "text-[#085041]"
               : (listing.dias_en_mercado ?? 0) < 30
@@ -234,12 +250,10 @@ function ListingCard({
               : (listing.dias_en_mercado ?? 0) < 90
               ? "text-[#BA7517]"
               : "text-[#E24B4A]"
-          }`}
-          title={listing.fecha_publicacion ? `Publicado el ${listing.fecha_publicacion}` : undefined}
-        >
-          {(listing.dias_en_mercado ?? 0) < 7 && "NUEVO · "}
-          {diasLabel(listing.dias_en_mercado)}
-          {(listing.dias_en_mercado ?? 0) > 90 && " · Lleva tiempo"}
+          }>
+            {diasLabel(listing.dias_en_mercado)}
+            {(listing.dias_en_mercado ?? 0) > 90 && " · Lleva tiempo"}
+          </span>
         </div>
       )}
 
@@ -250,21 +264,21 @@ function ListingCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-[10px] text-muted-foreground/60 capitalize hover:text-primary transition-colors"
+            className="flex items-center gap-1 text-[10px] text-[#9B8B75] capitalize hover:text-[#1D9E75] transition-colors"
           >
             {listing.fuente ?? "—"}
             <ExternalLink className="h-2.5 w-2.5" />
           </a>
         ) : listing.disponible_actualmente === false ? (
           <span
-            className="flex items-center gap-1 text-[10px] text-muted-foreground/40 capitalize cursor-default"
+            className="flex items-center gap-1 text-[10px] text-[#C8B8A2] capitalize cursor-default"
             title="Este listing ya no está disponible, pero sus datos son referencia histórica del mercado"
           >
             {listing.fuente ?? "—"}
             <ExternalLink className="h-2.5 w-2.5 opacity-30" />
           </span>
         ) : (
-          <span className="text-[10px] text-muted-foreground/60 capitalize">
+          <span className="text-[10px] text-[#9B8B75] capitalize">
             {listing.fuente ?? "—"}
           </span>
         )}
@@ -272,7 +286,7 @@ function ListingCard({
         <div className="flex items-center gap-1.5">
           <button
             onClick={(e) => { e.stopPropagation(); onSimular(); }}
-            className="rounded px-1.5 py-0.5 text-[10px] text-muted-foreground/70 border border-border hover:text-primary hover:border-primary/40 transition"
+            className="rounded px-1.5 py-0.5 text-[10px] text-[#9B8B75] border border-[#E8E0D0] hover:text-[#1D9E75] hover:border-[#1D9E75]/40 transition"
             title="Simular inversión"
           >
             Simular
@@ -334,10 +348,10 @@ export function MLSPanel({
   const { isFav, toggle: toggleFav } = useFavoritosListings();
   const { target, setTarget } = useTarget();
 
-  // Reset internal filters when target changes
+  // Reset internal filters when target or barrio changes
   useEffect(() => {
     setFilters({ soloPromium: false, modalidad: null, scoreMin: null, scoreMax: null, yieldMin: null, yieldMax: null });
-  }, [target]);
+  }, [target, barrio.id]);
 
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const listContainerRef = useRef<HTMLDivElement>(null);
@@ -370,6 +384,7 @@ export function MLSPanel({
       if (ef.precioMax !== null && (l.precio_cop ?? 0) > ef.precioMax) return false;
       if (ef.areaMin !== null && (l.area_m2 ?? 0) < ef.areaMin) return false;
       if (ef.areaMax !== null && (l.area_m2 ?? 0) > ef.areaMax) return false;
+      if (ef.banos !== null && ef.banos > 0 && (l.banos == null || l.banos < ef.banos)) return false;
       if (ef.habitaciones !== null) {
         if (ef.habitaciones === 4) {
           if ((l.habitaciones ?? 0) < 4) return false;
@@ -380,6 +395,17 @@ export function MLSPanel({
       if (ef.tipoInmueble !== null) {
         const ti = (l.tipo_inmueble ?? "").toLowerCase();
         if (!ti.includes(ef.tipoInmueble)) return false;
+      }
+      if (ef.estrato !== null && ef.estrato.length > 0) {
+        if (!ef.estrato.includes(l.estrato_real ?? 0)) return false;
+      }
+      if (ef.diasMercado !== null) {
+        const d = l.dias_en_mercado ?? 999;
+        if (ef.diasMercado === "nuevo"    && d >= 7)   return false;
+        if (ef.diasMercado === "reciente" && d >= 30)  return false;
+        if (ef.diasMercado === "demorado" && d < 90)   return false;
+        if (ef.diasMercado === "mas30"    && d < 30)   return false;
+        if (ef.diasMercado === "mas60"    && d < 60)   return false;
       }
       // Internal filters
       if (filters.soloPromium && l.tier !== "agencia_premium") return false;
@@ -472,7 +498,9 @@ export function MLSPanel({
               ? "Sin propiedades"
               : filtered.length < listings.length
               ? `${filtered.length} de ${listings.length} propiedades`
-              : `${listings.length} propiedades · ${nVenta} venta · ${nArriendo} arriendo`}
+              : ef.tipoOp === "todos"
+              ? `${listings.length} propiedades · ${nVenta} venta · ${nArriendo} arriendo`
+              : `${listings.length} propiedades`}
           </p>
           {!isLoading && !premiumIsLoading && effectiveRadio != null && effectiveRadio > 0 && (
             <p className="mt-0.5 text-[10px] text-muted-foreground/70">
@@ -547,19 +575,25 @@ export function MLSPanel({
           )}
         </div>
 
-        {/* Leyenda */}
-        <div className="flex items-center gap-4 border-b border-border px-4 py-2">
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
-            Buena oferta
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#5DCAA5]" />
-            Arriendo
-          </div>
-          <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#1D9E75]" />
-            Venta
+        {/* Leyenda por tipo de inmueble */}
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
+          {([
+            { color: '#1D9E75', label: 'Apto' },
+            { color: '#D85A30', label: 'Casa' },
+            { color: '#5DCAA5', label: 'Aptaestudio' },
+            { color: '#BA7517', label: 'Lote' },
+            { color: '#7F77DD', label: 'Local' },
+            { color: '#378ADD', label: 'Oficina' },
+            { color: '#9B8B75', label: 'Bodega' },
+          ] as { color: string; label: string }[]).map(({ color, label }) => (
+            <div key={label} className="flex items-center gap-1 text-[11px] text-muted-foreground">
+              <span className="h-2 w-2 rounded-full" style={{ background: color }} />
+              {label}
+            </div>
+          ))}
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <span className="text-[10px] font-bold" style={{ color: '#ffc928' }}>★</span>
+            Premium
           </div>
         </div>
 

@@ -144,9 +144,8 @@ function MapPageInner() {
   const atTopLevel      = mlsBarrio == null && activeComuna == null && activeMunicipio == null;
   const cdComunaQuery   = mlsBarrio == null && !activeMunicipio ? (activeComunaCd ?? undefined) : undefined;
   const municipioQueryName = mlsBarrio == null
-    ? (activeMunicipio ?? (atTopLevel ? "MEDELLIN" : undefined))
+    ? (activeMunicipio ?? (atTopLevel || activeComunaCd != null ? "MEDELLIN" : undefined))
     : undefined;
-
   const { data: comunaData, isLoading: comunaIsLoading } = useListings(
     null, 500, 0, mlsTipoOp, false, apiFilters, cdComunaQuery, municipioQueryName,
   );

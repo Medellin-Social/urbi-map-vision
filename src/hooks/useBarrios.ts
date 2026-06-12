@@ -693,9 +693,9 @@ export function useBarriosPorComuna(key: string | null) {
   });
 }
 
-// ── Comunas GeoJSON — polígonos con métricas agregadas para la capa visual ───
+// ── Comunas metrics — métricas por cd_comuna para colorear polígonos estáticos ─
 
-export type ComunaFeatureProps = {
+export type ComunaMetrics = {
   cd_comuna: number;
   nombre: string;
   municipio: string;
@@ -710,21 +710,22 @@ export type ComunaFeatureProps = {
   n_arriendo: number;
   has_data: boolean;
   slug_municipio: string;
-  source: string;
+  is_municipio: boolean;
 };
 
-export function useComunasGeoJSON(perfil?: string, target?: string) {
-  return useQuery<GeoJSON.FeatureCollection>({
-    queryKey: ["comunas-geojson", perfil ?? null, target ?? "investor"],
+export function useComunasMetrics(perfil?: string, target?: string) {
+  return useQuery<Record<string, ComunaMetrics>>({
+    queryKey: ["comunas-metrics", perfil ?? null, target ?? "investor"],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (perfil) params.set("perfil", perfil);
       if (target) params.set("target", target);
-      return apiFetch<GeoJSON.FeatureCollection>(
+      const res = await apiFetch<{ metrics: Record<string, ComunaMetrics> }>(
         `${API_ENDPOINTS.comunasGeoJSON}?${params}`,
       );
+      return res.metrics;
     },
-    staleTime: 24 * 60 * 60 * 1000, // 24 h — coincide con caché del backend
+    staleTime: 24 * 60 * 60 * 1000,
     retry: 1,
   });
 }
