@@ -52,24 +52,56 @@ def upgrade() -> None:
     """)
 
     op.execute("""
-        DROP TRIGGER IF EXISTS trg_precio_cambio_fincaraiz
-            ON raw.listings_fincaraiz;
-        CREATE TRIGGER trg_precio_cambio_fincaraiz
-            BEFORE UPDATE OF precio ON raw.listings_fincaraiz
-            FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio();
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'raw'
+                  AND table_name = 'listings_fincaraiz'
+                  AND table_type = 'BASE TABLE'
+            ) THEN
+                EXECUTE 'DROP TRIGGER IF EXISTS trg_precio_cambio_fincaraiz ON raw.listings_fincaraiz';
+                EXECUTE 'CREATE TRIGGER trg_precio_cambio_fincaraiz
+                    BEFORE UPDATE OF precio ON raw.listings_fincaraiz
+                    FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio()';
+            END IF;
+        END $$;
     """)
 
     op.execute("""
-        DROP TRIGGER IF EXISTS trg_precio_cambio_metrocuadrado
-            ON raw.listings_metrocuadrado;
-        CREATE TRIGGER trg_precio_cambio_metrocuadrado
-            BEFORE UPDATE OF precio ON raw.listings_metrocuadrado
-            FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio();
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'raw'
+                  AND table_name = 'listings_metrocuadrado'
+                  AND table_type = 'BASE TABLE'
+            ) THEN
+                EXECUTE 'DROP TRIGGER IF EXISTS trg_precio_cambio_metrocuadrado ON raw.listings_metrocuadrado';
+                EXECUTE 'CREATE TRIGGER trg_precio_cambio_metrocuadrado
+                    BEFORE UPDATE OF precio ON raw.listings_metrocuadrado
+                    FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio()';
+            END IF;
+        END $$;
     """)
 
 
 def downgrade() -> None:
-    op.execute("DROP TRIGGER IF EXISTS trg_precio_cambio_fincaraiz ON raw.listings_fincaraiz;")
-    op.execute("DROP TRIGGER IF EXISTS trg_precio_cambio_metrocuadrado ON raw.listings_metrocuadrado;")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='raw' AND table_name='listings_fincaraiz' AND table_type='BASE TABLE') THEN
+                EXECUTE 'DROP TRIGGER IF EXISTS trg_precio_cambio_fincaraiz ON raw.listings_fincaraiz';
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='raw' AND table_name='listings_metrocuadrado' AND table_type='BASE TABLE') THEN
+                EXECUTE 'DROP TRIGGER IF EXISTS trg_precio_cambio_metrocuadrado ON raw.listings_metrocuadrado';
+            END IF;
+        END $$;
+    """)
     op.execute("DROP FUNCTION IF EXISTS raw.fn_track_precio_cambio();")
     op.execute("DROP TABLE IF EXISTS raw.listings_precio_historial;")

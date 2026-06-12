@@ -13,12 +13,50 @@ depends_on = None
 
 
 def upgrade() -> None:
-    op.execute("ALTER TABLE raw.listings_fincaraiz ADD COLUMN IF NOT EXISTS fotos TEXT[]")
-    op.execute("ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS fotos TEXT[]")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_fc_fotos ON raw.listings_fincaraiz USING GIN(fotos) WHERE fotos IS NOT NULL")
-    op.execute("CREATE INDEX IF NOT EXISTS idx_mq_fotos ON raw.listings_metrocuadrado USING GIN(fotos) WHERE fotos IS NOT NULL")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'raw'
+                  AND table_name = 'listings_fincaraiz'
+                  AND table_type = 'BASE TABLE'
+            ) THEN
+                EXECUTE 'ALTER TABLE raw.listings_fincaraiz ADD COLUMN IF NOT EXISTS fotos TEXT[]';
+                EXECUTE 'CREATE INDEX IF NOT EXISTS idx_fc_fotos ON raw.listings_fincaraiz USING GIN(fotos) WHERE fotos IS NOT NULL';
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'raw'
+                  AND table_name = 'listings_metrocuadrado'
+                  AND table_type = 'BASE TABLE'
+            ) THEN
+                EXECUTE 'ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS fotos TEXT[]';
+                EXECUTE 'CREATE INDEX IF NOT EXISTS idx_mq_fotos ON raw.listings_metrocuadrado USING GIN(fotos) WHERE fotos IS NOT NULL';
+            END IF;
+        END $$;
+    """)
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE raw.listings_fincaraiz DROP COLUMN IF EXISTS fotos")
-    op.execute("ALTER TABLE raw.listings_metrocuadrado DROP COLUMN IF EXISTS fotos")
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='raw' AND table_name='listings_fincaraiz' AND table_type='BASE TABLE') THEN
+                EXECUTE 'ALTER TABLE raw.listings_fincaraiz DROP COLUMN IF EXISTS fotos';
+            END IF;
+        END $$;
+    """)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_schema='raw' AND table_name='listings_metrocuadrado' AND table_type='BASE TABLE') THEN
+                EXECUTE 'ALTER TABLE raw.listings_metrocuadrado DROP COLUMN IF EXISTS fotos';
+            END IF;
+        END $$;
+    """)
