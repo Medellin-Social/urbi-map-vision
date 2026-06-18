@@ -205,6 +205,7 @@ type StaticListing = {
   banos?: number | null;
   direccion_raw?: string | null;
   fuente?: string | null;
+  antiguedad?: string | null;
 };
 
 const _listingsCache = new Map<string, Promise<StaticListing[]>>();
@@ -609,7 +610,8 @@ export function useListings(
           if (extraFilters.area_min != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 >= extraFilters!.area_min!);
           if (extraFilters.area_max != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 <= extraFilters!.area_max!);
           if (extraFilters.banos != null && extraFilters.banos > 0) filtered = filtered.filter((l) => l.banos != null && l.banos >= extraFilters!.banos!);
-          // antiguedad not present in StaticListing — skipped
+          if (extraFilters.antiguedad && extraFilters.antiguedad !== "Todas")
+            filtered = filtered.filter((l) => l.antiguedad === extraFilters!.antiguedad);
         }
         const page = filtered.slice(offset, offset + limit);
         return {

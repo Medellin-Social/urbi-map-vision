@@ -1075,6 +1075,7 @@ function NotLoggedIn() {
       <div style={{ display: "grid", gap: 16 }}>
         <Link
           to="/register"
+          onClick={() => localStorage.setItem("registro_origen", "mls")}
           style={{
             display: "block",
             background: "#fff",

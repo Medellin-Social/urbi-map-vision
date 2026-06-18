@@ -18,18 +18,21 @@ depends_on = None
 def upgrade() -> None:
     op.execute("CREATE SCHEMA IF NOT EXISTS analytics")
 
-    # Index for PERCENTILE_CONT scan in barrios_medianas refresh
+    # These indexes are on the old staging.stg_listings table (renamed to stg_listings_unificado).
+    # Skip silently if the table doesn't exist to avoid failing the migration.
     op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_stg_listings_barrio_tipo
-        ON staging.stg_listings (barrio_id, tipo_inmueble)
-        WHERE activo = TRUE AND precio > 0
-    """)
+        DO $$ BEGIN
+          IF EXISTS (SELECT 1 FROM information_schema.tables
+                     WHERE table_schema='staging' AND table_name='stg_listings') THEN
+            CREATE INDEX IF NOT EXISTS idx_stg_listings_barrio_tipo
+            ON staging.stg_listings (barrio_id, tipo_inmueble)
+            WHERE activo = TRUE AND precio > 0;
 
-    # Index for georef JOIN (url lookup per listing)
-    op.execute("""
-        CREATE INDEX IF NOT EXISTS idx_stg_listings_url
-        ON staging.stg_listings (url)
-        WHERE activo = TRUE
+            CREATE INDEX IF NOT EXISTS idx_stg_listings_url
+            ON staging.stg_listings (url)
+            WHERE activo = TRUE;
+          END IF;
+        END $$;
     """)
 
     # barrios_medianas — replaces med CTE (PERCENTILE_CONT per-barrio per request)

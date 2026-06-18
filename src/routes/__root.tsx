@@ -5,6 +5,8 @@ import { LanguageProvider } from "@/lib/i18n";
 import { refreshIfExpiringSoon } from "@/lib/auth";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
+import { OnboardingModal } from "@/components/OnboardingModal";
+import { TargetProvider } from "@/contexts/TargetContext";
 import * as Sentry from "@sentry/react";
 
 const SENTRY_DSN = import.meta.env.VITE_SENTRY_DSN as string | undefined;
@@ -103,8 +105,11 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <LanguageProvider>
-        <Outlet />
-        <Toaster />
+        <TargetProvider>
+          <Outlet />
+          <OnboardingModal />
+          <Toaster />
+        </TargetProvider>
       </LanguageProvider>
     </QueryClientProvider>
   );

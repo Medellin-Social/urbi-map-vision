@@ -26,6 +26,7 @@ class RegisterRequest(BaseModel):
     password: str
     nombre: Optional[str] = None
     apellido: Optional[str] = None
+    origen: Optional[str] = None  # 'mls' | 'comunidad'
 
 
 class LoginRequest(BaseModel):
@@ -38,6 +39,10 @@ class UserBasic(BaseModel):
     email: str
     nombre: Optional[str]
     apellido: Optional[str]
+    plan: Optional[str] = "free"
+    perfil_busqueda: Optional[str] = None
+    onboarding_completado: Optional[bool] = False
+    origen_registro: Optional[str] = None
 
 
 class AuthResponse(BaseModel):
@@ -86,16 +91,19 @@ async def register(request: Request, req: RegisterRequest = Body(...)):
     password_hash = _hash_password(req.password)
     user_id = await pool.fetchval(
         """
-        INSERT INTO usuarios (email, password_hash, nombre, apellido)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO usuarios (email, password_hash, nombre, apellido, origen_registro)
+        VALUES ($1, $2, $3, $4, $5)
         RETURNING id
         """,
-        req.email, password_hash, req.nombre, req.apellido,
+        req.email, password_hash, req.nombre, req.apellido, req.origen,
     )
     token = _make_token(user_id)
     return AuthResponse(
         token=token,
-        user=UserBasic(id=user_id, email=req.email, nombre=req.nombre, apellido=req.apellido),
+        user=UserBasic(
+            id=user_id, email=req.email, nombre=req.nombre, apellido=req.apellido,
+            origen_registro=req.origen,
+        ),
     )
 
 
@@ -104,7 +112,9 @@ async def register(request: Request, req: RegisterRequest = Body(...)):
 async def login(request: Request, req: LoginRequest = Body(...)):
     pool = get_pool()
     row = await pool.fetchrow(
-        "SELECT id, email, password_hash, nombre, apellido, activo FROM usuarios WHERE email = $1",
+        """SELECT id, email, password_hash, nombre, apellido, activo, plan,
+                  perfil_busqueda, onboarding_completado, origen_registro
+           FROM usuarios WHERE email = $1""",
         req.email,
     )
     if row is None or not _verify_password(req.password, row["password_hash"]):
@@ -119,7 +129,12 @@ async def login(request: Request, req: LoginRequest = Body(...)):
     perfil = await _get_perfil(pool, row["id"])
     return AuthResponse(
         token=token,
-        user=UserBasic(id=row["id"], email=row["email"], nombre=row["nombre"], apellido=row["apellido"]),
+        user=UserBasic(
+            id=row["id"], email=row["email"], nombre=row["nombre"], apellido=row["apellido"],
+            plan=row["plan"], perfil_busqueda=row["perfil_busqueda"],
+            onboarding_completado=row["onboarding_completado"],
+            origen_registro=row["origen_registro"],
+        ),
         perfil_inversor=perfil,
     )
 
@@ -129,10 +144,44 @@ async def me(current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     perfil = await _get_perfil(pool, current_user["id"])
     return AuthResponse(
-        token="",  # client already has token
-        user=UserBasic(**{k: current_user[k] for k in ("id", "email", "nombre", "apellido")}),
+        token="",
+        user=UserBasic(**{k: current_user[k] for k in (
+            "id", "email", "nombre", "apellido", "plan",
+            "perfil_busqueda", "onboarding_completado", "origen_registro",
+        )}),
         perfil_inversor=perfil,
     )
+
+
+class PerfilOnboardingRequest(BaseModel):
+    perfil_busqueda: Optional[str] = None
+    onboarding_completado: Optional[bool] = None
+    origen_registro: Optional[str] = None
+
+
+@router.patch("/perfil", status_code=200)
+async def update_onboarding_perfil(
+    req: PerfilOnboardingRequest = Body(...),
+    current_user: dict = Depends(get_current_user),
+):
+    pool = get_pool()
+    fields, params = [], [current_user["id"]]
+    if req.perfil_busqueda is not None:
+        params.append(req.perfil_busqueda)
+        fields.append(f"perfil_busqueda = ${len(params)}")
+    if req.onboarding_completado is not None:
+        params.append(req.onboarding_completado)
+        fields.append(f"onboarding_completado = ${len(params)}")
+    if req.origen_registro is not None:
+        params.append(req.origen_registro)
+        fields.append(f"origen_registro = ${len(params)}")
+    if not fields:
+        return {"ok": True}
+    await pool.execute(
+        f"UPDATE usuarios SET {', '.join(fields)} WHERE id = $1",
+        *params,
+    )
+    return {"ok": True}
 
 
 @router.post("/logout", status_code=204)
@@ -164,7 +213,10 @@ async def refresh_token(
     perfil = await _get_perfil(pool, current_user["id"])
     return AuthResponse(
         token=new_token,
-        user=UserBasic(**{k: current_user[k] for k in ("id", "email", "nombre", "apellido")}),
+        user=UserBasic(**{k: current_user[k] for k in (
+            "id", "email", "nombre", "apellido", "plan",
+            "perfil_busqueda", "onboarding_completado", "origen_registro",
+        )}),
         perfil_inversor=perfil,
     )
 

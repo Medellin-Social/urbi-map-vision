@@ -8,6 +8,10 @@ type UserBasic = {
   email: string;
   nombre: string | null;
   apellido: string | null;
+  plan?: string | null;
+  perfil_busqueda?: string | null;
+  onboarding_completado?: boolean | null;
+  origen_registro?: string | null;
 };
 
 type PerfilInversor = {
@@ -27,15 +31,19 @@ function storeAuth(res: AuthResponse) {
   auth.set({
     name: [res.user.nombre, res.user.apellido].filter(Boolean).join(" ") || res.user.email,
     email: res.user.email,
+    plan: (res.user.plan ?? "free") as never,
     goal: (res.perfil_inversor?.objetivo as never) ?? undefined,
     budget: (res.perfil_inversor?.presupuesto as never) ?? undefined,
     risk: (res.perfil_inversor?.perfil_riesgo as never) ?? undefined,
+    perfilBusqueda: (res.user.perfil_busqueda as never) ?? undefined,
+    onboardingCompletado: res.user.onboarding_completado ?? false,
+    origenRegistro: res.user.origen_registro ?? undefined,
   });
 }
 
 export function useRegister() {
   return useMutation({
-    mutationFn: async (data: { email: string; password: string; nombre?: string }) => {
+    mutationFn: async (data: { email: string; password: string; nombre?: string; origen?: string }) => {
       const res = await apiFetch<AuthResponse>(API_ENDPOINTS.register, {
         method: "POST",
         body: JSON.stringify(data),
@@ -68,6 +76,25 @@ export function useMe() {
     enabled: !!getToken(),
     staleTime: 10 * 60 * 1000,
     retry: false,
+  });
+}
+
+export function useUpdateAuthPerfil() {
+  return useMutation({
+    mutationFn: async (data: {
+      perfil_busqueda?: string;
+      onboarding_completado?: boolean;
+      origen_registro?: string;
+    }) => {
+      await apiFetch(API_ENDPOINTS.authPerfil, {
+        method: "PATCH",
+        body: JSON.stringify(data),
+      });
+      if (data.perfil_busqueda !== undefined)
+        auth.patch({ perfilBusqueda: data.perfil_busqueda as never });
+      if (data.onboarding_completado !== undefined)
+        auth.patch({ onboardingCompletado: data.onboarding_completado });
+    },
   });
 }
 

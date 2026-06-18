@@ -15,10 +15,8 @@ import { useIsPro, LockedField } from "@/components/LockedField";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/listing/$id")({
-  beforeLoad: () => {
-    if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("medellin-social.user");
-    if (!raw) throw redirect({ to: "/login" });
+  beforeLoad: ({ params }) => {
+    throw redirect({ to: "/map", search: { listing: Number(params.id) } });
   },
   component: ListingPage,
 });

@@ -1,6 +1,6 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
-import { TargetProvider, useTarget, type Target } from "@/contexts/TargetContext";
+import { useTarget, type Target } from "@/contexts/TargetContext";
 import { ProfileChipMobile } from "@/components/Navbar";
 import { MapNavbar, type MapTab } from "@/components/MapNavbar";
 import { MapFilterBar, EMPTY_SHARED_FILTERS, TAB_TIPO_OP, type SharedFilters } from "@/components/MapFilterBar";
@@ -18,13 +18,9 @@ import { useMemo } from "react";
 import { point, booleanPointInPolygon } from "@turf/turf";
 import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
+import { ComparadorBadge } from "@/components/ComparadorBadge";
 
 export const Route = createFileRoute("/map")({
-  beforeLoad: () => {
-    if (typeof window === "undefined") return;
-    const raw = localStorage.getItem("medellin-social.user");
-    if (!raw) throw redirect({ to: "/login" });
-  },
   component: MapPage,
 });
 
@@ -38,11 +34,7 @@ const GOAL_TO_PERFIL: Record<string, string> = {
 
 // ─── Map page ──────────────────────────────────────────────────────────────────
 function MapPage() {
-  return (
-    <TargetProvider>
-      <MapPageInner />
-    </TargetProvider>
-  );
+  return <MapPageInner />;
 }
 
 const TAB_TO_TARGET: Record<MapTab, Target | null> = {
@@ -518,6 +510,9 @@ function MapPageInner() {
 
       {/* Listing detail drawer — slide-in (desktop) / bottom sheet (mobile) */}
       <ListingDrawer listingId={listingDetailId} onClose={closeListingDetail} />
+
+      {/* Comparador floating badge */}
+      <ComparadorBadge />
     </div>
   );
 }

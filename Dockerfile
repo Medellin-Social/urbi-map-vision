@@ -13,6 +13,10 @@ ENV VITE_MAPBOX_TOKEN=$VITE_MAPBOX_TOKEN
 
 RUN npm run build
 
+# TanStack Start SSR build doesn't copy public/ subdirectories to dist/client/
+# Copy entire public/data directory (not glob) to ensure all file types including .geojson
+RUN cp -r public/data dist/client/data
+
 EXPOSE 8080
 
 CMD ["node", "/app/server.mjs"]

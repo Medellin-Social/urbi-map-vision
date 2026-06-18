@@ -292,6 +292,32 @@ async def rechazar_agente(
     return {"ok": True, "mensaje": "Solicitud rechazada"}
 
 
+# ── GET /zona (agente que opera en un barrio) ─────────────────────────────────
+
+@router.get("/zona")
+async def agente_por_zona(barrio_id: int = Query(..., description="ID del barrio")):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        SELECT id,
+               (nombre || ' ' || apellido) AS nombre_completo,
+               foto_url                    AS foto_perfil,
+               telefono,
+               whatsapp,
+               agencia                     AS inmobiliaria_nombre
+        FROM public.agentes
+        WHERE $1 = ANY(barrios_especializados)
+          AND verificado = true
+          AND activo = true
+        LIMIT 1
+        """,
+        barrio_id,
+    )
+    if not row:
+        return None
+    return dict(row)
+
+
 # ── GET /{id}/perfil (público) ─────────────────────────────────────────────────
 
 @router.get("/{agente_id}/perfil")
@@ -324,14 +350,23 @@ async def agentes_aprobados(
     pool = get_pool()
     rows = await pool.fetch(
         """
-        SELECT id, nombre_completo, foto_perfil, especialidad,
-               tipo_inmueble, zonas_opera, sitio_web,
-               anos_experiencia, transacciones_cerradas,
-               inmobiliaria_nombre, es_independiente,
-               linkedin, instagram, whatsapp
-        FROM agentes
-        WHERE estado = 'aprobado'
-        ORDER BY fecha_aprobacion DESC
+        SELECT id,
+               (nombre || ' ' || apellido)  AS nombre_completo,
+               foto_url                     AS foto_perfil,
+               bio                          AS especialidad,
+               NULL::text[]                 AS tipo_inmueble,
+               barrios_especializados       AS zonas_opera,
+               NULL::text                   AS sitio_web,
+               NULL::int                    AS anos_experiencia,
+               NULL::int                    AS transacciones_cerradas,
+               agencia                      AS inmobiliaria_nombre,
+               (agencia IS NULL)            AS es_independiente,
+               NULL::text                   AS linkedin,
+               NULL::text                   AS instagram,
+               whatsapp
+        FROM public.agentes
+        WHERE verificado = true AND activo = true
+        ORDER BY id DESC
         LIMIT $1 OFFSET $2
         """,
         limit, offset,

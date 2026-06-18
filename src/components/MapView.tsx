@@ -314,12 +314,12 @@ export function MapView({
     if (tokenError || !containerRef.current || mapRef.current) return;
 
     mapboxgl.accessToken = MAPBOX_TOKEN;
-    const styleId = auth.get()?.mapStyle ?? "light";
+    const styleId = auth.get()?.mapStyle ?? "monochrome";
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/light-v11",
+      style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/streets-v12",
       center: [-75.5812, 6.2442],
       zoom: 11.5,
       pitch: isMobile ? 0 : 35,
@@ -352,23 +352,19 @@ export function MapView({
           if (layer.type === "symbol") {
             const layout = (layer as mapboxgl.SymbolLayer).layout;
             const lid = layer.id.toLowerCase();
-            const isStreetLabel =
+            const hide =
+              (layout && "icon-image" in layout) ||
               lid.includes("road") ||
               lid.includes("street") ||
               lid.includes("transit") ||
               lid.includes("poi") ||
               lid.includes("airport") ||
-              lid.includes("ferry");
-            const isPlaceLabel =
-              lid.includes("place") ||
-              lid.includes("settlement") ||
+              lid.includes("ferry") ||
               lid.includes("neighborhood") ||
-              lid.includes("admin") ||
-              lid.includes("state") ||
-              lid.includes("country");
-            if ((layout && "icon-image" in layout) || (isStreetLabel && !isPlaceLabel)) {
-              map.setLayoutProperty(layer.id, "visibility", "none");
-            }
+              lid.includes("suburb") ||
+              lid.includes("district") ||
+              lid.includes("quarter");
+            if (hide) map.setLayoutProperty(layer.id, "visibility", "none");
           }
           if (layer.type === "background") {
             map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
@@ -399,7 +395,7 @@ export function MapView({
             "case",
             ["boolean", ["feature-state", "hover"], false], 0.78,
             ["==", ["get", "has_data"], true], 0.55,
-            0.38,
+            0.5,
           ],
         },
       });
@@ -432,14 +428,14 @@ export function MapView({
         },
         paint: {
           "text-color": "#1A1208",
-          "text-halo-color": "rgba(250,247,242,0.9)",
-          "text-halo-width": 1.5,
+          "text-halo-color": "#FAF7F2",
+          "text-halo-width": 2,
         },
       });
 
       // ── Hover: Comunas ─────────────────────────────────────────────────────
       let hoverComunaId: number | null = null;
-      const comunaPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8 });
+      const comunaPopup = new mapboxgl.Popup({ closeButton: false, closeOnClick: false, offset: 8, className: "urbi-dark-tip" });
 
       map.on("mousemove", "comunas-fill", (e) => {
         if (!e.features?.length) return;
@@ -452,36 +448,9 @@ export function MapView({
         map.setFeatureState({ source: "comunas", id }, { hover: true });
         map.getCanvas().style.cursor = "pointer";
         const nombre = f.properties?.nombre ?? "";
-        const t = targetRef.current;
-        const fmtM = (n: number) => `$${(n / 1_000_000).toFixed(1)}M/m²`;
-        const fmtCOP = (n: number) => `$${(n / 1_000_000).toFixed(0)}M`;
-        let metricHtml = "";
-        const hasData = f.properties?.has_data === true;
-        if (hasData) {
-          if (t === "buyer") {
-            const pm2 = f.properties?.precio_m2_cop as number | null;
-            metricHtml = pm2 ? `<span style="color:#639922;font-weight:700;">${fmtM(pm2)}</span>` : "";
-          } else if (t === "seller") {
-            const liq = f.properties?.liquidez_score as number | null;
-            metricHtml = liq != null ? `<span style="color:#1D9E75;font-weight:700;">Liquidez ${liq}</span>` : "";
-          } else if (t === "landlord") {
-            const y = f.properties?.yield_promedio as number | null;
-            metricHtml = y ? `<span style="color:#1D9E75;font-weight:700;">${y.toFixed(1)}% yield</span>` : "";
-          } else if (t === "renter") {
-            const arr = f.properties?.arriendo_cop as number | null;
-            metricHtml = arr ? `<span style="color:#BA7517;font-weight:700;">${fmtCOP(arr)}/mes</span>` : "";
-          } else {
-            const sc = f.properties?.score_promedio as number | null;
-            metricHtml = sc != null ? `<span style="color:#1D9E75;font-weight:700;">Score ${sc}</span>` : "";
-          }
-        }
         comunaPopup
           .setLngLat(e.lngLat)
-          .setHTML(
-            `<div style="font-weight:600;letter-spacing:.05em;font-size:13px;">${nombre}</div>
-             ${metricHtml ? `<div style="font-size:11px;margin-top:3px;">${metricHtml}</div>` : ""}
-             <div style="color:#9ca3af;font-size:11px;margin-top:2px;">Click para ver barrios</div>`
-          )
+          .setHTML(`<span>${nombre}</span>`)
           .addTo(map);
       });
 
@@ -556,17 +525,23 @@ export function MapView({
           ],
           "circle-color": [
             "case",
-            ["==", ["get", "tier"], "agencia_premium"], "#ffc928",
-            ["==", ["get", "tipo_inmueble"], "apartamento"],   "#1D9E75",
-            ["==", ["get", "tipo_inmueble"], "casa"],          "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "casa_lote"],     "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "finca"],         "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "apartaestudio"], "#5DCAA5",
-            ["==", ["get", "tipo_inmueble"], "lote"],          "#BA7517",
-            ["==", ["get", "tipo_inmueble"], "local"],         "#7F77DD",
-            ["==", ["get", "tipo_inmueble"], "oficina"],       "#378ADD",
-            ["==", ["get", "tipo_inmueble"], "bodega"],        "#9B8B75",
-            ["==", ["get", "tipo_inmueble"], "consultorio"],   "#9B8B75",
+            // Agente verificado → amarillo
+            ["==", ["get", "fuente_display"], "agente_verificado"], "#ffc928",
+            // Propietario Pro → morado
+            ["==", ["get", "fuente_display"], "propio_pro"],        "#7F77DD",
+            // Propietario Free → gris cálido
+            ["==", ["get", "fuente_display"], "propio"],            "#9B8B75",
+            // FC/MC → color por tipo de inmueble
+            ["==", ["get", "tipo_inmueble"], "apartamento"],        "#1D9E75",
+            ["==", ["get", "tipo_inmueble"], "casa"],               "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "casa_lote"],          "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "finca"],              "#D85A30",
+            ["==", ["get", "tipo_inmueble"], "apartaestudio"],      "#5DCAA5",
+            ["==", ["get", "tipo_inmueble"], "lote"],               "#BA7517",
+            ["==", ["get", "tipo_inmueble"], "local"],              "#7F77DD",
+            ["==", ["get", "tipo_inmueble"], "oficina"],            "#378ADD",
+            ["==", ["get", "tipo_inmueble"], "bodega"],             "#9B8B75",
+            ["==", ["get", "tipo_inmueble"], "consultorio"],        "#9B8B75",
             "#1D9E75",
           ],
           "circle-stroke-width": [
@@ -657,15 +632,17 @@ export function MapView({
     if (!source) return;
 
     const enrichAndRender = (features: GeoJSON.Feature[]) => {
+      const userPlan = auth.get()?.plan ?? "free";
+      const isPlanPro = userPlan === "pro" || userPlan === "agente";
       const enriched = features.map((feat) => {
         const cd = feat.properties?.cd_comuna as number | null;
-        const m: ComunaMetrics | undefined = cd != null ? comunasMetrics?.[String(cd)] : undefined;
+        const m: ComunaMetrics | undefined = isPlanPro && cd != null ? comunasMetrics?.[String(cd)] : undefined;
         return {
           ...feat,
           id: cd ?? feat.id,
           properties: m
             ? { ...feat.properties, ...m }
-            : { ...feat.properties, color_hex: "#888780", has_data: false },
+            : { ...feat.properties, color_hex: isPlanPro ? "#888780" : "#1e3a5f", has_data: false },
         };
       });
       source.setData({ type: "FeatureCollection", features: enriched } as GeoJSON.FeatureCollection);
@@ -929,9 +906,41 @@ export function MapView({
     );
   }
 
+  const LEGEND_ITEMS = [
+    { color: "#1D9E75", label: "Apto" },
+    { color: "#D85A30", label: "Casa" },
+    { color: "#5DCAA5", label: "Aptaestudio" },
+    { color: "#BA7517", label: "Lote" },
+    { color: "#7F77DD", label: "Local" },
+    { color: "#378ADD", label: "Oficina" },
+    { color: "#9B8B75", label: "Bodega" },
+  ];
+
   return (
     <>
       <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />
+
+      {/* Leyenda tipos de inmueble — solo en vista de listings */}
+      {mapView === "listings" && (
+        <div style={{
+          position: "absolute", bottom: 40, left: 16, zIndex: 10,
+          background: "rgba(250,247,242,0.95)", border: "1px solid #E8E0D0",
+          borderRadius: 8, padding: "8px 12px",
+          display: "flex", flexWrap: "wrap", gap: "5px 10px", maxWidth: 260,
+        }}>
+          {LEGEND_ITEMS.map(({ color, label }) => (
+            <div key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#1A1208" }}>
+              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
+              {label}
+            </div>
+          ))}
+          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#1A1208" }}>
+            <span style={{ fontSize: 10, fontWeight: 700, color: "#ffc928", lineHeight: 1 }}>★</span>
+            Premium
+          </div>
+        </div>
+      )}
+
       <div className={`absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm${perfil ? "" : " hidden"}`}>
         <span className="h-1.5 w-1.5 rounded-full bg-primary" />
         <span>

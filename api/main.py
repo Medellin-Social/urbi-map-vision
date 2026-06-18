@@ -16,7 +16,7 @@ from api.db import create_pool, close_pool, get_pool
 from api import parametros
 from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
-from api.routers import admin, afiliados, agentes, auth, barrios, business, calculadora, comunidad, comunas, embajadores, favoritos, historial, listings, listings_propios, oportunidades, stats, suscripciones, tracking, usuario
+from api.routers import admin, afiliados, agentes, alertas, auth, barrios, business, calculadora, comparador, comunidad, comunas, embajadores, favoritos, historial, listings, listings_propios, oportunidades, stats, suscripciones, tracking, usuario
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -72,12 +72,6 @@ async def lifespan(app: FastAPI):
     await _connect_with_retry()
     await parametros.load()
     pool = get_pool()
-    try:
-        await pool.execute(
-            "DELETE FROM token_blacklist WHERE created_at < NOW() - INTERVAL '30 days'"
-        )
-    except Exception as exc:
-        print(f"[startup] token_blacklist cleanup skipped: {exc}", flush=True)
     # Populate materialized cache tables before serving — eliminates per-request CTEs
     await refresh_listings_cache(pool)
     # Start hourly background refresh
@@ -139,6 +133,8 @@ app.include_router(afiliados.router,     prefix="/api/v1/afiliados",         tag
 app.include_router(agentes.router,          prefix="/api/v1/agentes",           tags=["agentes"])
 app.include_router(listings_propios.router,  prefix="/api/v1/listings-propios",   tags=["listings-propios"])
 app.include_router(suscripciones.router,    prefix="/api/v1/suscripciones",       tags=["suscripciones"])
+app.include_router(alertas.router,          prefix="/api/v1/alertas",              tags=["alertas"])
+app.include_router(comparador.router,       prefix="/api/v1/comparador",           tags=["comparador"])
 
 
 @app.get("/", tags=["meta"])

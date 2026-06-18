@@ -223,6 +223,7 @@ export type SimilarListing = {
 export type ApiListing = {
   id: number;
   fuente?: string | null;
+  fuente_display?: string | null;
   tipo_operacion?: string | null;
   tipo_inmueble?: string | null;
   precio_cop?: number | null;
@@ -262,6 +263,9 @@ export type ApiListing = {
 
 export type ApiListingDetail = ApiListing & {
   municipio?: string | null;
+  barrio_display?: string | null;
+  municipio_display?: string | null;
+  comuna_nombre?: string | null;
   estrato_real?: number | null;
   descripcion?: string | null;
   arriendo_p50_barrio?: number | null;
@@ -281,6 +285,11 @@ export type ApiListingDetail = ApiListing & {
   indice_nomada?: number | null;
   seguridad_score?: number | null;
   var_anual_pct?: number | null;
+  // Barrio price range — pro only
+  precio_m2_p25?: number | null;
+  precio_m2_p75?: number | null;
+  arr_p25?: number | null;
+  arr_p75?: number | null;
 };
 
 export type ApiListingsResponse = {

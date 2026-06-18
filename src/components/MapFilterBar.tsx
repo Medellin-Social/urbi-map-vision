@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useMemo } from "react";
 import { ChevronDown, X, SlidersHorizontal } from "lucide-react";
+import { useIsPro } from "@/components/LockedField";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
@@ -626,6 +627,7 @@ function AntiguedadPanel({
 export function MapFilterBar({
   activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate,
 }: MapFilterBarProps) {
+  const isPro = useIsPro();
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -1109,7 +1111,8 @@ export function MapFilterBar({
                 })}
               </div>
 
-              {/* PRO teasers — distintos por tab */}
+              {/* PRO teasers — solo para usuarios sin plan pro */}
+              {!isPro && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                 <span style={labelSm}>Filtros PRO</span>
                 {proTeasers.map((t) => (
@@ -1134,6 +1137,7 @@ export function MapFilterBar({
                   </div>
                 ))}
               </div>
+              )}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>

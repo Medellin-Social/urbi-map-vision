@@ -432,7 +432,7 @@ export function LandingMapHeader({
                 <Link
                   to="/register"
                   className="flex items-center justify-center rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
-                  onClick={() => { setClicked(null); setShowPaywall(false); }}
+                  onClick={() => { setClicked(null); setShowPaywall(false); localStorage.setItem("registro_origen", "mls"); }}
                 >
                   Crear cuenta — Gratis →
                 </Link>

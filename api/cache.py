@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 _CACHE_REFRESH_INTERVAL = 3600  # seconds
 
 _INSERT_BARRIOS_MEDIANAS = """
-INSERT INTO analytics.barrios_medianas (barrio_id, tipo_inmueble, m2_mediana, arr_mediana, refreshed_at)
+INSERT INTO analytics.barrios_medianas (barrio_id, tipo_inmueble, m2_mediana, arr_mediana, m2_p25, m2_p75, arr_p25, arr_p75, refreshed_at)
 SELECT
     barrio_id,
     tipo_inmueble,
@@ -28,9 +28,47 @@ SELECT
             AND precio_cop::float / area_m2 < 50000000
         )
     )::bigint AS m2_mediana,
-    PERCENTILE_CONT(0.5) WITHIN GROUP (
-        ORDER BY precio_cop::float
-    ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint AS arr_mediana,
+    CASE
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        THEN PERCENTILE_CONT(0.5) WITHIN GROUP (
+                 ORDER BY precio_cop::float
+             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+        ELSE NULL
+    END AS arr_mediana,
+    ROUND(
+        PERCENTILE_CONT(0.25) WITHIN GROUP (
+            ORDER BY precio_cop::float / NULLIF(area_m2, 0)
+        ) FILTER (WHERE
+            tipo_operacion = 'venta'
+            AND area_m2 > 0
+            AND precio_cop::float / area_m2 > 500000
+            AND precio_cop::float / area_m2 < 50000000
+        )
+    )::bigint AS m2_p25,
+    ROUND(
+        PERCENTILE_CONT(0.75) WITHIN GROUP (
+            ORDER BY precio_cop::float / NULLIF(area_m2, 0)
+        ) FILTER (WHERE
+            tipo_operacion = 'venta'
+            AND area_m2 > 0
+            AND precio_cop::float / area_m2 > 500000
+            AND precio_cop::float / area_m2 < 50000000
+        )
+    )::bigint AS m2_p75,
+    CASE
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        THEN PERCENTILE_CONT(0.25) WITHIN GROUP (
+                 ORDER BY precio_cop::float
+             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+        ELSE NULL
+    END AS arr_p25,
+    CASE
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        THEN PERCENTILE_CONT(0.75) WITHIN GROUP (
+                 ORDER BY precio_cop::float
+             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+        ELSE NULL
+    END AS arr_p75,
     now()
 FROM staging.stg_listings_unificado
 WHERE precio_cop > 0 AND barrio_id IS NOT NULL
@@ -82,24 +120,32 @@ _TRUNCATE_STG_LISTINGS = "TRUNCATE staging.stg_listings_unificado"
 
 _REFRESH_STG_LISTINGS = """
 INSERT INTO staging.stg_listings_unificado
+    (listing_uid, fuente, tier, tipo_operacion, tipo_inmueble,
+     precio_cop, precio_usd, precio_min_cluster, precio_max_cluster, precio_variable,
+     area_m2, precio_m2, habitaciones, banos, barrio_raw, barrio_id,
+     direccion_raw, lat, lon, geom, url, fotos, fecha_scraping, n_duplicados, estrato_real)
 WITH todas_fuentes AS (
-    SELECT id::text || '_fc' AS listing_uid, 'fincaraiz' AS fuente, 'standard' AS tier,
-           tipo_operacion, tipo_inmueble, precio AS precio_cop, NULL::bigint AS precio_usd,
-           area_m2, habitaciones, banos::numeric AS banos, barrio_raw, barrio_id,
-           direccion_raw, lat::double precision, lon::double precision, geom, url, fotos,
-           fecha_scraping, dedup_hash, estrato_real
-    FROM raw.listings_fincaraiz WHERE activo = true AND precio > 0 AND area_m2 > 0
-    UNION ALL
-    SELECT id::text || '_mq', 'metrocuadrado', 'standard', tipo_operacion, tipo_inmueble,
-           precio, NULL::bigint, area_m2, habitaciones, banos::numeric, barrio_raw, barrio_id,
-           direccion_raw, lat, lon, geom, url, fotos, fecha_scraping, dedup_hash,
-           COALESCE(estrato_real, estrato)
+    SELECT id::text || '_mq'                       AS listing_uid,
+           'metrocuadrado'                          AS fuente,
+           'standard'                               AS tier,
+           tipo_operacion, tipo_inmueble,
+           precio                                   AS precio_cop,
+           NULL::bigint                             AS precio_usd,
+           area_m2, habitaciones, banos::numeric    AS banos,
+           barrio_raw, barrio_id, direccion_raw,
+           lat, lon,
+           CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+                THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
+           url, fotos, fecha_scraping, dedup_hash,
+           COALESCE(estrato_real, estrato)           AS estrato_real
     FROM raw.listings_metrocuadrado WHERE activo = true AND precio > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_pr', fuente, COALESCE(fuente_tipo,'standard'), tipo_operacion,
            tipo_inmueble, precio_cop, precio_usd, area_m2, habitaciones, banos, barrio_raw,
-           barrio_id, direccion_raw, lat::double precision, lon::double precision, geom, url,
-           fotos, fecha_scraping, dedup_hash, NULL::integer
+           barrio_id, direccion_raw, lat::double precision, lon::double precision,
+           CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+                THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
+           url, fotos, fecha_scraping, dedup_hash, NULL::integer
     FROM raw.listings_premium WHERE precio_cop > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_rm', fuente, 'renta_media', 'arriendo', 'apartamento', precio_mes_cop,
@@ -189,13 +235,11 @@ SELECT DISTINCT ON (l.url)
     l.url,
     l.lat,
     l.lon,
-    COALESCE(lm.url_activa, lf.url_activa)              AS url_activa,
-    COALESCE(l.estrato_real, lm.estrato_real, lf.estrato_real) AS estrato_real,
+    TRUE           AS url_activa,
+    l.estrato_real AS estrato_real,
     now()
 FROM staging.stg_listings_unificado l
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-JOIN raw.barrios b                      ON b.id = l.barrio_id
+JOIN raw.barrios b ON b.id = l.barrio_id
 WHERE l.precio_cop >= 500000
   AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
   AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
@@ -224,25 +268,24 @@ async def refresh_listings_cache(pool: Any) -> None:
                     await conn.execute(_TRUNCATE_STG_LISTINGS)
                     await conn.execute(_REFRESH_STG_LISTINGS)
                 logger.info("[cache] stg_listings_unificado refreshed")
+
+                # barrios_medianas queries stg_listings_unificado — only run when stg exists
+                async with conn.transaction():
+                    await conn.execute("TRUNCATE analytics.barrios_medianas")
+                    await conn.execute(_INSERT_BARRIOS_MEDIANAS)
+                logger.info("[cache] barrios_medianas refreshed")
+
+                # listings_georef queries stg_listings_unificado — only run when stg exists
+                async with conn.transaction():
+                    await conn.execute("TRUNCATE analytics.listings_georef")
+                    await conn.execute(_INSERT_LISTINGS_GEOREF)
+                logger.info("[cache] listings_georef refreshed")
             else:
-                logger.warning("[cache] stg_listings_unificado missing — run migration 0021")
+                logger.warning("[cache] stg_listings_unificado missing — skipping stg-dependent refreshes")
 
-            # barrios_medianas: TRUNCATE+INSERT in transaction (PERCENTILE_CONT result set
-            # is fully computed before lock, so the lock window is just the INSERT, not the scan)
-            async with conn.transaction():
-                await conn.execute("TRUNCATE analytics.barrios_medianas")
-                await conn.execute(_INSERT_BARRIOS_MEDIANAS)
-            logger.info("[cache] barrios_medianas refreshed")
-
-            # barrios_contexto: upsert — analytics tables read-only, no truncate needed
+            # barrios_contexto: upsert from analytics tables — no stg dependency
             await conn.execute(_INSERT_BARRIOS_CONTEXTO)
             logger.info("[cache] barrios_contexto refreshed")
-
-            # listings_georef: TRUNCATE+INSERT — source may have duplicate URLs
-            async with conn.transaction():
-                await conn.execute("TRUNCATE analytics.listings_georef")
-                await conn.execute(_INSERT_LISTINGS_GEOREF)
-            logger.info("[cache] listings_georef refreshed")
 
     except Exception as exc:
         logger.warning("[cache] refresh failed: %s", exc)

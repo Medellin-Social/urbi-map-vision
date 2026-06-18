@@ -51,3 +51,6 @@ scripts/data/raw/
 geojson_*/
 *.geojson
 *.zip
+
+# public/data GeoJSON files must be included for Railway deploy
+!public/data/*.geojson

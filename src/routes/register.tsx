@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { useRegister } from "@/hooks/useAuth";
 import { AuthShell } from "./login";
@@ -8,6 +8,20 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
+const MLS_PATHS = ["/map", "/listing", "/vender", "/agentes", "/planes"];
+
+function getOrigenFromReferrer(): "mls" | "comunidad" {
+  try {
+    const stored = localStorage.getItem("registro_origen");
+    if (stored === "mls" || stored === "comunidad") return stored;
+    // Fallback: check document.referrer pathname for hard-navigations
+    const ref = new URL(document.referrer || location.href).pathname;
+    return MLS_PATHS.some((p) => ref.includes(p)) ? "mls" : "comunidad";
+  } catch {
+    return "comunidad";
+  }
+}
+
 function RegisterPage() {
   const navigate = useNavigate();
   const register = useRegister();
@@ -15,6 +29,11 @@ function RegisterPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [origen, setOrigen] = useState<"mls" | "comunidad">("comunidad");
+
+  useEffect(() => {
+    setOrigen(getOrigenFromReferrer());
+  }, []);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,8 +43,12 @@ function RegisterPage() {
     }
     setError("");
     try {
-      await register.mutateAsync({ email, password, nombre: name });
-      navigate({ to: "/onboarding" });
+      await register.mutateAsync({ email, password, nombre: name, origen });
+      localStorage.removeItem("registro_origen");
+      localStorage.removeItem("onboarding_complete");
+      localStorage.setItem("onboarding_origen", origen);
+      window.dispatchEvent(new CustomEvent("show-onboarding", { detail: { origen } }));
+      navigate({ to: origen === "mls" ? "/map" : "/" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error al crear la cuenta.");
     }

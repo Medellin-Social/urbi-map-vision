@@ -126,6 +126,17 @@ body {
   box-shadow: 0 8px 32px rgba(26, 18, 8, 0.15) !important;
 }
 .mapboxgl-popup-tip { display: none; }
+.urbi-dark-tip .mapboxgl-popup-content {
+  background: #1A1208 !important;
+  color: #fff !important;
+  border: none !important;
+  border-radius: 4px !important;
+  padding: 6px 10px !important;
+  box-shadow: none !important;
+  font-size: 13px !important;
+  white-space: nowrap !important;
+}
+.urbi-dark-tip .mapboxgl-popup-tip { display: none; }
 .mapboxgl-canvas:focus { outline: none; }
 .mapboxgl-map,
 .mapboxgl-canvas,

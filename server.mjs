@@ -7,6 +7,7 @@ import { Readable } from 'node:stream';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '8080', 10);
 const STATIC_DIR = join(__dirname, 'dist/client');
+const PUBLIC_DIR = join(__dirname, 'public');
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -29,10 +30,12 @@ const MIME = {
 const { default: app } = await import('./dist/server/server.js');
 
 function tryServeStatic(pathname, res) {
-  const filePath = join(STATIC_DIR, pathname);
-  if (!existsSync(filePath)) return false;
-  const stat = statSync(filePath);
-  if (!stat.isFile()) return false;
+  // Try dist/client first, then public/ as fallback for data files
+  let filePath = join(STATIC_DIR, pathname);
+  if (!existsSync(filePath) || !statSync(filePath).isFile()) {
+    filePath = join(PUBLIC_DIR, pathname);
+    if (!existsSync(filePath) || !statSync(filePath).isFile()) return false;
+  }
 
   const mime = MIME[extname(filePath)] || 'application/octet-stream';
   res.setHeader('Content-Type', mime);

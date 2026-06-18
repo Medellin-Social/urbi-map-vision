@@ -29,6 +29,8 @@ export type HistoryEntry = {
 
 export type MapStyleId = "dark" | "night" | "satellite" | "light" | "monochrome";
 
+export type PerfilBusqueda = 'comprador' | 'inversor' | 'vendedor' | 'agente';
+
 export type UrbiUser = {
   name: string;
   email: string;
@@ -53,6 +55,10 @@ export type UrbiUser = {
   history?: HistoryEntry[];
   mapStyle?: MapStyleId;
   mostrarOportunidades?: boolean;
+  // Onboarding v2
+  perfilBusqueda?: PerfilBusqueda | null;
+  onboardingCompletado?: boolean;
+  origenRegistro?: string | null;
 };
 
 const KEY = "medellin-social.user";

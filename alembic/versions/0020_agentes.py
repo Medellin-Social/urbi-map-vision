@@ -79,6 +79,7 @@ def upgrade() -> None:
             aprobado_por          TEXT
         )
     """)
+    op.execute("ALTER TABLE agentes ADD COLUMN IF NOT EXISTS estado TEXT DEFAULT 'pendiente'")
     op.execute("CREATE INDEX IF NOT EXISTS idx_agentes_estado ON agentes(estado)")
     op.execute("CREATE INDEX IF NOT EXISTS idx_agentes_usuario_id ON agentes(usuario_id)")
 

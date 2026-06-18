@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
-import { Check, Lock } from "lucide-react";
+import { Check, Lock, X } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
@@ -21,11 +21,18 @@ const K = {
 };
 
 const FREE_FEATURES = [
-  "Mapa interactivo del MLS",
-  "Listados de propiedades",
-  "Filtros básicos",
-  "Barrios de Medellín",
-  "Comunidad y eventos",
+  "Mapa interactivo con 54,000+ propiedades",
+  "Filtros de búsqueda (precio, tipo, área, habitaciones, baños, antigüedad)",
+  "Ver propiedades en venta y arriendo",
+  "Comunas y barrios del Valle de Aburrá",
+  "Eventos y negocios locales",
+  "Publicar tu propiedad en el portal (3% comisión solo si se cierra la venta)",
+];
+
+const FREE_LOCKED_FEATURES = [
+  "Análisis de precio por barrio",
+  "Historial de precios",
+  "Recomendaciones por perfil",
 ];
 
 interface Plan {
@@ -50,6 +57,21 @@ interface PlanesModo {
   requiere_verificacion?: boolean;
   redirect?: string;
 }
+
+const FAQ_ITEMS = [
+  {
+    q: "¿Puedo cancelar cuando quiera?",
+    a: "Sí. Sin permanencia. Cancelas en cualquier momento desde tu perfil.",
+  },
+  {
+    q: "¿Cómo funciona la comisión del 3%?",
+    a: "Solo se cobra si vendes o arriendas tu propiedad a través de Medellín Social. Publicar es siempre gratis.",
+  },
+  {
+    q: "¿Qué es la verificación de agente?",
+    a: "Revisamos tu cédula, RUT y referencias en 24-48 horas. Solo para el plan Agente.",
+  },
+];
 
 export const Route = createFileRoute("/planes")({
   component: PlanesPage,
@@ -124,7 +146,7 @@ function PlanesPage() {
             Elige tu plan
           </h1>
           <p style={{ color: K.muted, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 28px" }}>
-            Accede a análisis profesional del mercado inmobiliario de Medellín.
+            Toma mejores decisiones en el mercado inmobiliario del Valle de Aburrá con datos reales.
           </p>
 
           {/* Currency toggle */}
@@ -163,17 +185,18 @@ function PlanesPage() {
           {/* FREE card */}
           <PlanCard
             id="free"
-            nombre="Free"
-            descripcion="Explorar el mercado de Medellín"
+            nombre="Explorador"
+            descripcion="Para conocer el mercado"
             precio={0}
             moneda={moneda}
             features={FREE_FEATURES}
+            lockedFeatures={FREE_LOCKED_FEATURES}
             planActual={planActual}
             requiere_verificacion={false}
-            cta="Tu plan actual"
-            ctaDisabled={planActual === "free"}
+            cta={!user ? "Comenzar gratis" : "Tu plan actual"}
+            ctaDisabled={!!user}
             popular={false}
-            onCTA={() => {}}
+            onCTA={() => navigate({ to: "/registro" as never })}
             iniciando={false}
           />
 
@@ -270,10 +293,24 @@ function PlanesPage() {
           </div>
         )}
 
-        {/* FAQ / guarantee */}
-        <div style={{ marginTop: 56, textAlign: "center", color: K.muted, fontSize: 13 }}>
-          <p style={{ marginBottom: 6 }}>Puedes cancelar en cualquier momento. Tu plan sigue activo hasta el final del período.</p>
-          <p>Preguntas: <a href={`mailto:${typeof window !== 'undefined' ? '' : ''}`} style={{ color: K.teal }}>hola@medellin.social</a></p>
+        {/* FAQ */}
+        <div style={{ marginTop: 56, maxWidth: 600, margin: "56px auto 0" }}>
+          {FAQ_ITEMS.map((item) => (
+            <div
+              key={item.q}
+              style={{
+                borderBottom: `1px solid ${K.line}`,
+                padding: "20px 0",
+              }}
+            >
+              <p style={{ fontWeight: 700, fontSize: 14, color: K.ink, marginBottom: 6 }}>{item.q}</p>
+              <p style={{ fontSize: 13, color: K.muted, lineHeight: 1.7, margin: 0 }}>{item.a}</p>
+            </div>
+          ))}
+          <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: K.muted }}>
+            ¿Más preguntas?{" "}
+            <a href="mailto:hola@medellin.social" style={{ color: K.teal }}>hola@medellin.social</a>
+          </p>
         </div>
       </div>
     </ComunidadLayout>
@@ -281,7 +318,7 @@ function PlanesPage() {
 }
 
 function PlanCard({
-  id, nombre, descripcion, precio, moneda, features,
+  id, nombre, descripcion, precio, moneda, features, lockedFeatures,
   planActual, popular, cta, ctaDisabled, onCTA, iniciando, requiere_verificacion,
 }: {
   id: string;
@@ -290,6 +327,7 @@ function PlanCard({
   precio: number;
   moneda: "COP" | "USD";
   features: string[];
+  lockedFeatures?: string[];
   planActual: string;
   popular: boolean;
   cta: string;
@@ -343,7 +381,10 @@ function PlanCard({
         {/* Price */}
         <div style={{ marginBottom: 20 }}>
           {id === "free" ? (
-            <span style={{ fontFamily: K.serif, fontSize: "2rem", fontWeight: 900, color: K.ink }}>$0</span>
+            <>
+              <span style={{ fontFamily: K.serif, fontSize: "2rem", fontWeight: 900, color: K.ink }}>$0</span>
+              <span style={{ fontSize: 13, color: K.muted }}> — Gratis siempre</span>
+            </>
           ) : (
             <>
               <span style={{ fontFamily: K.serif, fontSize: "2rem", fontWeight: 900, color: K.ink }}>{precioFmt}</span>
@@ -354,13 +395,28 @@ function PlanCard({
 
         {/* CTA */}
         {id === "free" ? (
-          <div style={{
-            background: K.paper, border: `1px solid ${K.line}`,
-            borderRadius: 8, padding: "10px 0",
-            textAlign: "center", fontSize: 13, color: K.muted, fontWeight: 600,
-          }}>
-            Disponible gratis
-          </div>
+          ctaDisabled ? (
+            <div style={{
+              background: K.paper, border: `1px solid ${K.line}`,
+              borderRadius: 8, padding: "10px 0",
+              textAlign: "center", fontSize: 13, color: K.muted, fontWeight: 600,
+            }}>
+              Tu plan actual
+            </div>
+          ) : (
+            <button
+              onClick={onCTA}
+              style={{
+                width: "100%",
+                background: K.teal, color: "#fff",
+                border: "none", borderRadius: 8,
+                padding: "11px 0", fontWeight: 700, fontSize: 13,
+                cursor: "pointer", transition: "background 0.15s",
+              }}
+            >
+              Comenzar gratis
+            </button>
+          )
         ) : (
           <button
             disabled={ctaDisabled || iniciando}
@@ -381,7 +437,7 @@ function PlanCard({
 
         {requiere_verificacion && !ctaDisabled && (
           <p style={{ fontSize: 11, color: K.muted, textAlign: "center", marginTop: 6 }}>
-            <Lock style={{ display: "inline", width: 10, height: 10 }} /> Requiere verificación de agente
+            <Lock style={{ display: "inline", width: 10, height: 10 }} /> Requiere verificación de agente (24-48h)
           </p>
         )}
       </div>
@@ -392,6 +448,12 @@ function PlanCard({
           {features.map((f) => (
             <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: K.ink }}>
               <Check style={{ flexShrink: 0, marginTop: 1 }} size={14} color={K.teal} />
+              {f}
+            </li>
+          ))}
+          {lockedFeatures?.map((f) => (
+            <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: K.muted }}>
+              <X style={{ flexShrink: 0, marginTop: 1 }} size={14} color={K.muted} />
               {f}
             </li>
           ))}

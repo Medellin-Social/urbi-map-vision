@@ -68,6 +68,7 @@ export function SiteNavbar({ transparent = false }: { transparent?: boolean }) {
           </Link>
           <Link
             to="/register"
+            onClick={() => localStorage.setItem("registro_origen", "comunidad")}
             className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
           >
             Comenzar <ArrowRight className="h-3.5 w-3.5" />

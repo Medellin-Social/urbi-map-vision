@@ -9,7 +9,7 @@ export type MapTab = "buy" | "rent" | "sell" | "agent";
 const TABS: { id: MapTab; label: string }[] = [
   { id: "buy",   label: "Comprar" },
   { id: "rent",  label: "Arrendar" },
-  { id: "sell",  label: "Vender" },
+  { id: "sell",  label: "Vender / Arrendar" },
   { id: "agent", label: "Agentes" },
 ];
 
@@ -99,11 +99,12 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       <nav style={{ display: "flex", alignItems: "stretch", flex: 1 }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
-          if (tab.id === "sell") {
+          if (tab.id === "sell" || tab.id === "agent") {
+            const dest = tab.id === "sell" ? "/vender" : "/agentes";
             return (
               <button
                 key={tab.id}
-                onClick={() => navigate({ to: "/vender" })}
+                onClick={() => navigate({ to: dest })}
                 style={{
                   background: "none", border: "none", padding: "0 14px",
                   borderBottom: "2px solid transparent",
@@ -165,39 +166,66 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           ))}
         </div>
 
-        {/* Avatar */}
-        <Link to="/perfil" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 7 }}>
-          <div style={{
-            width: 27, height: 27, borderRadius: "50%",
-            background: `linear-gradient(135deg, ${C.teal}, #085041)`,
-            display: "flex", alignItems: "center", justifyContent: "center",
-            fontSize: 10, fontWeight: 800, color: "#fff", overflow: "hidden", flexShrink: 0,
-          }}>
-            {user?.avatar
-              ? <img src={user.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-              : initials}
-          </div>
-          <span style={{
-            fontSize: 12, color: C.muted, fontWeight: 600,
-            maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
-          }}>
-            {user?.name ?? "Invitado"}
-          </span>
-        </Link>
+        {user ? (
+          <>
+            {/* Avatar */}
+            <Link to="/perfil" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 7 }}>
+              <div style={{
+                width: 27, height: 27, borderRadius: "50%",
+                background: `linear-gradient(135deg, ${C.teal}, #085041)`,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 10, fontWeight: 800, color: "#fff", overflow: "hidden", flexShrink: 0,
+              }}>
+                {user.avatar
+                  ? <img src={user.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  : initials}
+              </div>
+              <span style={{
+                fontSize: 12, color: C.muted, fontWeight: 600,
+                maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+              }}>
+                {user.name}
+              </span>
+            </Link>
 
-        {/* Logout */}
-        <button
-          onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
-          title="Salir"
-          style={{
-            background: "none", border: "none", color: C.muted,
-            cursor: "pointer", display: "flex", alignItems: "center", padding: 0,
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.color = C.coral)}
-          onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}
-        >
-          <LogOut size={15} />
-        </button>
+            {/* Logout */}
+            <button
+              onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
+              title="Salir"
+              style={{
+                background: "none", border: "none", color: C.muted,
+                cursor: "pointer", display: "flex", alignItems: "center", padding: 0,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.color = C.coral)}
+              onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}
+            >
+              <LogOut size={15} />
+            </button>
+          </>
+        ) : (
+          <>
+            <Link
+              to="/login"
+              style={{
+                fontSize: 12, color: C.muted, fontWeight: 600,
+                textDecoration: "none", padding: "4px 8px",
+              }}
+            >
+              Ingresar
+            </Link>
+            <Link
+              to="/register"
+              onClick={() => localStorage.setItem("registro_origen", "mls")}
+              style={{
+                fontSize: 12, fontWeight: 700, color: "#fff",
+                background: C.teal, borderRadius: 6, padding: "4px 12px",
+                textDecoration: "none",
+              }}
+            >
+              Registrarse
+            </Link>
+          </>
+        )}
       </div>
     </header>
   );

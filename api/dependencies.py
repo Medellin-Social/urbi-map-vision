@@ -33,7 +33,9 @@ async def _get_user_from_token(token: str) -> dict:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token revocado")
 
     row = await pool.fetchrow(
-        "SELECT id, email, nombre, apellido, activo, plan FROM usuarios WHERE id = $1",
+        """SELECT id, email, nombre, apellido, activo, plan,
+                  perfil_busqueda, onboarding_completado, origen_registro
+           FROM usuarios WHERE id = $1""",
         int(user_id),
     )
     if row is None or not row["activo"]:
@@ -62,6 +64,13 @@ async def get_optional_user(
 
 
 _PLAN_ORDEN = ["free", "pro", "agente"]
+
+
+def is_pro(user: Optional[dict]) -> bool:
+    """True when user has plan pro or agente."""
+    if not user:
+        return False
+    return (user.get("plan") or "free") in ("pro", "agente")
 
 
 def require_plan(plan_minimo: str):

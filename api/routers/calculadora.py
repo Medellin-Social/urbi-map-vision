@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 import json
-from typing import Literal, Optional
+from typing import Any, Dict, Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from api import parametros
 from api.db import get_pool
-from api.dependencies import get_optional_user
+from api.dependencies import get_optional_user, require_plan
 
 router = APIRouter()
 
@@ -83,6 +83,7 @@ class SimulacionRequest(BaseModel):
     presupuesto_cop: float = Field(gt=0)
     tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"]
     perfil_riesgo: Literal["conservador", "moderado", "agresivo"] = "moderado"
+    horizonte_anos: int = 5
     # Extended profile fields (all optional)
     n_unidades: Optional[str] = None
     tipo_gestion: Optional[str] = None
@@ -90,6 +91,19 @@ class SimulacionRequest(BaseModel):
     amoblado: Optional[str] = None
     tipo_pago: Optional[str] = None
     horizonte_inversion: Optional[str] = None
+    # Fine-grained expense overrides (when provided → skip flat OPEX)
+    administracion_mes: Optional[float] = None
+    vacancia_pct: Optional[float] = None
+    mantenimiento_pct: Optional[float] = None
+    seguro_pct: Optional[float] = None
+    fee_plataforma_pct: Optional[float] = None
+    predial_anual: Optional[float] = None
+    retencion_fuente: bool = False
+    # Credit
+    con_credito: bool = False
+    cuota_inicial_pct: float = 30.0
+    tasa_anual_pct: float = 13.0
+    plazo_anos: int = 15
 
 
 class Ingresos(BaseModel):
@@ -131,6 +145,31 @@ class Valorizacion(BaseModel):
     retorno_total_5anos_cop: float
 
 
+class FlujoCajaDesglose(BaseModel):
+    ingreso_bruto: float
+    vacancia: float
+    ingreso_post_vacancia: float
+    fee_plataforma: Optional[float] = None
+    retencion: Optional[float] = None
+    administracion: Optional[float] = None
+    mantenimiento: Optional[float] = None
+    seguro: Optional[float] = None
+    predial: Optional[float] = None
+    ingreso_neto: float
+    cuota_credito: Optional[float] = None
+    flujo_real: Optional[float] = None
+
+
+class ComparativoModalidad(BaseModel):
+    tipo: str
+    label: str
+    ingreso_mes: Optional[float] = None
+    yield_neto_pct: Optional[float] = None
+    recupero_anos: Optional[float] = None
+    riesgo: str
+    es_recomendada: bool = False
+
+
 class SimulacionResponse(BaseModel):
     barrio: str
     presupuesto_cop: float
@@ -163,17 +202,24 @@ class SimulacionResponse(BaseModel):
     costo_gestion_mensual: Optional[float] = None
     ingreso_neto_gestion_mensual: Optional[float] = None
     n_unidades_efectivo: Optional[int] = None
-    # Crédito hipotecario
+    # Crédito hipotecario (legacy profile-based)
     down_payment_cop: Optional[float] = None
     monto_credito_cop: Optional[float] = None
     cuota_mensual: Optional[float] = None
     flujo_neto_mensual: Optional[float] = None
-    yield_coc_pct: Optional[float] = None       # cash-on-cash sobre capital propio
-    recupero_credito_anos: Optional[float] = None  # recupero sobre capital propio
+    yield_coc_pct: Optional[float] = None
+    recupero_credito_anos: Optional[float] = None
     nota_hipoteca: Optional[str] = None
     costo_amoblado: Optional[float] = None
     presupuesto_efectivo: Optional[float] = None
     valor_20anos_cop: Optional[float] = None
+    # New fine-grained simulation fields
+    flujo_caja_desglose: Optional[FlujoCajaDesglose] = None
+    comparativo_modalidades: Optional[list[ComparativoModalidad]] = None
+    cuota_credito_mes: Optional[float] = None
+    flujo_con_credito: Optional[float] = None
+    recomendacion_modalidad: Optional[str] = None
+    proyeccion_anual: Optional[list[dict]] = None
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -446,10 +492,80 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     # ─────────────────────────────────────────────────────────────────────────
 
     ingreso_anual = ingreso_mensual * 12
-
     yield_bruto = _r2(ingreso_anual / presupuesto * 100)
-    opex_rate = _OPEX[req.tipo_inversion]
-    ingreso_neto_anual = ingreso_anual * (1 - opex_rate)
+
+    # ── Fine-grained expense calc vs flat OPEX ───────────────────────────────
+    _VAC_DEFAULTS = {"airbnb": 25.0, "renta_media": 15.0, "renta_larga": 5.0}
+    _MANT_DEFAULTS = {"airbnb": 1.5, "renta_media": 1.0, "renta_larga": 1.0}
+
+    has_fine_grained = any(
+        v is not None for v in [
+            req.vacancia_pct, req.administracion_mes, req.mantenimiento_pct,
+            req.seguro_pct, req.predial_anual,
+        ]
+    )
+
+    desglose_val: Optional[FlujoCajaDesglose] = None
+    cuota_credito_val: Optional[float] = None
+    flujo_con_credito_val: Optional[float] = None
+
+    if has_fine_grained:
+        vacancia_pct = req.vacancia_pct if req.vacancia_pct is not None else _VAC_DEFAULTS[req.tipo_inversion]
+        vacancia = vacancia_pct / 100
+        ingreso_post_vac = ingreso_mensual * (1 - vacancia)
+
+        fee = 0.0
+        if req.tipo_inversion == "airbnb":
+            fee_pct = (req.fee_plataforma_pct if req.fee_plataforma_pct is not None else 15.0) / 100
+            fee = ingreso_post_vac * fee_pct
+
+        retencion = 0.0
+        if req.retencion_fuente and ingreso_post_vac > 1_300_000:
+            retencion = ingreso_post_vac * 0.035
+
+        admin = req.administracion_mes or 0.0
+        mant_pct = req.mantenimiento_pct if req.mantenimiento_pct is not None else _MANT_DEFAULTS[req.tipo_inversion]
+        mant = presupuesto * mant_pct / 100 / 12
+        seguro_pct = req.seguro_pct if req.seguro_pct is not None else 0.3
+        seguro = presupuesto * seguro_pct / 100 / 12
+        predial_anual = req.predial_anual if req.predial_anual is not None else presupuesto * 0.005
+        predial = predial_anual / 12
+
+        ingreso_neto_mes = ingreso_post_vac - fee - retencion - admin - mant - seguro - predial
+        ingreso_neto_anual = ingreso_neto_mes * 12
+
+        desglose_val = FlujoCajaDesglose(
+            ingreso_bruto=float(ingreso_mensual),
+            vacancia=-round(ingreso_mensual * vacancia),
+            ingreso_post_vacancia=round(ingreso_post_vac),
+            fee_plataforma=-round(fee) if fee > 0 else None,
+            retencion=-round(retencion) if retencion > 0 else None,
+            administracion=-round(admin) if admin > 0 else None,
+            mantenimiento=-round(mant) if mant > 0 else None,
+            seguro=-round(seguro) if seguro > 0 else None,
+            predial=-round(predial) if predial > 0 else None,
+            ingreso_neto=round(ingreso_neto_mes),
+        )
+    else:
+        opex_rate = _OPEX[req.tipo_inversion]
+        ingreso_neto_anual = ingreso_anual * (1 - opex_rate)
+
+    # ── Credit calculation (new explicit params) ──────────────────────────────
+    if req.con_credito:
+        cuota_ini = req.cuota_inicial_pct / 100
+        valor_credito = presupuesto * (1 - cuota_ini)
+        tasa_mensual = req.tasa_anual_pct / 100 / 12
+        plazo_meses = req.plazo_anos * 12
+        if tasa_mensual > 0:
+            cuota_credito_val = round(valor_credito * tasa_mensual / (1 - (1 + tasa_mensual) ** -plazo_meses))
+        else:
+            cuota_credito_val = round(valor_credito / plazo_meses)
+        ingreso_neto_mes_for_flujo = round(ingreso_neto_anual / 12)
+        flujo_con_credito_val = ingreso_neto_mes_for_flujo - cuota_credito_val
+        if desglose_val:
+            desglose_val.cuota_credito = -cuota_credito_val
+            desglose_val.flujo_real = flujo_con_credito_val
+
     yield_neto_raw = _r2(ingreso_neto_anual / presupuesto * 100)
 
     # FIX 2: yield >25% signals unreliable income data — suppress the number rather
@@ -506,6 +622,48 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         f"más ${round(ingreso_neto_anual * 5 / 1_000_000, 0):.0f}M en ingresos netos "
         f"= retorno total de ${retorno_total_5/1_000_000:.0f}M."
     )
+
+    # ── Comparativo 3 modalidades ─────────────────────────────────────────────
+    _TIPO_LABELS = {"airbnb": "Airbnb", "renta_media": "Nómadas", "renta_larga": "Renta larga"}
+    _TIPO_RIESGO = {"airbnb": "Medio", "renta_media": "Bajo", "renta_larga": "Bajo"}
+    comparativo_list: list[ComparativoModalidad] = []
+    mejor_yield = -1.0
+    mejor_tipo = req.tipo_inversion
+    for tipo_c in ["airbnb", "renta_media", "renta_larga"]:
+        try:
+            ing_c, _ = calcular(presupuesto, tipo_c, data, [])
+            ing_neto_c = ing_c * 12 * (1 - _OPEX[tipo_c])
+            yn_c = round(ing_neto_c / presupuesto * 100, 1) if ing_neto_c > 0 else 0.0
+            rec_c = round(presupuesto / ing_neto_c, 1) if ing_neto_c > 0 else None
+            if yn_c > mejor_yield:
+                mejor_yield = yn_c
+                mejor_tipo = tipo_c
+            comparativo_list.append(ComparativoModalidad(
+                tipo=tipo_c,
+                label=_TIPO_LABELS[tipo_c],
+                ingreso_mes=round(ing_c),
+                yield_neto_pct=yn_c,
+                recupero_anos=rec_c,
+                riesgo=_TIPO_RIESGO[tipo_c],
+                es_recomendada=False,
+            ))
+        except Exception:
+            comparativo_list.append(ComparativoModalidad(
+                tipo=tipo_c, label=_TIPO_LABELS[tipo_c],
+                riesgo=_TIPO_RIESGO[tipo_c],
+            ))
+    for cm in comparativo_list:
+        cm.es_recomendada = (cm.tipo == mejor_tipo)
+    recomendacion = _TIPO_LABELS.get(mejor_tipo, "")
+
+    # ── Proyección anual ──────────────────────────────────────────────────────
+    horizonte_val = max(1, min(req.horizonte_anos, 30))
+    proyeccion_list: list[dict] = []
+    for a in range(1, horizonte_val + 1):
+        val_a = round(presupuesto * (1 + var_anual / 100) ** a)
+        ing_a = round(ingreso_neto_anual * a)
+        roi_a = round((val_a - presupuesto + ing_a) / presupuesto * 100, 1)
+        proyeccion_list.append({"año": a, "valor_inmueble": val_a, "ingresos_acumulados": ing_a, "roi_pct": roi_a})
 
     if current_user:
         try:
@@ -578,4 +736,203 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         costo_amoblado=float(costo_amoblado_val) if costo_amoblado_val is not None else None,
         presupuesto_efectivo=float(presupuesto_efectivo_val) if presupuesto_efectivo_val is not None else None,
         valor_20anos_cop=float(valor_20),
+        flujo_caja_desglose=desglose_val,
+        comparativo_modalidades=comparativo_list,
+        cuota_credito_mes=float(cuota_credito_val) if cuota_credito_val is not None else None,
+        flujo_con_credito=float(flujo_con_credito_val) if flujo_con_credito_val is not None else None,
+        recomendacion_modalidad=recomendacion,
+        proyeccion_anual=proyeccion_list,
+    )
+
+
+# ── New endpoints ─────────────────────────────────────────────────────────────
+
+_LISTING_SIMUL_SQL = """
+    SELECT
+        ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
+        precio_cop::bigint AS precio,
+        barrio_id,
+        area_m2::float8,
+        NULL::numeric AS administracion,
+        tipo_inmueble,
+        tipo_operacion
+    FROM staging.stg_listings_unificado
+    WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1::bigint
+    LIMIT 1
+"""
+
+_BARRIO_NAME_SQL = """
+    SELECT nombre, municipio FROM raw.barrios WHERE id = $1
+"""
+
+_ALTERNATIVAS_SQL = """
+    SELECT
+        ('x'||substr(md5(l.url),1,8))::bit(32)::int AS id,
+        l.tipo_inmueble,
+        l.precio_cop::bigint AS precio,
+        l.area_m2::float8,
+        l.habitaciones,
+        l.banos::float8,
+        (l.fotos)[1] AS foto,
+        b.id AS barrio_id,
+        b.nombre AS barrio_nombre,
+        b.municipio,
+        ctx.yield_bruto_pct,
+        ctx.indice_nomada,
+        ctx.seguridad_score
+    FROM staging.stg_listings_unificado l
+    JOIN raw.barrios b ON b.id = l.barrio_id
+    LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
+    WHERE l.tipo_operacion = 'venta'
+      AND l.precio_cop > 0
+      AND l.precio_cop <= $1
+      AND ctx.yield_bruto_pct IS NOT NULL
+      AND l.fotos IS NOT NULL AND array_length(l.fotos, 1) > 0
+      AND ('x'||substr(md5(l.url),1,8))::bit(32)::int != $2::bigint
+    ORDER BY ctx.yield_bruto_pct DESC NULLS LAST
+    LIMIT 25
+"""
+
+
+@router.get("/listing-simulador-data")
+async def listing_simulador_data(
+    listing_id: int = Query(...),
+    current_user: dict = Depends(require_plan("pro")),
+):
+    lid = listing_id
+    pool = get_pool()
+    row = await pool.fetchrow(_LISTING_SIMUL_SQL, lid)
+    if row is None:
+        raise HTTPException(status_code=404, detail="Listing no encontrado")
+    d = dict(row)
+    barrio_row = await pool.fetchrow(_BARRIO_NAME_SQL, d["barrio_id"])
+    return {
+        "id": d["id"],
+        "precio": d["precio"],
+        "barrio_id": d["barrio_id"],
+        "barrio_nombre": barrio_row["nombre"] if barrio_row else None,
+        "municipio": barrio_row["municipio"] if barrio_row else None,
+        "area_m2": d["area_m2"],
+        "administracion": d["administracion"],
+        "tipo_inmueble": d["tipo_inmueble"],
+        "tipo_operacion": d["tipo_operacion"],
+    }
+
+
+@router.get("/alternativas")
+async def simulador_alternativas(
+    presupuesto_max: float = Query(..., gt=0),
+    tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"] = Query(...),
+    listing_id: Optional[int] = Query(None),
+    current_user: dict = Depends(require_plan("pro")),
+):
+    pool = get_pool()
+    exclude_id = listing_id if listing_id is not None else -999999
+    rows = await pool.fetch(_ALTERNATIVAS_SQL, presupuesto_max * 1.1, exclude_id)
+
+    tipo_opex = _OPEX[tipo_inversion]
+    result = []
+    for r in rows:
+        d = dict(r)
+        yb = d.get("yield_bruto_pct")
+        yn = round(yb * (1 - tipo_opex), 1) if yb else None
+        rec = round(100 / yn, 1) if yn and yn > 0 else None
+
+        # Apply tipo_inversion filter
+        nomada = d.get("indice_nomada") or 0
+        seguridad = d.get("seguridad_score") or 0
+        if tipo_inversion == "airbnb" and nomada < 30:
+            continue
+        if tipo_inversion == "renta_media" and nomada < 15:
+            continue
+        if tipo_inversion == "renta_larga" and seguridad < 30:
+            continue
+
+        result.append({
+            "id": d["id"],
+            "tipo_inmueble": d.get("tipo_inmueble"),
+            "precio": d["precio"],
+            "area_m2": d.get("area_m2"),
+            "habitaciones": d.get("habitaciones"),
+            "banos": d.get("banos"),
+            "foto": d.get("foto"),
+            "barrio_id": d["barrio_id"],
+            "barrio_nombre": d["barrio_nombre"],
+            "municipio": d["municipio"],
+            "yield_bruto_pct": yb,
+            "yield_neto_pct": yn,
+            "recupero_anos": rec,
+        })
+        if len(result) >= 5:
+            break
+
+    return result
+
+
+# ─── Historial de simulaciones ────────────────────────────────────────────────
+
+class SimulacionHistorialCreate(BaseModel):
+    listing_id: Optional[int] = None
+    barrio_id: Optional[int] = None
+    presupuesto: Optional[float] = None
+    tipo_inversion: Optional[str] = None
+    horizonte_anos: Optional[int] = None
+    con_credito: Optional[bool] = None
+    params: Optional[Dict[str, Any]] = None
+    resultados: Optional[Dict[str, Any]] = None
+
+
+@router.post("/historial", status_code=201)
+async def guardar_simulacion(
+    body: SimulacionHistorialCreate,
+    current_user: dict = Depends(require_plan("pro")),
+):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        INSERT INTO public.simulaciones_historial
+            (usuario_id, listing_id, barrio_id, presupuesto, tipo_inversion,
+             horizonte_anos, con_credito, params, resultados)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+        RETURNING id, listing_id, barrio_id, presupuesto, tipo_inversion,
+                  horizonte_anos, con_credito, params, resultados, fecha_creacion
+        """,
+        current_user["id"], body.listing_id, body.barrio_id,
+        body.presupuesto, body.tipo_inversion, body.horizonte_anos,
+        body.con_credito,
+        json.dumps(body.params) if body.params else None,
+        json.dumps(body.resultados) if body.resultados else None,
+    )
+    return dict(row)
+
+
+@router.get("/historial")
+async def listar_simulaciones(current_user: dict = Depends(require_plan("pro"))):
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT s.id, s.listing_id, s.barrio_id, s.presupuesto, s.tipo_inversion,
+               s.horizonte_anos, s.con_credito, s.params, s.resultados,
+               s.fecha_creacion,
+               b.nombre AS barrio_nombre
+        FROM public.simulaciones_historial s
+        LEFT JOIN raw.barrios b ON b.id = s.barrio_id
+        WHERE s.usuario_id = $1
+        ORDER BY s.fecha_creacion DESC
+        LIMIT 20
+        """,
+        current_user["id"],
+    )
+    return [dict(r) for r in rows]
+
+
+@router.delete("/historial/{sim_id}", status_code=204)
+async def eliminar_simulacion(
+    sim_id: int,
+    current_user: dict = Depends(require_plan("pro")),
+):
+    pool = get_pool()
+    await pool.execute(
+        "DELETE FROM public.simulaciones_historial WHERE id = $1 AND usuario_id = $2",
+        sim_id, current_user["id"],
     )

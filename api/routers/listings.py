@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user
+from api.dependencies import get_optional_user, is_pro
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
@@ -27,6 +27,7 @@ class ListingFull(BaseModel):
     id: int
     listing_uid: Optional[str] = None
     fuente: Optional[str] = None
+    fuente_display: Optional[str] = None
     tipo_operacion: Optional[str] = None
     tipo_inmueble: Optional[str] = None
     precio_cop: Optional[int] = None
@@ -41,7 +42,10 @@ class ListingFull(BaseModel):
     lon: Optional[float] = None
     barrio_id: Optional[int] = None
     barrio_nombre: Optional[str] = None
+    barrio_display: Optional[str] = None
     municipio: Optional[str] = None
+    municipio_display: Optional[str] = None
+    comuna_nombre: Optional[str] = None
     cd_comuna: Optional[int] = None
     buena_oferta: Optional[bool] = None
     pct_bajo_mediana: Optional[float] = None
@@ -88,6 +92,11 @@ class ListingDetail(ListingFull):
     indice_nomada: Optional[float] = None
     seguridad_score: Optional[float] = None
     var_anual_pct: Optional[float] = None
+    # Barrio price range (p25/p75) — pro only
+    precio_m2_p25: Optional[int] = None
+    precio_m2_p75: Optional[int] = None
+    arr_p25: Optional[int] = None
+    arr_p75: Optional[int] = None
 
 
 class ListingsAllResponse(BaseModel):
@@ -126,6 +135,12 @@ SELECT
     l.id,
     l.listing_uid,
     l.fuente,
+    CASE
+        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente') THEN 'propio_pro'
+        WHEN l.fuente = 'propio' THEN 'propio'
+        ELSE l.fuente
+    END AS fuente_display,
     l.tier,
     l.tipo_operacion,
     l.tipo_inmueble,
@@ -140,8 +155,11 @@ SELECT
     g.lat,
     g.lon,
     l.barrio_id,
-    b.nombre    AS barrio_nombre,
-    b.municipio AS municipio,
+    b.nombre                           AS barrio_nombre,
+    INITCAP(LOWER(b.nombre))           AS barrio_display,
+    b.municipio                        AS municipio,
+    INITCAP(LOWER(b.municipio))        AS municipio_display,
+    INITCAP(LOWER(b.comuna)) AS comuna_nombre,
     bc.cd_comuna AS cd_comuna,
     CASE
         WHEN l.tipo_operacion = 'venta'
@@ -168,7 +186,7 @@ SELECT
     END AS pct_bajo_mediana,
     m.m2_mediana::int             AS precio_m2_mediana_barrio,
     g.url_activa                  AS disponible_actualmente,
-    (CURRENT_DATE - COALESCE(_lf.fecha_primera_vez, _lm.fecha_primera_vez)::date)::int
+    (CURRENT_DATE - _lm.fecha_primera_vez::date)::int
                                   AS dias_en_mercado,
     NULL::timestamp               AS fecha_ultima_verificacion,
     ctx.yield_bruto_pct,
@@ -193,12 +211,16 @@ LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
                AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc     ON bc.barrio_id = b.id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
-LEFT JOIN raw.listings_fincaraiz _lf  ON _lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_metrocuadrado _lm ON _lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN (
     SELECT url, COUNT(*)::int AS favoritos_count
     FROM raw.favoritos_listings GROUP BY url
 ) _fav ON _fav.url = l.url
+LEFT JOIN (
+    SELECT lp.id::text AS lp_url, u.plan AS owner_plan
+    FROM public.listings_propios lp
+    JOIN public.usuarios u ON u.id = lp.user_id
+) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text    IS NULL OR l.tipo_operacion = $3)
@@ -332,7 +354,7 @@ async def _expand_neighbors(
     pool: Any,
     barrio_id: int,
     radios: tuple[int, ...] = (0, 500, 1000),
-    min_listings: int = 5,
+    min_listings: int = 1,
     only_premium: bool = False,
 ) -> tuple[list[int], list[str], int]:
     """Cascade-expand barrio → neighbors until min_listings reached.
@@ -466,9 +488,13 @@ async def get_all_listings(
         )
         total = total or 0
 
+    _is_pro = is_pro(current_user)
     items: list[ListingFull] = []
     for r in rows:
         row_d = dict(r)
+        if not _is_pro:
+            row_d["buena_oferta"] = None
+            row_d["pct_bajo_mediana"] = None
         if perfil_dict:
             barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS}
             score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
@@ -517,11 +543,36 @@ WITH listing AS (
            END AS pm2
     FROM staging.stg_listings_unificado
     WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1
+),
+p_range AS (
+    SELECT
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY precio_cop::float/NULLIF(area_m2,0))
+            FILTER (WHERE tipo_operacion='venta' AND area_m2>0
+                    AND precio_cop::float/area_m2 BETWEEN 500000 AND 50000000) AS m2_p25,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY precio_cop::float/NULLIF(area_m2,0))
+            FILTER (WHERE tipo_operacion='venta' AND area_m2>0
+                    AND precio_cop::float/area_m2 BETWEEN 500000 AND 50000000) AS m2_p75,
+        PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY precio_cop::float)
+            FILTER (WHERE tipo_operacion='arriendo'
+                    AND precio_cop BETWEEN 300000 AND 50000000) AS arr_p25,
+        PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY precio_cop::float)
+            FILTER (WHERE tipo_operacion='arriendo'
+                    AND precio_cop BETWEEN 300000 AND 50000000) AS arr_p75
+    FROM staging.stg_listings_unificado
+    WHERE barrio_id  = (SELECT barrio_id FROM listing)
+      AND tipo_inmueble IS NOT DISTINCT FROM (SELECT tipo_inmueble FROM listing)
+      AND precio_cop > 0
 )
 SELECT
     l.id,
     l.listing_uid,
     l.fuente,
+    CASE
+        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente') THEN 'propio_pro'
+        WHEN l.fuente = 'propio' THEN 'propio'
+        ELSE l.fuente
+    END AS fuente_display,
     l.tier,
     l.tipo_operacion,
     l.tipo_inmueble,
@@ -538,8 +589,11 @@ SELECT
     g.url_activa AS disponible_actualmente,
     g.estrato_real,
     l.barrio_id,
-    b.nombre AS barrio_nombre,
+    b.nombre                           AS barrio_nombre,
+    INITCAP(LOWER(b.nombre))           AS barrio_display,
     b.municipio,
+    INITCAP(LOWER(b.municipio))        AS municipio_display,
+    INITCAP(LOWER(b.comuna)) AS comuna_nombre,
     bc.cd_comuna,
     m.m2_mediana::int AS precio_m2_mediana_barrio,
     m.arr_mediana::int AS arriendo_p50_barrio,
@@ -567,7 +621,7 @@ SELECT
         ELSE NULL
     END AS yield_estimado,
     lp.descripcion AS descripcion,
-    (CURRENT_DATE - COALESCE(lf.fecha_primera_vez, lm.fecha_primera_vez)::date)::int
+    (CURRENT_DATE - lm.fecha_primera_vez::date)::int
                                        AS dias_en_mercado,
     l.fecha_publicacion::text,
     NULL::timestamp AS fecha_ultima_verificacion,
@@ -583,7 +637,11 @@ SELECT
     COALESCE(_vistas.vistas, 0)        AS vistas,
     lm.raw_data->>'tiempoConstruido'   AS antiguedad,
     NULLIF(REPLACE(COALESCE(lm.raw_data->>'valorAdministracion', ''), '.', ''), '')::bigint AS administracion,
-    COALESCE(l.fotos, lp.fotos)        AS fotos
+    COALESCE(l.fotos, lp.fotos)        AS fotos,
+    pr.m2_p25::int  AS precio_m2_p25,
+    pr.m2_p75::int  AS precio_m2_p75,
+    pr.arr_p25::int AS arr_p25,
+    pr.arr_p75::int AS arr_p75
 FROM listing l
 JOIN raw.barrios b ON b.id = l.barrio_id
 JOIN analytics.listings_georef g ON g.url = l.url
@@ -592,7 +650,6 @@ LEFT JOIN analytics.barrios_medianas m
     AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
-LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_premium lp ON lp.url = l.url
 LEFT JOIN (
@@ -605,6 +662,12 @@ LEFT JOIN (
     WHERE event_type = 'listing_view' AND entity_type = 'listing'
     GROUP BY entity_id
 ) _vistas ON _vistas.entity_id = l.url
+LEFT JOIN (
+    SELECT lp2.id::text AS lp_url, u.plan AS owner_plan
+    FROM public.listings_propios lp2
+    JOIN public.usuarios u ON u.id = lp2.user_id
+) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
+CROSS JOIN p_range pr
 LIMIT 1
 """.format(usd=int(_USD))
 
@@ -619,7 +682,10 @@ ORDER BY fecha_cambio ASC
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
-async def get_listing_by_id(listing_id: int):
+async def get_listing_by_id(
+    listing_id: int,
+    current_user: Optional[dict] = Depends(get_optional_user),
+):
     pool = get_pool()
     row = await pool.fetchrow(_LISTING_BY_ID_SQL, listing_id)
     if not row:
@@ -627,6 +693,13 @@ async def get_listing_by_id(listing_id: int):
     row_d = dict(row)
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []
+    if not is_pro(current_user):
+        row_d["buena_oferta"] = None
+        row_d["pct_bajo_mediana"] = None
+        row_d["precio_m2_p25"] = None
+        row_d["precio_m2_p75"] = None
+        row_d["arr_p25"] = None
+        row_d["arr_p75"] = None
     return ListingDetail(**row_d)
 
 
@@ -657,15 +730,13 @@ barrio_matches AS (
            l.url, l.precio_cop, l.area_m2,
            NULLIF(l.habitaciones, -1) AS habitaciones, l.banos,
            b.nombre AS barrio_nombre,
-           (CURRENT_DATE - COALESCE(lf.fecha_primera_vez, lm.fecha_primera_vez)::date)::int AS dias_en_mercado,
+           NULL::int AS dias_en_mercado,
            COALESCE(l.fotos[1], lp.fotos[1]) AS foto_principal,
            l.tipo_inmueble,
            1 AS scope_priority
     FROM staging.stg_listings_unificado l
     JOIN raw.barrios b ON b.id = l.barrio_id
     JOIN analytics.listings_georef g ON g.url = l.url
-    LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
-    LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
     LEFT JOIN raw.listings_premium lp ON lp.url = l.url
     JOIN ref r ON r.barrio_id = l.barrio_id
     WHERE l.url <> (SELECT url FROM ref)
@@ -679,7 +750,7 @@ comuna_matches AS (
            l.url, l.precio_cop, l.area_m2,
            NULLIF(l.habitaciones, -1) AS habitaciones, l.banos,
            b.nombre AS barrio_nombre,
-           (CURRENT_DATE - COALESCE(lf.fecha_primera_vez, lm.fecha_primera_vez)::date)::int AS dias_en_mercado,
+           NULL::int AS dias_en_mercado,
            COALESCE(l.fotos[1], lp.fotos[1]) AS foto_principal,
            l.tipo_inmueble,
            2 AS scope_priority
@@ -687,8 +758,6 @@ comuna_matches AS (
     JOIN raw.barrios b ON b.id = l.barrio_id
     JOIN analytics.listings_georef g ON g.url = l.url
     LEFT JOIN analytics.barrios_cd bc2 ON bc2.barrio_id = l.barrio_id
-    LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
-    LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
     LEFT JOIN raw.listings_premium lp ON lp.url = l.url
     JOIN ref r ON r.cd_comuna = bc2.cd_comuna AND r.cd_comuna IS NOT NULL
     WHERE l.url <> (SELECT url FROM ref)

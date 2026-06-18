@@ -1,6 +1,9 @@
-import { X, ChevronRight, Bed, Bath, Maximize2, Clock, MapPin } from "lucide-react";
+import { X, ChevronRight, Bed, Bath, Maximize2, Clock, MapPin, Plus, Check } from "lucide-react";
 import { formatCOP } from "@/lib/format";
 import type { ApiListing } from "@/lib/adapters";
+import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { useIsPro } from "@/components/LockedField";
+import { toast } from "sonner";
 
 const POPUP_WIDTH = 300;
 const POPUP_HEIGHT = 340;
@@ -44,6 +47,10 @@ type Props = {
 };
 
 export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
+  const isPro = useIsPro();
+  const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
+  const selected = isSelected(listing.id);
+
   // Always center over the visible map area (viewport minus right panel on desktop)
   const panelWidth = window.innerWidth >= 768 ? 380 : 0;
   const mapWidth = window.innerWidth - panelWidth;
@@ -128,6 +135,29 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
             </div>
           )}
 
+          {isPro && (
+            <button
+              onClick={() => {
+                if (selected) {
+                  removeListing(listing.id);
+                } else if (canAdd) {
+                  addListing(listing);
+                } else {
+                  toast.info("Máximo 5 inmuebles en el comparador");
+                }
+              }}
+              className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition"
+              style={selected
+                ? { background: "#E1F5EE", color: "#085041", border: "1px solid #1D9E75" }
+                : { background: "transparent", color: "#1D9E75", border: "1px solid #1D9E75" }
+              }
+            >
+              {selected
+                ? <><Check className="h-3.5 w-3.5" /> En comparación</>
+                : <><Plus className="h-3.5 w-3.5" /> Agregar a comparación</>
+              }
+            </button>
+          )}
           <button
             onClick={() => onViewMore(listing.id)}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"

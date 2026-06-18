@@ -70,7 +70,8 @@ BEGIN
     WHERE table_schema = 'staging'
       AND table_name   = 'stg_listings_unificado'
   ) THEN
-    CREATE TABLE staging.stg_listings_unificado AS
+    BEGIN
+      CREATE TABLE staging.stg_listings_unificado AS
     WITH todas_fuentes AS (
 
         SELECT
@@ -315,11 +316,42 @@ BEGIN
         direccion_raw, lat, lon, geom,
         url, fotos, fecha_scraping, n_duplicados, estrato_real
     FROM sin_geo WHERE _rn = 1;
+    EXCEPTION WHEN OTHERS THEN
+      -- listings_fincaraiz may be a VIEW without lat/lon; create empty table so
+      -- indexes and cache.py refresh work correctly on startup.
+      CREATE TABLE staging.stg_listings_unificado (
+          listing_uid         TEXT,
+          fuente              TEXT,
+          tier                TEXT,
+          tipo_operacion      TEXT,
+          tipo_inmueble       TEXT,
+          precio_cop          BIGINT,
+          precio_usd          BIGINT,
+          precio_min_cluster  BIGINT,
+          precio_max_cluster  BIGINT,
+          precio_variable     BOOLEAN,
+          area_m2             NUMERIC,
+          precio_m2           NUMERIC,
+          habitaciones        INTEGER,
+          banos               NUMERIC,
+          barrio_raw          TEXT,
+          barrio_id           INTEGER,
+          direccion_raw       TEXT,
+          lat                 DOUBLE PRECISION,
+          lon                 DOUBLE PRECISION,
+          geom                GEOMETRY(Point, 4326),
+          url                 TEXT,
+          fotos               TEXT[],
+          fecha_scraping      TIMESTAMPTZ,
+          n_duplicados        BIGINT,
+          estrato_real        INTEGER
+      );
+    END;
 
     -- Indexes that the API and cache.py depend on
-    CREATE INDEX idx_stg_barrio_id ON staging.stg_listings_unificado (barrio_id);
-    CREATE INDEX idx_stg_url       ON staging.stg_listings_unificado (url);
-    CREATE INDEX idx_stg_precio    ON staging.stg_listings_unificado (precio_cop);
+    CREATE INDEX IF NOT EXISTS idx_stg_barrio_id ON staging.stg_listings_unificado (barrio_id);
+    CREATE INDEX IF NOT EXISTS idx_stg_url       ON staging.stg_listings_unificado (url);
+    CREATE INDEX IF NOT EXISTS idx_stg_precio    ON staging.stg_listings_unificado (precio_cop);
   END IF;
 END $$;
 """
@@ -330,13 +362,11 @@ SELECT DISTINCT ON (l.url)
     l.url,
     l.lat,
     l.lon,
-    COALESCE(lm.url_activa, lf.url_activa) AS url_activa,
-    COALESCE(l.estrato_real, lm.estrato_real, lf.estrato_real) AS estrato_real,
+    TRUE                AS url_activa,
+    l.estrato_real      AS estrato_real,
     now()
 FROM staging.stg_listings_unificado l
-LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
-LEFT JOIN raw.listings_fincaraiz lf     ON lf.url = l.url AND l.fuente = 'fincaraiz'
-JOIN raw.barrios b                      ON b.id = l.barrio_id
+JOIN raw.barrios b ON b.id = l.barrio_id
 WHERE l.precio_cop >= 500000
   AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
   AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
@@ -348,9 +378,9 @@ WHERE l.precio_cop >= 500000
   )
 ORDER BY l.url
 ON CONFLICT (url) DO UPDATE
-    SET lat = EXCLUDED.lat,
-        lon = EXCLUDED.lon,
-        url_activa = EXCLUDED.url_activa,
+    SET lat          = EXCLUDED.lat,
+        lon          = EXCLUDED.lon,
+        url_activa   = EXCLUDED.url_activa,
         estrato_real = EXCLUDED.estrato_real,
         refreshed_at = EXCLUDED.refreshed_at
 """

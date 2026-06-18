@@ -6,11 +6,13 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Camera,
+  Check,
   CreditCard,
   Heart,
   History,
   Map as MapIcon,
   Plus,
+  Search,
   Settings,
   Star,
   Trash2,
@@ -26,9 +28,12 @@ import {
   type Goal,
   type MapStyleId,
   type PaymentMethod,
+  type PerfilBusqueda,
   type Risk,
   type UrbiUser,
 } from "@/lib/auth";
+import { useUpdateAuthPerfil } from "@/hooks/useAuth";
+import { useTarget } from "@/contexts/TargetContext";
 import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
 import {
   SCORE_PALETTES,
@@ -48,10 +53,11 @@ export const Route = createFileRoute("/perfil")({
   component: PerfilPage,
 });
 
-type Tab = "cuenta" | "inversor" | "pagos" | "favoritos" | "historial" | "mapa";
+type Tab = "cuenta" | "busqueda" | "inversor" | "pagos" | "favoritos" | "historial" | "mapa";
 
 const TABS: { id: Tab; label: string; Icon: typeof UserIcon }[] = [
   { id: "cuenta", label: "Cuenta", Icon: UserIcon },
+  { id: "busqueda", label: "Perfil de búsqueda", Icon: Search },
   { id: "inversor", label: "Perfil inversor", Icon: TrendingUp },
   { id: "pagos", label: "Métodos de pago", Icon: CreditCard },
   { id: "favoritos", label: "Favoritos", Icon: Heart },
@@ -125,6 +131,7 @@ function PerfilPage() {
                 transition={{ duration: 0.18 }}
               >
                 {tab === "cuenta" && <CuentaTab user={user} />}
+                {tab === "busqueda" && <BusquedaTab user={user} />}
                 {tab === "inversor" && <InversorTab user={user} />}
                 {tab === "pagos" && <PagosTab user={user} />}
                 {tab === "favoritos" && <FavoritosTab user={user} />}
@@ -247,6 +254,99 @@ function CuentaTab({ user }: { user: UrbiUser }) {
         >
           Cerrar sesión
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- Búsqueda ---------------- */
+
+const BUSQUEDA_OPTIONS: { value: PerfilBusqueda; icon: string; title: string; hint: string }[] = [
+  { value: "comprador", icon: "🏠", title: "Comprar o arrendar", hint: "Busco una propiedad para vivir en el Valle de Aburrá" },
+  { value: "inversor", icon: "📈", title: "Invertir en finca raíz", hint: "Analizo rentabilidad, yields y oportunidades" },
+  { value: "vendedor", icon: "🏡", title: "Vender mi propiedad", hint: "Quiero publicar y conectar con compradores" },
+  { value: "agente", icon: "🤝", title: "Soy agente inmobiliario", hint: "Uso las herramientas profesionales del MLS" },
+];
+
+const PERFIL_TO_TARGET: Record<PerfilBusqueda, "buyer" | "investor" | "seller" | null> = {
+  comprador: "buyer",
+  inversor: "investor",
+  vendedor: "seller",
+  agente: null,
+};
+
+function BusquedaTab({ user }: { user: UrbiUser }) {
+  const [selected, setSelected] = useState<PerfilBusqueda | null>(
+    (user.perfilBusqueda as PerfilBusqueda) ?? null
+  );
+  const [saving, setSaving] = useState(false);
+  const [toast, setToast] = useState<"ok" | "err" | null>(null);
+  const updatePerfil = useUpdateAuthPerfil();
+  const { setTarget } = useTarget();
+
+  async function save(perfil: PerfilBusqueda) {
+    setSelected(perfil);
+    setSaving(true);
+    try {
+      await updatePerfil.mutateAsync({ perfil_busqueda: perfil });
+      auth.patch({ perfilBusqueda: perfil });
+      const target = PERFIL_TO_TARGET[perfil];
+      if (target) setTarget(target as never);
+      setToast("ok");
+    } catch {
+      setToast("err");
+    } finally {
+      setSaving(false);
+      setTimeout(() => setToast(null), 3000);
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <SectionTitle
+        title="¿Qué estás buscando?"
+        hint="Personalizamos el mapa y las recomendaciones según tu perfil."
+      />
+
+      <div className="space-y-2.5">
+        {BUSQUEDA_OPTIONS.map((o) => {
+          const active = selected === o.value;
+          return (
+            <button
+              key={o.value}
+              onClick={() => !saving && save(o.value)}
+              disabled={saving}
+              className="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition disabled:opacity-60"
+              style={{
+                background: "#FFFFFF",
+                borderColor: active ? "#1D9E75" : "#E8E0D0",
+                boxShadow: active ? "0 0 0 1px #1D9E75" : "none",
+              }}
+            >
+              <span className="mt-0.5 text-xl leading-none">{o.icon}</span>
+              <div className="flex-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-semibold text-[#1A1208]">{o.title}</span>
+                  {active && <Check className="h-4 w-4 text-[#1D9E75]" />}
+                </div>
+                <p className="mt-0.5 text-xs text-[#6B5B45]">{o.hint}</p>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-3 pt-1">
+        {toast === "ok" && (
+          <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-success">
+            ✅ Perfil actualizado
+          </motion.span>
+        )}
+        {toast === "err" && (
+          <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-danger">
+            ❌ Error al guardar. Intenta de nuevo.
+          </motion.span>
+        )}
       </div>
     </div>
   );

@@ -25,6 +25,7 @@ export const API_ENDPOINTS = {
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,
   perfil: `${API_BASE_URL}/usuario/perfil`,
+  authPerfil: `${API_BASE_URL}/auth/perfil`,
   configMapa: `${API_BASE_URL}/usuario/configuracion_mapa`,
 
   // Admin
@@ -33,6 +34,8 @@ export const API_ENDPOINTS = {
 
   // Features
   calculadora: `${API_BASE_URL}/calculadora/simular`,
+  simuladorListingData: (id: number) => `${API_BASE_URL}/calculadora/listing-simulador-data?listing_id=${id}`,
+  simuladorAlternativas: `${API_BASE_URL}/calculadora/alternativas`,
   oportunidades: `${API_BASE_URL}/oportunidades`,
   favoritos: `${API_BASE_URL}/favoritos`,
   historial: `${API_BASE_URL}/historial`,
@@ -75,11 +78,28 @@ export const API_ENDPOINTS = {
   listingsPropiosSolicitudesPendientes: `${API_BASE_URL}/listings-propios/solicitudes/pendientes`,
   listingsPropiosSolicitudById: (id: number) => `${API_BASE_URL}/listings-propios/solicitudes/${id}`,
 
+  // Agente zona
+  agenteZona: (barrioId: number) => `${API_BASE_URL}/agentes/zona?barrio_id=${barrioId}`,
+
+  // Alertas de precio
+  alertasCrear: `${API_BASE_URL}/alertas`,
+  alertasMis: `${API_BASE_URL}/alertas/mis`,
+  alertaDesactivar: (id: number) => `${API_BASE_URL}/alertas/${id}`,
+
   // Suscripciones
   suscripcionesPlanes: `${API_BASE_URL}/suscripciones/planes`,
   suscripcionesIniciar: `${API_BASE_URL}/suscripciones/iniciar`,
   suscripcionesMiPlan: `${API_BASE_URL}/suscripciones/mi-plan`,
   suscripcionesCancelar: `${API_BASE_URL}/suscripciones/cancelar`,
+
+  // Comparador
+  comparadorHistorial: `${API_BASE_URL}/comparador/historial`,
+  comparadorHistorialItem: (id: number) => `${API_BASE_URL}/comparador/historial/${id}`,
+  comparadorListings: (ids: string) => `${API_BASE_URL}/comparador/listings?ids=${ids}`,
+
+  // Simulador historial
+  simuladorHistorial: `${API_BASE_URL}/calculadora/historial`,
+  simuladorHistorialItem: (id: number) => `${API_BASE_URL}/calculadora/historial/${id}`,
 } as const;
 
 export { API_BASE_URL };

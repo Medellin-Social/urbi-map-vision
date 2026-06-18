@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, Check } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
@@ -9,6 +9,8 @@ import { auth } from "@/lib/auth";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
 import { useIsPro } from "@/components/LockedField";
+import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { toast } from "sonner";
 
 type Props = {
   barrio: Neighborhood;
@@ -118,6 +120,8 @@ function ListingCard({
   onSimular: () => void;
 }) {
   const isPro = useIsPro();
+  const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
+  const selected = isSelected(listing.id);
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
   const precioUsd = listing.precio_usd
     ? `~$${(listing.precio_usd / 1000).toFixed(0)}k USD`
@@ -184,6 +188,32 @@ function ListingCard({
         >
           {tipo}
         </span>
+        {/* Comparador "+" button */}
+        {isPro && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              if (selected) {
+                removeListing(listing.id);
+              } else if (canAdd) {
+                addListing(listing);
+              } else {
+                toast.info("Máximo 5 inmuebles en el comparador");
+              }
+            }}
+            title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
+            className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full shadow-md transition hover:scale-110"
+            style={{
+              background: selected ? "#1D9E75" : "rgba(255,255,255,0.92)",
+              border: selected ? "none" : "0.5px solid #E8E0D0",
+            }}
+          >
+            {selected
+              ? <Check className="h-3.5 w-3.5 text-white" />
+              : <Plus className="h-3.5 w-3.5 text-[#1D9E75]" />
+            }
+          </button>
+        )}
       </div>
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
@@ -573,28 +603,6 @@ export function MLSPanel({
               </div>
             </div>
           )}
-        </div>
-
-        {/* Leyenda por tipo de inmueble */}
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b border-border px-4 py-2">
-          {([
-            { color: '#1D9E75', label: 'Apto' },
-            { color: '#D85A30', label: 'Casa' },
-            { color: '#5DCAA5', label: 'Aptaestudio' },
-            { color: '#BA7517', label: 'Lote' },
-            { color: '#7F77DD', label: 'Local' },
-            { color: '#378ADD', label: 'Oficina' },
-            { color: '#9B8B75', label: 'Bodega' },
-          ] as { color: string; label: string }[]).map(({ color, label }) => (
-            <div key={label} className="flex items-center gap-1 text-[11px] text-muted-foreground">
-              <span className="h-2 w-2 rounded-full" style={{ background: color }} />
-              {label}
-            </div>
-          ))}
-          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
-            <span className="text-[10px] font-bold" style={{ color: '#ffc928' }}>★</span>
-            Premium
-          </div>
         </div>
 
         {/* Lista */}

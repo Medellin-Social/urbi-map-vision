@@ -52,33 +52,25 @@ export function LockedField({ label, preview, className, planRequerido = "pro" }
   const planLabel = _PLAN_LABEL[planRequerido];
   return (
     <div
-      className={`relative overflow-hidden rounded-xl ${className ?? ""}`}
-      style={{ border: "0.5px solid #1D9E75", background: "#F5FFF9" }}
+      className={`relative overflow-hidden rounded-lg ${className ?? ""}`}
+      style={{ border: "0.5px solid #E8E0D0", background: "#F5F0E8", minHeight: 40 }}
       title={`Disponible en ${planLabel}`}
     >
-      {/* Blurred preview value */}
-      <div className="flex items-center justify-between px-4 py-2.5 text-sm" style={{ filter: "blur(4px)", userSelect: "none" }}>
+      {/* Blurred content */}
+      <div className="flex items-center justify-between px-3 py-2.5 text-sm" style={{ filter: "blur(3px)", userSelect: "none" }}>
         <span className="text-[#6B5B45]">{label}</span>
-        <span className="font-semibold text-[#1A1208]">{preview ?? "——————"}</span>
+        <span className="font-semibold text-[#1A1208]">{preview ?? "———"}</span>
       </div>
-
-      {/* Lock overlay */}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 bg-white/70 backdrop-blur-[1px]">
-        <Lock className="h-3.5 w-3.5 text-[#1D9E75]" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-[#1D9E75]">
+      {/* Compact lock overlay */}
+      <div className="absolute inset-0 flex items-center justify-between px-3 bg-white/60 backdrop-blur-[1px]">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Lock className="h-3 w-3 shrink-0 text-[#9B8B75]" />
+          <span className="text-[11px] text-[#6B5B45] truncate">{label}</span>
+        </div>
+        <span className="text-[10px] font-bold uppercase tracking-wider text-[#9B8B75] shrink-0 ml-2">
           {planLabel}
         </span>
       </div>
-
-      {/* CTA */}
-      <a
-        href="/planes"
-        onClick={(e) => e.stopPropagation()}
-        className="block w-full py-1.5 text-center text-[11px] font-semibold transition hover:opacity-90"
-        style={{ background: "#1D9E75", color: "#FFFFFF" }}
-      >
-        Desbloquear
-      </a>
     </div>
   );
 }
