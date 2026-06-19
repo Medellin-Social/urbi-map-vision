@@ -1,8 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { useRegister } from "@/hooks/useAuth";
-import { AuthShell } from "./login";
+import { AuthShell, Field, ErrorBanner, AuthButton, inputStyle } from "./login";
 
 export const Route = createFileRoute("/register")({
   component: RegisterPage,
@@ -55,13 +54,18 @@ function RegisterPage() {
   };
 
   return (
-    <AuthShell title="Crear cuenta" subtitle="Inteligencia inmobiliaria de Medellín">
-      <form onSubmit={submit} className="space-y-4">
+    <AuthShell
+      title="Crea tu cuenta"
+      subtitle="Explora el mercado inmobiliario y la comunidad del Valle de Aburrá"
+      editorial={"Únete a la comunidad que\nestá construyendo Medellín."}
+    >
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Field label="Nombre">
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="auth-input"
+            style={inputStyle}
             placeholder="Nombre completo"
           />
         </Field>
@@ -70,7 +74,8 @@ function RegisterPage() {
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="auth-input"
+            style={inputStyle}
             placeholder="tu@correo.com"
           />
         </Field>
@@ -79,36 +84,22 @@ function RegisterPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="auth-input"
+            style={inputStyle}
             placeholder="Mínimo 8 caracteres"
           />
         </Field>
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-          type="submit"
-          disabled={register.isPending}
-          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan disabled:opacity-60"
-        >
-          {register.isPending ? "Creando cuenta…" : "Crear cuenta"}
-        </motion.button>
-        <p className="text-center text-xs text-muted-foreground">
+        {error && <ErrorBanner message={error} />}
+        <AuthButton disabled={register.isPending}>
+          {register.isPending ? "Creando cuenta…" : "Crear cuenta →"}
+        </AuthButton>
+        <p style={{ textAlign: "center", fontSize: 14, fontFamily: "'Inter', system-ui, sans-serif", color: "#6B5B45", margin: 0 }}>
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" className="text-primary hover:underline">
+          <Link to="/login" style={{ color: "#1D9E75", textDecoration: "none" }}>
             Inicia sesión
           </Link>
         </p>
       </form>
     </AuthShell>
-  );
-}
-
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
-      {children}
-    </label>
   );
 }

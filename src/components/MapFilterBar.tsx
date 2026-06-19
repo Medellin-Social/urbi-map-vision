@@ -34,10 +34,12 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
-  buy:   "venta",
-  rent:  "arriendo",
-  sell:  "todos",
-  agent: "todos",
+  buy:        "venta",
+  rent:       "arriendo",
+  sell:       "todos",
+  agent:      "todos",
+  simulator:  "todos",
+  comparador: "todos",
 };
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -649,7 +651,7 @@ export function MapFilterBar({
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  if (activeTab === "agent") return null;
+  if (activeTab === "agent" || activeTab === "simulator" || activeTab === "comparador") return null;
 
   const isRent     = activeTab === "rent";
   const activeCount = countActive(filters, activeTab);

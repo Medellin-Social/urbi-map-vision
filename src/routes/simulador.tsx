@@ -28,7 +28,7 @@ import {
   Legend,
 } from "recharts";
 import { z } from "zod";
-import { Navbar } from "@/components/Navbar";
+import { MapNavbar } from "@/components/MapNavbar";
 import { formatCOP, formatPct } from "@/lib/format";
 import { auth } from "@/lib/auth";
 import { apiFetch } from "@/lib/apiClient";
@@ -337,7 +337,7 @@ function SimuladorPage() {
   if (!isPro) {
     return (
       <div className="paper-theme relative min-h-screen w-full bg-background">
-        <Navbar />
+        <MapNavbar activeTab="simulator" onTabChange={() => {}} />
         <main className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-24 sm:px-6">
           <div className="relative overflow-hidden rounded-2xl border border-border bg-surface/70 p-8">
             {/* Blurred form preview */}
@@ -374,7 +374,7 @@ function SimuladorPage() {
 
   return (
     <div className="paper-theme relative min-h-screen w-full overflow-x-hidden bg-background">
-      <Navbar />
+      <MapNavbar activeTab="simulator" onTabChange={() => {}} />
       <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-24 sm:px-6">
         <button
           onClick={() => navigate({ to: "/map" })}
@@ -430,7 +430,7 @@ function SimuladorPage() {
             </div>
 
             {/* PASO 1 — ZONA Y PRESUPUESTO */}
-            <Field label="Zona / Barrio">
+            <Field label="Zona / Comuna">
               <select
                 value={comunaKey ?? ""}
                 onChange={(e) => handleComunaChange(e.target.value || null)}
@@ -446,7 +446,7 @@ function SimuladorPage() {
                         <optgroup label="Medellín — Comunas">
                           {medellin.map((c) => (
                             <option key={c.key} value={c.key}>
-                              {titleCase(c.label)} ({c.n_barrios})
+                              {titleCase(c.label)} · {c.n_barrios} barrios
                             </option>
                           ))}
                         </optgroup>
@@ -455,7 +455,7 @@ function SimuladorPage() {
                         <optgroup label="Valle de Aburrá">
                           {valle.map((c) => (
                             <option key={c.key} value={c.key}>
-                              {titleCase(c.label)} ({c.n_barrios})
+                              {titleCase(c.label)} · {c.n_barrios} barrios
                             </option>
                           ))}
                         </optgroup>
@@ -464,12 +464,14 @@ function SimuladorPage() {
                   );
                 })()}
               </select>
-              {comunaKey && (
+            </Field>
+            {comunaKey && (
+              <Field label="Barrio">
                 <select
                   value={barrioId || ""}
                   onChange={(e) => { setBarrioId(Number(e.target.value)); reset(); setCalcDone(false); }}
                   disabled={isComunaLoading}
-                  className="mt-2 w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#1A1208] focus:border-primary focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#1A1208] focus:border-primary focus:outline-none disabled:opacity-50"
                 >
                   <option value="">
                     {isComunaLoading ? "Cargando barrios..." : "Seleccionar barrio..."}
@@ -481,8 +483,8 @@ function SimuladorPage() {
                     </option>
                   ))}
                 </select>
-              )}
-            </Field>
+              </Field>
+            )}
 
             <Field label="Presupuesto">
               <div className="flex items-center gap-2">

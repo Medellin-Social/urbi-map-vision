@@ -1,13 +1,26 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { motion } from "framer-motion";
 import { useLogin } from "@/hooks/useAuth";
-import { LanguageToggle } from "@/lib/i18n";
-import { Building2 } from "lucide-react";
+import { useLang } from "@/lib/i18n";
+import { AlertCircle } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
+
+const K = {
+  paper:    "#FAF7F2",
+  surface:  "#F5F0E8",
+  line:     "#E8E0D0",
+  ink:      "#1A1208",
+  muted:    "#6B5B45",
+  tertiary: "#9B8B75",
+  teal:     "#1D9E75",
+  tealDeep: "#085041",
+  coral:    "#D85A30",
+  serif:    "'Fraunces', Georgia, serif",
+  sans:     "'Inter', system-ui, sans-serif",
+} as const;
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -33,14 +46,19 @@ function LoginPage() {
   };
 
   return (
-    <AuthShell title="Iniciar sesión" subtitle="Bienvenido de vuelta a Medellin Social">
-      <form onSubmit={submit} className="space-y-4">
+    <AuthShell
+      title="Bienvenido de nuevo"
+      subtitle="Ingresa a tu cuenta para continuar"
+      editorial={"Tu ciudad, tus datos,\ntus decisiones."}
+    >
+      <form onSubmit={submit} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         <Field label="Correo">
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="auth-input"
+            style={inputStyle}
             placeholder="tu@correo.com"
           />
         </Field>
@@ -49,73 +67,286 @@ function LoginPage() {
             type="password"
             value={password}
             onChange={(e) => setPassword(e.target.value)}
-            className="w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
+            className="auth-input"
+            style={inputStyle}
             placeholder="••••••••"
           />
         </Field>
-        {error && <p className="text-xs text-danger">{error}</p>}
-        <motion.button
-          whileHover={{ scale: 1.01 }}
-          whileTap={{ scale: 0.99 }}
-          type="submit"
-          disabled={login.isPending}
-          className="w-full rounded-md bg-primary py-2.5 text-sm font-semibold text-primary-foreground glow-cyan disabled:opacity-60"
-        >
-          {login.isPending ? "Entrando…" : "Entrar"}
-        </motion.button>
-        <div className="space-y-1 text-center text-xs text-muted-foreground">
-          <p>
-            <Link to="/forgot-password" className="text-primary hover:underline">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </p>
-          <p>
-            ¿Sin cuenta?{" "}
-            <Link to="/register" className="text-primary hover:underline">
-              Crear una cuenta
-            </Link>
-          </p>
+        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+          <Link
+            to="/forgot-password"
+            style={{ color: K.teal, fontSize: 13, fontFamily: K.sans, textDecoration: "none" }}
+          >
+            ¿Olvidaste tu contraseña?
+          </Link>
         </div>
+        {error && <ErrorBanner message={error} />}
+        <AuthButton disabled={login.isPending}>
+          {login.isPending ? "Entrando…" : "Iniciar sesión"}
+        </AuthButton>
+        <p style={{ textAlign: "center", fontSize: 14, fontFamily: K.sans, color: K.muted, margin: 0 }}>
+          ¿No tienes cuenta?{" "}
+          <Link to="/register" style={{ color: K.teal, textDecoration: "none" }}>
+            Regístrate
+          </Link>
+        </p>
       </form>
     </AuthShell>
   );
 }
 
-export function AuthShell({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
+export function AuthShell({
+  title,
+  subtitle,
+  editorial,
+  children,
+}: {
+  title: string;
+  subtitle: string;
+  editorial?: string;
+  children: React.ReactNode;
+}) {
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background px-4">
-      {/* Background grid + glow */}
-      <div className="pointer-events-none absolute inset-0">
-        <div className="absolute inset-0 opacity-[0.07]" style={{ backgroundImage: "linear-gradient(rgba(0,212,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(0,212,255,.5) 1px, transparent 1px)", backgroundSize: "48px 48px" }} />
-        <div className="absolute -left-32 top-20 h-80 w-80 rounded-full bg-primary/20 blur-3xl" />
-        <div className="absolute -right-32 bottom-10 h-80 w-80 rounded-full bg-accent/20 blur-3xl" />
-      </div>
-      <div className="absolute right-4 top-4 z-20"><LanguageToggle /></div>
-      <motion.div
-        initial={{ opacity: 0, y: 12 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4 }}
-        className="relative z-10 w-full max-w-sm rounded-2xl border border-border bg-surface/70 p-8 backdrop-blur-xl"
-      >
-        <div className="mb-6 flex items-center gap-2">
-          <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
-            <Building2 className="h-4 w-4" />
+    <>
+      <style>{`
+        .auth-input:focus {
+          border-color: #1D9E75 !important;
+          box-shadow: 0 0 0 3px rgba(29,158,117,0.12) !important;
+          outline: none;
+        }
+        .auth-btn:hover:not(:disabled) {
+          background: #085041 !important;
+        }
+      `}</style>
+      <div style={{ display: "flex", minHeight: "100vh", background: K.paper, fontFamily: K.sans }}>
+        {/* Left editorial column — desktop only */}
+        <div
+          className="hidden lg:flex"
+          style={{
+            width: "50%",
+            background: `linear-gradient(135deg, ${K.tealDeep} 0%, ${K.ink} 100%)`,
+            flexDirection: "column",
+            justifyContent: "center",
+            alignItems: "center",
+            padding: "48px 56px",
+          }}
+        >
+          <div style={{ maxWidth: 400, textAlign: "center" }}>
+            <div
+              style={{
+                fontFamily: K.serif,
+                fontSize: "2.4rem",
+                fontWeight: 900,
+                color: "#fff",
+                marginBottom: 24,
+                letterSpacing: "-0.5px",
+                lineHeight: 1.1,
+              }}
+            >
+              Medellín Social.
+            </div>
+            {editorial && (
+              <p
+                style={{
+                  fontFamily: K.sans,
+                  fontSize: 16,
+                  color: "rgba(255,255,255,0.72)",
+                  lineHeight: 1.65,
+                  marginBottom: 48,
+                  whiteSpace: "pre-line",
+                }}
+              >
+                {editorial}
+              </p>
+            )}
+            <p
+              style={{
+                fontFamily: K.sans,
+                fontSize: 13,
+                color: "rgba(255,255,255,0.52)",
+                letterSpacing: "0.02em",
+                margin: 0,
+              }}
+            >
+              54,000+ propiedades · 606 barrios · 12,000+ negocios
+            </p>
           </div>
-          <span className="font-display text-lg font-semibold tracking-tight">Medellin Social</span>
         </div>
-        <h1 className="font-display text-2xl font-semibold">{title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>
-        <div className="mt-6">{children}</div>
-      </motion.div>
+
+        {/* Right form column */}
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "48px 24px",
+            position: "relative",
+          }}
+        >
+          {/* Language toggle */}
+          <div style={{ position: "absolute", top: 16, right: 16 }}>
+            <AuthLangToggle />
+          </div>
+
+          {/* Mobile logo */}
+          <div className="lg:hidden" style={{ marginBottom: 28, textAlign: "center" }}>
+            <span style={{ fontFamily: K.serif, fontSize: "1.7rem", fontWeight: 900, color: K.ink }}>
+              Medellín Social.
+            </span>
+          </div>
+
+          {/* Card */}
+          <div
+            style={{
+              width: "100%",
+              maxWidth: 420,
+              background: "#fff",
+              borderRadius: 12,
+              boxShadow: "0 2px 12px rgba(26,18,8,0.06)",
+              padding: 40,
+            }}
+          >
+            <h1
+              style={{
+                fontFamily: K.serif,
+                fontSize: 28,
+                fontWeight: 900,
+                color: K.ink,
+                margin: "0 0 6px 0",
+                lineHeight: 1.15,
+              }}
+            >
+              {title}
+            </h1>
+            <p style={{ fontFamily: K.sans, fontSize: 14, color: K.muted, margin: "0 0 28px 0", lineHeight: 1.5 }}>
+              {subtitle}
+            </p>
+            {children}
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export const inputStyle: React.CSSProperties = {
+  width: "100%",
+  background: "#F5F0E8",
+  border: "1px solid #E8E0D0",
+  borderRadius: 8,
+  padding: "12px 14px",
+  color: "#1A1208",
+  fontFamily: "'Inter', system-ui, sans-serif",
+  fontSize: 14,
+  outline: "none",
+  boxSizing: "border-box",
+  transition: "border-color 0.15s, box-shadow 0.15s",
+};
+
+export function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div
+        style={{
+          fontFamily: "'Inter', system-ui, sans-serif",
+          fontSize: 12,
+          fontWeight: 500,
+          color: "#6B5B45",
+          textTransform: "uppercase",
+          letterSpacing: "0.07em",
+          marginBottom: 6,
+        }}
+      >
+        {label}
+      </div>
+      {children}
     </div>
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+export function ErrorBanner({ message }: { message: string }) {
   return (
-    <label className="block">
-      <span className="mb-1.5 block text-xs font-medium uppercase tracking-wider text-muted-foreground">{label}</span>
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: 8,
+        background: "#FAECE7",
+        border: "1px solid #D85A30",
+        borderRadius: 8,
+        padding: "10px 14px",
+        fontFamily: "'Inter', system-ui, sans-serif",
+        fontSize: 13,
+        color: "#8B2A10",
+      }}
+    >
+      <AlertCircle style={{ width: 14, height: 14, flexShrink: 0, color: "#D85A30" }} />
+      {message}
+    </div>
+  );
+}
+
+function AuthLangToggle() {
+  const { lang, toggle } = useLang();
+  return (
+    <button
+      onClick={toggle}
+      title={lang === "es" ? "Switch to English" : "Cambiar a Español"}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        borderRadius: 999,
+        border: `1px solid ${K.line}`,
+        background: "#fff",
+        padding: "4px 10px",
+        fontSize: 11,
+        fontWeight: 600,
+        fontFamily: K.sans,
+        cursor: "pointer",
+        color: K.ink,
+        boxShadow: "0 1px 4px rgba(26,18,8,0.06)",
+        transition: "border-color 0.15s",
+      }}
+    >
+      <span style={{ fontSize: 12 }}>🌐</span>
+      <span style={{ color: lang === "es" ? K.teal : K.tertiary }}>ES</span>
+      <span style={{ color: K.line, margin: "0 1px" }}>|</span>
+      <span style={{ color: lang === "en" ? K.teal : K.tertiary }}>EN</span>
+    </button>
+  );
+}
+
+export function AuthButton({
+  children,
+  disabled,
+}: {
+  children: React.ReactNode;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="submit"
+      disabled={disabled}
+      className="auth-btn"
+      style={{
+        width: "100%",
+        background: "#1D9E75",
+        color: "#fff",
+        fontFamily: "'Inter', system-ui, sans-serif",
+        fontSize: 15,
+        fontWeight: 500,
+        border: "none",
+        borderRadius: 8,
+        padding: "12px",
+        cursor: disabled ? "not-allowed" : "pointer",
+        opacity: disabled ? 0.65 : 1,
+        transition: "background 0.15s",
+      }}
+    >
       {children}
-    </label>
+    </button>
   );
 }

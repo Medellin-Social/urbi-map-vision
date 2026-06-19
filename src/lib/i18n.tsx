@@ -462,6 +462,18 @@ const PHRASES: Array<[string, string]> = [
   ["Año 1", "Year 1"],
 
   // ---- Auth ----
+  ["Bienvenido de nuevo", "Welcome back"],
+  ["Ingresa a tu cuenta para continuar", "Log in to your account to continue"],
+  ["Crea tu cuenta", "Create your account"],
+  ["Explora el mercado inmobiliario y la comunidad del Valle de Aburrá",
+    "Explore the real estate market and the Aburrá Valley community"],
+  ["Tu ciudad, tus datos,\ntus decisiones.", "Your city, your data,\nyour decisions."],
+  ["Únete a la comunidad que\nestá construyendo Medellín.", "Join the community\nbuilding Medellín."],
+  ["54,000+ propiedades · 606 barrios · 12,000+ negocios",
+    "54,000+ properties · 606 neighborhoods · 12,000+ businesses"],
+  ["¿No tienes cuenta?", "Don't have an account?"],
+  ["Regístrate", "Sign up"],
+  ["Crear cuenta →", "Create account →"],
   ["Creando cuenta…", "Creating account…"],
   ["Error al crear la cuenta.", "Error creating account."],
   ["Credenciales inválidas.", "Invalid credentials."],

@@ -38,10 +38,12 @@ function MapPage() {
 }
 
 const TAB_TO_TARGET: Record<MapTab, Target | null> = {
-  buy:   "buyer",
-  rent:  "renter",
-  sell:  "seller",
-  agent: null,
+  buy:        "buyer",
+  rent:       "renter",
+  sell:       "seller",
+  agent:      null,
+  simulator:  null,
+  comparador: null,
 };
 
 function MapPageInner() {

@@ -125,6 +125,30 @@ def upgrade() -> None:
     op.execute("ALTER TABLE raw.barrios ADD COLUMN IF NOT EXISTS uso_suelo_score integer")
     # score_mediano_plazo may exist as a table (pre-migration) — must drop before CREATE VIEW
     op.execute("DROP TABLE IF EXISTS analytics.score_mediano_plazo")
+    # These are dbt models; create stubs so the view definition validates on fresh DB
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS analytics.barrios_mercado (
+            barrio_id              integer,
+            yield_renta_media_pct  double precision,
+            yield_bruto            double precision,
+            estado_precio          text
+        )
+    """)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS analytics.barrios_pois_distancia (
+            barrio_id       integer,
+            n_cafes_500m    integer,
+            n_coworking_1km integer,
+            n_gimnasios_1km integer,
+            indice_nomada   double precision
+        )
+    """)
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS analytics.barrios_seguridad (
+            barrio_id                  integer,
+            score_seguridad_residente  double precision
+        )
+    """)
     op.execute(_VIEW_SQL)
 
 

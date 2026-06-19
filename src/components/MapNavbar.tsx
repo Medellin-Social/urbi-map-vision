@@ -1,16 +1,19 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, ArrowLeft } from "lucide-react";
+import { LogOut, ArrowLeft, Lock } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
+import { useIsPro } from "@/components/LockedField";
 import type { Neighborhood } from "@/lib/adapters";
 
-export type MapTab = "buy" | "rent" | "sell" | "agent";
+export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
 
-const TABS: { id: MapTab; label: string }[] = [
-  { id: "buy",   label: "Comprar" },
-  { id: "rent",  label: "Arrendar" },
-  { id: "sell",  label: "Vender / Arrendar" },
-  { id: "agent", label: "Agentes" },
+const TABS: { id: MapTab; label: string; route?: string }[] = [
+  { id: "buy",        label: "Comprar" },
+  { id: "rent",       label: "Arrendar" },
+  { id: "sell",       label: "Vender / Arrendar", route: "/vender" },
+  { id: "agent",      label: "Agentes",            route: "/agentes" },
+  { id: "simulator",  label: "Simulador",           route: "/simulador" },
+  { id: "comparador", label: "Comparador",          route: "/comparador" },
 ];
 
 type MapNavbarProps = {
@@ -35,6 +38,7 @@ const C = {
 export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack }: MapNavbarProps) {
   const navigate = useNavigate();
   const { lang, toggle } = useLang();
+  const isPro = useIsPro();
   const user = typeof window !== "undefined" ? auth.get() : null;
 
   const initials = (user?.name ?? "U")
@@ -99,33 +103,44 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       <nav style={{ display: "flex", alignItems: "stretch", flex: 1 }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
-          if (tab.id === "sell" || tab.id === "agent") {
-            const dest = tab.id === "sell" ? "/vender" : "/agentes";
+
+          if (tab.route) {
             return (
               <button
                 key={tab.id}
-                onClick={() => navigate({ to: dest })}
+                onClick={() => navigate({ to: tab.route as any })}
                 style={{
                   background: "none", border: "none", padding: "0 14px",
-                  borderBottom: "2px solid transparent",
-                  color: C.muted,
-                  fontWeight: 500,
+                  borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
+                  color: active ? C.tealDeep : C.muted,
+                  fontWeight: active ? 700 : 500,
                   fontSize: 13, cursor: "pointer",
                   transition: "color 0.15s",
                   letterSpacing: "0.1px",
                   flexShrink: 0,
+                  display: "flex", alignItems: "center", gap: 4,
                 }}
-                onMouseEnter={(e) => { e.currentTarget.style.color = C.ink; }}
-                onMouseLeave={(e) => { e.currentTarget.style.color = C.muted; }}
+                onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
+                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.tealDeep : C.muted; }}
               >
                 {tab.label}
+                {tab.id === "simulator" && !isPro && (
+                  <Lock size={10} style={{ opacity: 0.45, flexShrink: 0 }} />
+                )}
               </button>
             );
           }
+
           return (
             <button
               key={tab.id}
-              onClick={() => onTabChange(tab.id)}
+              onClick={() => {
+                if (activeTab === "simulator" || activeTab === "comparador") {
+                  navigate({ to: "/map" });
+                } else {
+                  onTabChange(tab.id);
+                }
+              }}
               style={{
                 background: "none", border: "none", padding: "0 14px",
                 borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",

@@ -6,7 +6,7 @@ import {
   ArrowLeft, Lock, Plus, X, ChevronDown, ChevronUp,
   Trophy, MapPin, Clock, Trash2, Home, Building2, BarChart2,
 } from "lucide-react";
-import { Navbar } from "@/components/Navbar";
+import { MapNavbar } from "@/components/MapNavbar";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useBarriosRaw, useCompararRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood } from "@/lib/adapters";
@@ -1025,7 +1025,7 @@ function ComparadorPage() {
 
   return (
     <div className="paper-theme relative min-h-screen bg-background pb-20">
-      <Navbar />
+      <MapNavbar activeTab="comparador" onTabChange={() => {}} />
       <main className="mx-auto max-w-6xl px-4 pt-24 sm:px-6">
         <Link
           to="/map"
