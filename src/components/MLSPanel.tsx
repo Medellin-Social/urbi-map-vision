@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { useIsPro } from "@/components/LockedField";
 import { toast } from "sonner";
 
 type Props = {
@@ -124,6 +125,7 @@ function ListingCard({
   onToggleFav: () => void;
   onSimular: () => void;
 }) {
+  const isPro = useIsPro();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
@@ -193,7 +195,7 @@ function ListingCard({
           {tipo}
         </span>
         {/* Comparador "+" button */}
-        {(
+        {isPro && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -231,7 +233,7 @@ function ListingCard({
             YA NO DISPONIBLE
           </span>
         )}
-        {listing.buena_oferta && listing.disponible_actualmente !== false && (
+        {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
           <span
             className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
             style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}

@@ -270,7 +270,8 @@ export function MapView({
     if (barriosRaw?.length) barriosRef.current = barriosRaw;
   }, [barriosRaw]);
 
-  const { data: comunasMetrics } = useComunasMetrics(perfil, target ?? "investor");
+  const isPro = ["pro", "agente"].includes(auth.get()?.plan ?? "");
+  const { data: comunasMetrics } = useComunasMetrics(perfil, isPro ? (target ?? "investor") : "investor");
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
@@ -633,15 +634,17 @@ export function MapView({
     if (!source) return;
 
     const enrichAndRender = (features: GeoJSON.Feature[]) => {
+      const userPlan = auth.get()?.plan ?? "free";
+      const isPlanPro = userPlan === "pro" || userPlan === "agente";
       const enriched = features.map((feat) => {
         const cd = feat.properties?.cd_comuna as number | null;
-        const m: ComunaMetrics | undefined = cd != null ? comunasMetrics?.[String(cd)] : undefined;
+        const m: ComunaMetrics | undefined = isPlanPro && cd != null ? comunasMetrics?.[String(cd)] : undefined;
         return {
           ...feat,
           id: cd ?? feat.id,
           properties: m
             ? { ...feat.properties, ...m }
-            : { ...feat.properties, color_hex: "#888780", has_data: false },
+            : { ...feat.properties, color_hex: isPlanPro ? "#888780" : "#1e3a5f", has_data: false },
         };
       });
       source.setData({ type: "FeatureCollection", features: enriched } as GeoJSON.FeatureCollection);
@@ -915,15 +918,6 @@ export function MapView({
     { color: "#9B8B75", label: "Bodega" },
   ];
 
-  const ZONE_LEGEND: Record<string, [string, string, string]> = {
-    buyer:    ["Precio/m² bajo", "Precio/m² medio", "Precio/m² alto"],
-    investor: ["Alto rendimiento", "Rend. medio",    "Bajo rendimiento"],
-    renter:   ["Canon bajo",      "Canon medio",     "Canon alto"],
-    landlord: ["Alta demanda",    "Demanda media",   "Baja demanda"],
-    seller:   ["Alta liquidez",   "Liquidez media",  "Baja liquidez"],
-  };
-  const zoneLegendLabels = ZONE_LEGEND[target ?? "investor"] ?? ZONE_LEGEND.investor;
-
   return (
     <>
       <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />
@@ -949,42 +943,19 @@ export function MapView({
         </div>
       )}
 
-      {/* Leyenda comunas — solo en vista de zonas */}
-      {mapView === "zonas" && (
-        <div style={{
-          position: "absolute", bottom: 40, left: 16, zIndex: 10,
-          background: "rgba(250,247,242,0.95)", border: "1px solid #E8E0D0",
-          borderRadius: 8, padding: "8px 12px",
-          display: "flex", flexDirection: "column", gap: 4,
-        }}>
-          {([
-            ["#1D9E75", 0], ["#E8D574", 1], ["#D85A30", 2],
-          ] as [string, number][]).map(([color, i]) => (
-            <div key={i} style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, color: "#1A1208" }}>
-              <span style={{ width: 10, height: 10, borderRadius: 2, background: color, display: "inline-block", flexShrink: 0 }} />
-              {zoneLegendLabels[i]}
-            </div>
-          ))}
-        </div>
-      )}
-
-      {(perfil || target) && mapView === "zonas" && (
-        <div className="absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm" style={{ marginBottom: 72 }}>
-          <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-          <span>
-            Mapa para:{" "}
-            <strong className="text-foreground">
-              {_PERFIL_BADGE_LABEL[perfil ?? ""] ?? (target ? { buyer: "Comprador", investor: "Inversor", renter: "Arrendatario", landlord: "Arrendador", seller: "Vendedor" }[target] : null) ?? perfil ?? target}
-            </strong>
-            {risk && (
-              <>
-                <span className="mx-1 opacity-40">·</span>
-                <strong className="text-foreground">{_RISK_BADGE_LABEL[risk] ?? risk}</strong>
-              </>
-            )}
-          </span>
-        </div>
-      )}
+      <div className={`absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm${perfil ? "" : " hidden"}`}>
+        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
+        <span>
+          Personalizado para:{" "}
+          <strong className="text-foreground">{_PERFIL_BADGE_LABEL[perfil ?? ""] ?? perfil}</strong>
+          {risk && (
+            <>
+              <span className="mx-1 opacity-40">·</span>
+              <strong className="text-foreground">{_RISK_BADGE_LABEL[risk] ?? risk}</strong>
+            </>
+          )}
+        </span>
+      </div>
     </>
   );
 }

@@ -9,6 +9,7 @@ import {
   ArrowUpDown, Building2, Users, Dumbbell, Waves, Car, DoorClosed,
   Shield, Camera, Trees, Baby, TrainFront,
 } from "lucide-react";
+import { useIsPro } from "@/components/LockedField";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
@@ -802,6 +803,7 @@ function AmenidadesPanel({
 export function MapFilterBar({
   activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
 }: MapFilterBarProps) {
+  const isPro = useIsPro();
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -1358,6 +1360,34 @@ export function MapFilterBar({
                 })}
               </div>
 
+
+              {/* PRO teasers — solo para usuarios sin plan pro */}
+              {!isPro && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <span style={labelSm}>Filtros PRO</span>
+                {proTeasers.map((t) => (
+                  <div key={t.label} style={{
+                    display: "flex", alignItems: "center", justifyContent: "space-between",
+                    padding: "8px 10px", borderRadius: 8,
+                    background: "rgba(255,201,40,0.06)",
+                    border: "1px solid rgba(255,201,40,0.3)",
+                    userSelect: "none",
+                  }}>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>🔒 {t.label}</div>
+                      <div style={{ fontSize: 10, color: C.muted }}>{t.desc}</div>
+                    </div>
+                    <span style={{
+                      fontSize: 9, fontWeight: 800, letterSpacing: "1px",
+                      background: "#ffc928", color: "#1A1208",
+                      padding: "2px 7px", borderRadius: 999, flexShrink: 0,
+                    }}>
+                      PRO
+                    </span>
+                  </div>
+                ))}
+              </div>
+              )}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
