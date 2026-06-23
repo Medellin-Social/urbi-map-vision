@@ -249,6 +249,61 @@ async def get_comunas_geojson(
     return result
 
 
+@router.get("/cd/{cd_comuna}/barrios")
+async def get_barrios_in_comuna_by_cd(
+    cd_comuna: int,
+    perfil: Optional[str] = Query(None),
+    pool=Depends(get_pool),
+) -> list[dict]:
+    """Lista de barrios de una comuna por cd_comuna (más confiable que nombre)."""
+    score_col = get_score_col(perfil)
+    sql = """
+SELECT
+    b.id                                        AS barrio_id,
+    b.nombre,
+    b.comuna,
+    bc.cd_comuna,
+    bm.precio_venta_m2_p50                      AS precio_m2_cop,
+    bm.precio_arriendo_p50                      AS arriendo_cop,
+    bm.yield_bruto                              AS yield_pct,
+    sc.{score_col}                              AS score,
+    lq.liquidez_score,
+    b.excluir_inversion,
+    ST_X(ST_Centroid(b.geometry))               AS lon,
+    ST_Y(ST_Centroid(b.geometry))               AS lat
+FROM raw.barrios b
+JOIN analytics.barrios_cd bc                     ON bc.barrio_id = b.id
+LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
+LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
+LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
+WHERE bc.cd_comuna = $1
+ORDER BY b.nombre
+""".format(score_col=score_col)
+
+    try:
+        rows = await pool.fetch(sql, cd_comuna)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    return [
+        {
+            "barrio_id":      row["barrio_id"],
+            "nombre":         row["nombre"],
+            "comuna":         row["comuna"],
+            "cd_comuna":      row["cd_comuna"],
+            "precio_m2_cop":  row["precio_m2_cop"],
+            "arriendo_cop":   row["arriendo_cop"],
+            "yield_pct":      float(row["yield_pct"]) if row["yield_pct"] else None,
+            "score":          row["score"],
+            "liquidez_score": row["liquidez_score"],
+            "excluir":        bool(row["excluir_inversion"]),
+            "lat":            float(row["lat"]) if row["lat"] else None,
+            "lon":            float(row["lon"]) if row["lon"] else None,
+        }
+        for row in rows
+    ]
+
+
 @router.get("/{nombre}/barrios")
 async def get_barrios_in_comuna(
     nombre: str,

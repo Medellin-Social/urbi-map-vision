@@ -11,12 +11,51 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user, is_pro
+from api.dependencies import get_optional_user
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
 
 _USD = USD_TO_COP
+
+_AMENIDADES_VARIANTS: dict[str, list[str]] = {
+    "piscina":                ["Piscina"],
+    "gimnasio":               ["Gimnasio"],
+    "ascensor":               ["Ascensor", "Número de Ascensores 1", "Número de Ascensores 2",
+                               "Número de Ascensores 3", "Número de Ascensores 4"],
+    "balcon":                 ["Terraza/Balcón balcón"],
+    "lavanderia":             ["Zona de lavanderia"],
+    "conjunto_cerrado":       ["Conjunto cerrado"],
+    "cocina_integral":        ["Cocina integral"],
+    "salon_comunal":          ["Salón  comunal"],
+    "zona_ninos":             ["Zona para niños"],
+    "parqueadero_visitantes": ["Parqueadero visitantes"],
+    "vigilancia":             ["Vigilancia 24hrs", "Vigilancia"],
+    "camaras":                ["Circuito cerrado de TV"],
+    "transporte":             ["Cerca Transporte Público"],
+    "zonas_verdes":           ["Zonas verdes"],
+    "porteria":               ["Recepción Lobby"],
+}
+
+
+def _build_amenidades_sql(keys: list[str], base: int = 14) -> tuple[str, list]:
+    """Returns (WHERE clauses string, extra positional args). Each key adds one AND EXISTS pair."""
+    clauses: list[str] = []
+    extra: list = []
+    for key in keys:
+        variants = _AMENIDADES_VARIANTS.get(key)
+        if not variants:
+            continue
+        n = base + len(extra) + 1
+        extra.append(variants)
+        clauses.append(
+            f"AND EXISTS (\n"
+            f"    SELECT 1 FROM raw.listings_metrocuadrado _am\n"
+            f"    WHERE _am.url = l.url AND _am.amenidades && ${n}::text[]\n"
+            f")"
+        )
+    return "\n  ".join(clauses), extra
+
 
 # In-process TTL cache for _expand_neighbors — barrios/geometry never change at runtime.
 _NEIGHBORS_TTL = 60  # seconds
@@ -111,7 +150,7 @@ class ListingsAllResponse(BaseModel):
 # analytics.barrios_contexto  replaces: bctx CTE (6 analytics table JOINs)
 # analytics.barrios_cd        replaces: barrio_cd CTE (catastro JOIN)
 # analytics.listings_georef   replaces: 3 LEFT JOINs (lm/lf/lp) + COALESCE lat/lon filter
-_LISTINGS_SQL = """
+_LISTINGS_SQL_TMPL = """
 WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            listing_uid,
@@ -228,10 +267,10 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($5::bigint  IS NULL OR l.precio >= $5)
   AND ($6::bigint  IS NULL OR l.precio <= $6)
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
-  AND ($8::int     IS NULL OR l.habitaciones = $8)
+  AND ($8::int     IS NULL OR (CASE WHEN $8 >= 4 THEN l.habitaciones >= $8 ELSE l.habitaciones = $8 END))
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
-  AND ($11::float8 IS NULL OR l.banos >= $11)
+  AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN l.banos >= $11 ELSE l.banos = $11 END))
   AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
@@ -239,6 +278,7 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
       WHERE _lmc.url = l.url
         AND _lmc.raw_data::text LIKE '%tiempoConstruido:' || $14 || '%'
   ))
+  {{amenidades_filter}}
 ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
          WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
@@ -246,8 +286,9 @@ ORDER BY
     CASE WHEN l.fuente = 'medellinliving' THEN 0 ELSE 1 END,
     l.pm2 ASC NULLS LAST
 """.format(usd=int(_USD))
+_LISTINGS_SQL = _LISTINGS_SQL_TMPL.format(amenidades_filter="")
 
-_COUNT_SQL = """
+_COUNT_SQL_TMPL = """
 WITH lraw AS (
     SELECT fuente, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2,
@@ -273,7 +314,7 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($8::int    IS NULL OR l.habitaciones = $8)
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
-  AND ($11::float8 IS NULL OR l.banos >= $11)
+  AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN l.banos >= $11 ELSE l.banos = $11 END))
   AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
@@ -281,7 +322,9 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
       WHERE _lmc.url = l.url
         AND _lmc.raw_data::text LIKE '%tiempoConstruido:' || $14 || '%'
   ))
+  {amenidades_filter}
 """
+_COUNT_SQL = _COUNT_SQL_TMPL.format(amenidades_filter="")
 
 _BARRIO_CTX_KEYS = (
     "score_corto", "score_mediano", "score_largo",
@@ -396,11 +439,17 @@ async def _expand_neighbors(
     return result
 
 
-async def _count_and_fetch(pool: Any, args: tuple, fetch_limit: int, fetch_offset: int) -> tuple:
+async def _count_and_fetch(
+    pool: Any, args: tuple, fetch_limit: int, fetch_offset: int,
+    count_sql: str | None = None,
+    listings_sql: str | None = None,
+) -> tuple:
     """Run COUNT + LISTINGS concurrently. Returns (count, rows)."""
+    csql = count_sql if count_sql is not None else _COUNT_SQL
+    lsql = (listings_sql if listings_sql is not None else _LISTINGS_SQL) + f" LIMIT {fetch_limit} OFFSET {fetch_offset}"
     count, rows = await asyncio.gather(
-        pool.fetchval(_COUNT_SQL, *args),
-        pool.fetch(_LISTINGS_SQL + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+        pool.fetchval(csql, *args),
+        pool.fetch(lsql, *args),
     )
     return count or 0, rows
 
@@ -421,6 +470,7 @@ async def get_all_listings(
     cd_comuna: Optional[int] = Query(default=None),
     estrato_real: Optional[int] = Query(default=None),
     antiguedad: Optional[str] = Query(default=None),
+    amenidades: Optional[list[str]] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
     current_user: Optional[dict] = Depends(get_optional_user),
@@ -456,10 +506,14 @@ async def get_all_listings(
         except Exception:
             pass
 
+    am_clauses, am_extra = _build_amenidades_sql(amenidades or [])
+    _eff_count_sql    = _COUNT_SQL_TMPL.format(amenidades_filter=am_clauses)
+    _eff_listings_sql = _LISTINGS_SQL_TMPL.format(amenidades_filter=am_clauses)
+
     def _args(tipo_op: Optional[str]) -> tuple:
         return (municipio, barrio_ids, tipo_op, tipo_inmueble,
                 precio_min, precio_max, area_min, habitaciones, only_premium,
-                area_max, banos, cd_comuna, estrato_real, antiguedad)
+                area_max, banos, cd_comuna, estrato_real, antiguedad) + tuple(am_extra)
 
     # Unified venta+arriendo path: 2 parallel fetches → balanced results, 1 HTTP round-trip.
     # Only applies when: no tipo_operacion filter, barrio selected, no premium, no personalization, page 0.
@@ -467,8 +521,8 @@ async def get_all_listings(
             and not only_premium and not perfil_dict and offset == 0):
         half = max(1, limit // 2)
         (total_v, rows_v), (total_a, rows_a) = await asyncio.gather(
-            _count_and_fetch(pool, _args("venta"),   half, 0),
-            _count_and_fetch(pool, _args("arriendo"), half, 0),
+            _count_and_fetch(pool, _args("venta"),    half, 0, _eff_count_sql, _eff_listings_sql),
+            _count_and_fetch(pool, _args("arriendo"), half, 0, _eff_count_sql, _eff_listings_sql),
         )
         rows = list(rows_v) + list(rows_a)
         total = (total_v or 0) + (total_a or 0)
@@ -483,18 +537,14 @@ async def get_all_listings(
             fetch_limit = limit
             fetch_offset = offset
         total, rows = await asyncio.gather(
-            pool.fetchval(_COUNT_SQL, *args),
-            pool.fetch(_LISTINGS_SQL + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+            pool.fetchval(_eff_count_sql, *args),
+            pool.fetch(_eff_listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
         )
         total = total or 0
 
-    _is_pro = is_pro(current_user)
     items: list[ListingFull] = []
     for r in rows:
         row_d = dict(r)
-        if not _is_pro:
-            row_d["buena_oferta"] = None
-            row_d["pct_bajo_mediana"] = None
         if perfil_dict:
             barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS}
             score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
@@ -693,13 +743,6 @@ async def get_listing_by_id(
     row_d = dict(row)
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []
-    if not is_pro(current_user):
-        row_d["buena_oferta"] = None
-        row_d["pct_bajo_mediana"] = None
-        row_d["precio_m2_p25"] = None
-        row_d["precio_m2_p75"] = None
-        row_d["arr_p25"] = None
-        row_d["arr_p75"] = None
     return ListingDetail(**row_d)
 
 

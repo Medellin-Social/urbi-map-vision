@@ -39,10 +39,16 @@ CREATE TABLE IF NOT EXISTS raw.listings_renta_media (
     lat               DECIMAL(10,6),
     lon               DECIMAL(10,6),
     fecha_scraping    TIMESTAMP DEFAULT NOW(),
-    dedup_hash        VARCHAR UNIQUE
+    dedup_hash        VARCHAR UNIQUE,
+    descripcion       TEXT,
+    fotos             TEXT[],
+    amenidades        TEXT[]
 );
 CREATE INDEX IF NOT EXISTS idx_lrm_barrio_id ON raw.listings_renta_media(barrio_id);
 CREATE INDEX IF NOT EXISTS idx_lrm_fuente    ON raw.listings_renta_media(fuente);
+ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS descripcion  TEXT;
+ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS fotos        TEXT[];
+ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS amenidades   TEXT[];
 """
 
 
@@ -131,3 +137,48 @@ def upsert_listing(conn, listing: dict) -> None:
     with conn.cursor() as cur:
         cur.execute(UPSERT_SQL, listing)
     conn.commit()
+
+
+UPDATE_DETAIL_SQL = """
+UPDATE raw.listings_renta_media SET
+    descripcion = COALESCE(%(descripcion)s, descripcion),
+    fotos       = CASE WHEN %(fotos)s IS NOT NULL THEN %(fotos)s ELSE fotos END,
+    amenidades  = CASE WHEN %(amenidades)s IS NOT NULL THEN %(amenidades)s ELSE amenidades END,
+    lat         = COALESCE(%(lat)s, lat),
+    lon         = COALESCE(%(lon)s, lon),
+    area_m2     = COALESCE(%(area_m2)s, area_m2),
+    habitaciones = COALESCE(%(habitaciones)s, habitaciones),
+    banos       = COALESCE(%(banos)s, banos),
+    fecha_scraping = NOW()
+WHERE url = %(url)s
+"""
+
+
+def update_listing_detail(
+    conn,
+    url: str,
+    descripcion: Optional[str] = None,
+    fotos: Optional[list] = None,
+    amenidades: Optional[list] = None,
+    lat: Optional[float] = None,
+    lon: Optional[float] = None,
+    area_m2: Optional[float] = None,
+    habitaciones: Optional[int] = None,
+    banos: Optional[float] = None,
+) -> bool:
+    """Update rich detail fields for an existing listing row. Returns True if row updated."""
+    with conn.cursor() as cur:
+        cur.execute(UPDATE_DETAIL_SQL, {
+            "url":          url,
+            "descripcion":  descripcion,
+            "fotos":        fotos,
+            "amenidades":   amenidades,
+            "lat":          lat,
+            "lon":          lon,
+            "area_m2":      area_m2,
+            "habitaciones": habitaciones,
+            "banos":        banos,
+        })
+        updated = cur.rowcount > 0
+    conn.commit()
+    return updated
