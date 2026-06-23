@@ -244,6 +244,10 @@ export type ApiListing = {
   lon?: number | null;
   barrio_id?: number | null;
   barrio_nombre?: string | null;
+  barrio_display?: string | null;
+  municipio?: string | null;
+  municipio_display?: string | null;
+  comuna_nombre?: string | null;
   cd_comuna?: number | null;
   tier?: string | null;
   estrato_real?: number | null;
@@ -262,10 +266,6 @@ export type ApiListing = {
 };
 
 export type ApiListingDetail = ApiListing & {
-  municipio?: string | null;
-  barrio_display?: string | null;
-  municipio_display?: string | null;
-  comuna_nombre?: string | null;
   estrato_real?: number | null;
   descripcion?: string | null;
   arriendo_p50_barrio?: number | null;

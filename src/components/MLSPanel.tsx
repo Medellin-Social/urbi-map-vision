@@ -8,7 +8,6 @@ import { useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { auth } from "@/lib/auth";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
-import { useIsPro } from "@/components/LockedField";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { toast } from "sonner";
 
@@ -37,6 +36,12 @@ type Props = {
   drawnPolygon?: GeoJSON.Feature | null;
   onToggleDrawMode?: () => void;
   onClearDraw?: () => void;
+  // Commune drill-down
+  activeComuna?: string | null;
+  activeMunicipio?: string | null;
+  comunaBarrios?: Array<{ barrio_id: number; nombre: string }>;
+  onBackToComuna?: () => void;
+  onSelectBarrioInComune?: (barrioId: number) => void;
 };
 
 // Internal-only filters — common filters (precio, hab, tipo, area, banos, antiguedad, tipoOp)
@@ -119,7 +124,6 @@ function ListingCard({
   onToggleFav: () => void;
   onSimular: () => void;
 }) {
-  const isPro = useIsPro();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
@@ -189,7 +193,7 @@ function ListingCard({
           {tipo}
         </span>
         {/* Comparador "+" button */}
-        {isPro && (
+        {(
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -227,7 +231,7 @@ function ListingCard({
             YA NO DISPONIBLE
           </span>
         )}
-        {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
+        {listing.buena_oferta && listing.disponible_actualmente !== false && (
           <span
             className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
             style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}
@@ -363,6 +367,11 @@ export function MLSPanel({
   drawnPolygon,
   onToggleDrawMode,
   onClearDraw,
+  activeComuna,
+  activeMunicipio,
+  comunaBarrios,
+  onBackToComuna,
+  onSelectBarrioInComune,
 }: Props) {
   const [filters, setFilters] = useState<Filters>({
     soloPromium: false,
@@ -437,6 +446,15 @@ export function MLSPanel({
         if (ef.diasMercado === "mas30"    && d < 30)   return false;
         if (ef.diasMercado === "mas60"    && d < 60)   return false;
       }
+      if (ef.busqueda) {
+        const q = ef.busqueda.toLowerCase();
+        const haystack = [
+          l.barrio_nombre, l.barrio_display,
+          l.municipio, l.municipio_display,
+          l.comuna_nombre, l.direccion_raw,
+        ].filter(Boolean).join(" ").toLowerCase();
+        if (!haystack.includes(q)) return false;
+      }
       // Internal filters
       if (filters.soloPromium && l.tier !== "agencia_premium") return false;
       if (filters.scoreMin !== null && (l.barrio_score ?? 0) < filters.scoreMin) return false;
@@ -486,6 +504,15 @@ export function MLSPanel({
     }`;
 
   const headerName = toTitleCase(barrio.nombre);
+  const isAtBarrioLevel = barrio.id > 0;
+  const isAtTopLevel = barrio.id === -1 && !activeComuna && !activeMunicipio;
+  const comunaLabel = activeComuna
+    ? toTitleCase(activeComuna)
+    : activeMunicipio
+    ? toTitleCase(activeMunicipio)
+    : isAtBarrioLevel
+    ? toTitleCase(barrio.comuna ?? "")
+    : null;
 
   return (
     <AnimatePresence>
@@ -500,27 +527,72 @@ export function MLSPanel({
       >
         {/* Header */}
         <div className="border-b border-border px-4 pb-3 pt-[104px]">
-          <button
-            onClick={onBack}
-            className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Volver al análisis
-          </button>
+          {isAtTopLevel ? (
+            <button
+              onClick={onBack}
+              className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              Volver al análisis
+            </button>
+          ) : (
+            <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
+              <button
+                onClick={onBack}
+                className="font-medium text-primary transition hover:underline"
+              >
+                Medellín
+              </button>
+              {comunaLabel && (
+                <>
+                  <span className="text-muted-foreground/60">›</span>
+                  {isAtBarrioLevel && onBackToComuna && activeComuna ? (
+                    <button onClick={onBackToComuna} className="text-primary transition hover:underline">
+                      {comunaLabel}
+                    </button>
+                  ) : (
+                    <span className={isAtBarrioLevel ? "text-muted-foreground" : "font-semibold text-foreground"}>
+                      {comunaLabel}
+                    </span>
+                  )}
+                </>
+              )}
+              {isAtBarrioLevel && (
+                <>
+                  <span className="text-muted-foreground/60">›</span>
+                  <span className="font-semibold text-foreground">{headerName}</span>
+                </>
+              )}
+            </div>
+          )}
 
-          <div className="flex flex-col gap-0.5">
-            <h2 className="font-display text-base font-semibold">{headerName}</h2>
-            {barrio.comuna && barrio.comuna.toUpperCase() !== barrio.nombre.toUpperCase() && (
-              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Barrio · {toTitleCase(barrio.comuna)}
-              </span>
-            )}
-            {barrio.comuna && barrio.comuna.toUpperCase() === barrio.nombre.toUpperCase() && (
-              <span className="text-[10px] text-muted-foreground/60 uppercase tracking-wider">
-                Barrio · {toTitleCase(barrio.comuna)} · {barrio.municipio}
-              </span>
-            )}
-          </div>
+          {!isAtBarrioLevel && (
+            <div className="flex flex-col gap-0.5">
+              <h2 className="font-display text-base font-semibold">{headerName}</h2>
+            </div>
+          )}
+
+          {activeComuna && comunaBarrios && comunaBarrios.length > 0 && (
+            <select
+              value={isAtBarrioLevel ? String(barrio.id) : ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) onBackToComuna?.();
+                else onSelectBarrioInComune?.(Number(v));
+              }}
+              className="mt-2 w-full cursor-pointer rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+            >
+              <option value="">Todos los barrios</option>
+              {comunaBarrios
+                .slice()
+                .sort((a, b) => a.nombre.localeCompare(b.nombre))
+                .map(b => (
+                  <option key={b.barrio_id} value={b.barrio_id}>
+                    {toTitleCase(b.nombre)}
+                  </option>
+                ))}
+            </select>
+          )}
           <p className="mt-0.5 text-xs text-muted-foreground">
             {isLoading
               ? "Cargando…"

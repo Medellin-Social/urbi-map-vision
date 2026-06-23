@@ -54,11 +54,11 @@ export function BarrioProvider({ children, initialSlug }: { children: ReactNode;
   const [barrio, setBarrio] = useState<Barrio>(initial)
   const [lang, setLangState] = useState<'es' | 'en'>(() => {
     if (typeof window === 'undefined') return 'es'
-    return (localStorage.getItem('ms_lang') as 'es' | 'en') ?? 'es'
+    return (localStorage.getItem('medellin-social.lang') as 'es' | 'en') ?? 'es'
   })
 
   function setLang(l: 'es' | 'en') {
-    localStorage.setItem('ms_lang', l)
+    localStorage.setItem('medellin-social.lang', l)
     setLangState(l)
   }
 

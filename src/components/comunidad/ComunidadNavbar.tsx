@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
+import { useLang } from '../../lib/i18n'
 
 const K = {
   ink:      '#14201d',
@@ -77,10 +78,16 @@ const FALLBACK_ITEMS_EN = [
 ]
 
 export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
-  const { barrio, barrios, lang, setLang, setBarrioSlug } = useBarrio()
+  const { barrio, barrios, lang, setLang: setBarrioLang, setBarrioSlug } = useBarrio()
+  const { setLang: setGlobalLang } = useLang()
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
+
+  function setLang(l: 'es' | 'en') {
+    setBarrioLang(l)
+    setGlobalLang(l)
+  }
 
   const t = (es: string, en: string) => lang === 'es' ? es : en
 

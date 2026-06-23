@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
+import { API_ENDPOINTS } from "@/config/api";
 import { useTarget, type Target } from "@/contexts/TargetContext";
 import { ProfileChipMobile } from "@/components/Navbar";
 import { MapNavbar, type MapTab } from "@/components/MapNavbar";
@@ -32,6 +33,16 @@ const GOAL_TO_PERFIL: Record<string, string> = {
   nomadas: "mediano_plazo",
 };
 
+type ComunaBarrioItem = {
+  barrio_id: number;
+  nombre: string;
+  lat: number | null;
+  lon: number | null;
+  precio_m2_cop: number | null;
+  arriendo_cop: number | null;
+  yield_pct: number | null;
+};
+
 // ─── Map page ──────────────────────────────────────────────────────────────────
 function MapPage() {
   return <MapPageInner />;
@@ -48,9 +59,16 @@ const TAB_TO_TARGET: Record<MapTab, Target | null> = {
 
 function MapPageInner() {
   const { setTarget } = useTarget();
-  const [activeTab, setActiveTab] = useState<MapTab>("buy");
-  const [sharedFilters, setSharedFilters] = useState<SharedFilters>({
-    ...EMPTY_SHARED_FILTERS, tipoOp: "venta",
+  const [activeTab, setActiveTab] = useState<MapTab>(() => {
+    if (typeof window === "undefined") return "buy";
+    const op = new URLSearchParams(window.location.search).get("tipo_operacion");
+    return op === "arriendo" ? "rent" : "buy";
+  });
+  const [sharedFilters, setSharedFilters] = useState<SharedFilters>(() => {
+    const op = typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("tipo_operacion")
+      : null;
+    return { ...EMPTY_SHARED_FILTERS, tipoOp: op === "arriendo" ? "arriendo" : "venta" };
   });
   const [selected, setSelected] = useState<Neighborhood | null>(null);
   const [mostrarOportunidades, setMostrarOportunidades] = useState(
@@ -88,6 +106,7 @@ function MapPageInner() {
     sharedFilters.habitaciones, sharedFilters.tipoInmueble,
     sharedFilters.areaMin, sharedFilters.areaMax,
     sharedFilters.banos, sharedFilters.antiguedad,
+    sharedFilters.busqueda,
   ].filter((v) => v !== null).length;
 
   // API-level filters derived from sharedFilters — trigger refetch when changed
@@ -96,7 +115,8 @@ function MapPageInner() {
     area_max:   sharedFilters.areaMax,
     banos:      sharedFilters.banos,
     antiguedad: sharedFilters.antiguedad,
-  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad]);
+    amenidades: sharedFilters.amenidades,
+  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad, sharedFilters.amenidades]);
 
   // Pass tipoOp to backend so it returns the correct type (not a mixed 50/50 split).
   // undefined when "todos" so backend does the balanced venta+arriendo fetch.
@@ -132,6 +152,15 @@ function MapPageInner() {
   const [activeComunaCd, setActiveComunaCd] = useState<number | null>(null);
   const [activeMunicipio, setActiveMunicipio] = useState<string | null>(null);
   const returnToComunasRef = useRef<(() => void) | null>(null);
+  const [comunaBarriosList, setComunaBarriosList] = useState<ComunaBarrioItem[]>([]);
+
+  useEffect(() => {
+    if (!activeComunaCd) { setComunaBarriosList([]); return; }
+    fetch(API_ENDPOINTS.comunasBarriosByCd(activeComunaCd))
+      .then(r => r.ok ? r.json() : [])
+      .then(data => setComunaBarriosList(Array.isArray(data) ? data : []))
+      .catch(() => setComunaBarriosList([]));
+  }, [activeComunaCd]);
 
   // Derive query params: commune or municipality filter (only when no specific barrio).
   // Top-level view (no selection) defaults to all-Medellín so MLS panel is never empty.
@@ -302,7 +331,6 @@ function MapPageInner() {
     if (apiBarrio) {
       setMlsBarrio(barrioToNeighborhood(apiBarrio));
     } else {
-      // Fallback: build a minimal Neighborhood from BarrioOption so listings update
       setMlsBarrio({
         id: opt.id, nombre: opt.nombre, comuna: opt.comuna ?? opt.nombre,
         municipio: opt.municipio.toUpperCase(), estrato: 3,
@@ -311,6 +339,8 @@ function MapPageInner() {
         lat: opt.lat, lng: opt.lng, cd_comuna: opt.cd_comuna,
       });
     }
+    setMapView("listings");
+    setSelected(null);
     setActiveBarrioInComune(null);
     setFilteredListings(null);
     flyToListingRef.current?.(opt.lat, opt.lng);
@@ -329,6 +359,33 @@ function MapPageInner() {
     setFilteredListings(null);
     setDrawnPolygon(null);
     setDrawModeActive(false);
+  }
+
+  function handleBackToCommune() {
+    setMlsBarrio(null);
+    setFilteredListings(null);
+  }
+
+  function handleSelectBarrioInComune(barrioId: number) {
+    const item = comunaBarriosList.find(b => b.barrio_id === barrioId);
+    if (!item) return;
+    setMlsBarrio({
+      id: item.barrio_id,
+      nombre: item.nombre,
+      comuna: activeComuna ?? item.nombre,
+      municipio: "MEDELLÍN",
+      estrato: 0,
+      precio_m2: item.precio_m2_cop ?? 0,
+      arriendo: item.arriendo_cop ?? 0,
+      yield: item.yield_pct ?? 0,
+      anos_recupero: 0,
+      dist_metro: 0, dist_parque: 0, dist_mall: 0,
+      n_venta: 0, n_arriendo: 0,
+      lat: item.lat ?? 6.2442,
+      lng: item.lon ?? -75.5812,
+    });
+    setFilteredListings(null);
+    if (item.lat && item.lon) flyToListingRef.current?.(item.lat, item.lon);
   }
 
   function handleBarrioFilter(barrioNombre: string | null) {
@@ -390,7 +447,7 @@ function MapPageInner() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
-      <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0">
+      <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0 z-0">
         <MapView
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
@@ -445,6 +502,7 @@ function MapPageInner() {
         onResetAll={handleResetFilters}
         allBarrios={allBarrioOptions}
         onBarrioNavigate={handleBarrioNavigate}
+        onBarrioClear={() => { setMlsBarrio(null); setMapView("zonas"); }}
       />
       <ProfileChipMobile />
 
@@ -493,6 +551,11 @@ function MapPageInner() {
           premiumBarriosIncluidos={premiumBarriosIncluidos}
           onPremiumExpand={setPremiumExpand}
           externalFilters={sharedFilters}
+          activeComuna={activeComuna}
+          activeMunicipio={activeMunicipio}
+          comunaBarrios={comunaBarriosList}
+          onBackToComuna={handleBackToCommune}
+          onSelectBarrioInComune={handleSelectBarrioInComune}
         />
       )}
 

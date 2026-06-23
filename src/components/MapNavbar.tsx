@@ -1,8 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, ArrowLeft, Lock } from "lucide-react";
+import { LogOut, ArrowLeft } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
-import { useIsPro } from "@/components/LockedField";
 import type { Neighborhood } from "@/lib/adapters";
 
 export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
@@ -38,7 +37,6 @@ const C = {
 export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack }: MapNavbarProps) {
   const navigate = useNavigate();
   const { lang, toggle } = useLang();
-  const isPro = useIsPro();
   const user = typeof window !== "undefined" ? auth.get() : null;
 
   const initials = (user?.name ?? "U")
@@ -51,7 +49,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
   return (
     <header
       style={{
-        position: "absolute", inset: "0 0 auto 0", zIndex: 30,
+        position: "absolute", inset: "0 0 auto 0", zIndex: 40,
         background: C.paper,
         borderBottom: `1px solid ${C.border}`,
         display: "flex", alignItems: "stretch",
@@ -124,9 +122,6 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.tealDeep : C.muted; }}
               >
                 {tab.label}
-                {tab.id === "simulator" && !isPro && (
-                  <Lock size={10} style={{ opacity: 0.45, flexShrink: 0 }} />
-                )}
               </button>
             );
           }

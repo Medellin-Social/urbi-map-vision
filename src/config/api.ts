@@ -52,6 +52,7 @@ export const API_ENDPOINTS = {
   // Comunas (MLS visual layer)
   comunasGeoJSON: `${API_BASE_URL}/comunas/geojson`,
   comunasBarrios: (nombre: string) => `${API_BASE_URL}/comunas/${encodeURIComponent(nombre)}/barrios`,
+  comunasBarriosByCd: (cd: number) => `${API_BASE_URL}/comunas/cd/${cd}/barrios`,
 
   // Agentes
   agentesRegistro: `${API_BASE_URL}/agentes/registro`,

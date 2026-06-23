@@ -1,6 +1,14 @@
-import { useState, useRef, useEffect, useMemo } from "react";
-import { ChevronDown, X, SlidersHorizontal } from "lucide-react";
-import { useIsPro } from "@/components/LockedField";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+
+function norm(s: string): string {
+  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+import {
+  ChevronDown, X, SlidersHorizontal, Search,
+  UtensilsCrossed, Wind, WashingMachine,
+  ArrowUpDown, Building2, Users, Dumbbell, Waves, Car, DoorClosed,
+  Shield, Camera, Trees, Baby, TrainFront,
+} from "lucide-react";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
@@ -17,6 +25,8 @@ export type SharedFilters = {
   antiguedad: string | null;
   estrato: number[] | null;
   diasMercado: "nuevo" | "reciente" | "demorado" | "mas30" | "mas60" | null;
+  amenidades: string[] | null;
+  busqueda: string | null;
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
@@ -31,6 +41,8 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   antiguedad: null,
   estrato: null,
   diasMercado: null,
+  amenidades: null,
+  busqueda: null,
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
@@ -51,6 +63,7 @@ type MapFilterBarProps = {
   onResetAll?: () => void;
   allBarrios?: BarrioOption[];
   onBarrioNavigate?: (opt: BarrioOption) => void;
+  onBarrioClear?: () => void;
 };
 
 const C = {
@@ -90,20 +103,19 @@ const ANTIGUEDAD_DIST: { value: string | null; label: string; h: number }[] = [
   { value: "Remodelado",         label: "Remods",  h: 0.28 },
 ];
 
-type DropdownId = "precio" | "habitaciones" | "tipo" | "area" | "banos" | "antiguedad" | "mas";
+type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
 
-function countActive(f: SharedFilters, tab: MapTab): number {
+function countActive(f: SharedFilters): number {
   let n = 0;
   if (f.precioMax !== null || f.precioMin !== null) n++;
   if (f.habitaciones !== null) n++;
+  if (f.banos !== null) n++;
   if (f.tipoInmueble !== null) n++;
   if (f.areaMin !== null || f.areaMax !== null) n++;
-  if (tab === "buy") {
-    if (f.banos !== null) n++;
-    if (f.antiguedad !== null) n++;
-  }
+  if (f.antiguedad !== null) n++;
   if (f.estrato !== null && f.estrato.length > 0) n++;
   if (f.diasMercado !== null) n++;
+  if (f.busqueda !== null) n++;
   return n;
 }
 
@@ -173,7 +185,7 @@ function precioLabel(f: SharedFilters, isRent: boolean): string {
 function habLabel(f: SharedFilters): string {
   if (f.habitaciones === null) return "Habitaciones";
   if (f.habitaciones === 4) return "4+ hab.";
-  return `${f.habitaciones}+ hab.`;
+  return `${f.habitaciones} hab.`;
 }
 
 function tipoLabel(f: SharedFilters): string {
@@ -189,12 +201,19 @@ function areaLabel(f: SharedFilters): string {
 
 function banosLabel(f: SharedFilters): string {
   if (f.banos === null) return "Baños";
-  if (f.banos === 3) return "3+ baños";
-  return `${f.banos}+ baños`;
+  if (f.banos === 4) return "4+ baños";
+  return `${f.banos} baños`;
 }
 
 function antiguedadLabel(f: SharedFilters): string {
   return ANTIGUEDAD_OPTIONS.find((o) => o.value === f.antiguedad)?.label ?? "Antigüedad";
+}
+
+function habBanosLabel(f: SharedFilters): string {
+  const parts: string[] = [];
+  if (f.habitaciones !== null) parts.push(f.habitaciones === 4 ? "4+ hab." : `${f.habitaciones} hab.`);
+  if (f.banos !== null) parts.push(f.banos === 4 ? "4+ baños" : `${f.banos} baños`);
+  return parts.length > 0 ? parts.join(", ") : "Hab. y Baños";
 }
 
 // ─── Dropdown panels ──────────────────────────────────────────────────────────
@@ -272,8 +291,8 @@ function PrecioPanel({
   onClose: () => void;
 }) {
   const TOTAL_MIN = 0;
-  const TOTAL_MAX = isRent ? 5_000_000 : 2_000_000_000;
-  const STEP      = isRent ? 50_000   : 5_000_000;
+  const TOTAL_MAX = isRent ? 10_000_000 : 2_000_000_000;
+  const STEP      = isRent ? 50_000    : 5_000_000;
 
   const curMin = filters.precioMin ?? TOTAL_MIN;
   const curMax = filters.precioMax ?? TOTAL_MAX;
@@ -312,10 +331,6 @@ function PrecioPanel({
     if (v >= TOTAL_MAX) return "Máx";
     return `$${Math.round(v / div)}${unit}`;
   };
-
-  const quicks = isRent
-    ? [500_000, 1_000_000, 1_500_000, 2_500_000, 4_000_000]
-    : [200_000_000, 400_000_000, 600_000_000, 800_000_000, 1_200_000_000];
 
   const thumbStyle: React.CSSProperties = {
     position: "absolute", bottom: 2,
@@ -398,30 +413,6 @@ function PrecioPanel({
           }}
           onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
         />
-      </div>
-
-      {/* Quick picks */}
-      <span style={{ ...labelSm, marginTop: 10 }}>Opciones rápidas</span>
-      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginBottom: 12 }}>
-        {quicks.map((q, i) => {
-          const isLast = i === quicks.length - 1;
-          return (
-            <button
-              key={q}
-              onClick={() => {
-                if (isLast) onChange({ precioMin: q, precioMax: null });
-                else        onChange({ precioMax: q, precioMin: null });
-              }}
-              style={{
-                padding: "4px 10px", borderRadius: 8, fontSize: 11,
-                border: `1px solid ${C.border}`, background: C.surface,
-                color: C.ink, cursor: "pointer",
-              }}
-            >
-              {isLast ? `$${Math.round(q / div)}${unit}+` : `$${Math.round(q / div)}${unit}`}
-            </button>
-          );
-        })}
       </div>
 
       <button
@@ -624,17 +615,239 @@ function AntiguedadPanel({
   );
 }
 
+// ─── HabBanosPanel ───────────────────────────────────────────────────────────
+
+function HabBanosPanel({
+  filters, onChange,
+}: {
+  filters: SharedFilters;
+  onChange: (f: Partial<SharedFilters>) => void;
+}) {
+  const OPTS = [
+    { value: null as number | null, label: "Cualquiera" },
+    { value: 1, label: "1" },
+    { value: 2, label: "2" },
+    { value: 3, label: "3" },
+    { value: 4, label: "4+" },
+  ];
+  return (
+    <div style={{ ...panelBase, minWidth: 240 }}>
+      <span style={labelSm}>Habitaciones</span>
+      <BtnGroup options={OPTS} current={filters.habitaciones} onChange={(v) => onChange({ habitaciones: v })} />
+      <div style={{ marginTop: 14 }}>
+        <span style={labelSm}>Baños</span>
+        <BtnGroup options={OPTS} current={filters.banos} onChange={(v) => onChange({ banos: v })} />
+      </div>
+      {(filters.habitaciones !== null || filters.banos !== null) && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => onChange({ habitaciones: null, banos: null })}
+            style={{ fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer" }}
+          >
+            Limpiar
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Amenidades ───────────────────────────────────────────────────────────────
+
+type AmenItem = { key: string; label: string; Icon: React.ElementType };
+
+const AMENIDADES_GROUPS: { id: string; label: string; items: AmenItem[] }[] = [
+  {
+    id: "interior",
+    label: "INTERIOR",
+    items: [
+      { key: "cocina_integral",  label: "Cocina integral",   Icon: UtensilsCrossed },
+      { key: "balcon",           label: "Balcón / Terraza",  Icon: Wind },
+      { key: "lavanderia",       label: "Lavandería",        Icon: WashingMachine },
+    ],
+  },
+  {
+    id: "edificio",
+    label: "EDIFICIO Y CONJUNTO",
+    items: [
+      { key: "ascensor",               label: "Ascensor",              Icon: ArrowUpDown },
+      { key: "conjunto_cerrado",       label: "Conjunto cerrado",      Icon: Building2 },
+      { key: "salon_comunal",          label: "Salón comunal",         Icon: Users },
+      { key: "gimnasio",               label: "Gimnasio",              Icon: Dumbbell },
+      { key: "piscina",                label: "Piscina",               Icon: Waves },
+      { key: "parqueadero_visitantes", label: "Parqueadero visitantes",Icon: Car },
+      { key: "porteria",               label: "Portería",              Icon: DoorClosed },
+    ],
+  },
+  {
+    id: "seguridad",
+    label: "SEGURIDAD Y ENTORNO",
+    items: [
+      { key: "vigilancia",  label: "Vigilancia 24h",        Icon: Shield },
+      { key: "camaras",     label: "Cámaras de seguridad",  Icon: Camera },
+      { key: "zonas_verdes",label: "Zonas verdes",          Icon: Trees },
+      { key: "zona_ninos",  label: "Zona de niños",         Icon: Baby },
+      { key: "transporte",  label: "Cerca al transporte",   Icon: TrainFront },
+    ],
+  },
+];
+
+function AmenidadesPanel({
+  current,
+  onChange,
+  onClose,
+}: {
+  current: string[];
+  onChange: (keys: string[]) => void;
+  onClose: () => void;
+}) {
+  const [pending, setPending] = useState<string[]>(current);
+
+  const toggleKey = (key: string) =>
+    setPending((prev) => prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]);
+
+  const clearAll = () => setPending([]);
+
+  const apply = () => { onChange(pending); onClose(); };
+
+  const ICON_COLOR = "#9B8B75";
+
+  return (
+    <div style={{ ...panelBase, width: 320, padding: 0, display: "flex", flexDirection: "column" }}>
+      {/* Scrollable body */}
+      <div style={{ overflowY: "auto", maxHeight: "min(460px, 70vh)", padding: "12px 16px 4px" }}>
+        {AMENIDADES_GROUPS.map((group, gi) => (
+          <div key={group.id}>
+            <span style={{
+              display: "block", fontSize: 10, fontWeight: 700, letterSpacing: "0.5px",
+              textTransform: "uppercase", color: C.muted,
+              padding: gi === 0 ? "4px 0 6px" : "10px 0 6px",
+              borderTop: gi > 0 ? `1px solid ${C.border}` : "none",
+            }}>
+              {group.label}
+            </span>
+            {group.items.map(({ key, label, Icon }) => {
+              const checked = pending.includes(key);
+              return (
+                <div
+                  key={key}
+                  role="checkbox"
+                  aria-checked={checked}
+                  onClick={() => toggleKey(key)}
+                  style={{
+                    display: "flex", alignItems: "center", gap: 10,
+                    padding: "7px 6px", borderRadius: 7, cursor: "pointer",
+                    userSelect: "none",
+                  }}
+                  onMouseEnter={(e) => { e.currentTarget.style.background = C.surface; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.background = "transparent"; }}
+                >
+                  <Icon size={16} color={checked ? C.teal : ICON_COLOR} strokeWidth={1.8} />
+                  <span style={{ flex: 1, fontSize: 13, color: C.ink }}>{label}</span>
+                  <span style={{
+                    width: 18, height: 18, borderRadius: 5, flexShrink: 0,
+                    border: `2px solid ${checked ? C.teal : C.border}`,
+                    background: checked ? C.teal : "transparent",
+                    display: "flex", alignItems: "center", justifyContent: "center",
+                    transition: "all 0.12s",
+                  }}>
+                    {checked && (
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                      </svg>
+                    )}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+
+      {/* Footer */}
+      <div style={{
+        display: "flex", gap: 8, padding: "12px 16px",
+        borderTop: `1px solid ${C.border}`,
+        background: "#fff",
+      }}>
+        <button
+          onClick={clearAll}
+          style={{
+            flex: 1, padding: "8px", borderRadius: 8,
+            border: `1px solid ${C.border}`, background: "transparent",
+            color: C.muted, fontSize: 12, cursor: "pointer",
+          }}
+        >
+          Limpiar
+        </button>
+        <button
+          onClick={apply}
+          disabled={pending.length === 0 && current.length === 0}
+          style={{
+            flex: 1, padding: "8px", borderRadius: 8, border: "none",
+            background: (pending.length > 0 || current.length > 0) ? C.teal : C.border,
+            color: (pending.length > 0 || current.length > 0) ? "#fff" : C.muted,
+            fontSize: 12, fontWeight: 600, cursor: "pointer",
+          }}
+        >
+          {pending.length > 0 ? `Aplicar (${pending.length})` : "Aplicar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MapFilterBar({
-  activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate,
+  activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
 }: MapFilterBarProps) {
-  const isPro = useIsPro();
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // ── Search autocomplete state ──────────────────────────────────────────────
+  const [searchQ, setSearchQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchSelected, setSearchSelected] = useState<BarrioOption | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const [searchRect, setSearchRect] = useState<DOMRect | null>(null);
+
+  // Sync when busqueda cleared externally (Reset All)
+  useEffect(() => {
+    if (!filters.busqueda) { setSearchQ(""); setSearchSelected(null); }
+  }, [filters.busqueda]);
+
+  const suggestions = useMemo<BarrioOption[]>(() => {
+    if (!searchQ.trim() || !allBarrios) return [];
+    const q = norm(searchQ);
+    return allBarrios
+      .filter(b =>
+        norm(b.nombre).includes(q) ||
+        norm(b.municipio).includes(q) ||
+        (b.comuna && norm(b.comuna).includes(q))
+      )
+      .slice(0, 8);
+  }, [searchQ, allBarrios]);
+
+  const handleSearchSelect = useCallback((opt: BarrioOption) => {
+    setSearchSelected(opt);
+    setSearchQ(opt.nombre);
+    setSearchOpen(false);
+    onFiltersChange({ busqueda: null });
+    onBarrioNavigate?.(opt);
+  }, [onBarrioNavigate, onFiltersChange]);
+
+  const handleSearchClear = useCallback(() => {
+    setSearchQ("");
+    setSearchSelected(null);
+    setSearchOpen(false);
+    onFiltersChange({ busqueda: null });
+    onBarrioClear?.();
+  }, [onBarrioClear, onFiltersChange]);
 
   const toggle = (id: DropdownId, a: DOMRect) => {
     setAnchor(a);
@@ -646,6 +859,7 @@ export function MapFilterBar({
     const handler = (e: MouseEvent) => {
       const t = e.target as Node;
       if (!barRef.current?.contains(t) && !dropdownRef.current?.contains(t)) close();
+      if (!searchRef.current?.contains(t)) setSearchOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
@@ -654,7 +868,7 @@ export function MapFilterBar({
   if (activeTab === "agent" || activeTab === "simulator" || activeTab === "comparador") return null;
 
   const isRent     = activeTab === "rent";
-  const activeCount = countActive(filters, activeTab);
+  const activeCount = countActive(filters);
   const precioActive     = filters.precioMax !== null || filters.precioMin !== null;
   const habActive        = filters.habitaciones !== null;
   const tipoActive       = filters.tipoInmueble !== null;
@@ -689,8 +903,59 @@ export function MapFilterBar({
   );
 
   // ── Desktop pill row ───────────────────────────────────────────────────────
+  const habBanosActive = filters.habitaciones !== null || filters.banos !== null;
+  const filtrosCount = [
+    areaActive,
+    !isRent && antiguedadActive,
+    isRent  && (filters.estrato?.length ?? 0) > 0,
+    filters.diasMercado !== null,
+  ].filter(Boolean).length;
+  const amenCount = filters.amenidades?.length ?? 0;
+
   const desktopContent = (
     <div style={{ display: "flex", alignItems: "center", gap: 7, overflowX: "auto", paddingBottom: 2 }}>
+
+      {/* Search autocomplete */}
+      <div ref={searchRef} style={{ position: "relative", flexShrink: 0 }}>
+        <Search size={13} style={{ position: "absolute", left: 10, top: "50%", transform: "translateY(-50%)", color: C.muted, pointerEvents: "none", zIndex: 1 }} />
+        <input
+          ref={searchInputRef}
+          type="text"
+          placeholder="Buscar barrio o municipio..."
+          value={searchQ}
+          onChange={(e) => {
+            const v = e.target.value;
+            setSearchQ(v);
+            setSearchSelected(null);
+            setSearchRect(searchInputRef.current?.getBoundingClientRect() ?? null);
+            setSearchOpen(!!v.trim());
+            onFiltersChange({ busqueda: v || null });
+          }}
+          onFocus={() => {
+            if (searchQ.trim()) {
+              setSearchRect(searchInputRef.current?.getBoundingClientRect() ?? null);
+              setSearchOpen(true);
+            }
+          }}
+          style={{
+            height: 32, paddingLeft: 28, paddingRight: (searchQ || searchSelected) ? 26 : 10,
+            border: `1px solid ${searchSelected ? C.teal : searchQ ? C.teal : C.border}`,
+            borderRadius: 8, fontSize: 12, color: C.ink, background: C.white,
+            outline: "none", width: 210, flexShrink: 0,
+          }}
+        />
+        {(searchQ || searchSelected) && (
+          <button
+            onClick={handleSearchClear}
+            style={{ position: "absolute", right: 7, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", cursor: "pointer", color: C.muted, display: "flex", padding: 0, zIndex: 1 }}
+          >
+            <X size={12} />
+          </button>
+        )}
+      </div>
+
+      {/* Separador visual */}
+      <div style={{ width: 1, height: 20, background: C.border, flexShrink: 0, margin: "0 2px" }} />
 
       {/* Precio */}
       <div style={{ position: "relative", flexShrink: 0 }}>
@@ -703,14 +968,14 @@ export function MapFilterBar({
         />
       </div>
 
-      {/* Habitaciones */}
+      {/* Habitaciones y Baños */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
-          label={habLabel(filters)}
-          active={habActive}
-          onClear={() => onFiltersChange({ habitaciones: null })}
-          onClick={(a) => toggle("habitaciones", a)}
-          isOpen={open === "habitaciones"}
+          label={habBanosLabel(filters)}
+          active={habBanosActive}
+          onClear={habBanosActive ? () => onFiltersChange({ habitaciones: null, banos: null }) : undefined}
+          onClick={(a) => toggle("habBanos", a)}
+          isOpen={open === "habBanos"}
         />
       </div>
 
@@ -725,51 +990,25 @@ export function MapFilterBar({
         />
       </div>
 
-      {/* Área */}
+      {/* Filtros */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
-          label={areaLabel(filters)}
-          active={areaActive}
-          onClear={() => onFiltersChange({ areaMin: null, areaMax: null })}
-          onClick={(a) => toggle("area", a)}
-          isOpen={open === "area"}
+          label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
+          active={filtrosCount > 0}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null }) : undefined}
+          onClick={(a) => toggle("filtros", a)}
+          isOpen={open === "filtros"}
         />
       </div>
 
-      {/* BUY-only */}
-      {activeTab === "buy" && (
-        <>
-          {/* Baños */}
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <FilterPill
-              label={banosLabel(filters)}
-              active={banosActive}
-              onClear={() => onFiltersChange({ banos: null })}
-              onClick={(a) => toggle("banos", a)}
-              isOpen={open === "banos"}
-            />
-          </div>
-
-          {/* Antigüedad */}
-          <div style={{ position: "relative", flexShrink: 0 }}>
-            <FilterPill
-              label={antiguedadLabel(filters)}
-              active={antiguedadActive}
-              onClear={() => onFiltersChange({ antiguedad: null })}
-              onClick={(a) => toggle("antiguedad", a)}
-              isOpen={open === "antiguedad"}
-            />
-          </div>
-        </>
-      )}
-
-      {/* + Más filtros */}
+      {/* Amenidades */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
-          label={`+ Más${activeCount > 0 ? ` (${activeCount})` : ""}`}
-          active={false}
-          onClick={(a) => toggle("mas", a)}
-          isOpen={open === "mas"}
+          label={amenCount > 0 ? `Amenidades (${amenCount})` : "Amenidades"}
+          active={amenCount > 0}
+          onClear={amenCount > 0 ? () => onFiltersChange({ amenidades: null }) : undefined}
+          onClick={(a) => toggle("amenidades", a)}
+          isOpen={open === "amenidades"}
         />
       </div>
 
@@ -846,7 +1085,7 @@ export function MapFilterBar({
                   cursor: "pointer",
                 }}
               >
-                {["Todas", "1+", "2+", "3+", "4+"][i]}
+                {["Todas", "1", "2", "3", "4+"][i]}
               </button>
             ))}
           </div>
@@ -889,7 +1128,7 @@ export function MapFilterBar({
             <div style={{ marginBottom: 20 }}>
               <span style={labelSm}>Baños</span>
               <div style={{ display: "flex", gap: 6 }}>
-                {[null, 1, 2, 3].map((b, i) => (
+                {[null, 1, 2, 3, 4].map((b, i) => (
                   <button
                     key={String(b)}
                     onClick={() => onFiltersChange({ banos: b })}
@@ -901,7 +1140,7 @@ export function MapFilterBar({
                       cursor: "pointer",
                     }}
                   >
-                    {["Todos", "1+", "2+", "3+"][i]}
+                    {["Todos", "1", "2", "3", "4+"][i]}
                   </button>
                 ))}
               </div>
@@ -961,23 +1200,10 @@ export function MapFilterBar({
             <PrecioPanel filters={filters} isRent={isRent} onChange={onFiltersChange} onClose={close} />
           </div>
         );
-      case "habitaciones":
+      case "habBanos":
         return (
           <div ref={dropdownRef} style={wrapStyle}>
-            <div style={panelBase}>
-              <span style={labelSm}>Habitaciones</span>
-              <BtnGroup
-                options={[
-                  { value: null, label: "Cualquiera" },
-                  { value: 1, label: "1+" },
-                  { value: 2, label: "2+" },
-                  { value: 3, label: "3+" },
-                  { value: 4, label: "4+" },
-                ]}
-                current={filters.habitaciones}
-                onChange={(v) => { onFiltersChange({ habitaciones: v }); close(); }}
-              />
-            </div>
+            <HabBanosPanel filters={filters} onChange={onFiltersChange} />
           </div>
         );
       case "tipo":
@@ -1001,37 +1227,17 @@ export function MapFilterBar({
             </div>
           </div>
         );
-      case "area":
+      case "amenidades":
         return (
           <div ref={dropdownRef} style={wrapStyle}>
-            <AreaPanel filters={filters} onChange={onFiltersChange} onClose={close} />
+            <AmenidadesPanel
+              current={filters.amenidades ?? []}
+              onChange={(keys) => onFiltersChange({ amenidades: keys.length === 0 ? null : keys })}
+              onClose={close}
+            />
           </div>
         );
-      case "banos":
-        return (
-          <div ref={dropdownRef} style={wrapStyle}>
-            <div style={panelBase}>
-              <span style={labelSm}>Baños</span>
-              <BtnGroup
-                options={[
-                  { value: null, label: "Cualquiera" },
-                  { value: 1, label: "1+" },
-                  { value: 2, label: "2+" },
-                  { value: 3, label: "3+" },
-                ]}
-                current={filters.banos}
-                onChange={(v) => { onFiltersChange({ banos: v }); close(); }}
-              />
-            </div>
-          </div>
-        );
-      case "antiguedad":
-        return (
-          <div ref={dropdownRef} style={wrapStyle}>
-            <AntiguedadPanel filters={filters} onChange={onFiltersChange} onClose={close} />
-          </div>
-        );
-      case "mas": {
+      case "filtros": {
         const tiempoOpts = isRent
           ? ([
               { val: "nuevo",  label: "Recién publicado", sub: "< 7 días" },
@@ -1060,37 +1266,76 @@ export function MapFilterBar({
           <div ref={dropdownRef} style={wrapStyle}>
             <div style={{ ...panelBase, minWidth: 300 }}>
               <span style={{ ...labelSm, fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
-                Más filtros
+                Filtros
               </span>
 
-              {/* Estrato */}
-              <span style={labelSm}>Estrato</span>
-              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-                {[1, 2, 3, 4, 5, 6].map((e) => {
-                  const active = (filters.estrato ?? []).includes(e);
-                  return (
-                    <button
-                      key={e}
-                      onClick={() => {
-                        const cur = filters.estrato ?? [];
-                        const next = active ? cur.filter((x) => x !== e) : [...cur, e];
-                        onFiltersChange({ estrato: next.length === 0 ? null : next });
-                      }}
-                      style={{
-                        width: 36, height: 32, borderRadius: 8,
-                        border: `1.5px solid ${active ? C.teal : C.border}`,
-                        background: active ? C.teal : "transparent",
-                        color: active ? "#fff" : C.ink,
-                        fontSize: 12, fontWeight: 700, cursor: "pointer",
-                      }}
-                    >
-                      {e}
-                    </button>
-                  );
-                })}
+              {/* Área m² */}
+              <span style={labelSm}>Área m²</span>
+              <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+                <NumInput
+                  placeholder="Mínimo"
+                  value={filters.areaMin}
+                  onChange={(v) => onFiltersChange({ areaMin: v })}
+                />
+                <NumInput
+                  placeholder="Máximo"
+                  value={filters.areaMax}
+                  onChange={(v) => onFiltersChange({ areaMax: v })}
+                />
               </div>
 
-              {/* Tiempo — condicional según tab */}
+              {/* Antigüedad — solo compra */}
+              {!isRent && (
+                <>
+                  <span style={labelSm}>Antigüedad</span>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 16 }}>
+                    {[{ value: null as string | null, label: "Cualquiera" }, ...ANTIGUEDAD_OPTIONS].map((opt) => (
+                      <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: C.ink }}>
+                        <input
+                          type="radio" name="antg-dd"
+                          checked={filters.antiguedad === opt.value}
+                          onChange={() => onFiltersChange({ antiguedad: opt.value })}
+                          style={{ accentColor: C.teal }}
+                        />
+                        {opt.label}
+                      </label>
+                    ))}
+                  </div>
+                </>
+              )}
+
+              {/* Estrato — solo arriendo */}
+              {isRent && (
+                <>
+                  <span style={labelSm}>Estrato</span>
+                  <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                    {[1, 2, 3, 4, 5, 6].map((e) => {
+                      const active = (filters.estrato ?? []).includes(e);
+                      return (
+                        <button
+                          key={e}
+                          onClick={() => {
+                            const cur = filters.estrato ?? [];
+                            const next = active ? cur.filter((x) => x !== e) : [...cur, e];
+                            onFiltersChange({ estrato: next.length === 0 ? null : next });
+                          }}
+                          style={{
+                            width: 36, height: 32, borderRadius: 8,
+                            border: `1.5px solid ${active ? C.teal : C.border}`,
+                            background: active ? C.teal : "transparent",
+                            color: active ? "#fff" : C.ink,
+                            fontSize: 12, fontWeight: 700, cursor: "pointer",
+                          }}
+                        >
+                          {e}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </>
+              )}
+
+              {/* Tiempo en mercado */}
               <span style={labelSm}>{isRent ? "Tiempo publicado" : "Tiempo en mercado"}</span>
               <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
                 {tiempoOpts.map((opt) => {
@@ -1113,47 +1358,20 @@ export function MapFilterBar({
                 })}
               </div>
 
-              {/* PRO teasers — solo para usuarios sin plan pro */}
-              {!isPro && (
-              <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                <span style={labelSm}>Filtros PRO</span>
-                {proTeasers.map((t) => (
-                  <div key={t.label} style={{
-                    display: "flex", alignItems: "center", justifyContent: "space-between",
-                    padding: "8px 10px", borderRadius: 8,
-                    background: "rgba(255,201,40,0.06)",
-                    border: "1px solid rgba(255,201,40,0.3)",
-                    userSelect: "none",
-                  }}>
-                    <div>
-                      <div style={{ fontSize: 12, fontWeight: 600, color: C.ink }}>🔒 {t.label}</div>
-                      <div style={{ fontSize: 10, color: C.muted }}>{t.desc}</div>
-                    </div>
-                    <span style={{
-                      fontSize: 9, fontWeight: 800, letterSpacing: "1px",
-                      background: "#ffc928", color: "#1A1208",
-                      padding: "2px 7px", borderRadius: 999, flexShrink: 0,
-                    }}>
-                      PRO
-                    </span>
-                  </div>
-                ))}
-              </div>
-              )}
 
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
                 <button
-                  onClick={() => { onResetAll?.(); close(); }}
+                  onClick={() => { onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null }); close(); }}
                   style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
                 >
-                  Limpiar todo
+                  Limpiar
                 </button>
                 <button
                   onClick={close}
                   style={{ flex: 1, padding: "8px", borderRadius: 8, background: C.teal, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
                 >
-                  Aplicar
+                  Cerrar
                 </button>
               </div>
             </div>
@@ -1171,7 +1389,7 @@ export function MapFilterBar({
       <div
         ref={barRef}
         style={{
-          position: "absolute", top: 52, left: 0, right: 0, zIndex: 30,
+          position: "fixed", top: 52, left: 0, right: 0, zIndex: 40,
           background: C.white,
           borderBottom: `1px solid ${C.border}`,
           height: 48,
@@ -1223,6 +1441,43 @@ export function MapFilterBar({
           )}
         </div>
       </div>
+
+      {/* Search suggestions — position:fixed so it floats above map/WebGL */}
+      {searchOpen && suggestions.length > 0 && searchRect && (
+        <div
+          ref={searchRef}
+          style={{
+            position: "fixed",
+            top: searchRect.bottom + 4,
+            left: searchRect.left,
+            zIndex: 9999,
+            background: C.white, border: `1px solid ${C.border}`,
+            borderRadius: 10, boxShadow: "0 4px 20px rgba(0,0,0,0.16)",
+            minWidth: 240, maxHeight: 280, overflowY: "auto",
+          }}
+        >
+          {suggestions.map((opt) => (
+            <button
+              key={opt.id}
+              onMouseDown={(e) => { e.preventDefault(); handleSearchSelect(opt); }}
+              style={{
+                display: "block", width: "100%", textAlign: "left",
+                padding: "9px 14px", background: "none", border: "none",
+                cursor: "pointer", fontSize: 13, color: C.ink,
+                borderBottom: `1px solid ${C.border}`,
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = C.surface)}
+              onMouseLeave={(e) => (e.currentTarget.style.background = "none")}
+            >
+              <span style={{ fontWeight: 600 }}>{opt.nombre}</span>
+              <span style={{ color: C.muted, fontSize: 11, marginLeft: 6 }}>{opt.municipio}</span>
+              {opt.comuna && (
+                <span style={{ color: C.muted, fontSize: 11, marginLeft: 4 }}>· {opt.comuna}</span>
+              )}
+            </button>
+          ))}
+        </div>
+      )}
 
       {activePanel}
       {mobileSheet}

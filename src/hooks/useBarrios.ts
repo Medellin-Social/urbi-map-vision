@@ -582,6 +582,7 @@ export type ListingsApiFilters = {
   area_max?: number | null;
   banos?: number | null;
   antiguedad?: string | null;
+  amenidades?: string[] | null;
 };
 
 export function useListings(
@@ -647,6 +648,9 @@ export function useListings(
       if (extraFilters?.area_max != null) params.set("area_max", String(extraFilters.area_max));
       if (extraFilters?.banos != null) params.set("banos", String(extraFilters.banos));
       if (extraFilters?.antiguedad) params.set("antiguedad", extraFilters.antiguedad);
+      if (extraFilters?.amenidades?.length) {
+        for (const a of extraFilters.amenidades) params.append("amenidades", a);
+      }
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
     enabled: barrioId != null || cdComuna != null || !!municipioNombre,

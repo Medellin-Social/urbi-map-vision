@@ -2,7 +2,6 @@ import { X, ChevronRight, Bed, Bath, Maximize2, Clock, MapPin, Plus, Check } fro
 import { formatCOP } from "@/lib/format";
 import type { ApiListing } from "@/lib/adapters";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
-import { useIsPro } from "@/components/LockedField";
 import { toast } from "sonner";
 
 const POPUP_WIDTH = 300;
@@ -47,7 +46,6 @@ type Props = {
 };
 
 export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
-  const isPro = useIsPro();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
 
@@ -135,7 +133,7 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
             </div>
           )}
 
-          {isPro && (
+          {(
             <button
               onClick={() => {
                 if (selected) {
