@@ -469,6 +469,7 @@ function MapPageInner() {
           onDrawPolygon={handleDrawPolygon}
           onDrawDelete={handleDrawDelete}
           clearDrawRef={clearDrawRef}
+          activeTab={activeTab}
         />
       </div>
 
