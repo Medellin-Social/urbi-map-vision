@@ -159,23 +159,13 @@ function MapPageInner() {
       .catch(() => setComunaBarriosList([]));
   }, [activeComunaCd]);
 
-  // Derive query params: commune or municipality filter (only when no specific barrio).
-  // Top-level view (no selection) defaults to all-Medellín so MLS panel is never empty.
-  const atTopLevel      = mlsBarrio == null && activeComuna == null && activeMunicipio == null;
-  const cdComunaQuery   = mlsBarrio == null && !activeMunicipio ? (activeComunaCd ?? undefined) : undefined;
-  const municipioQueryName = mlsBarrio == null
-    ? (activeMunicipio ?? (atTopLevel || activeComunaCd != null ? "MEDELLIN" : undefined))
-    : undefined;
-  const { data: comunaData, isLoading: comunaIsLoading } = useListings(
-    null, 500, 0, mlsTipoOp, false, apiFilters, cdComunaQuery, municipioQueryName,
-  );
+  // Camera-derived commune filter forwarded to MapView's viewport fetch.
+  const cdComunaQuery = mlsBarrio == null && !activeMunicipio ? (activeComunaCd ?? undefined) : undefined;
 
-  // Merged listings: specific barrio OR commune/municipality-level
-  const mergedListings = useMemo(
-    () => (mlsBarrio ? mlsListings : (comunaData?.listings ?? [])),
-    [mlsBarrio, mlsListings, comunaData?.listings],
-  );
-  const mergedLoading  = mlsBarrio ? mlsIsLoading : comunaIsLoading;
+  // FIX 1d: single source of truth — the panel mirrors exactly the viewport the
+  // map shows (clusters mode returns a capped list, points mode the points).
+  const mergedListings = viewportListings;
+  const mergedLoading  = mlsBarrio ? mlsIsLoading : false;
   const mlsTotal = mergedListings.length;
 
   // Panel zone label — real barrio > active commune > active municipality > Medellín default
@@ -420,6 +410,14 @@ function MapPageInner() {
     if (b) setMlsBarrio(barrioToNeighborhood(b));
   }
 
+  // Camera-derived commune/municipio (zoom < TIER) → scope viewport + breadcrumb.
+  function handleAutoSelectComuna(cd: number | null, municipio: string | null, nombre: string | null) {
+    setMlsBarrio(null);
+    setActiveComunaCd(cd);
+    setActiveMunicipio(municipio);
+    setActiveComuna(nombre);
+  }
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
       <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0 z-0">
@@ -441,6 +439,7 @@ function MapPageInner() {
           mlsMunicipio={activeMunicipio}
           onViewportListingsChange={setViewportListings}
           onAutoSelectBarrio={handleAutoSelectBarrio}
+          onAutoSelectComuna={handleAutoSelectComuna}
           highlightedListingId={highlightedListingId}
           flyToListingRef={flyToListingRef}
           onListingClickFromMap={handleListingClickFromMap}

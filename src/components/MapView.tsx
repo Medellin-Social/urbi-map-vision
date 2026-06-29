@@ -46,6 +46,7 @@ type Props = {
   mlsMunicipio?: string | null;
   onViewportListingsChange?: (listings: ApiListing[]) => void;
   onAutoSelectBarrio?: (barrioId: number | null) => void;
+  onAutoSelectComuna?: (cd: number | null, municipio: string | null, nombre: string | null) => void;
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
@@ -208,6 +209,7 @@ export function MapView({
   mlsMunicipio,
   onViewportListingsChange,
   onAutoSelectBarrio,
+  onAutoSelectComuna,
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
@@ -225,6 +227,7 @@ export function MapView({
   const mlsLastFlyToRef = useRef<number | null>(null);
   const zoneFlyRef = useRef<string | null>(null);  // last comuna/municipio flown-to
   const lastAutoBarrioRef = useRef<number | null>(null);  // camera-auto-selected barrio
+  const lastAutoComunaRef = useRef<string | null>(null);  // camera-auto-selected comuna/muni key
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -247,6 +250,8 @@ export function MapView({
   useEffect(() => { onViewportListingsChangeRef.current = onViewportListingsChange; }, [onViewportListingsChange]);
   const onAutoSelectBarrioRef = useRef(onAutoSelectBarrio);
   useEffect(() => { onAutoSelectBarrioRef.current = onAutoSelectBarrio; }, [onAutoSelectBarrio]);
+  const onAutoSelectComunaRef = useRef(onAutoSelectComuna);
+  useEffect(() => { onAutoSelectComunaRef.current = onAutoSelectComuna; }, [onAutoSelectComuna]);
 
 
   const riskRef = useRef(risk);
@@ -482,13 +487,10 @@ export function MapView({
         source: "barrios-mls",
         layout: { visibility: "none" },
         paint: {
-          "fill-color": "#DAB33C",
-          "fill-opacity": [
-            "case",
-            ["boolean", ["feature-state", "selected"], false], 0.5,
-            ["boolean", ["feature-state", "hover"], false], 0.45,
-            0.22,
-          ],
+          // CAMBIO 3: barrio sin relleno (fill-opacity 0, queryable para hit-test);
+          // barrio activo = relleno muy tenue. knobs.
+          "fill-color": "#002776",
+          "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.10, 0],
         },
       });
       map.addLayer({
@@ -497,9 +499,10 @@ export function MapView({
         source: "barrios-mls",
         layout: { visibility: "none" },
         paint: {
+          // borde fino y suave; activo algo más marcado. knobs.
           "line-color": "#002776",
-          "line-opacity": 0.6,
-          "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3, 1.5],
+          "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.7, 0.4],
+          "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5, 1],
         },
       });
       let hoverBarrioId: number | null = null;
@@ -771,10 +774,9 @@ export function MapView({
         if (cancelled) return;
         const src = map.getSource("listings-mls") as mapboxgl.GeoJSONSource | undefined;
         if (!src) return;
-        let coords: [number, number][] = [];
         if (res.mode === "clusters") {
-          onViewportListingsChangeRef.current?.([]);
-          coords = res.clusters.map((c) => [c.lng, c.lat]);
+          // CAMBIO 4A: clusters mode also returns a capped panel list → feed the panel.
+          onViewportListingsChangeRef.current?.(res.listings ?? []);
           src.setData({
             type: "FeatureCollection",
             features: res.clusters.map((c) => ({
@@ -786,7 +788,6 @@ export function MapView({
         } else {
           const pts = res.listings.filter((l) => l.lat != null && l.lon != null);
           onViewportListingsChangeRef.current?.(pts);
-          coords = pts.map((l) => [l.lon!, l.lat!]);
           src.setData({
             type: "FeatureCollection",
             features: pts.map((l) => ({
@@ -803,20 +804,6 @@ export function MapView({
             })),
           } as unknown as GeoJSON.FeatureCollection);
         }
-        // Fly-to a comuna/municipio recién seleccionada (una vez). El barrio usa
-        // su flyTo de centroide más abajo. fitBounds al extent de la zona.
-        const zoneKey = mlsCdComuna != null ? `c:${mlsCdComuna}` : mlsMunicipio ? `m:${mlsMunicipio}` : null;
-        if (zoneKey && zoneKey !== zoneFlyRef.current && mlsBarrioId == null && coords.length) {
-          zoneFlyRef.current = zoneKey;
-          const lons = coords.map((c) => c[0]);
-          const lats = coords.map((c) => c[1]);
-          map.fitBounds(
-            [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
-            { padding: 60, maxZoom: 14, duration: 600 },
-          );
-        } else if (!zoneKey) {
-          zoneFlyRef.current = null;
-        }
       } catch { /* transient fetch error — keep current dots */ }
     };
 
@@ -828,16 +815,6 @@ export function MapView({
     map.on("moveend", onMove);
     map.on("zoomend", onMove);
     loadViewport();
-
-    // FlyTo centroide del barrio la primera vez (dispara moveend → refetch viewport)
-    if (mlsBarrioId != null && mlsLastFlyToRef.current !== mlsBarrioId) {
-      mlsLastFlyToRef.current = mlsBarrioId;
-      const barrio = barriosRef.current.find((b) => b.barrio_id === mlsBarrioId);
-      if (barrio) {
-        const nb = barrioToNeighborhood(barrio);
-        map.flyTo({ center: [nb.lng, nb.lat], zoom: 14, pitch: 0, speed: 0.8 });
-      }
-    }
 
     return () => {
       cancelled = true;
@@ -883,34 +860,48 @@ export function MapView({
       setVis("barrios-mls-line", hi ? "visible" : "none");
     };
 
+    // FIX 1d — free navigation: zone derived from the camera on every move (no
+    // lock). zoom<TIER → comuna under center; zoom>=TIER → barrio under center.
+    const clearBarrioSel = () => {
+      if (lastAutoBarrioRef.current != null) {
+        map.setFeatureState({ source: "barrios-mls", id: lastAutoBarrioRef.current }, { selected: false });
+        lastAutoBarrioRef.current = null;
+      }
+    };
     const autoSelect = () => {
+      const c = map.project(map.getCenter());
       if (map.getZoom() < POLYGON_TIER_ZOOM) {
-        if (lastAutoBarrioRef.current != null) {
-          map.setFeatureState({ source: "barrios-mls", id: lastAutoBarrioRef.current }, { selected: false });
-          lastAutoBarrioRef.current = null;
-          onAutoSelectBarrioRef.current?.(null);
+        if (lastAutoBarrioRef.current != null) { clearBarrioSel(); onAutoSelectBarrioRef.current?.(null); }
+        const cfeats = map.queryRenderedFeatures([c.x, c.y], { layers: ["comunas-fill"] });
+        const f = cfeats.length ? cfeats[0].properties : undefined;
+        const isMuni = f?.is_municipio === true;
+        const cd = isMuni ? null : ((f?.cd_comuna as number) ?? null);
+        const muni = isMuni ? ((f?.nombre as string) ?? null) : null;
+        const nombre = (f?.nombre as string) ?? null;
+        const key = isMuni ? `m:${muni}` : cd != null ? `c:${cd}` : null;
+        if (key !== lastAutoComunaRef.current) {
+          lastAutoComunaRef.current = key;
+          onAutoSelectComunaRef.current?.(cd, muni, nombre);
         }
         return;
       }
-      const c = map.project(map.getCenter());
+      // barrio under center (zoom >= TIER)
+      lastAutoComunaRef.current = null;
       const feats = map.queryRenderedFeatures([c.x, c.y], { layers: ["barrios-mls-fill"] });
       const bid = feats.length ? (feats[0].id as number) : null;
       if (bid != null && bid !== lastAutoBarrioRef.current) {
-        if (lastAutoBarrioRef.current != null) map.setFeatureState({ source: "barrios-mls", id: lastAutoBarrioRef.current }, { selected: false });
+        clearBarrioSel();
         map.setFeatureState({ source: "barrios-mls", id: bid }, { selected: true });
         lastAutoBarrioRef.current = bid;
-        mlsLastFlyToRef.current = bid;   // camera already here → suppress 1b fly-to
         onAutoSelectBarrioRef.current?.(bid);
       }
     };
 
     let debounce: ReturnType<typeof setTimeout> | null = null;
-    const onMove = (e: mapboxgl.MapboxEvent) => {
+    const onMove = () => {
       applyTier();                       // tier visual is immediate
-      // ignore programmatic moves (fly-to/easeTo) — only user gestures carry originalEvent
-      if (!(e as { originalEvent?: unknown }).originalEvent) return;
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(autoSelect, 300);
+      debounce = setTimeout(autoSelect, 300);   // derive on every move (gesture or fly-to)
     };
 
     applyTier();
