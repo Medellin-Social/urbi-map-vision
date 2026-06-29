@@ -1,7 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
-import { auth } from "@/lib/auth";
 
 const BASE = API_ENDPOINTS.favoritos + "/listings";
 
@@ -10,7 +9,7 @@ export function useFavoritosListings() {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    if (!auth.get()) return;
+    if (!getToken()) return;
     apiFetch<{ ids: string[] }>(`${BASE}/ids`)
       .then((data) => {
         setFavUrls(new Set(data.ids));
@@ -24,7 +23,7 @@ export function useFavoritosListings() {
   }, [favUrls]);
 
   const toggle = useCallback(async (url: string | null | undefined, barrioId?: number | null) => {
-    if (!url || !auth.get()) return;
+    if (!url || !getToken()) return;
     if (favUrls.has(url)) {
       await apiFetch(`${BASE}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {});
       setFavUrls((prev) => { const n = new Set(prev); n.delete(url); return n; });

@@ -32,7 +32,9 @@ export async function apiFetch<T>(url: string, options: FetchOptions = {}): Prom
 
   if (res.status === 401) {
     clearToken();
-    if (typeof window !== "undefined") {
+    // Only bounce to /login when a session actually expired (a token was sent).
+    // The MLS is public — anonymous users on public pages must not be redirected.
+    if (typeof window !== "undefined" && token) {
       window.location.href = "/login";
     }
     throw new Error("Sesión expirada. Por favor inicia sesión nuevamente.");
