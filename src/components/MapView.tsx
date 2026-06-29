@@ -228,6 +228,7 @@ export function MapView({
   const zoneFlyRef = useRef<string | null>(null);  // last comuna/municipio flown-to
   const lastAutoBarrioRef = useRef<number | null>(null);  // camera-auto-selected barrio
   const lastAutoComunaRef = useRef<string | null>(null);  // camera-auto-selected comuna/muni key
+  const flattenSkipRef = useRef(false);  // skip listings-toggle pitch easeTo when a zone fit drives it
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -305,6 +306,7 @@ export function MapView({
     // derives the comuna/municipio (not a single barrio) and shows it all.
     // pitch/bearing 0 in the SAME move: the initial view is 3D-tilted and the first
     // click would otherwise race the listings flatten-easeTo → off-center.
+    flattenSkipRef.current = true;   // this fitBounds already flattens — don't let the toggle race it
     map.setTerrain(null);
     map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, speed: 0.85 });
     viewLevelRef.current = "barrios";
@@ -768,7 +770,10 @@ export function MapView({
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
       }
       map.setTerrain(null);
-      map.easeTo({ pitch: 0, duration: 500 });
+      // Skip the flatten easeTo when a zone fitBounds is already driving the camera
+      // (it would interrupt the fit mid-flight → zone ends off-center).
+      if (flattenSkipRef.current) flattenSkipRef.current = false;
+      else map.easeTo({ pitch: 0, duration: 500 });
     } else {
       // Vista 1: ocultar MLS layers + barrio polygons, volver a comunas
       mlsLastFlyToRef.current = null;
