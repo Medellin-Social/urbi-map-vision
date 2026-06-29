@@ -413,6 +413,13 @@ function MapPageInner() {
     setFilteredListings(listings);
   }
 
+  // Camera auto-select (FIX 1c): barrio under map center at high zoom → scope panel+dots.
+  function handleAutoSelectBarrio(barrioId: number | null) {
+    if (barrioId == null) { setMlsBarrio(null); return; }
+    const b = (barriosRaw ?? []).find((x) => x.barrio_id === barrioId);
+    if (b) setMlsBarrio(barrioToNeighborhood(b));
+  }
+
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
       <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0 z-0">
@@ -433,6 +440,7 @@ function MapPageInner() {
           mlsCdComuna={cdComunaQuery ?? null}
           mlsMunicipio={activeMunicipio}
           onViewportListingsChange={setViewportListings}
+          onAutoSelectBarrio={handleAutoSelectBarrio}
           highlightedListingId={highlightedListingId}
           flyToListingRef={flyToListingRef}
           onListingClickFromMap={handleListingClickFromMap}

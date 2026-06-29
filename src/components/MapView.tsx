@@ -45,6 +45,7 @@ type Props = {
   mlsCdComuna?: number | null;
   mlsMunicipio?: string | null;
   onViewportListingsChange?: (listings: ApiListing[]) => void;
+  onAutoSelectBarrio?: (barrioId: number | null) => void;
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
@@ -54,6 +55,10 @@ type Props = {
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+// Zoom at which the polygon tier flips comuna → barrio (matches cluster→points). Knob.
+const POLYGON_TIER_ZOOM = 13;
+// Synthetic barrio ids (non-API fallback) live at/above this — excluded from the layer.
+const _REAL_ID_MAX = 800_000;
 
 // Municipalities not included in map data
 const _HIDDEN_MUNICIPIOS = ["CALDAS", "COPACABANA", "GIRARDOTA", "BARBOSA"];
@@ -202,6 +207,7 @@ export function MapView({
   mlsCdComuna,
   mlsMunicipio,
   onViewportListingsChange,
+  onAutoSelectBarrio,
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
@@ -218,6 +224,7 @@ export function MapView({
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
   const zoneFlyRef = useRef<string | null>(null);  // last comuna/municipio flown-to
+  const lastAutoBarrioRef = useRef<number | null>(null);  // camera-auto-selected barrio
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -238,6 +245,8 @@ export function MapView({
   useEffect(() => { onListingDoubleClickFromMapRef.current = onListingDoubleClickFromMap; }, [onListingDoubleClickFromMap]);
   const onViewportListingsChangeRef = useRef(onViewportListingsChange);
   useEffect(() => { onViewportListingsChangeRef.current = onViewportListingsChange; }, [onViewportListingsChange]);
+  const onAutoSelectBarrioRef = useRef(onAutoSelectBarrio);
+  useEffect(() => { onAutoSelectBarrioRef.current = onAutoSelectBarrio; }, [onAutoSelectBarrio]);
 
 
   const riskRef = useRef(risk);
@@ -465,6 +474,49 @@ export function MapView({
         switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
       });
 
+      // ── CAPA BARRIOS (FIX 1c): polígonos de barrio, tier alto (zoom >= 13) ───
+      map.addSource("barrios-mls", { type: "geojson", data: EMPTY_FC });
+      map.addLayer({
+        id: "barrios-mls-fill",
+        type: "fill",
+        source: "barrios-mls",
+        layout: { visibility: "none" },
+        paint: {
+          "fill-color": "#DAB33C",
+          "fill-opacity": [
+            "case",
+            ["boolean", ["feature-state", "selected"], false], 0.5,
+            ["boolean", ["feature-state", "hover"], false], 0.45,
+            0.22,
+          ],
+        },
+      });
+      map.addLayer({
+        id: "barrios-mls-line",
+        type: "line",
+        source: "barrios-mls",
+        layout: { visibility: "none" },
+        paint: {
+          "line-color": "#002776",
+          "line-opacity": 0.6,
+          "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3, 1.5],
+        },
+      });
+      let hoverBarrioId: number | null = null;
+      map.on("mousemove", "barrios-mls-fill", (e) => {
+        if (!e.features?.length) return;
+        const id = e.features[0].id as number;
+        if (hoverBarrioId !== null && hoverBarrioId !== id) {
+          map.setFeatureState({ source: "barrios-mls", id: hoverBarrioId }, { hover: false });
+        }
+        hoverBarrioId = id;
+        map.setFeatureState({ source: "barrios-mls", id }, { hover: true });
+      });
+      map.on("mouseleave", "barrios-mls-fill", () => {
+        if (hoverBarrioId !== null) map.setFeatureState({ source: "barrios-mls", id: hoverBarrioId }, { hover: false });
+        hoverBarrioId = null;
+      });
+
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
       // Server-side clustering (FIX 1): cluster:false — clusters/points come
       // pre-aggregated from /listings/viewport. Cluster features carry a `count`.
@@ -662,22 +714,25 @@ export function MapView({
     const mlsLayers = ["listings-mls-clusters", "listings-mls-cluster-count", "listings-mls-unclustered"] as const;
 
     if (mapView === "listings") {
-      // Hide commune polygons — only listing dots in MLS mode
-      for (const id of ["comunas-fill", "comunas-line", "comunas-label"] as const) {
-        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
-      }
+      // Polygons stay as context — the polygon-tier effect (FIX 1c) toggles
+      // comuna vs barrio by zoom. Just show the listing dots here.
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
       }
       map.setTerrain(null);
       map.easeTo({ pitch: 0, duration: 500 });
     } else {
-      // Vista 1: ocultar MLS layers, volver a comunas
+      // Vista 1: ocultar MLS layers + barrio polygons, volver a comunas
       mlsLastFlyToRef.current = null;
-      for (const id of mlsLayers) {
+      for (const id of [...mlsLayers, "barrios-mls-fill", "barrios-mls-line"]) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
       }
       (map.getSource("listings-mls") as mapboxgl.GeoJSONSource)?.setData(EMPTY_FC);
+      // restore comuna line (tier may have made it tenue)
+      if (map.getLayer("comunas-line")) {
+        map.setPaintProperty("comunas-line", "line-width", 2);
+        map.setPaintProperty("comunas-line", "line-opacity", 0.6);
+      }
       if (map.getSource("mapbox-dem")) {
         map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
       }
@@ -792,6 +847,82 @@ export function MapView({
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax]);
+
+  // ── FIX 1c: polígono tier (comuna↔barrio por zoom) + auto-select por cámara ──
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || mapView !== "listings") return;
+
+    // Poblar polígonos de barrio desde barriosRaw (ids reales 1-945, con geometry).
+    const src = map.getSource("barrios-mls") as mapboxgl.GeoJSONSource | undefined;
+    if (src) {
+      const feats = (barriosRaw ?? [])
+        .filter((b) => b.geometry && b.barrio_id < _REAL_ID_MAX)
+        .map((b) => ({
+          type: "Feature" as const,
+          id: b.barrio_id,
+          geometry: b.geometry as GeoJSON.Geometry,
+          properties: { barrio_id: b.barrio_id, nombre: b.nombre ?? "", cd_comuna: b.cd_comuna ?? null },
+        }));
+      src.setData({ type: "FeatureCollection", features: feats } as GeoJSON.FeatureCollection);
+    }
+
+    const setVis = (id: string, v: "visible" | "none") => {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
+    };
+    const applyTier = () => {
+      const hi = map.getZoom() >= POLYGON_TIER_ZOOM;
+      setVis("comunas-fill",  hi ? "none" : "visible");
+      setVis("comunas-label", hi ? "none" : "visible");
+      setVis("comunas-line",  "visible");
+      if (map.getLayer("comunas-line")) {
+        map.setPaintProperty("comunas-line", "line-width",   hi ? 0.8 : 2);
+        map.setPaintProperty("comunas-line", "line-opacity", hi ? 0.35 : 0.6);
+      }
+      setVis("barrios-mls-fill", hi ? "visible" : "none");
+      setVis("barrios-mls-line", hi ? "visible" : "none");
+    };
+
+    const autoSelect = () => {
+      if (map.getZoom() < POLYGON_TIER_ZOOM) {
+        if (lastAutoBarrioRef.current != null) {
+          map.setFeatureState({ source: "barrios-mls", id: lastAutoBarrioRef.current }, { selected: false });
+          lastAutoBarrioRef.current = null;
+          onAutoSelectBarrioRef.current?.(null);
+        }
+        return;
+      }
+      const c = map.project(map.getCenter());
+      const feats = map.queryRenderedFeatures([c.x, c.y], { layers: ["barrios-mls-fill"] });
+      const bid = feats.length ? (feats[0].id as number) : null;
+      if (bid != null && bid !== lastAutoBarrioRef.current) {
+        if (lastAutoBarrioRef.current != null) map.setFeatureState({ source: "barrios-mls", id: lastAutoBarrioRef.current }, { selected: false });
+        map.setFeatureState({ source: "barrios-mls", id: bid }, { selected: true });
+        lastAutoBarrioRef.current = bid;
+        mlsLastFlyToRef.current = bid;   // camera already here → suppress 1b fly-to
+        onAutoSelectBarrioRef.current?.(bid);
+      }
+    };
+
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+    const onMove = (e: mapboxgl.MapboxEvent) => {
+      applyTier();                       // tier visual is immediate
+      // ignore programmatic moves (fly-to/easeTo) — only user gestures carry originalEvent
+      if (!(e as { originalEvent?: unknown }).originalEvent) return;
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(autoSelect, 300);
+    };
+
+    applyTier();
+    map.on("moveend", onMove);
+    map.on("zoomend", onMove);
+    return () => {
+      if (debounce) clearTimeout(debounce);
+      map.off("moveend", onMove);
+      map.off("zoomend", onMove);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapView, barriosRaw]);
 
   // ── Highlight listing seleccionado ───────────────────────────────────────────
   useEffect(() => {
