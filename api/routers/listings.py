@@ -755,6 +755,10 @@ _VIEWPORT_CLUSTER_MAX_ZOOM = 13
 # Safety cap on individual points returned for one viewport.
 _VIEWPORT_POINTS_CAP = 3000
 
+# Params (shared by both SQLs): $1-$4 bbox (NULLable — nulled when a zone is
+# active so the whole zone shows), $5 tipo_op, $6 precio_min, $7 precio_max,
+# $8 barrio_ids int[] (neighbor-expanded), $9 cd_comuna, $10 municipio.
+# Clusters adds $11 grid-cell size.
 _VIEWPORT_CLUSTERS_SQL = """
 SELECT
     COUNT(*)::int                    AS count,
@@ -762,16 +766,23 @@ SELECT
     AVG(g.lat)::float8               AS lat,
     ROUND(AVG(l.precio_cop))::bigint AS precio_promedio
 FROM staging.stg_listings_unificado l
-JOIN analytics.listings_georef g ON g.url = l.url
+JOIN analytics.listings_georef g  ON g.url = l.url
+JOIN raw.barrios b                ON b.id = l.barrio_id
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 WHERE l.precio_cop >= 500000
   AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
   AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
-  AND g.lat BETWEEN $2 AND $4
-  AND g.lon BETWEEN $1 AND $3
+  AND ($1::float8 IS NULL OR g.lon >= $1)
+  AND ($2::float8 IS NULL OR g.lat >= $2)
+  AND ($3::float8 IS NULL OR g.lon <= $3)
+  AND ($4::float8 IS NULL OR g.lat <= $4)
   AND ($5::text   IS NULL OR l.tipo_operacion = $5)
   AND ($6::bigint IS NULL OR l.precio_cop >= $6)
   AND ($7::bigint IS NULL OR l.precio_cop <= $7)
-GROUP BY floor(g.lon / $8::float8), floor(g.lat / $8::float8)
+  AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
+  AND ($9::int    IS NULL OR bc.cd_comuna = $9)
+  AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
+GROUP BY floor(g.lon / $11::float8), floor(g.lat / $11::float8)
 """
 
 _VIEWPORT_POINTS_SQL = """
@@ -803,18 +814,24 @@ SELECT
     b.municipio                  AS municipio,
     g.estrato_real
 FROM lraw l
-JOIN analytics.listings_georef g ON g.url = l.url
-JOIN raw.barrios b               ON b.id = l.barrio_id
+JOIN analytics.listings_georef g  ON g.url = l.url
+JOIN raw.barrios b                ON b.id = l.barrio_id
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN (
     SELECT lp.id::text AS lp_url, u.plan AS owner_plan
     FROM public.listings_propios lp
     JOIN public.usuarios u ON u.id = lp.user_id
 ) _lp ON _lp.lp_url = l.url AND l.fuente = 'propio'
-WHERE g.lat BETWEEN $2 AND $4
-  AND g.lon BETWEEN $1 AND $3
+WHERE ($1::float8 IS NULL OR g.lon >= $1)
+  AND ($2::float8 IS NULL OR g.lat >= $2)
+  AND ($3::float8 IS NULL OR g.lon <= $3)
+  AND ($4::float8 IS NULL OR g.lat <= $4)
   AND ($5::text   IS NULL OR l.tipo_operacion = $5)
   AND ($6::bigint IS NULL OR l.precio >= $6)
   AND ($7::bigint IS NULL OR l.precio <= $7)
+  AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
+  AND ($9::int    IS NULL OR bc.cd_comuna = $9)
+  AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
 ORDER BY l.precio ASC
 LIMIT {cap}
 """.format(usd=int(_USD), cap=_VIEWPORT_POINTS_CAP)
@@ -830,11 +847,21 @@ async def get_listings_viewport(
     tipo_operacion: Optional[str] = Query(default=None),
     precio_min: Optional[int] = Query(default=None),
     precio_max: Optional[int] = Query(default=None),
+    barrio_id: Optional[int] = Query(default=None),
+    cd_comuna: Optional[int] = Query(default=None),
+    municipio: Optional[str] = Query(default=None),
 ):
     """Listings within the map viewport. Server-side clustering at low zoom
-    (mode=clusters), individual points at high zoom (mode=points, capped)."""
+    (mode=clusters), individual points at high zoom (mode=points, capped).
+    Geographic selection (barrio_id + neighbor expansion / cd_comuna / municipio)
+    overrides the bbox: with a zone active the whole zone is returned."""
     pool = get_pool()
-    args = (min_lng, min_lat, max_lng, max_lat, tipo_operacion, precio_min, precio_max)
+    barrio_ids: Optional[list[int]] = None
+    if barrio_id is not None:
+        barrio_ids, _, _ = await _expand_neighbors(pool, barrio_id)
+    has_geo = barrio_ids is not None or cd_comuna is not None or municipio is not None
+    bbox = (None, None, None, None) if has_geo else (min_lng, min_lat, max_lng, max_lat)
+    args = (*bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio)
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
         rows = await pool.fetch(_VIEWPORT_POINTS_SQL, *args)

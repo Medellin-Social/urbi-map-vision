@@ -430,6 +430,8 @@ function MapPageInner() {
           mlsTipoOp={mlsTipoOp}
           mlsPrecioMin={sharedFilters.precioMin}
           mlsPrecioMax={sharedFilters.precioMax}
+          mlsCdComuna={cdComunaQuery ?? null}
+          mlsMunicipio={activeMunicipio}
           onViewportListingsChange={setViewportListings}
           highlightedListingId={highlightedListingId}
           flyToListingRef={flyToListingRef}

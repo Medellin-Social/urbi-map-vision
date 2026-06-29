@@ -42,6 +42,8 @@ type Props = {
   mlsTipoOp?: "venta" | "arriendo";
   mlsPrecioMin?: number | null;
   mlsPrecioMax?: number | null;
+  mlsCdComuna?: number | null;
+  mlsMunicipio?: string | null;
   onViewportListingsChange?: (listings: ApiListing[]) => void;
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
@@ -197,6 +199,8 @@ export function MapView({
   mlsTipoOp,
   mlsPrecioMin,
   mlsPrecioMax,
+  mlsCdComuna,
+  mlsMunicipio,
   onViewportListingsChange,
   highlightedListingId,
   flyToListingRef,
@@ -213,6 +217,7 @@ export function MapView({
   const barriosRef = useRef<ApiBarrio[]>([]);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
+  const zoneFlyRef = useRef<string | null>(null);  // last comuna/municipio flown-to
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -702,13 +707,19 @@ export function MapView({
       if (mlsTipoOp) params.set("tipo_operacion", mlsTipoOp);
       if (mlsPrecioMin != null) params.set("precio_min", String(mlsPrecioMin));
       if (mlsPrecioMax != null) params.set("precio_max", String(mlsPrecioMax));
+      // Geographic selection — backend ignores bbox when a zone is active.
+      if (mlsBarrioId != null) params.set("barrio_id", String(mlsBarrioId));
+      if (mlsCdComuna != null) params.set("cd_comuna", String(mlsCdComuna));
+      if (mlsMunicipio) params.set("municipio", mlsMunicipio);
       try {
         const res = await apiFetch<ViewportResponse>(`${API_ENDPOINTS.allListings}/viewport?${params}`);
         if (cancelled) return;
         const src = map.getSource("listings-mls") as mapboxgl.GeoJSONSource | undefined;
         if (!src) return;
+        let coords: [number, number][] = [];
         if (res.mode === "clusters") {
           onViewportListingsChangeRef.current?.([]);
+          coords = res.clusters.map((c) => [c.lng, c.lat]);
           src.setData({
             type: "FeatureCollection",
             features: res.clusters.map((c) => ({
@@ -720,6 +731,7 @@ export function MapView({
         } else {
           const pts = res.listings.filter((l) => l.lat != null && l.lon != null);
           onViewportListingsChangeRef.current?.(pts);
+          coords = pts.map((l) => [l.lon!, l.lat!]);
           src.setData({
             type: "FeatureCollection",
             features: pts.map((l) => ({
@@ -735,6 +747,20 @@ export function MapView({
               },
             })),
           } as unknown as GeoJSON.FeatureCollection);
+        }
+        // Fly-to a comuna/municipio recién seleccionada (una vez). El barrio usa
+        // su flyTo de centroide más abajo. fitBounds al extent de la zona.
+        const zoneKey = mlsCdComuna != null ? `c:${mlsCdComuna}` : mlsMunicipio ? `m:${mlsMunicipio}` : null;
+        if (zoneKey && zoneKey !== zoneFlyRef.current && mlsBarrioId == null && coords.length) {
+          zoneFlyRef.current = zoneKey;
+          const lons = coords.map((c) => c[0]);
+          const lats = coords.map((c) => c[1]);
+          map.fitBounds(
+            [[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]],
+            { padding: 60, maxZoom: 14, duration: 600 },
+          );
+        } else if (!zoneKey) {
+          zoneFlyRef.current = null;
         }
       } catch { /* transient fetch error — keep current dots */ }
     };
@@ -765,7 +791,7 @@ export function MapView({
       map.off("zoomend", onMove);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapView, mlsBarrioId, mlsTipoOp, mlsPrecioMin, mlsPrecioMax]);
+  }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax]);
 
   // ── Highlight listing seleccionado ───────────────────────────────────────────
   useEffect(() => {
