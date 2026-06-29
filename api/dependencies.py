@@ -11,7 +11,9 @@ from api.db import get_pool
 
 _bearer = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.getenv("JWT_SECRET", "urbidata-dev-secret-change-in-prod")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET or len(JWT_SECRET) < 32:
+    raise RuntimeError("JWT_SECRET env var requerida (mín 32 caracteres)")
 JWT_ALGORITHM = "HS256"
 
 
