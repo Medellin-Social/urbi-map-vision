@@ -6,7 +6,16 @@ import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useBarriosRaw, useScoreThresholds, useComunasMetrics, type ComunaMetrics } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
 import type { MapTab } from "@/components/MapNavbar";
+
+type ViewportResponse = {
+  mode: "clusters" | "points";
+  zoom: number;
+  clusters: { lng: number; lat: number; count: number; precio_promedio: number | null }[];
+  listings: ApiListing[];
+};
 import {
   OPP_COLORS,
   PALETTE_EVENT,
@@ -28,7 +37,12 @@ type Props = {
   // Vista 2 — MLS
   mapView?: "zonas" | "listings";
   mlsBarrioId?: number | null;
-  mlsListings?: ApiListing[];
+  // Viewport loading (FIX 1): active map filters + callback with the points
+  // currently in view (so map.tsx can resolve clicks → mini-popup).
+  mlsTipoOp?: "venta" | "arriendo";
+  mlsPrecioMin?: number | null;
+  mlsPrecioMax?: number | null;
+  onViewportListingsChange?: (listings: ApiListing[]) => void;
   highlightedListingId?: number | null;
   flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
@@ -180,7 +194,10 @@ export function MapView({
   onGoToMLS,
   mapView = "zonas",
   mlsBarrioId,
-  mlsListings,
+  mlsTipoOp,
+  mlsPrecioMin,
+  mlsPrecioMax,
+  onViewportListingsChange,
   highlightedListingId,
   flyToListingRef,
   onListingClickFromMap,
@@ -214,6 +231,8 @@ export function MapView({
   useEffect(() => { onListingClickFromMapRef.current = onListingClickFromMap; }, [onListingClickFromMap]);
   const onListingDoubleClickFromMapRef = useRef(onListingDoubleClickFromMap);
   useEffect(() => { onListingDoubleClickFromMapRef.current = onListingDoubleClickFromMap; }, [onListingDoubleClickFromMap]);
+  const onViewportListingsChangeRef = useRef(onViewportListingsChange);
+  useEffect(() => { onViewportListingsChangeRef.current = onViewportListingsChange; }, [onViewportListingsChange]);
 
 
   const riskRef = useRef(risk);
@@ -442,23 +461,22 @@ export function MapView({
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
+      // Server-side clustering (FIX 1): cluster:false — clusters/points come
+      // pre-aggregated from /listings/viewport. Cluster features carry a `count`.
       map.addSource("listings-mls", {
         type: "geojson",
         data: EMPTY_FC,
-        cluster: true,
-        clusterMaxZoom: 14,
-        clusterRadius: 50,
       });
 
       map.addLayer({
         id: "listings-mls-clusters",
         type: "circle",
         source: "listings-mls",
-        filter: ["has", "point_count"],
+        filter: ["has", "count"],
         layout: { visibility: "none" },
         paint: {
-          "circle-color": ["step", ["get", "point_count"], "#1D9E75", 10, "#085041", 50, "#1A1208"],
-          "circle-radius": ["step", ["get", "point_count"], 20, 10, 30, 50, 40],
+          "circle-color": ["step", ["get", "count"], "#1D9E75", 10, "#085041", 50, "#1A1208"],
+          "circle-radius": ["step", ["get", "count"], 20, 10, 30, 50, 40],
           "circle-opacity": 0.88,
           "circle-stroke-width": 2,
           "circle-stroke-color": "rgba(29,158,117,0.3)",
@@ -469,10 +487,10 @@ export function MapView({
         id: "listings-mls-cluster-count",
         type: "symbol",
         source: "listings-mls",
-        filter: ["has", "point_count"],
+        filter: ["has", "count"],
         layout: {
           visibility: "none",
-          "text-field": "{point_count_abbreviated}",
+          "text-field": ["get", "count"],
           "text-size": 12,
           "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
         },
@@ -483,7 +501,7 @@ export function MapView({
         id: "listings-mls-unclustered",
         type: "circle",
         source: "listings-mls",
-        filter: ["!", ["has", "point_count"]],
+        filter: ["!", ["has", "count"]],
         layout: { visibility: "none" },
         paint: {
           "circle-radius": [
@@ -522,15 +540,12 @@ export function MapView({
         },
       });
 
-      // Click en cluster MLS → zoom in
+      // Click en cluster (server-side) → acercar; al subir zoom el viewport
+      // re-fetchea y abre el cluster en sub-clusters / puntos.
       map.on("click", "listings-mls-clusters", (e) => {
         if (!e.features?.length) return;
-        const clusterId = e.features[0].properties!.cluster_id as number;
         const center = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
-        (map.getSource("listings-mls") as mapboxgl.GeoJSONSource).getClusterExpansionZoom(
-          clusterId,
-          (err, zoom) => { if (!err && zoom != null) map.easeTo({ center, zoom }); },
-        );
+        map.easeTo({ center, zoom: Math.min(map.getZoom() + 2, 16) });
       });
 
       // Click en punto individual → mini popup (debounced to distinguish dblclick)
@@ -671,41 +686,69 @@ export function MapView({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current || mapView !== "listings") return;
 
-    const src = map.getSource("listings-mls") as mapboxgl.GeoJSONSource | undefined;
-    if (src) {
-      if (!mlsListings?.length) {
-        src.setData(EMPTY_FC);
-      } else {
-        const features = mlsListings
-          .filter((l) => l.lat != null && l.lon != null)
-          .map((l) => ({
-            type: "Feature" as const,
-            id: l.id,
-            geometry: { type: "Point" as const, coordinates: [l.lon!, l.lat!] },
-            properties: {
+    let cancelled = false;
+    let debounce: ReturnType<typeof setTimeout> | null = null;
+
+    const loadViewport = async () => {
+      const b = map.getBounds();
+      if (!b) return;
+      const params = new URLSearchParams({
+        min_lng: String(b.getWest()),
+        min_lat: String(b.getSouth()),
+        max_lng: String(b.getEast()),
+        max_lat: String(b.getNorth()),
+        zoom: String(Math.round(map.getZoom())),
+      });
+      if (mlsTipoOp) params.set("tipo_operacion", mlsTipoOp);
+      if (mlsPrecioMin != null) params.set("precio_min", String(mlsPrecioMin));
+      if (mlsPrecioMax != null) params.set("precio_max", String(mlsPrecioMax));
+      try {
+        const res = await apiFetch<ViewportResponse>(`${API_ENDPOINTS.allListings}/viewport?${params}`);
+        if (cancelled) return;
+        const src = map.getSource("listings-mls") as mapboxgl.GeoJSONSource | undefined;
+        if (!src) return;
+        if (res.mode === "clusters") {
+          onViewportListingsChangeRef.current?.([]);
+          src.setData({
+            type: "FeatureCollection",
+            features: res.clusters.map((c) => ({
+              type: "Feature" as const,
+              geometry: { type: "Point" as const, coordinates: [c.lng, c.lat] },
+              properties: { count: c.count, precio_promedio: c.precio_promedio },
+            })),
+          } as GeoJSON.FeatureCollection);
+        } else {
+          const pts = res.listings.filter((l) => l.lat != null && l.lon != null);
+          onViewportListingsChangeRef.current?.(pts);
+          src.setData({
+            type: "FeatureCollection",
+            features: pts.map((l) => ({
+              type: "Feature" as const,
               id: l.id,
-              buena_oferta: l.buena_oferta ?? false,
-              tipo_op: l.tipo_operacion ?? "venta",
-              tipo_inmueble: l.tipo_inmueble ?? "",
-              tier: l.tier ?? "",
-              precio_cop: l.precio_cop ?? null,
-              precio_usd: l.precio_usd ?? null,
-              precio_m2: l.precio_m2 ?? null,
-              precio_m2_mediana_barrio: l.precio_m2_mediana_barrio ?? null,
-              area_m2: l.area_m2 ?? null,
-              habitaciones: l.habitaciones ?? null,
-              banos: l.banos ?? null,
-              url: l.url ?? null,
-              fuente: l.fuente ?? "",
-              barrio_nombre: l.barrio_nombre ?? "",
-              barrio_id: l.barrio_id ?? null,
-              pct_bajo_mediana: l.pct_bajo_mediana ?? null,
-            },
-          }));
-        src.setData({ type: "FeatureCollection", features } as unknown as GeoJSON.FeatureCollection);
-      }
-    }
-    // FlyTo centroide del barrio solo la primera vez por barrio seleccionado
+              geometry: { type: "Point" as const, coordinates: [l.lon!, l.lat!] },
+              properties: {
+                id: l.id,
+                tipo_op: l.tipo_operacion ?? "venta",
+                tipo_inmueble: l.tipo_inmueble ?? "",
+                fuente_display: l.fuente_display ?? l.fuente ?? "",
+                tier: l.tier ?? "",
+              },
+            })),
+          } as unknown as GeoJSON.FeatureCollection);
+        }
+      } catch { /* transient fetch error — keep current dots */ }
+    };
+
+    const onMove = () => {
+      if (debounce) clearTimeout(debounce);
+      debounce = setTimeout(loadViewport, 300);
+    };
+
+    map.on("moveend", onMove);
+    map.on("zoomend", onMove);
+    loadViewport();
+
+    // FlyTo centroide del barrio la primera vez (dispara moveend → refetch viewport)
     if (mlsBarrioId != null && mlsLastFlyToRef.current !== mlsBarrioId) {
       mlsLastFlyToRef.current = mlsBarrioId;
       const barrio = barriosRef.current.find((b) => b.barrio_id === mlsBarrioId);
@@ -714,8 +757,15 @@ export function MapView({
         map.flyTo({ center: [nb.lng, nb.lat], zoom: 14, pitch: 0, speed: 0.8 });
       }
     }
+
+    return () => {
+      cancelled = true;
+      if (debounce) clearTimeout(debounce);
+      map.off("moveend", onMove);
+      map.off("zoomend", onMove);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapView, mlsBarrioId, mlsListings]);
+  }, [mapView, mlsBarrioId, mlsTipoOp, mlsPrecioMin, mlsPrecioMax]);
 
   // ── Highlight listing seleccionado ───────────────────────────────────────────
   useEffect(() => {

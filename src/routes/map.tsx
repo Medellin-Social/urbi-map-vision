@@ -93,6 +93,9 @@ function MapPageInner() {
 
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
+  // Listings currently rendered as map dots via viewport loading (FIX 1) — used
+  // to resolve a map-point click into the listing for the mini-popup/drawer.
+  const [viewportListings, setViewportListings] = useState<ApiListing[]>([]);
 
   // Count active filters for hint banner
   const activeFilterCount = [
@@ -390,7 +393,7 @@ function MapPageInner() {
   // Single click on map point → show mini popup
   function handleListingClickFromMap(id: number, screenX: number, screenY: number) {
     setHighlightedListingId(id);
-    const listing = mergedListings.find((l) => l.id === id);
+    const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
     if (!listing) return;
     track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     setMiniPopupData({ listing, x: screenX, y: screenY });
@@ -400,7 +403,7 @@ function MapPageInner() {
   function handleListingDoubleClickFromMap(id: number) {
     setHighlightedListingId(id);
     setMiniPopupData(null);
-    const listing = mergedListings.find((l) => l.id === id);
+    const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
     if (listing) track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     openListingDetail(id);
   }
@@ -409,9 +412,6 @@ function MapPageInner() {
   function handleFilteredListingsChange(listings: ApiListing[]) {
     setFilteredListings(listings);
   }
-
-  // Map renders filtered subset when filters are active, otherwise all listings
-  const mapListings = filteredListings ?? mergedListings;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
@@ -427,7 +427,10 @@ function MapPageInner() {
           onGoToMLS={handleGoToMLS}
           mapView={mapView}
           mlsBarrioId={mlsBarrio?.id ?? null}
-          mlsListings={mapListings}
+          mlsTipoOp={mlsTipoOp}
+          mlsPrecioMin={sharedFilters.precioMin}
+          mlsPrecioMax={sharedFilters.precioMax}
+          onViewportListingsChange={setViewportListings}
           highlightedListingId={highlightedListingId}
           flyToListingRef={flyToListingRef}
           onListingClickFromMap={handleListingClickFromMap}

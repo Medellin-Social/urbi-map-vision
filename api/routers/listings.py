@@ -735,6 +735,124 @@ ORDER BY fecha_cambio ASC
 """
 
 
+# ── Viewport-based loading (server-side clustering) ──────────────────────────
+class ViewportCluster(BaseModel):
+    lng: float
+    lat: float
+    count: int
+    precio_promedio: Optional[int] = None
+
+
+class ViewportResponse(BaseModel):
+    mode: str          # "clusters" | "points"
+    zoom: int
+    clusters: list[ViewportCluster] = []
+    listings: list[ListingFull] = []
+
+
+# Below this zoom we aggregate into a lat/lon grid; at/above it we return points.
+_VIEWPORT_CLUSTER_MAX_ZOOM = 13
+# Safety cap on individual points returned for one viewport.
+_VIEWPORT_POINTS_CAP = 3000
+
+_VIEWPORT_CLUSTERS_SQL = """
+SELECT
+    COUNT(*)::int                    AS count,
+    AVG(g.lon)::float8               AS lng,
+    AVG(g.lat)::float8               AS lat,
+    ROUND(AVG(l.precio_cop))::bigint AS precio_promedio
+FROM staging.stg_listings_unificado l
+JOIN analytics.listings_georef g ON g.url = l.url
+WHERE l.precio_cop >= 500000
+  AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
+  AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
+  AND g.lat BETWEEN $2 AND $4
+  AND g.lon BETWEEN $1 AND $3
+  AND ($5::text   IS NULL OR l.tipo_operacion = $5)
+  AND ($6::bigint IS NULL OR l.precio_cop >= $6)
+  AND ($7::bigint IS NULL OR l.precio_cop <= $7)
+GROUP BY floor(g.lon / $8::float8), floor(g.lat / $8::float8)
+"""
+
+_VIEWPORT_POINTS_SQL = """
+WITH lraw AS (
+    SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
+           fuente, tier, tipo_operacion, tipo_inmueble,
+           precio_cop AS precio, area_m2, NULLIF(habitaciones, -1) AS habitaciones,
+           banos, direccion_raw, barrio_id, url, fotos[1] AS foto_principal
+    FROM staging.stg_listings_unificado
+    WHERE precio_cop >= 500000
+      AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
+      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
+)
+SELECT
+    l.id, l.fuente,
+    CASE
+        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente') THEN 'propio_pro'
+        WHEN l.fuente = 'propio' THEN 'propio'
+        ELSE l.fuente
+    END                          AS fuente_display,
+    l.tier, l.tipo_operacion, l.tipo_inmueble,
+    l.precio::bigint             AS precio_cop,
+    (l.precio / {usd})::bigint   AS precio_usd,
+    l.area_m2::float8, l.habitaciones, l.banos::float8,
+    l.direccion_raw, l.url, l.foto_principal,
+    g.lat, g.lon, l.barrio_id,
+    b.nombre                     AS barrio_nombre,
+    b.municipio                  AS municipio,
+    g.estrato_real
+FROM lraw l
+JOIN analytics.listings_georef g ON g.url = l.url
+JOIN raw.barrios b               ON b.id = l.barrio_id
+LEFT JOIN (
+    SELECT lp.id::text AS lp_url, u.plan AS owner_plan
+    FROM public.listings_propios lp
+    JOIN public.usuarios u ON u.id = lp.user_id
+) _lp ON _lp.lp_url = l.url AND l.fuente = 'propio'
+WHERE g.lat BETWEEN $2 AND $4
+  AND g.lon BETWEEN $1 AND $3
+  AND ($5::text   IS NULL OR l.tipo_operacion = $5)
+  AND ($6::bigint IS NULL OR l.precio >= $6)
+  AND ($7::bigint IS NULL OR l.precio <= $7)
+ORDER BY l.precio ASC
+LIMIT {cap}
+""".format(usd=int(_USD), cap=_VIEWPORT_POINTS_CAP)
+
+
+@router.get("/viewport", response_model=ViewportResponse)
+async def get_listings_viewport(
+    min_lng: float = Query(...),
+    min_lat: float = Query(...),
+    max_lng: float = Query(...),
+    max_lat: float = Query(...),
+    zoom: int = Query(..., ge=0, le=22),
+    tipo_operacion: Optional[str] = Query(default=None),
+    precio_min: Optional[int] = Query(default=None),
+    precio_max: Optional[int] = Query(default=None),
+):
+    """Listings within the map viewport. Server-side clustering at low zoom
+    (mode=clusters), individual points at high zoom (mode=points, capped)."""
+    pool = get_pool()
+    args = (min_lng, min_lat, max_lng, max_lat, tipo_operacion, precio_min, precio_max)
+
+    if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
+        rows = await pool.fetch(_VIEWPORT_POINTS_SQL, *args)
+        return ViewportResponse(
+            mode="points", zoom=zoom,
+            listings=[ListingFull(**dict(r)) for r in rows],
+        )
+
+    # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
+    # metres per cell at city zoom; bump the constant for finer/coarser clusters.
+    cell = 360.0 / (2 ** (zoom + 4))
+    rows = await pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell)
+    return ViewportResponse(
+        mode="clusters", zoom=zoom,
+        clusters=[ViewportCluster(**dict(r)) for r in rows],
+    )
+
+
 @router.get("/{listing_id}", response_model=ListingDetail)
 async def get_listing_by_id(
     listing_id: int,
