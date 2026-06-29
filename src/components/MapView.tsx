@@ -229,6 +229,7 @@ export function MapView({
   const lastAutoBarrioRef = useRef<number | null>(null);  // camera-auto-selected barrio
   const lastAutoComunaRef = useRef<string | null>(null);  // camera-auto-selected comuna/muni key
   const flattenSkipRef = useRef(false);  // skip listings-toggle pitch easeTo when a zone fit drives it
+  const lastViewportQueryRef = useRef("");  // dedup identical viewport fetches
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -308,7 +309,7 @@ export function MapView({
     // click would otherwise race the listings flatten-easeTo → off-center.
     flattenSkipRef.current = true;   // this fitBounds already flattens — don't let the toggle race it
     map.setTerrain(null);
-    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, speed: 0.85 });
+    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, duration: 450 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
     onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null, municipioFilter ? null : cd);
@@ -552,7 +553,7 @@ export function MapView({
       // Click en barrio → dirigir el mapa allí (la derivación por cámara lo selecciona).
       map.on("click", "barrios-mls-fill", (e) => {
         if (!e.features?.length) return;
-        map.fitBounds(featureBounds(e.features[0]), { padding: 60, maxZoom: 15, duration: 600 });
+        map.fitBounds(featureBounds(e.features[0]), { padding: 60, maxZoom: 15, duration: 400 });
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
@@ -819,6 +820,14 @@ export function MapView({
       if (mlsBarrioId != null) params.set("barrio_id", String(mlsBarrioId));
       if (mlsCdComuna != null) params.set("cd_comuna", String(mlsCdComuna));
       if (mlsMunicipio) params.set("municipio", mlsMunicipio);
+      // Dedup: with a zone active the backend ignores bbox, so panning within the
+      // zone returns identical data — skip the refetch (key excludes bbox then).
+      const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
+      const dedupKey = hasGeo
+        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}`
+        : params.toString();
+      if (dedupKey === lastViewportQueryRef.current) return;
+      lastViewportQueryRef.current = dedupKey;
       try {
         const res = await apiFetch<ViewportResponse>(`${API_ENDPOINTS.allListings}/viewport?${params}`);
         if (cancelled) return;
@@ -859,7 +868,7 @@ export function MapView({
 
     const onMove = () => {
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(loadViewport, 300);
+      debounce = setTimeout(loadViewport, 150);
     };
 
     map.on("moveend", onMove);
@@ -952,7 +961,7 @@ export function MapView({
     const onMove = () => {
       applyTier();                       // tier visual is immediate
       if (debounce) clearTimeout(debounce);
-      debounce = setTimeout(autoSelect, 300);   // derive on every move (gesture or fly-to)
+      debounce = setTimeout(autoSelect, 180);   // derive on every move (gesture or fly-to)
     };
 
     applyTier();
