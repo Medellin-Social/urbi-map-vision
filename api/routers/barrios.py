@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user, is_pro
+from api.dependencies import get_optional_user, is_agente
 from api.routers.listings import ListingFull, ListingsAllResponse
 from api.services.personalizacion import PRESUPUESTO_MAX
 
@@ -399,18 +399,6 @@ _BARRIO_SQL = """
 """
 
 
-_PRO_FIELDS_GATE = [
-    "yield_bruto_pct", "yield_renta_media_pct", "precio_renta_media_p50",
-    "premium_vs_largo_pct", "n_listings_renta_media",
-    "ocupacion_airbnb_pct", "ocupacion_p25_pct", "ocupacion_p75_pct",
-    "adr_noche_cop", "yield_airbnb_pct", "yield_airbnb_real_pct",
-    "n_listings_airbnb", "n_entire_home", "n_private_room", "n_superhosts",
-    "ingresos_anuales_p50_usd", "ingresos_anuales_p50_cop",
-    "rating_promedio", "reviews_promedio", "diff_ocupacion_pct", "diff_adr_cop",
-    "pts_yield_nomada",
-]
-
-
 def _f(row: dict, key: str) -> Optional[float]:
     v = row.get(key)
     return float(v) if v is not None else None
@@ -421,9 +409,7 @@ def _i(row: dict, key: str) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None, use_max_score: bool = False, user_is_pro: bool = True) -> BarrioResponse:
-    if not user_is_pro:
-        row = {**row, **{k: None for k in _PRO_FIELDS_GATE}}
+def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None, use_max_score: bool = False) -> BarrioResponse:
     raw_geo = row.get("geometry_raw")
     geometry = json.loads(raw_geo) if raw_geo else None
 
@@ -649,8 +635,7 @@ async def list_barrios(
     """
     rows = await pool.fetch(sql, municipio, estrato, score_min)
     use_max = not effective_perfil
-    pro = is_pro(current_user)
-    return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max, user_is_pro=pro) for r in rows]
+    return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max) for r in rows]
 
 
 # ── Lightweight selector endpoints ───────────────────────────────────────────
@@ -758,7 +743,7 @@ async def get_barrio(
         raise HTTPException(status_code=503, detail="Datos temporalmente no disponibles")
     if row is None:
         raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
-    return _build_response(dict(row), score_col, perfil, user_is_pro=is_pro(current_user))
+    return _build_response(dict(row), score_col, perfil)
 
 
 _BARRIO_COUNT_SQL = """
@@ -879,6 +864,7 @@ async def get_barrio_listings(
     habitaciones: Optional[int] = Query(default=None),
     limit: int = Query(default=50, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     pool = get_pool()
     args = (barrio_id, tipo_operacion, precio_min, precio_max, area_min, habitaciones)
@@ -889,7 +875,13 @@ async def get_barrio_listings(
         *args,
     )
 
-    return ListingsAllResponse(
-        total=total or 0,
-        listings=[ListingFull(**dict(r)) for r in rows],
-    )
+    _agente = is_agente(current_user)
+    items: list[ListingFull] = []
+    for r in rows:
+        d = dict(r)
+        if not _agente:
+            d["buena_oferta"] = None
+            d["pct_bajo_mediana"] = None
+        items.append(ListingFull(**d))
+
+    return ListingsAllResponse(total=total or 0, listings=items)
