@@ -271,6 +271,13 @@ async def refresh_listings_cache(pool: Any) -> None:
                 async with conn.transaction():
                     await conn.execute(_TRUNCATE_STG_LISTINGS)
                     await conn.execute(_REFRESH_STG_LISTINGS)
+                # Index on url for the /viewport JOIN (g.url = l.url) — was a 54k-row
+                # seq scan. TRUNCATE preserves it; IF NOT EXISTS makes it a no-op after
+                # the first run and survives any dbt recreate of the table.
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_stg_listings_url "
+                    "ON staging.stg_listings_unificado (url)"
+                )
                 logger.info("[cache] stg_listings_unificado refreshed")
 
                 # barrios_medianas queries stg_listings_unificado — only run when stg exists
