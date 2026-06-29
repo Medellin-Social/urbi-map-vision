@@ -301,8 +301,9 @@ export function MapView({
     bounds: mapboxgl.LngLatBounds,
     municipioFilter?: string | null,
   ) {
-    // Zoom to commune bounds — no barrio polygon layer, only listings points show
-    map.fitBounds(bounds, { padding: 60, maxZoom: 14, speed: 0.85 });
+    // Fit the WHOLE zone in cluster tier (maxZoom < POLYGON_TIER_ZOOM) so the camera
+    // derives the comuna/municipio (not a single barrio) and shows it all.
+    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, speed: 0.85 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
     onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null, municipioFilter ? null : cd);
@@ -474,8 +475,11 @@ export function MapView({
         const f = e.features[0];
         const cd = f.properties?.cd_comuna as number;
         const nombre = (f.properties?.nombre ?? "").toString();
-        const bounds = featureBounds(f);
         const isMunicipio = f.properties?.is_municipio === true;
+        // queryRenderedFeatures clips geometry to the tile under the cursor → use the
+        // full source feature (by nombre) so we fit the WHOLE zone, not a fragment.
+        const full = staticFeaturesRef.current?.find((sf) => (sf.properties?.nombre ?? "") === nombre);
+        const bounds = featureBounds((full ?? f) as mapboxgl.MapboxGeoJSONFeature);
         switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
       });
 
