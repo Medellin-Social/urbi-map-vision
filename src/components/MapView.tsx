@@ -505,9 +505,29 @@ export function MapView({
           "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5, 1],
         },
       });
+      // Etiqueta con el nombre del barrio sobre el polígono (tier alto).
+      map.addLayer({
+        id: "barrios-mls-label",
+        type: "symbol",
+        source: "barrios-mls",
+        layout: {
+          visibility: "none",
+          "text-field": ["get", "nombre"],
+          "text-size": 11,
+          "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
+          "text-transform": "uppercase",
+          "text-letter-spacing": 0.05,
+        },
+        paint: {
+          "text-color": "#1A1208",
+          "text-halo-color": "#FAF7F2",
+          "text-halo-width": 1.5,
+        },
+      });
       let hoverBarrioId: number | null = null;
       map.on("mousemove", "barrios-mls-fill", (e) => {
         if (!e.features?.length) return;
+        map.getCanvas().style.cursor = "pointer";
         const id = e.features[0].id as number;
         if (hoverBarrioId !== null && hoverBarrioId !== id) {
           map.setFeatureState({ source: "barrios-mls", id: hoverBarrioId }, { hover: false });
@@ -516,8 +536,14 @@ export function MapView({
         map.setFeatureState({ source: "barrios-mls", id }, { hover: true });
       });
       map.on("mouseleave", "barrios-mls-fill", () => {
+        map.getCanvas().style.cursor = "";
         if (hoverBarrioId !== null) map.setFeatureState({ source: "barrios-mls", id: hoverBarrioId }, { hover: false });
         hoverBarrioId = null;
+      });
+      // Click en barrio → dirigir el mapa allí (la derivación por cámara lo selecciona).
+      map.on("click", "barrios-mls-fill", (e) => {
+        if (!e.features?.length) return;
+        map.fitBounds(featureBounds(e.features[0]), { padding: 60, maxZoom: 15, duration: 600 });
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────
@@ -727,7 +753,7 @@ export function MapView({
     } else {
       // Vista 1: ocultar MLS layers + barrio polygons, volver a comunas
       mlsLastFlyToRef.current = null;
-      for (const id of [...mlsLayers, "barrios-mls-fill", "barrios-mls-line"]) {
+      for (const id of [...mlsLayers, "barrios-mls-fill", "barrios-mls-line", "barrios-mls-label"]) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
       }
       (map.getSource("listings-mls") as mapboxgl.GeoJSONSource)?.setData(EMPTY_FC);
@@ -856,8 +882,9 @@ export function MapView({
         map.setPaintProperty("comunas-line", "line-width",   hi ? 0.8 : 2);
         map.setPaintProperty("comunas-line", "line-opacity", hi ? 0.35 : 0.6);
       }
-      setVis("barrios-mls-fill", hi ? "visible" : "none");
-      setVis("barrios-mls-line", hi ? "visible" : "none");
+      setVis("barrios-mls-fill",  hi ? "visible" : "none");
+      setVis("barrios-mls-line",  hi ? "visible" : "none");
+      setVis("barrios-mls-label", hi ? "visible" : "none");
     };
 
     // FIX 1d — free navigation: zone derived from the camera on every move (no
