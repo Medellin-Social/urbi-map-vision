@@ -170,10 +170,6 @@ function loadBarrioStats(): Promise<Map<string, BarrioStats>> {
   return _statsPromise;
 }
 
-// ── Fake-barrio index: maps synthetic IDs → static listing lookup params ─────
-// Populated by makeStatsBarrio/makeGreyBarrio; consumed by useListings.
-const _fakeBarrioIndex = new Map<number, { slug: string; statsNombre: string; cd_comuna: number | null }>();
-
 // ── Commune names index: "slug:cd_comuna" → set of normalized barrio names ───
 const _communeNamesIndex = new Map<string, Set<string>>();
 
@@ -187,40 +183,6 @@ function _registerCommune(slug: string, cdComuna: number | null, sn: string) {
 // ── Fake-barrio full data cache: maps synthetic IDs → ApiBarrio ───────────────
 // Populated by makeStatsBarrio; consumed by useCompararRaw to avoid 404 on fake IDs.
 const _fakeBarioData = new Map<number, ApiBarrio>();
-
-// ── Static listings cache per municipio slug ──────────────────────────────────
-type StaticListing = {
-  id: number;
-  tipo_operacion: string;
-  tipo_inmueble?: string | null;
-  precio_cop: number | null;
-  area_m2: number | null;
-  precio_m2: number | null;
-  estrato: number | null;
-  lat: number | null;
-  lng: number | null;
-  barrio: string;
-  url?: string | null;
-  habitaciones?: number | null;
-  banos?: number | null;
-  direccion_raw?: string | null;
-  fuente?: string | null;
-  antiguedad?: string | null;
-};
-
-const _listingsCache = new Map<string, Promise<StaticListing[]>>();
-
-function loadStaticListings(slug: string): Promise<StaticListing[]> {
-  if (!_listingsCache.has(slug)) {
-    _listingsCache.set(
-      slug,
-      fetch(`/data/listings_${slug}.json`)
-        .then((r) => r.json())
-        .catch(() => [] as StaticListing[]),
-    );
-  }
-  return _listingsCache.get(slug)!;
-}
 
 // Derive a 0-100 investment score from yield_anual (p25=5.6 p50=6.5 p75=7.6)
 function yieldToScore(y: number | null): number | null {
@@ -245,7 +207,6 @@ function makeStatsBarrio(f: StaticFeature, stats: BarrioStats, perfil?: string):
   const _slug = stats.slug_municipio.replace(/-/g, "_");
   const _sn = stripAccents(stats.nombre.toUpperCase());
   const _cdComuna = f.properties.cd_comuna ?? null;
-  _fakeBarrioIndex.set(fakeId, { slug: _slug, statsNombre: _sn, cd_comuna: _cdComuna });
   _registerCommune(_slug, _cdComuna, _sn);
   const barrio: ApiBarrio = {
     barrio_id: fakeId,
@@ -330,7 +291,6 @@ function makeGreyBarrio(f: StaticFeature, id: number): ApiBarrio {
   const _sn = stripAccents(f.properties.nombre.toUpperCase());
   const _cdComuna = f.properties.cd_comuna ?? null;
   if (_slug) {
-    _fakeBarrioIndex.set(id, { slug: _slug, statsNombre: _sn, cd_comuna: _cdComuna });
     _registerCommune(_slug, _cdComuna, _sn);
   }
   return {
@@ -598,45 +558,6 @@ export function useListings(
   return useQuery({
     queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null, cdComuna ?? null, municipioNombre ?? null],
     queryFn: async (): Promise<ApiListingsResponse> => {
-      // Static path for synthetic barrios (non-API municipalities)
-      const fake = barrioId != null ? _fakeBarrioIndex.get(barrioId) : undefined;
-      if (fake) {
-        const all = await loadStaticListings(fake.slug);
-        let filtered = all.filter((l) => {
-          const lb = stripAccents((l.barrio ?? "").toUpperCase());
-          return lb === fake.statsNombre && (!tipoOperacion || l.tipo_operacion === tipoOperacion);
-        });
-        // Apply extraFilters client-side (static path has no API to delegate to)
-        if (extraFilters) {
-          if (extraFilters.area_min != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 >= extraFilters!.area_min!);
-          if (extraFilters.area_max != null) filtered = filtered.filter((l) => l.area_m2 != null && l.area_m2 <= extraFilters!.area_max!);
-          if (extraFilters.banos != null && extraFilters.banos > 0) filtered = filtered.filter((l) => l.banos != null && l.banos >= extraFilters!.banos!);
-          if (extraFilters.antiguedad && extraFilters.antiguedad !== "Todas")
-            filtered = filtered.filter((l) => l.antiguedad === extraFilters!.antiguedad);
-        }
-        const page = filtered.slice(offset, offset + limit);
-        return {
-          total: filtered.length,
-          listings: page.map((l) => ({
-            id: l.id,
-            tipo_operacion: l.tipo_operacion ?? undefined,
-            tipo_inmueble: l.tipo_inmueble ?? null,
-            precio_cop: l.precio_cop,
-            precio_usd: l.precio_cop ? Math.round(l.precio_cop / 4100) : null,
-            area_m2: l.area_m2,
-            precio_m2: l.precio_m2,
-            habitaciones: l.habitaciones ?? null,
-            banos: l.banos ?? null,
-            direccion_raw: l.direccion_raw ?? null,
-            url: l.url ?? null,
-            fuente: l.fuente ?? "metrocuadrado",
-            lat: l.lat,
-            lon: l.lng,
-            barrio_nombre: l.barrio ?? null,
-          })),
-        };
-      }
-
       // API path — expansion handled server-side (expands only when barrio has < 5 listings)
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
       if (tipoOperacion) params.set("tipo_operacion", tipoOperacion);
