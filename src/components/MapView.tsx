@@ -630,10 +630,22 @@ export function MapView({
         },
       });
 
-      // Click en cluster (server-side) → acercar; al subir zoom el viewport
-      // re-fetchea y abre el cluster en sub-clusters / puntos.
+      // Click en cluster → seleccionar la comuna/municipio bajo el punto y fitearla
+      // entera (las burbujas tapan los polígonos, así que el click cae aquí). Si no
+      // hay comuna bajo el punto, fallback: acercar hacia el cluster.
       map.on("click", "listings-mls-clusters", (e) => {
         if (!e.features?.length) return;
+        const cf = map.queryRenderedFeatures(e.point, { layers: ["comunas-fill"] });
+        if (cf.length) {
+          const props = cf[0].properties;
+          const nombre = (props?.nombre ?? "").toString();
+          const cd = props?.cd_comuna as number;
+          const isMunicipio = props?.is_municipio === true;
+          const full = staticFeaturesRef.current?.find((sf) => (sf.properties?.nombre ?? "") === nombre);
+          const bounds = featureBounds((full ?? cf[0]) as mapboxgl.MapboxGeoJSONFeature);
+          switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
+          return;
+        }
         const center = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
         map.easeTo({ center, zoom: Math.min(map.getZoom() + 2, 16) });
       });
