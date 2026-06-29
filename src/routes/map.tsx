@@ -16,7 +16,6 @@ import { track } from "@/lib/tracking";
 import { useListings, useBarriosRaw, type ListingsApiFilters } from "@/hooks/useBarrios";
 import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/adapters";
 import { useMemo } from "react";
-import { point, booleanPointInPolygon } from "@turf/turf";
 import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
@@ -95,11 +94,6 @@ function MapPageInner() {
   // Filtered listings for map (updated by MLSPanel when filters change)
   const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
 
-  // Draw-to-filter
-  const [drawModeActive, setDrawModeActive] = useState(false);
-  const [drawnPolygon, setDrawnPolygon] = useState<GeoJSON.Feature | null>(null);
-  const clearDrawRef = useRef<(() => void) | null>(null);
-
   // Count active filters for hint banner
   const activeFilterCount = [
     sharedFilters.precioMax, sharedFilters.precioMin,
@@ -174,7 +168,10 @@ function MapPageInner() {
   );
 
   // Merged listings: specific barrio OR commune/municipality-level
-  const mergedListings = mlsBarrio ? mlsListings : (comunaData?.listings ?? []);
+  const mergedListings = useMemo(
+    () => (mlsBarrio ? mlsListings : (comunaData?.listings ?? [])),
+    [mlsBarrio, mlsListings, comunaData?.listings],
+  );
   const mergedLoading  = mlsBarrio ? mlsIsLoading : comunaIsLoading;
   const mlsTotal = mergedListings.length;
 
@@ -206,20 +203,6 @@ function MapPageInner() {
   useEffect(() => {
     setFilteredListings(null);
   }, [mergedListings]);
-
-  // Apply polygon filter on top of raw listings
-  const polygonFilteredListings = useMemo<ApiListing[]>(() => {
-    if (!drawnPolygon) return mergedListings;
-    return mergedListings.filter((l) => {
-      if (!l.lat || !l.lon) return false;
-      return booleanPointInPolygon(point([l.lon, l.lat]), drawnPolygon as GeoJSON.Feature<GeoJSON.Polygon>);
-    });
-  }, [mergedListings, drawnPolygon]);
-
-  // Reset MLSPanel filters when polygon changes so mapListings stays consistent
-  useEffect(() => {
-    setFilteredListings(null);
-  }, [drawnPolygon]);
 
   // Read ?listing=X from URL on mount → open modal automatically
   useEffect(() => {
@@ -357,8 +340,6 @@ function MapPageInner() {
     setHighlightedListingId(null);
     setActiveBarrioInComune(null);
     setFilteredListings(null);
-    setDrawnPolygon(null);
-    setDrawModeActive(false);
   }
 
   function handleBackToCommune() {
@@ -429,21 +410,8 @@ function MapPageInner() {
     setFilteredListings(listings);
   }
 
-  // Draw handlers — disabled, revisar filtros antes de habilitar
-  // function handleToggleDrawMode() { ... }
-  // function handleClearDraw() { ... }
-
-  function handleDrawPolygon(poly: GeoJSON.Feature) {
-    setDrawnPolygon(poly);
-    setDrawModeActive(false);
-  }
-
-  function handleDrawDelete() {
-    setDrawnPolygon(null);
-  }
-
-  // Map renders filtered subset when filters are active, otherwise all polygon-filtered listings
-  const mapListings = filteredListings ?? polygonFilteredListings;
+  // Map renders filtered subset when filters are active, otherwise all listings
+  const mapListings = filteredListings ?? mergedListings;
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
@@ -465,10 +433,6 @@ function MapPageInner() {
           onListingClickFromMap={handleListingClickFromMap}
           onListingDoubleClickFromMap={handleListingDoubleClickFromMap}
           activeBarrioName={activeBarrioInComune}
-          drawModeActive={drawModeActive}
-          onDrawPolygon={handleDrawPolygon}
-          onDrawDelete={handleDrawDelete}
-          clearDrawRef={clearDrawRef}
           activeTab={activeTab}
         />
       </div>

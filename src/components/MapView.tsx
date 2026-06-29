@@ -4,10 +4,8 @@ import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
 import { barrioToNeighborhood, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
-import { useTarget } from "@/contexts/TargetContext";
 import { useBarriosRaw, useScoreThresholds, useComunasMetrics, type ComunaMetrics } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
-import { useIsPro } from "@/components/LockedField";
 import type { MapTab } from "@/components/MapNavbar";
 import {
   OPP_COLORS,
@@ -36,11 +34,6 @@ type Props = {
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
-  // Draw-to-filter
-  drawModeActive?: boolean;
-  onDrawPolygon?: (polygon: GeoJSON.Feature) => void;
-  onDrawDelete?: () => void;
-  clearDrawRef?: React.MutableRefObject<(() => void) | null>;
   activeTab?: MapTab;
 };
 
@@ -56,18 +49,6 @@ const MUNICIPIO_STATIC: Record<number, string> = {
   103: "/data/comunas_itagui.geojson",
   104: "/data/comunas_sabaneta.geojson",
   105: "/data/comunas_la_estrella.geojson",
-};
-
-const _PERFIL_BADGE_LABEL: Record<string, string> = {
-  airbnb: "Renta Corta",
-  mediano_plazo: "Renta Media",
-  largo_plazo: "Renta Larga",
-};
-
-const _RISK_BADGE_LABEL: Record<string, string> = {
-  conservador: "Conservador",
-  moderado: "Moderado",
-  agresivo: "Agresivo",
 };
 
 // Calcula los bounds de un feature de Mapbox
@@ -205,10 +186,6 @@ export function MapView({
   onListingClickFromMap,
   onListingDoubleClickFromMap,
   activeBarrioName,
-  drawModeActive = false,
-  onDrawPolygon,
-  onDrawDelete,
-  clearDrawRef,
   activeTab,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -229,12 +206,6 @@ export function MapView({
   // Refs estables para callbacks (evita stale closures)
   const onViewLevelChangeRef = useRef(onViewLevelChange);
   useEffect(() => { onViewLevelChangeRef.current = onViewLevelChange; }, [onViewLevelChange]);
-
-  const onDrawPolygonRef = useRef(onDrawPolygon);
-  useEffect(() => { onDrawPolygonRef.current = onDrawPolygon; }, [onDrawPolygon]);
-
-  const onDrawDeleteRef = useRef(onDrawDelete);
-  useEffect(() => { onDrawDeleteRef.current = onDrawDelete; }, [onDrawDelete]);
 
   const onGoToMLSRef = useRef(onGoToMLS);
   useEffect(() => { onGoToMLSRef.current = onGoToMLS; }, [onGoToMLS]);
@@ -266,17 +237,12 @@ export function MapView({
   }, [thresholdsData]);
 
   const { data: barriosRaw } = useBarriosRaw(perfil);
-  const { target } = useTarget();
-  const targetRef = useRef(target);
-  useEffect(() => { targetRef.current = target; }, [target]);
 
   useEffect(() => {
     if (barriosRaw?.length) barriosRef.current = barriosRaw;
   }, [barriosRaw]);
 
-  const isPro = useIsPro();
-  const nonProTarget = activeTab === "rent" ? "renter" : "buyer";
-  const { data: comunasMetrics } = useComunasMetrics(perfil, isPro ? (target ?? "investor") : nonProTarget);
+  const { data: comunasMetrics } = useComunasMetrics(perfil);
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
@@ -397,12 +363,11 @@ export function MapView({
         type: "fill",
         source: "comunas",
         paint: {
-          "fill-color": ["coalesce", ["get", "color_hex"], "#1e3a5f"],
+          "fill-color": "#DAB33C",
           "fill-opacity": [
             "case",
-            ["boolean", ["feature-state", "hover"], false], 0.78,
-            ["==", ["get", "has_data"], true], 0.55,
-            0.5,
+            ["boolean", ["feature-state", "hover"], false], 0.45,
+            0.25,
           ],
         },
       });
@@ -412,13 +377,9 @@ export function MapView({
         type: "line",
         source: "comunas",
         paint: {
-          "line-color": "#1D9E75",
-          "line-opacity": 0.85,
-          "line-width": [
-            "case",
-            ["boolean", ["feature-state", "hover"], false], 2.5,
-            1.2,
-          ],
+          "line-color": "#002776",
+          "line-opacity": 0.6,
+          "line-width": 2,
         },
       });
 
@@ -647,7 +608,7 @@ export function MapView({
           id: cd ?? feat.id,
           properties: m
             ? { ...feat.properties, ...m }
-            : { ...feat.properties, color_hex: "#888780", has_data: false },
+            : { ...feat.properties, has_data: false },
         };
       });
       source.setData({ type: "FeatureCollection", features: enriched } as GeoJSON.FeatureCollection);
@@ -704,83 +665,6 @@ export function MapView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView]);
-
-  // ── Draw mode: custom polygon drawing (native mapbox-gl v3) ─────────────────
-  useEffect(() => {
-    const map = mapRef.current;
-    if (!map || !mapLoadedRef.current || !drawModeActive) return;
-
-    const SRC   = "urbi-draw-preview";
-    const FILL  = "urbi-draw-fill";
-    const LINE  = "urbi-draw-line";
-    const DOTS  = "urbi-draw-dots";
-
-    const vertices: [number, number][] = [];
-
-    if (!map.getSource(SRC)) {
-      map.addSource(SRC, { type: "geojson", data: { type: "FeatureCollection", features: [] } });
-      map.addLayer({ id: FILL, type: "fill",   source: SRC, filter: ["==", "$type", "Polygon"],    paint: { "fill-color": "#1D9E75", "fill-opacity": 0.15 } });
-      map.addLayer({ id: LINE, type: "line",   source: SRC, filter: ["==", "$type", "LineString"], paint: { "line-color": "#1D9E75", "line-width": 2, "line-dasharray": [3, 2] } });
-      map.addLayer({ id: DOTS, type: "circle", source: SRC, filter: ["==", "$type", "Point"],      paint: { "circle-radius": 5, "circle-color": "#1D9E75", "circle-stroke-width": 2, "circle-stroke-color": "#fff" } });
-    }
-
-    const setPreview = (mouse?: [number, number]) => {
-      const src = map.getSource(SRC) as mapboxgl.GeoJSONSource;
-      if (!src) return;
-      const pts = mouse ? [...vertices, mouse] : vertices;
-      const features: GeoJSON.Feature[] = vertices.map(v => ({ type: "Feature", geometry: { type: "Point", coordinates: v }, properties: {} }));
-      if (pts.length >= 3) features.push({ type: "Feature", geometry: { type: "Polygon",    coordinates: [[...pts, pts[0]]] }, properties: {} });
-      else if (pts.length === 2) features.push({ type: "Feature", geometry: { type: "LineString", coordinates: pts }, properties: {} });
-      src.setData({ type: "FeatureCollection", features });
-    };
-
-    map.dragPan.disable();
-    map.doubleClickZoom.disable();
-    map.getCanvas().style.cursor = "crosshair";
-
-    const onClick = (e: mapboxgl.MapMouseEvent) => {
-      vertices.push([e.lngLat.lng, e.lngLat.lat]);
-      setPreview();
-    };
-    const onDblClick = (e: mapboxgl.MapMouseEvent) => {
-      e.preventDefault();
-      vertices.pop(); // remove duplicate vertex from 2nd click of dblclick
-      if (vertices.length < 3) return;
-      onDrawPolygonRef.current?.({
-        type: "Feature",
-        geometry: { type: "Polygon", coordinates: [[...vertices, vertices[0]]] },
-        properties: {},
-      });
-    };
-    const onMouseMove = (e: mapboxgl.MapMouseEvent) => {
-      if (vertices.length > 0) setPreview([e.lngLat.lng, e.lngLat.lat]);
-    };
-
-    map.on("click",     onClick);
-    map.on("dblclick",  onDblClick);
-    map.on("mousemove", onMouseMove);
-
-    if (clearDrawRef) clearDrawRef.current = () => {
-      (map.getSource(SRC) as mapboxgl.GeoJSONSource | undefined)?.setData({ type: "FeatureCollection", features: [] });
-    };
-
-    return () => {
-      map.off("click",     onClick);
-      map.off("dblclick",  onDblClick);
-      map.off("mousemove", onMouseMove);
-      map.dragPan.enable();
-      map.doubleClickZoom.enable();
-      map.getCanvas().style.cursor = "";
-      try {
-        if (map.getLayer(FILL)) map.removeLayer(FILL);
-        if (map.getLayer(LINE)) map.removeLayer(LINE);
-        if (map.getLayer(DOTS)) map.removeLayer(DOTS);
-        if (map.getSource(SRC)) map.removeSource(SRC);
-      } catch { /* ignore if map already torn down */ }
-      if (clearDrawRef) clearDrawRef.current = null;
-    };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawModeActive]);
 
   // ── Vista 2: actualizar datos GeoJSON cuando llegan listings ────────────────
   useEffect(() => {
@@ -946,19 +830,6 @@ export function MapView({
         </div>
       )}
 
-      <div className={`absolute bottom-10 left-4 z-10 flex items-center gap-1.5 rounded-full border border-white/10 bg-background/80 px-2.5 py-1 text-[10px] text-muted-foreground backdrop-blur-sm${perfil ? "" : " hidden"}`}>
-        <span className="h-1.5 w-1.5 rounded-full bg-primary" />
-        <span>
-          Personalizado para:{" "}
-          <strong className="text-foreground">{_PERFIL_BADGE_LABEL[perfil ?? ""] ?? perfil}</strong>
-          {risk && (
-            <>
-              <span className="mx-1 opacity-40">·</span>
-              <strong className="text-foreground">{_RISK_BADGE_LABEL[risk] ?? risk}</strong>
-            </>
-          )}
-        </span>
-      </div>
     </>
   );
 }

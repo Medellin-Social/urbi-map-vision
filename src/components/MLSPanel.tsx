@@ -32,11 +32,6 @@ type Props = {
   premiumBarriosIncluidos?: string[] | null;
   onPremiumExpand?: (v: boolean) => void;
   externalFilters?: SharedFilters;
-  // Draw-to-filter
-  drawModeActive?: boolean;
-  drawnPolygon?: GeoJSON.Feature | null;
-  onToggleDrawMode?: () => void;
-  onClearDraw?: () => void;
   // Commune drill-down
   activeComuna?: string | null;
   activeMunicipio?: string | null;
@@ -365,10 +360,6 @@ export function MLSPanel({
   premiumBarriosIncluidos,
   onPremiumExpand,
   externalFilters,
-  drawModeActive = false,
-  drawnPolygon,
-  onToggleDrawMode,
-  onClearDraw,
   activeComuna,
   activeMunicipio,
   comunaBarrios,
