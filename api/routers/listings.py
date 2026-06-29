@@ -2,13 +2,11 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 import time
 from datetime import datetime
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from api.config import USD_TO_COP
@@ -926,7 +924,9 @@ async def get_listings_viewport(
     headers = {"Cache-Control": "public, max-age=300", "ETag": etag}
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
-    return JSONResponse(content=json.loads(body), headers=headers)
+    # Send the already-serialized body directly — no json.loads + JSONResponse
+    # re-serialize (that triple-work dominated latency on big point responses).
+    return Response(content=body, media_type="application/json", headers=headers)
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
