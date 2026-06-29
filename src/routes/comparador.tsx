@@ -75,7 +75,6 @@ function goalToScoreLabel(goal?: string): string {
   return "Score Renta media";
 }
 
-const FREE_BARRIO_LIMIT = 3;
 
 const INVERSION_FILTROS = [
   { id: null, label: "Todos" },
@@ -100,56 +99,6 @@ const BAR_METRICS: {
   { key: "liquidez", label: "Liquidez", dir: "↑", getValue: (b) => b.liquidez.score, fmt: (v) => `${v}/100` },
   { key: "precio_m2", label: "Precio m²", dir: "↓", getValue: (b) => b.mercado.precio_m2_cop, fmt: (v) => formatCOP(v) },
 ];
-
-// ─── Comparador Gate Modal ─────────────────────────────────────────────────────
-
-function ComparadorGateModal({ onClose }: { onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.5)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="mb-3 flex items-start justify-between">
-          <div className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-[#1D9E75]" />
-            <span className="font-semibold text-[#1A1208]">Comparador limitado</span>
-          </div>
-          <button onClick={onClose} className="text-[#6B5B45] hover:text-[#1A1208]">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
-        <p className="mb-1 text-sm text-[#6B5B45]">
-          Con el plan Free puedes comparar hasta <strong>3 barrios</strong>.
-        </p>
-        <p className="mb-5 text-sm text-[#6B5B45]">
-          Con MLS Pro compara barrios ilimitados y accede a métricas avanzadas.
-        </p>
-        <div className="flex gap-2">
-          <Link
-            to="/planes"
-            className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
-          >
-            Ver planes →
-          </Link>
-          <button
-            onClick={onClose}
-            className="rounded-xl px-4 py-2.5 text-sm font-medium text-[#6B5B45] transition hover:bg-[#F5F0E8]"
-            style={{ border: "0.5px solid #E8E0D0" }}
-          >
-            Cerrar
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ─── Historial section ─────────────────────────────────────────────────────────
 
@@ -294,7 +243,6 @@ function TabBarrios({
   const { data: barriosRaw = [], isPlaceholderData } = useBarriosRaw();
   const barrios = useMemo(() => barriosRaw.map(barrioToNeighborhood), [barriosRaw]);
   const [ids, setIds] = useState<number[]>(forcedIds ?? []);
-  const [showGateModal, setShowGateModal] = useState(false);
   const [filtroInversion, setFiltroInversion] = useState<InversionFiltro>(
     (forcedFiltro as InversionFiltro) ?? null
   );
@@ -391,34 +339,19 @@ function TabBarrios({
             )}
           </div>
         ))}
-        {(isPro || ids.length < FREE_BARRIO_LIMIT) && (
-          <button
-            onClick={() => {
-              if (!isPro && ids.length >= FREE_BARRIO_LIMIT) {
-                setShowGateModal(true);
-                return;
-              }
-              const next = barrios.find((n) => !ids.includes(n.id));
-              if (next) setIds([...ids, next.id]);
-            }}
-            className="inline-flex items-center gap-1 rounded-md border border-dashed px-3 py-1 text-xs font-medium transition hover:bg-accent/10"
-            style={{ borderColor: "#085041", color: "#085041" }}
-          >
-            <Plus className="h-3 w-3" /> Añadir barrio
-          </button>
-        )}
-        {!isPro && ids.length >= FREE_BARRIO_LIMIT && (
-          <button
-            onClick={() => setShowGateModal(true)}
-            className="inline-flex items-center gap-1 rounded-md border border-dashed px-3 py-1 text-xs font-medium transition hover:bg-accent/10"
-            style={{ borderColor: "#6B5B45", color: "#6B5B45" }}
-          >
-            <Lock className="h-3 w-3" /> Añadir barrio
-          </button>
-        )}
+        <button
+          onClick={() => {
+            const next = barrios.find((n) => !ids.includes(n.id));
+            if (next) setIds([...ids, next.id]);
+          }}
+          className="inline-flex items-center gap-1 rounded-md border border-dashed px-3 py-1 text-xs font-medium transition hover:bg-accent/10"
+          style={{ borderColor: "#085041", color: "#085041" }}
+        >
+          <Plus className="h-3 w-3" /> Añadir barrio
+        </button>
 
         {/* Guardar comparación */}
-        {isPro && items.length >= 2 && (
+        {items.length >= 2 && (
           <button
             onClick={() => {
               saveMut.mutate({
@@ -445,7 +378,6 @@ function TabBarrios({
           Error al cargar datos del backend.
         </div>
       )}
-      {showGateModal && <ComparadorGateModal onClose={() => setShowGateModal(false)} />}
 
       {!isLoading && !isError && items.length > 0 && (
         <div className="mt-8 grid gap-6 lg:grid-cols-5">

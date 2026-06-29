@@ -12,7 +12,7 @@ import {
   Shield, Bell, BellRing, User, BarChart2, Plus, Check,
 } from "lucide-react";
 import { useTarget } from "@/contexts/TargetContext";
-import { useIsPro, LockedField } from "@/components/LockedField";
+import { useIsPro } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
@@ -645,9 +645,6 @@ function SobreBarrio({ listing, target }: { listing: ApiListingDetail; target: s
     staleTime: 300_000,
   });
 
-  if (!isPro) {
-    return <LockedField label="Sobre este barrio" preview="Análisis editorial del vecindario" />;
-  }
   if (!barrioId) return null;
 
   const barrio     = listing.barrio_nombre ?? "El barrio";
@@ -719,14 +716,10 @@ function SobreBarrio({ listing, target }: { listing: ApiListingDetail; target: s
 // ─── PriceJustice ──────────────────────────────────────────────────────────────
 
 function PriceJustice({ listing }: { listing: ApiListingDetail }) {
-  const isPro = useIsPro();
   const p50   = listing.arriendo_p50_barrio;
   const precio = listing.precio_cop;
   const barrio = listing.barrio_nombre ?? "este barrio";
 
-  if (!isPro) {
-    return <LockedField label="Comparativo de precio en el barrio" preview="¿Canon justo o sobre precio?" />;
-  }
   if (!p50 || !precio) return null;
 
   const pct = ((precio - p50) / p50) * 100;
@@ -1052,14 +1045,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* ── BUYER: análisis para quien quiere vivir ────────────────────────────── */}
       {isBuyer && (
         <>
-          {isPro
-            ? listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />
-            : <LockedField label="Análisis de precio" preview="¿Buena oferta o sobre precio?" />
-          }
-          {isPro
-            ? <PriceRange listing={listing} />
-            : <LockedField label="Rango de precios del barrio" preview="Precio mínimo · Típico · Premium" />
-          }
+          {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
+          <PriceRange listing={listing} />
           {isPro && listing.var_anual_pct != null && (
             <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
               <div className="flex items-center justify-between px-4 py-2.5 text-sm">
@@ -1076,14 +1063,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* ── INVESTOR: análisis completo de rentabilidad ─────────────────────────── */}
       {isInvestor && (
         <>
-          {isPro
-            ? listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />
-            : <LockedField label="Análisis de precio" preview="¿Buena oferta o sobre precio?" />
-          }
-          {isPro
-            ? <PriceRange listing={listing} />
-            : <LockedField label="Rango de precios del barrio" preview="Precio mínimo · Típico · Premium" />
-          }
+          {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
+          <PriceRange listing={listing} />
           <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
             <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
             {listing.arriendo_p50_barrio
@@ -1091,10 +1072,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               : <span className="text-xs italic" style={{ color: "#9B8B75" }}>Pocos inmuebles para calcular una media</span>
             }
           </div>
-          {isPro
-            ? <YieldMultiModal listing={listing} />
-            : <LockedField label="Rendimiento estimado" preview="Airbnb vs renta larga vs nómadas" />
-          }
+          <YieldMultiModal listing={listing} />
           {isPro && (listing.var_anual_pct != null || listing.score_corto != null) && (
             <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
               {listing.var_anual_pct != null && (
@@ -1126,10 +1104,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               : <span className="text-xs italic" style={{ color: "#9B8B75" }}>Pocos inmuebles para calcular una media</span>
             }
           </div>
-          {isPro
-            ? <YieldMultiModal listing={listing} />
-            : <LockedField label="Rendimiento estimado" preview="Airbnb vs renta larga vs nómadas" />
-          }
+          <YieldMultiModal listing={listing} />
         </>
       )}
 
@@ -1148,7 +1123,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       )}
 
       {/* Historial de precio — todos los targets */}
-      {isPro ? (() => {
+      {(() => {
         const historia = listing.precio_historia ?? [];
 
         if (historia.length === 0) {
@@ -1226,9 +1201,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             </div>
           </div>
         );
-      })() : (
-        <LockedField label="Historial de precio" preview="¿Ha bajado de precio?" />
-      )}
+      })()}
 
       {/* CTA único para usuarios free */}
       {!isPro && (
