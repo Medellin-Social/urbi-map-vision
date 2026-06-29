@@ -17,6 +17,10 @@ async def create_pool() -> None:
         max_size=10,
         command_timeout=30,
         timeout=10,
+        # Server-side statement timeout (15s) for every pooled connection → covers
+        # all endpoints uniformly. Heavy background jobs (cache refresh) raise it
+        # per-connection; asyncpg RESET ALL on release reverts to this default.
+        server_settings={"statement_timeout": "15000"},
     )
 
 

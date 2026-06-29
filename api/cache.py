@@ -257,6 +257,10 @@ async def refresh_listings_cache(pool: Any) -> None:
     """Refresh all dynamic cache tables. barrios_cd is static — not refreshed here."""
     try:
         async with pool.acquire() as conn:
+            # Cache rebuild runs heavy percentile/aggregate queries that exceed the
+            # pool-wide 15s statement_timeout — raise it for this connection only
+            # (asyncpg RESET ALL on release reverts to the 15s default).
+            await conn.execute("SET statement_timeout = '600000'")
             # stg_listings_unificado: rebuild from raw tables (normally managed by dbt;
             # this keeps it fresh on environments where dbt doesn't run, e.g. Railway)
             stg_exists = await conn.fetchval(
