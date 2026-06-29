@@ -743,11 +743,36 @@ class ViewportCluster(BaseModel):
     precio_promedio: Optional[int] = None
 
 
+# Trimmed map/card tier — only the fields MapView dots + MLSPanel cards consume.
+# Full detail (fotos, descripción, amenidades, yields) is fetched per-id at drawer open.
+class ViewportListing(BaseModel):
+    id: int
+    lat: Optional[float] = None
+    lon: Optional[float] = None
+    tipo_operacion: Optional[str] = None
+    tipo_inmueble: Optional[str] = None
+    precio_cop: Optional[int] = None
+    precio_usd: Optional[int] = None
+    area_m2: Optional[float] = None
+    habitaciones: Optional[int] = None
+    banos: Optional[float] = None
+    foto_principal: Optional[str] = None
+    fuente: Optional[str] = None
+    fuente_display: Optional[str] = None
+    tier: Optional[str] = None
+    estrato_real: Optional[int] = None
+    barrio_id: Optional[int] = None
+    barrio_nombre: Optional[str] = None
+    municipio: Optional[str] = None
+    url: Optional[str] = None
+    direccion_raw: Optional[str] = None
+
+
 class ViewportResponse(BaseModel):
     mode: str          # "clusters" | "points"
     zoom: int
     clusters: list[ViewportCluster] = []
-    listings: list[ListingFull] = []
+    listings: list[ViewportListing] = []
 
 
 # Below this zoom we aggregate into a lat/lon grid; at/above it we return points.
@@ -872,7 +897,7 @@ async def get_listings_viewport(
         rows = await pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
         return ViewportResponse(
             mode="points", zoom=zoom,
-            listings=[ListingFull(**dict(r)) for r in rows],
+            listings=[ViewportListing(**dict(r)) for r in rows],
         )
 
     # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
@@ -886,7 +911,7 @@ async def get_listings_viewport(
     return ViewportResponse(
         mode="clusters", zoom=zoom,
         clusters=[ViewportCluster(**dict(r)) for r in clusters],
-        listings=[ListingFull(**dict(r)) for r in plist],
+        listings=[ViewportListing(**dict(r)) for r in plist],
     )
 
 
