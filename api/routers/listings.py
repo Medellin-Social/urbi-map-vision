@@ -754,6 +754,8 @@ class ViewportResponse(BaseModel):
 _VIEWPORT_CLUSTER_MAX_ZOOM = 13
 # Safety cap on individual points returned for one viewport.
 _VIEWPORT_POINTS_CAP = 3000
+# Cap on the panel list returned alongside clusters at low zoom (CAMBIO 4A).
+_VIEWPORT_PANEL_CAP = 200
 
 # Params (shared by both SQLs): $1-$4 bbox (NULLable — nulled when a zone is
 # active so the whole zone shows), $5 tipo_op, $6 precio_min, $7 precio_max,
@@ -790,7 +792,7 @@ WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, NULLIF(habitaciones, -1) AS habitaciones,
-           banos, direccion_raw, barrio_id, url, fotos[1] AS foto_principal
+           banos, direccion_raw, barrio_id, url, fecha_scraping, fotos[1] AS foto_principal
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -832,9 +834,12 @@ WHERE ($1::float8 IS NULL OR g.lon >= $1)
   AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
   AND ($9::int    IS NULL OR bc.cd_comuna = $9)
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
-ORDER BY l.precio ASC
-LIMIT {cap}
-""".format(usd=int(_USD), cap=_VIEWPORT_POINTS_CAP)
+ORDER BY
+    CASE WHEN l.tier = 'agente_premium'
+              OR (l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente'))
+         THEN 0 ELSE 1 END,
+    l.fecha_scraping DESC NULLS LAST
+""".format(usd=int(_USD))
 
 
 @router.get("/viewport", response_model=ViewportResponse)
@@ -864,7 +869,7 @@ async def get_listings_viewport(
     args = (*bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio)
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
-        rows = await pool.fetch(_VIEWPORT_POINTS_SQL, *args)
+        rows = await pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
         return ViewportResponse(
             mode="points", zoom=zoom,
             listings=[ListingFull(**dict(r)) for r in rows],
@@ -872,11 +877,16 @@ async def get_listings_viewport(
 
     # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
     # metres per cell at city zoom; bump the constant for finer/coarser clusters.
+    # CAMBIO 4A: also return a capped, premium-first panel list for the same bbox/zone.
     cell = 360.0 / (2 ** (zoom + 4))
-    rows = await pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell)
+    clusters, plist = await asyncio.gather(
+        pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell),
+        pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_PANEL_CAP}", *args),
+    )
     return ViewportResponse(
         mode="clusters", zoom=zoom,
-        clusters=[ViewportCluster(**dict(r)) for r in rows],
+        clusters=[ViewportCluster(**dict(r)) for r in clusters],
+        listings=[ListingFull(**dict(r)) for r in plist],
     )
 
 
