@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
 import time
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from api.config import USD_TO_COP
@@ -869,6 +871,7 @@ ORDER BY
 
 @router.get("/viewport", response_model=ViewportResponse)
 async def get_listings_viewport(
+    request: Request,
     min_lng: float = Query(...),
     min_lat: float = Query(...),
     max_lng: float = Query(...),
@@ -884,7 +887,10 @@ async def get_listings_viewport(
     """Listings within the map viewport. Server-side clustering at low zoom
     (mode=clusters), individual points at high zoom (mode=points, capped).
     Geographic selection (barrio_id + neighbor expansion / cd_comuna / municipio)
-    overrides the bbox: with a zone active the whole zone is returned."""
+    overrides the bbox: with a zone active the whole zone is returned.
+
+    Response is identical for all users (no auth-gated fields) → cacheable public.
+    """
     pool = get_pool()
     barrio_ids: Optional[list[int]] = None
     if barrio_id is not None:
@@ -895,24 +901,32 @@ async def get_listings_viewport(
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
         rows = await pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
-        return ViewportResponse(
+        result = ViewportResponse(
             mode="points", zoom=zoom,
             listings=[ViewportListing(**dict(r)) for r in rows],
         )
+    else:
+        # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
+        # metres per cell at city zoom; bump the constant for finer/coarser clusters.
+        # CAMBIO 4A: also return a capped, premium-first panel list for the same bbox/zone.
+        cell = 360.0 / (2 ** (zoom + 4))
+        clusters, plist = await asyncio.gather(
+            pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell),
+            pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_PANEL_CAP}", *args),
+        )
+        result = ViewportResponse(
+            mode="clusters", zoom=zoom,
+            clusters=[ViewportCluster(**dict(r)) for r in clusters],
+            listings=[ViewportListing(**dict(r)) for r in plist],
+        )
 
-    # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
-    # metres per cell at city zoom; bump the constant for finer/coarser clusters.
-    # CAMBIO 4A: also return a capped, premium-first panel list for the same bbox/zone.
-    cell = 360.0 / (2 ** (zoom + 4))
-    clusters, plist = await asyncio.gather(
-        pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell),
-        pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_PANEL_CAP}", *args),
-    )
-    return ViewportResponse(
-        mode="clusters", zoom=zoom,
-        clusters=[ViewportCluster(**dict(r)) for r in clusters],
-        listings=[ViewportListing(**dict(r)) for r in plist],
-    )
+    # Public HTTP caching: ETag over the body + 5-min TTL (cache.py rebuilds hourly).
+    body = result.model_dump_json()
+    etag = 'W/"' + hashlib.md5(body.encode()).hexdigest() + '"'
+    headers = {"Cache-Control": "public, max-age=300", "ETag": etag}
+    if request.headers.get("if-none-match") == etag:
+        return Response(status_code=304, headers=headers)
+    return JSONResponse(content=json.loads(body), headers=headers)
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
