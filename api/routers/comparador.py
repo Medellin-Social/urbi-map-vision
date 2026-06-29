@@ -8,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.db import get_pool
-from api.dependencies import require_plan
+from api.dependencies import get_current_user, get_optional_user
 
 router = APIRouter()
 
@@ -27,7 +27,7 @@ class ComparacionCreate(BaseModel):
 @router.post("/historial", status_code=201)
 async def guardar_comparacion(
     body: ComparacionCreate,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     if body.tipo not in ("barrios", "listings"):
         raise HTTPException(status_code=400, detail="tipo debe ser 'barrios' o 'listings'")
@@ -50,7 +50,7 @@ async def guardar_comparacion(
 
 
 @router.get("/historial")
-async def listar_comparaciones(current_user: dict = Depends(require_plan("pro"))):
+async def listar_comparaciones(current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         """
@@ -74,7 +74,7 @@ async def listar_comparaciones(current_user: dict = Depends(require_plan("pro"))
 @router.get("/historial/{comp_id}")
 async def obtener_comparacion(
     comp_id: int,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     row = await pool.fetchrow(
@@ -96,7 +96,7 @@ async def obtener_comparacion(
 @router.delete("/historial/{comp_id}", status_code=204)
 async def eliminar_comparacion(
     comp_id: int,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     await pool.execute(
@@ -110,7 +110,7 @@ async def eliminar_comparacion(
 @router.get("/listings")
 async def batch_listings(
     ids: str,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     """Devuelve datos completos de hasta 5 listings para la tabla comparativa."""
     try:

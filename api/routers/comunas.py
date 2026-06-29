@@ -6,7 +6,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
 
 from api.db import get_pool
-from api.routers.barrios import get_score_col, _score_to_hex
+from api.routers.barrios import get_score_col
 
 router = APIRouter()
 
@@ -14,51 +14,6 @@ router = APIRouter()
 # { cache_key: (timestamp, metrics_dict) }
 _cache: dict[str, tuple[float, Any]] = {}
 _CACHE_TTL = 86_400  # segundos
-
-# Target color thresholds — mirror de adapters.ts getTargetBarrioColor
-def _comuna_color(
-    perfil: Optional[str],
-    score: Optional[int],
-    precio_m2: Optional[int],
-    yield_pct: Optional[float],
-    arriendo: Optional[int],
-    liquidez: Optional[int],
-    target: str,
-) -> str:
-    TC = {
-        "verde": "#3d6b0e",
-        "teal":  "#0d7a58",
-        "amber": "#7a4c0a",
-        "rojo":  "#9e2424",
-        "gris":  "#4a4945",
-    }
-    if target == "buyer":
-        if precio_m2 is None: return TC["gris"]
-        if precio_m2 < 3_000_000: return TC["verde"]
-        if precio_m2 < 5_000_000: return TC["teal"]
-        if precio_m2 < 8_000_000: return TC["amber"]
-        return TC["rojo"]
-    if target == "seller":
-        if liquidez is None: return TC["gris"]
-        if liquidez > 70: return TC["verde"]
-        if liquidez >= 50: return TC["teal"]
-        if liquidez >= 30: return TC["amber"]
-        return TC["rojo"]
-    if target == "landlord":
-        if yield_pct is None: return TC["gris"]
-        if yield_pct > 8: return TC["verde"]
-        if yield_pct >= 6: return TC["teal"]
-        if yield_pct >= 4: return TC["amber"]
-        return TC["rojo"]
-    if target == "renter":
-        if arriendo is None: return TC["gris"]
-        if arriendo < 1_500_000: return TC["verde"]
-        if arriendo < 2_500_000: return TC["teal"]
-        if arriendo < 4_000_000: return TC["amber"]
-        return TC["rojo"]
-    # investor / default → score-based
-    return _score_to_hex(score, perfil)
-
 
 # ── SQL ───────────────────────────────────────────────────────────────────────
 
@@ -195,12 +150,10 @@ async def get_comunas_geojson(
         arriendo  = row["arriendo_cop"]
         liquidez  = row["liquidez_score"]
         cd_comuna = row["cd_comuna"] or (i + 1)
-        color     = _comuna_color(perfil, score, precio_m2, yield_pct, arriendo, liquidez, target)
         metrics[str(cd_comuna)] = {
             "cd_comuna":      cd_comuna,
             "nombre":         row["comuna"] or "",
             "municipio":      "MEDELLÍN",
-            "color_hex":      color,
             "score_promedio": score,
             "precio_m2_cop":  precio_m2,
             "yield_promedio": yield_pct,
@@ -224,13 +177,11 @@ async def get_comunas_geojson(
         arriendo  = row["arriendo_cop"]
         liquidez  = row["liquidez_score"]
         municipio = row["comuna"] or ""
-        color     = _comuna_color(perfil, score, precio_m2, yield_pct, arriendo, liquidez, target)
         slug      = municipio.lower().replace(" ", "_")
         metrics[str(cd_comuna)] = {
             "cd_comuna":      cd_comuna,
             "nombre":         municipio,
             "municipio":      municipio,
-            "color_hex":      color,
             "score_promedio": score,
             "precio_m2_cop":  precio_m2,
             "yield_promedio": yield_pct,

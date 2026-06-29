@@ -11,7 +11,6 @@ import { formatCOP, yieldColor, yieldLabel } from "@/lib/format";
 import type { ApiListingDetail } from "@/lib/adapters";
 import { SiteNavbar } from "@/components/SiteNavbar";
 import { PhotoGallery } from "@/components/PhotoGallery";
-import { useIsPro, LockedField } from "@/components/LockedField";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/listing/$id")({
@@ -157,7 +156,6 @@ export function ListingDetailContent({
   const { lat, lon } = listing;
   const fuente = (listing.fuente ?? "").toLowerCase();
   const tipoOp = listing.tipo_operacion ?? "venta";
-  const isPro = useIsPro();
 
   const heroMapUrl =
     lat != null && lon != null
@@ -326,9 +324,6 @@ export function ListingDetailContent({
             {tipoOp === "venta" && (
               <section className="space-y-4">
                 <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Análisis de inversión</h2>
-                {!isPro ? (
-                  <LockedField label="Análisis completo de inversión" preview={listing.yield_estimado != null ? `Yield ${listing.yield_estimado.toFixed(1)}% · Recupero ${listing.yield_estimado > 0 ? (100 / listing.yield_estimado).toFixed(1) : "—"} años` : "Yield · Recupero · Valorización"} />
-                ) : (
                 <>
                 <div className="grid gap-3 sm:grid-cols-2">
                   <div className="space-y-1 rounded-xl border border-[#E8E0D0] bg-[#F5F0E8] p-4">
@@ -430,16 +425,12 @@ export function ListingDetailContent({
                   </Link>
                 </div>
                 </>
-                )}
               </section>
             )}
 
             {/* Zona scores — PRO gated */}
             <section className="space-y-4">
               <h2 className="text-lg font-semibold" style={{ color: '#1A1208' }}>Contexto de zona</h2>
-              {!isPro ? (
-                <LockedField label="Scores de zona detallados" preview="Score largo · Liquidez · Seguridad · Índice nómada" />
-              ) : (
                 <div className="space-y-4 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-5">
                   <ScoreBar label="Score corto plazo (airbnb / temporada)" value={listing.score_corto} />
                   <ScoreBar label="Score mediano plazo (renta media)" value={listing.score_mediano} />
@@ -456,7 +447,6 @@ export function ListingDetailContent({
                     </div>
                   )}
                 </div>
-              )}
             </section>
 
             {/* Gallery + coming soon extras */}

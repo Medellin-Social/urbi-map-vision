@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user, is_pro
+from api.dependencies import get_optional_user, is_agente
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
@@ -542,11 +542,11 @@ async def get_all_listings(
         )
         total = total or 0
 
-    _is_pro = is_pro(current_user)
+    _is_agente = is_agente(current_user)
     items: list[ListingFull] = []
     for r in rows:
         row_d = dict(r)
-        if not _is_pro:
+        if not _is_agente:
             row_d["buena_oferta"] = None
             row_d["pct_bajo_mediana"] = None
         if perfil_dict:
@@ -747,13 +747,10 @@ async def get_listing_by_id(
     row_d = dict(row)
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []
-    if not is_pro(current_user):
+    # buena_oferta / pct_bajo_mediana are agent-only; price range (p25/p75) is free.
+    if not is_agente(current_user):
         row_d["buena_oferta"] = None
         row_d["pct_bajo_mediana"] = None
-        row_d["precio_m2_p25"] = None
-        row_d["precio_m2_p75"] = None
-        row_d["arr_p25"] = None
-        row_d["arr_p75"] = None
     return ListingDetail(**row_d)
 
 

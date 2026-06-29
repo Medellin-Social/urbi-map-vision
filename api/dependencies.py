@@ -11,7 +11,9 @@ from api.db import get_pool
 
 _bearer = HTTPBearer(auto_error=False)
 
-JWT_SECRET = os.getenv("JWT_SECRET", "urbidata-dev-secret-change-in-prod")
+JWT_SECRET = os.getenv("JWT_SECRET")
+if not JWT_SECRET or len(JWT_SECRET) < 32:
+    raise RuntimeError("JWT_SECRET env var requerida (mín 32 caracteres)")
 JWT_ALGORITHM = "HS256"
 
 
@@ -34,7 +36,10 @@ async def _get_user_from_token(token: str) -> dict:
 
     row = await pool.fetchrow(
         """SELECT id, email, nombre, apellido, activo, plan,
-                  perfil_busqueda, onboarding_completado, origen_registro
+                  perfil_busqueda, onboarding_completado, origen_registro,
+                  EXISTS(SELECT 1 FROM agentes a
+                         WHERE a.usuario_id = usuarios.id
+                           AND a.estado = 'aprobado' AND a.activo) AS es_agente
            FROM usuarios WHERE id = $1""",
         int(user_id),
     )
@@ -71,6 +76,17 @@ def is_pro(user: Optional[dict]) -> bool:
     if not user:
         return False
     return (user.get("plan") or "free") in ("pro", "agente")
+
+
+def is_agente(user: Optional[dict]) -> bool:
+    """True when user is a sponsored/approved real-estate agent.
+
+    Gates the only agent-exclusive map data: buena_oferta / pct_bajo_mediana.
+    plan == 'agente' OR an approved+active row in `agentes`.
+    """
+    if not user:
+        return False
+    return (user.get("plan") == "agente") or bool(user.get("es_agente"))
 
 
 def require_plan(plan_minimo: str):

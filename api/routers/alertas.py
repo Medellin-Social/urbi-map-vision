@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
 from api.db import get_pool
-from api.dependencies import require_plan
+from api.dependencies import get_current_user
 
 router = APIRouter()
 
@@ -21,7 +21,7 @@ class AlertaCreate(BaseModel):
 @router.post("", status_code=201)
 async def crear_alerta(
     body: AlertaCreate,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     row = await pool.fetchrow(
@@ -38,7 +38,7 @@ async def crear_alerta(
 
 
 @router.get("/mis")
-async def mis_alertas(current_user: dict = Depends(require_plan("pro"))):
+async def mis_alertas(current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         """
@@ -58,7 +58,7 @@ async def mis_alertas(current_user: dict = Depends(require_plan("pro"))):
 @router.delete("/{alerta_id}", status_code=204)
 async def desactivar_alerta(
     alerta_id: int,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     await pool.execute(

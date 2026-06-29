@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from api import parametros
 from api.db import get_pool
-from api.dependencies import get_optional_user, require_plan
+from api.dependencies import get_optional_user, get_current_user
 
 router = APIRouter()
 
@@ -797,7 +797,7 @@ _ALTERNATIVAS_SQL = """
 @router.get("/listing-simulador-data")
 async def listing_simulador_data(
     listing_id: int = Query(...),
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     lid = listing_id
     pool = get_pool()
@@ -824,7 +824,7 @@ async def simulador_alternativas(
     presupuesto_max: float = Query(..., gt=0),
     tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"] = Query(...),
     listing_id: Optional[int] = Query(None),
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: Optional[dict] = Depends(get_optional_user),
 ):
     pool = get_pool()
     exclude_id = listing_id if listing_id is not None else -999999
@@ -885,7 +885,7 @@ class SimulacionHistorialCreate(BaseModel):
 @router.post("/historial", status_code=201)
 async def guardar_simulacion(
     body: SimulacionHistorialCreate,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     row = await pool.fetchrow(
@@ -907,7 +907,7 @@ async def guardar_simulacion(
 
 
 @router.get("/historial")
-async def listar_simulaciones(current_user: dict = Depends(require_plan("pro"))):
+async def listar_simulaciones(current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         """
@@ -929,7 +929,7 @@ async def listar_simulaciones(current_user: dict = Depends(require_plan("pro")))
 @router.delete("/historial/{sim_id}", status_code=204)
 async def eliminar_simulacion(
     sim_id: int,
-    current_user: dict = Depends(require_plan("pro")),
+    current_user: dict = Depends(get_current_user),
 ):
     pool = get_pool()
     await pool.execute(
