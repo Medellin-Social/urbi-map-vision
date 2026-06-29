@@ -303,7 +303,10 @@ export function MapView({
   ) {
     // Fit the WHOLE zone in cluster tier (maxZoom < POLYGON_TIER_ZOOM) so the camera
     // derives the comuna/municipio (not a single barrio) and shows it all.
-    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, speed: 0.85 });
+    // pitch/bearing 0 in the SAME move: the initial view is 3D-tilted and the first
+    // click would otherwise race the listings flatten-easeTo → off-center.
+    map.setTerrain(null);
+    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, speed: 0.85 });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
     onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null, municipioFilter ? null : cd);
