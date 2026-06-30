@@ -66,6 +66,10 @@ type Props = {
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   activeTab?: MapTab;
+  // Mobile bottom-sheet reconciliation (FIX 1d): fraction of viewport the sheet
+  // covers from the bottom, and whether to pause camera auto-select (sheet "full").
+  mobileSheetFrac?: number | null;
+  mobileAutoSelectPaused?: boolean;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -231,6 +235,8 @@ export function MapView({
   onListingDoubleClickFromMap,
   activeBarrioName,
   activeTab,
+  mobileSheetFrac,
+  mobileAutoSelectPaused,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -247,6 +253,14 @@ export function MapView({
   const lastViewportQueryRef = useRef("");  // dedup identical viewport fetches
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
+  // Sheet reconciliation (FIX 1d): current sheet height fraction + pause flag, in
+  // refs so the moveend closure reads live values; autoSelectRef lets the snap-change
+  // effect re-run the same logic when the sheet height changes (not just on map move).
+  const mobileSheetFracRef = useRef<number | null>(mobileSheetFrac ?? null);
+  useEffect(() => { mobileSheetFracRef.current = mobileSheetFrac ?? null; }, [mobileSheetFrac]);
+  const mobilePausedRef = useRef(!!mobileAutoSelectPaused);
+  useEffect(() => { mobilePausedRef.current = !!mobileAutoSelectPaused; }, [mobileAutoSelectPaused]);
+  const autoSelectRef = useRef<(() => void) | null>(null);
 
   // Nivel de vista actual — ref para acceso dentro de closures de Mapbox
   const viewLevelRef = useRef<"comunas" | "barrios">("comunas");
@@ -960,10 +974,22 @@ export function MapView({
       }
     };
     const autoSelect = () => {
-      const c = map.project(map.getCenter());
+      // Mobile: sheet at "full" covers the map → user is browsing the list, freeze selection.
+      if (mobilePausedRef.current) return;
+      // Query the center of the map region the sheet leaves VISIBLE (above it), not the
+      // geometric screen center which the sheet would cover. Desktop: plain screen center.
+      const frac = mobileSheetFracRef.current;
+      let qx: number, qy: number;
+      if (isMobileRef.current && frac != null) {
+        qx = map.getContainer().clientWidth / 2;
+        qy = (map.getContainer().clientHeight * (1 - frac)) / 2;
+      } else {
+        const c = map.project(map.getCenter());
+        qx = c.x; qy = c.y;
+      }
       if (map.getZoom() < POLYGON_TIER_ZOOM) {
         if (lastAutoBarrioRef.current != null) { clearBarrioSel(); onAutoSelectBarrioRef.current?.(null); }
-        const cfeats = map.queryRenderedFeatures([c.x, c.y], { layers: ["comunas-fill"] });
+        const cfeats = map.queryRenderedFeatures([qx, qy], { layers: ["comunas-fill"] });
         const f = cfeats.length ? cfeats[0].properties : undefined;
         const isMuni = f?.is_municipio === true;
         const cd = isMuni ? null : ((f?.cd_comuna as number) ?? null);
@@ -978,7 +1004,7 @@ export function MapView({
       }
       // barrio under center (zoom >= TIER)
       lastAutoComunaRef.current = null;
-      const feats = map.queryRenderedFeatures([c.x, c.y], { layers: ["barrios-mls-fill"] });
+      const feats = map.queryRenderedFeatures([qx, qy], { layers: ["barrios-mls-fill"] });
       const bid = feats.length ? (feats[0].id as number) : null;
       if (bid != null && bid !== lastAutoBarrioRef.current) {
         clearBarrioSel();
@@ -987,6 +1013,8 @@ export function MapView({
         onAutoSelectBarrioRef.current?.(bid);
       }
     };
+
+    autoSelectRef.current = autoSelect;   // let the snap-change effect re-derive on sheet resize
 
     let debounce: ReturnType<typeof setTimeout> | null = null;
     const onMove = () => {
@@ -1000,11 +1028,20 @@ export function MapView({
     map.on("zoomend", onMove);
     return () => {
       if (debounce) clearTimeout(debounce);
+      autoSelectRef.current = null;
       map.off("moveend", onMove);
       map.off("zoomend", onMove);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView, barriosRaw]);
+
+  // FIX 1d (mobile): the visible-map center moves when the sheet snap changes, so
+  // re-derive the active zone on snap change too (not only on map moveend). Skips
+  // when paused ("full") — autoSelect itself also early-returns while paused.
+  useEffect(() => {
+    if (mapView !== "listings" || mobileAutoSelectPaused) return;
+    autoSelectRef.current?.();
+  }, [mobileSheetFrac, mobileAutoSelectPaused, mapView]);
 
   // ── Highlight listing seleccionado ───────────────────────────────────────────
   useEffect(() => {

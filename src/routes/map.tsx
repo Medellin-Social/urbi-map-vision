@@ -19,6 +19,7 @@ import { useMemo } from "react";
 import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export const Route = createFileRoute("/map")({
   component: MapPage,
@@ -96,6 +97,18 @@ function MapPageInner() {
   const [viewportListings, setViewportListings] = useState<ApiListing[]>([]);
 
   const [globalSearch, setGlobalSearch] = useState(false);
+
+  // Mobile bottom-sheet snap (vaul). Fractions of viewport height: peek / half / full.
+  // Lifted here so MapView can reconcile camera auto-select (FIX 1d) with sheet height.
+  const isMobile = useIsMobile();
+  const SHEET_SNAPS = [0.12, 0.5, 0.9];
+  const SHEET_FULL = 0.9;
+  const [sheetSnap, setSheetSnap] = useState<number | string | null>(0.12);
+  const sheetFrac = typeof sheetSnap === "number" ? sheetSnap : 0.12;
+  // Visible-map fraction the sheet leaves uncovered → MapView centers its query there.
+  const mobileSheetFrac = isMobile && mapView === "listings" ? sheetFrac : null;
+  // At "full" the user is browsing the list, not the map → pause camera auto-select.
+  const mobileAutoSelectPaused = isMobile && mapView === "listings" && sheetFrac >= SHEET_FULL;
 
   // Count active filters for hint banner
   const activeFilterCount = [
@@ -437,8 +450,8 @@ function MapPageInner() {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-background max-md:flex max-md:flex-col">
-      <div className="max-md:relative max-md:h-[45vh] max-md:shrink-0 md:absolute md:inset-0 z-0">
+    <div className="relative h-screen w-screen overflow-hidden bg-background">
+      <div className="absolute inset-0 z-0">
         <MapView
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
@@ -466,6 +479,8 @@ function MapPageInner() {
           onListingDoubleClickFromMap={handleListingDoubleClickFromMap}
           activeBarrioName={activeBarrioInComune}
           activeTab={activeTab}
+          mobileSheetFrac={mobileSheetFrac}
+          mobileAutoSelectPaused={mobileAutoSelectPaused}
         />
       </div>
 
@@ -555,6 +570,9 @@ function MapPageInner() {
           comunaBarrios={comunaBarriosList}
           onBackToComuna={handleBackToCommune}
           onSelectBarrioInComune={handleSelectBarrioInComune}
+          sheetSnapPoints={SHEET_SNAPS}
+          sheetSnap={sheetSnap}
+          onSheetSnapChange={setSheetSnap}
         />
       )}
 

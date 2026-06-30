@@ -1,5 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { Drawer } from "vaul";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { ArrowLeft, ExternalLink, Plus, Check } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
@@ -38,6 +40,11 @@ type Props = {
   comunaBarrios?: Array<{ barrio_id: number; nombre: string }>;
   onBackToComuna?: () => void;
   onSelectBarrioInComune?: (barrioId: number) => void;
+  // Mobile bottom-sheet (vaul) — controlled snap, owned by map.tsx so MapView can
+  // reconcile camera auto-select with the sheet height. Ignored on desktop.
+  sheetSnapPoints?: (number | string)[];
+  sheetSnap?: number | string | null;
+  onSheetSnapChange?: (s: number | string | null) => void;
 };
 
 // Internal-only filters — common filters (precio, hab, tipo, area, banos, antiguedad, tipoOp)
@@ -373,7 +380,11 @@ export function MLSPanel({
   comunaBarrios,
   onBackToComuna,
   onSelectBarrioInComune,
+  sheetSnapPoints,
+  sheetSnap,
+  onSheetSnapChange,
 }: Props) {
+  const isMobile = useIsMobile();
   const [filters, setFilters] = useState<Filters>({
     soloPromium: false,
     modalidad: null,
@@ -475,19 +486,20 @@ export function MLSPanel({
     ? toTitleCase(barrio.comuna ?? "")
     : null;
 
-  return (
-    <AnimatePresence>
-      <motion.aside
-        key="mls-panel"
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
-        transition={{ type: "spring", damping: 30, stiffness: 280 }}
-        className="max-md:relative max-md:w-full max-md:h-[55vh] md:absolute md:right-0 md:top-0 z-20 flex md:h-full md:w-[380px] max-w-full flex-col shadow-2xl"
-        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties}
-      >
-        {/* Header */}
-        <div className="border-b border-border px-4 pb-3 pt-[104px]">
+  const panelVars = { '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties;
+
+  const peekCount = isLoading
+    ? "Cargando…"
+    : `${filtered.length} ${filtered.length === 1 ? "propiedad" : "propiedades"}`;
+
+  const body = (
+    <>
+      {/* Peek summary — always visible at the smallest snap (handle + count) */}
+      {isMobile && (
+        <p className="px-4 pb-1.5 pt-0.5 text-center text-sm font-semibold text-foreground">{peekCount}</p>
+      )}
+        {/* Header — desktop clears the navbar+filterbar (104px); mobile sits in the sheet */}
+        <div className={`border-b border-border px-4 pb-3 ${isMobile ? "pt-1" : "pt-[104px]"}`}>
           {isAtTopLevel ? (
             <button
               onClick={onBack}
@@ -677,6 +689,47 @@ export function MLSPanel({
             />
           ))}
         </div>
+    </>
+  );
+
+  // Mobile: bottom-sheet over the full-screen map. modal=false keeps the map
+  // interactive behind the sheet; dismissible=false keeps it pinned (snaps only).
+  if (isMobile) {
+    return (
+      <Drawer.Root
+        open
+        modal={false}
+        dismissible={false}
+        snapPoints={sheetSnapPoints ?? [0.12, 0.5, 0.9]}
+        activeSnapPoint={sheetSnap ?? 0.12}
+        setActiveSnapPoint={(s) => onSheetSnapChange?.(s)}
+      >
+        <Drawer.Portal>
+          <Drawer.Content
+            className="fixed inset-x-0 bottom-0 z-30 flex h-full max-h-[97%] flex-col rounded-t-2xl shadow-2xl outline-none"
+            style={{ background: '#FAF7F2', borderTop: '0.5px solid #E8E0D0', ...panelVars }}
+          >
+            <Drawer.Handle className="!mx-auto !my-2 !h-1.5 !w-12 !rounded-full !bg-border" />
+            {body}
+          </Drawer.Content>
+        </Drawer.Portal>
+      </Drawer.Root>
+    );
+  }
+
+  // Desktop: unchanged — right-edge overlay column (380px).
+  return (
+    <AnimatePresence>
+      <motion.aside
+        key="mls-panel"
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 280 }}
+        className="absolute right-0 top-0 z-20 flex h-full w-[380px] max-w-full flex-col shadow-2xl"
+        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', ...panelVars }}
+      >
+        {body}
       </motion.aside>
     </AnimatePresence>
   );
