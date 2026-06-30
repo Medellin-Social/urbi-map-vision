@@ -236,6 +236,14 @@ function ListingCard({
             BUENA OFERTA
           </span>
         )}
+        {listing.amoblado && (
+          <span
+            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+            style={{ background: '#F0EBE1', color: '#6B5B45', border: '0.5px solid #C8B99A' }}
+          >
+            AMOBLADO
+          </span>
+        )}
         <span
           className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           style={{

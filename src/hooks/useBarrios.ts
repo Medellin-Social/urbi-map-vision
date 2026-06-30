@@ -543,6 +543,7 @@ export type ListingsApiFilters = {
   banos?: number | null;
   antiguedad?: string | null;
   amenidades?: string[] | null;
+  amoblado?: boolean | null;
 };
 
 export function useListings(
@@ -554,9 +555,10 @@ export function useListings(
   extraFilters?: ListingsApiFilters,
   cdComuna?: number,
   municipioNombre?: string,
+  forceEnabled = false,
 ) {
   return useQuery({
-    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null, cdComuna ?? null, municipioNombre ?? null],
+    queryKey: ["listings", barrioId, limit, offset, tipoOperacion ?? null, onlyPremium, extraFilters ?? null, cdComuna ?? null, municipioNombre ?? null, forceEnabled],
     queryFn: async (): Promise<ApiListingsResponse> => {
       // API path — expansion handled server-side (expands only when barrio has < 5 listings)
       const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
@@ -572,9 +574,10 @@ export function useListings(
       if (extraFilters?.amenidades?.length) {
         for (const a of extraFilters.amenidades) params.append("amenidades", a);
       }
+      if (extraFilters?.amoblado != null) params.set("amoblado", String(extraFilters.amoblado));
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
-    enabled: barrioId != null || cdComuna != null || !!municipioNombre,
+    enabled: forceEnabled || barrioId != null || cdComuna != null || !!municipioNombre,
     staleTime: 5 * 60 * 1000,
     retry: 1,
   });

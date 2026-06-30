@@ -38,7 +38,7 @@ _AMENIDADES_VARIANTS: dict[str, list[str]] = {
 }
 
 
-def _build_amenidades_sql(keys: list[str], base: int = 14) -> tuple[str, list]:
+def _build_amenidades_sql(keys: list[str], base: int = 15) -> tuple[str, list]:
     """Returns (WHERE clauses string, extra positional args). Each key adds one AND EXISTS pair."""
     clauses: list[str] = []
     extra: list = []
@@ -94,6 +94,7 @@ class ListingFull(BaseModel):
     disponible_actualmente: Optional[bool] = None
     fecha_ultima_verificacion: Optional[datetime] = None
     estrato_real: Optional[int] = None
+    amoblado: Optional[bool] = None
     tier: Optional[str] = None
     favoritos_count: Optional[int] = None
     foto_principal: Optional[str] = None
@@ -164,7 +165,8 @@ WITH lraw AS (
                     THEN ROUND(precio_cop::float8 / area_m2)::int
                ELSE NULL
            END AS pm2,
-           fotos[1] AS foto_principal
+           fotos[1] AS foto_principal,
+           amoblado
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -241,6 +243,7 @@ SELECT
     ctx.var_anual_pct,
     ctx.pct_wifi,
     g.estrato_real,
+    l.amoblado,
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
     l.foto_principal
 FROM lraw l
@@ -278,6 +281,7 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
       WHERE _lmc.url = l.url
         AND _lmc.raw_data::text LIKE '%tiempoConstruido:' || $14 || '%'
   ))
+  AND ($15::boolean IS NULL OR l.amoblado = $15)
   {{amenidades_filter}}
 ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
@@ -293,7 +297,7 @@ WITH lraw AS (
     SELECT fuente, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2,
            NULLIF(habitaciones, -1) AS habitaciones,
-           banos, barrio_id, url
+           banos, barrio_id, url, amoblado
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -322,6 +326,7 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
       WHERE _lmc.url = l.url
         AND _lmc.raw_data::text LIKE '%tiempoConstruido:' || $14 || '%'
   ))
+  AND ($15::boolean IS NULL OR l.amoblado = $15)
   {amenidades_filter}
 """
 _COUNT_SQL = _COUNT_SQL_TMPL.format(amenidades_filter="")
@@ -470,6 +475,7 @@ async def get_all_listings(
     cd_comuna: Optional[int] = Query(default=None),
     estrato_real: Optional[int] = Query(default=None),
     antiguedad: Optional[str] = Query(default=None),
+    amoblado: Optional[bool] = Query(default=None),
     amenidades: Optional[list[str]] = Query(default=None),
     limit: int = Query(default=200, ge=1, le=500),
     offset: int = Query(default=0, ge=0),
@@ -513,7 +519,7 @@ async def get_all_listings(
     def _args(tipo_op: Optional[str]) -> tuple:
         return (municipio, barrio_ids, tipo_op, tipo_inmueble,
                 precio_min, precio_max, area_min, habitaciones, only_premium,
-                area_max, banos, cd_comuna, estrato_real, antiguedad) + tuple(am_extra)
+                area_max, banos, cd_comuna, estrato_real, antiguedad, amoblado) + tuple(am_extra)
 
     # Unified venta+arriendo path: 2 parallel fetches → balanced results, 1 HTTP round-trip.
     # Only applies when: no tipo_operacion filter, barrio selected, no premium, no personalization, page 0.
@@ -809,7 +815,8 @@ WHERE l.precio_cop >= 500000
   AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
   AND ($9::int    IS NULL OR bc.cd_comuna = $9)
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
-GROUP BY floor(g.lon / $11::float8), floor(g.lat / $11::float8)
+  AND ($11::boolean IS NULL OR l.amoblado = $11)
+GROUP BY floor(g.lon / $12::float8), floor(g.lat / $12::float8)
 """
 
 _VIEWPORT_POINTS_SQL = """
@@ -817,7 +824,7 @@ WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, NULLIF(habitaciones, -1) AS habitaciones,
-           banos, direccion_raw, barrio_id, url, fecha_scraping, fotos[1] AS foto_principal
+           banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, fotos[1] AS foto_principal
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -859,6 +866,7 @@ WHERE ($1::float8 IS NULL OR g.lon >= $1)
   AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
   AND ($9::int    IS NULL OR bc.cd_comuna = $9)
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
+  AND ($11::boolean IS NULL OR l.amoblado = $11)
 ORDER BY
     CASE WHEN l.tier = 'agente_premium'
               OR (l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente'))
@@ -881,6 +889,7 @@ async def get_listings_viewport(
     barrio_id: Optional[int] = Query(default=None),
     cd_comuna: Optional[int] = Query(default=None),
     municipio: Optional[str] = Query(default=None),
+    amoblado: Optional[bool] = Query(default=None),
 ):
     """Listings within the map viewport. Server-side clustering at low zoom
     (mode=clusters), individual points at high zoom (mode=points, capped).
@@ -895,7 +904,7 @@ async def get_listings_viewport(
         barrio_ids, _, _ = await _expand_neighbors(pool, barrio_id)
     has_geo = barrio_ids is not None or cd_comuna is not None or municipio is not None
     bbox = (None, None, None, None) if has_geo else (min_lng, min_lat, max_lng, max_lat)
-    args = (*bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio)
+    args = (*bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio, amoblado)
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
         rows = await pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)

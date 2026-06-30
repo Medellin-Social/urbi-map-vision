@@ -42,6 +42,7 @@ type Props = {
   mlsTipoOp?: "venta" | "arriendo";
   mlsPrecioMin?: number | null;
   mlsPrecioMax?: number | null;
+  mlsAmoblado?: boolean | null;
   mlsCdComuna?: number | null;
   mlsMunicipio?: string | null;
   onViewportListingsChange?: (listings: ApiListing[]) => void;
@@ -205,6 +206,7 @@ export function MapView({
   mlsTipoOp,
   mlsPrecioMin,
   mlsPrecioMax,
+  mlsAmoblado,
   mlsCdComuna,
   mlsMunicipio,
   onViewportListingsChange,
@@ -816,6 +818,7 @@ export function MapView({
       if (mlsTipoOp) params.set("tipo_operacion", mlsTipoOp);
       if (mlsPrecioMin != null) params.set("precio_min", String(mlsPrecioMin));
       if (mlsPrecioMax != null) params.set("precio_max", String(mlsPrecioMax));
+      if (mlsAmoblado != null) params.set("amoblado", String(mlsAmoblado));
       // Geographic selection — backend ignores bbox when a zone is active.
       if (mlsBarrioId != null) params.set("barrio_id", String(mlsBarrioId));
       if (mlsCdComuna != null) params.set("cd_comuna", String(mlsCdComuna));
@@ -824,7 +827,7 @@ export function MapView({
       // zone returns identical data — skip the refetch (key excludes bbox then).
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
       const dedupKey = hasGeo
-        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}`
+        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}`
         : params.toString();
       if (dedupKey === lastViewportQueryRef.current) return;
       lastViewportQueryRef.current = dedupKey;
@@ -882,7 +885,7 @@ export function MapView({
       map.off("zoomend", onMove);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax]);
+  }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax, mlsAmoblado]);
 
   // ── FIX 1c: polígono tier (comuna↔barrio por zoom) + auto-select por cámara ──
   useEffect(() => {

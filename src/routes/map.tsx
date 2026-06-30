@@ -97,6 +97,8 @@ function MapPageInner() {
   // to resolve a map-point click into the listing for the mini-popup/drawer.
   const [viewportListings, setViewportListings] = useState<ApiListing[]>([]);
 
+  const [globalSearch, setGlobalSearch] = useState(false);
+
   // Count active filters for hint banner
   const activeFilterCount = [
     sharedFilters.precioMax, sharedFilters.precioMin,
@@ -113,7 +115,8 @@ function MapPageInner() {
     banos:      sharedFilters.banos,
     antiguedad: sharedFilters.antiguedad,
     amenidades: sharedFilters.amenidades,
-  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad, sharedFilters.amenidades]);
+    amoblado:   sharedFilters.amoblado,
+  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad, sharedFilters.amenidades, sharedFilters.amoblado]);
 
   // Pass tipoOp to backend so it returns the correct type (not a mixed 50/50 split).
   // undefined when "todos" so backend does the balanced venta+arriendo fetch.
@@ -122,6 +125,12 @@ function MapPageInner() {
   const mlsListings: ApiListing[] = useMemo(() => mlsData?.listings ?? [], [mlsData]);
   const mlsRadio = mlsData?.radio_usado_metros ?? null;
   const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
+
+  // Global Valle search — only fires when user clicks "Buscar en el Valle"
+  const { data: globalData, isLoading: globalIsLoading } = useListings(
+    null, 500, 0, mlsTipoOp, false, apiFilters,
+    undefined, undefined, globalSearch,
+  );
 
   // Premium-expansion fetch — fires when premium filter is active to find nearby premium
   const [premiumExpand, setPremiumExpand] = useState(false);
@@ -164,13 +173,23 @@ function MapPageInner() {
 
   // FIX 1d: single source of truth — the panel mirrors exactly the viewport the
   // map shows (clusters mode returns a capped list, points mode the points).
-  const mergedListings = viewportListings;
-  const mergedLoading  = mlsBarrio ? mlsIsLoading : false;
+  const mergedListings = globalSearch ? (globalData?.listings ?? []) : viewportListings;
+  const mergedLoading  = globalSearch ? globalIsLoading : (mlsBarrio ? mlsIsLoading : false);
   const mlsTotal = mergedListings.length;
 
   // Panel zone label — real barrio > active commune > active municipality > Medellín default
   const activePanelName = activeComuna ?? activeMunicipio;
-  const panelBarrio: Neighborhood | null = mlsBarrio ?? (activePanelName ? {
+  const panelBarrio: Neighborhood | null = mlsBarrio ?? (globalSearch ? {
+    id: -1,
+    nombre: "Valle de Aburrá",
+    comuna: "Valle de Aburrá",
+    municipio: "MEDELLÍN",
+    estrato: 0,
+    precio_m2: 0, arriendo: 0, yield: 0, anos_recupero: 0,
+    dist_metro: 0, dist_parque: 0, dist_mall: 0,
+    n_venta: 0, n_arriendo: 0,
+    lat: 6.2442, lng: -75.5812,
+  } : activePanelName ? {
     id: -1,
     nombre: activePanelName,
     comuna: activePanelName,
@@ -279,7 +298,7 @@ function MapPageInner() {
     setSharedFilters({ ...EMPTY_SHARED_FILTERS, tipoOp });
     const t = TAB_TO_TARGET[tab];
     if (t) setTarget(t);
-    if (tab === "sell") { setMapView("zonas"); setMlsBarrio(null); }
+    if (tab === "sell") { setMapView("zonas"); setMlsBarrio(null); setGlobalSearch(false); }
   }
 
   function handleFiltersChange(partial: Partial<SharedFilters>) {
@@ -326,6 +345,7 @@ function MapPageInner() {
   function handleBackToZonas() {
     setMapView("zonas");
     setMlsBarrio(null);
+    setGlobalSearch(false);
     setActiveComuna(null);
     setActiveComunaCd(null);
     setActiveMunicipio(null);
@@ -435,6 +455,7 @@ function MapPageInner() {
           mlsTipoOp={mlsTipoOp}
           mlsPrecioMin={sharedFilters.precioMin}
           mlsPrecioMax={sharedFilters.precioMax}
+          mlsAmoblado={sharedFilters.amoblado}
           mlsCdComuna={cdComunaQuery ?? null}
           mlsMunicipio={activeMunicipio}
           onViewportListingsChange={setViewportListings}
@@ -479,23 +500,26 @@ function MapPageInner() {
         onResetAll={handleResetFilters}
         allBarrios={allBarrioOptions}
         onBarrioNavigate={handleBarrioNavigate}
-        onBarrioClear={() => { setMlsBarrio(null); setMapView("zonas"); }}
+        onBarrioClear={() => { setMlsBarrio(null); setMapView("zonas"); setGlobalSearch(false); }}
+        onSearchAll={() => { setGlobalSearch(true); setMapView("listings"); }}
+        hasActiveScope={!!mlsBarrio || !!activePanelName}
       />
       <ProfileChipMobile />
 
-      {/* Hint: filtros activos pero sin barrio seleccionado */}
-      {activeFilterCount > 0 && !mlsBarrio && activeTab !== "agent" && (
-        <div
+      {/* Buscar en el Valle — filtros activos pero sin barrio/zona seleccionada */}
+      {activeFilterCount > 0 && !mlsBarrio && !globalSearch && activeTab !== "agent" && (
+        <button
+          onClick={() => { setGlobalSearch(true); setMapView("listings"); }}
           style={{
             position: "absolute", top: 108, left: "50%", transform: "translateX(-50%)",
-            zIndex: 24, background: "rgba(26,18,8,0.82)", color: "#FAF7F2",
-            borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 500,
-            pointerEvents: "none", whiteSpace: "nowrap",
-            boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+            zIndex: 24, background: "#1e3a5f", color: "#FAF7F2",
+            borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 600,
+            border: "none", cursor: "pointer", whiteSpace: "nowrap",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
           }}
         >
-          Selecciona una zona del mapa para ver los listings filtrados
-        </div>
+          Buscar en el Valle de Aburrá →
+        </button>
       )}
 
       {/* Vista 1: paneles normales */}

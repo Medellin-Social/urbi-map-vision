@@ -7,7 +7,7 @@ import {
   ChevronDown, X, SlidersHorizontal, Search,
   UtensilsCrossed, Wind, WashingMachine,
   ArrowUpDown, Building2, Users, Dumbbell, Waves, Car, DoorClosed,
-  Shield, Camera, Trees, Baby, TrainFront,
+  Shield, Camera, Trees, Baby, TrainFront, Sofa,
 } from "lucide-react";
 import { useIsPro } from "@/components/LockedField";
 import type { MapTab } from "./MapNavbar";
@@ -27,6 +27,7 @@ export type SharedFilters = {
   estrato: number[] | null;
   diasMercado: "nuevo" | "reciente" | "demorado" | "mas30" | "mas60" | null;
   amenidades: string[] | null;
+  amoblado: boolean | null;
   busqueda: string | null;
 };
 
@@ -43,6 +44,7 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   estrato: null,
   diasMercado: null,
   amenidades: null,
+  amoblado: null,
   busqueda: null,
 };
 
@@ -65,6 +67,8 @@ type MapFilterBarProps = {
   allBarrios?: BarrioOption[];
   onBarrioNavigate?: (opt: BarrioOption) => void;
   onBarrioClear?: () => void;
+  onSearchAll?: () => void;
+  hasActiveScope?: boolean;
 };
 
 const C = {
@@ -116,6 +120,7 @@ function countActive(f: SharedFilters): number {
   if (f.antiguedad !== null) n++;
   if (f.estrato !== null && f.estrato.length > 0) n++;
   if (f.diasMercado !== null) n++;
+  if (f.amoblado !== null) n++;
   if (f.busqueda !== null) n++;
   return n;
 }
@@ -662,6 +667,7 @@ const AMENIDADES_GROUPS: { id: string; label: string; items: AmenItem[] }[] = [
     id: "interior",
     label: "INTERIOR",
     items: [
+      { key: "amoblado",         label: "Amoblado",          Icon: Sofa },
       { key: "cocina_integral",  label: "Cocina integral",   Icon: UtensilsCrossed },
       { key: "balcon",           label: "Balcón / Terraza",  Icon: Wind },
       { key: "lavanderia",       label: "Lavandería",        Icon: WashingMachine },
@@ -1233,8 +1239,12 @@ export function MapFilterBar({
         return (
           <div ref={dropdownRef} style={wrapStyle}>
             <AmenidadesPanel
-              current={filters.amenidades ?? []}
-              onChange={(keys) => onFiltersChange({ amenidades: keys.length === 0 ? null : keys })}
+              current={[...(filters.amenidades ?? []), ...(filters.amoblado ? ["amoblado"] : [])]}
+              onChange={(keys) => {
+                const hasAmoblado = keys.includes("amoblado");
+                const rest = keys.filter(k => k !== "amoblado");
+                onFiltersChange({ amenidades: rest.length === 0 ? null : rest, amoblado: hasAmoblado ? true : null });
+              }}
               onClose={close}
             />
           </div>
@@ -1360,7 +1370,6 @@ export function MapFilterBar({
                 })}
               </div>
 
-
               {/* PRO teasers — solo para usuarios sin plan pro */}
               {!isPro && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
@@ -1392,7 +1401,7 @@ export function MapFilterBar({
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
                 <button
-                  onClick={() => { onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null }); close(); }}
+                  onClick={() => { onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, amoblado: null }); close(); }}
                   style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
                 >
                   Limpiar
