@@ -760,6 +760,7 @@ class ViewportListing(BaseModel):
     precio_cop: Optional[int] = None
     precio_usd: Optional[int] = None
     area_m2: Optional[float] = None
+    precio_m2: Optional[int] = None
     habitaciones: Optional[int] = None
     banos: Optional[float] = None
     foto_principal: Optional[str] = None
@@ -890,7 +891,7 @@ _VIEWPORT_POINTS_SQL = """
 WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            fuente, tier, tipo_operacion, tipo_inmueble,
-           precio_cop AS precio, area_m2, NULLIF(habitaciones, -1) AS habitaciones,
+           precio_cop AS precio, area_m2, precio_m2, NULLIF(habitaciones, -1) AS habitaciones,
            banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, amenidades, fotos[1] AS foto_principal
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
@@ -908,7 +909,7 @@ SELECT
     l.tier, l.tipo_operacion, l.tipo_inmueble,
     l.precio::bigint             AS precio_cop,
     (l.precio / {usd})::bigint   AS precio_usd,
-    l.area_m2::float8, l.habitaciones, l.banos::float8,
+    l.area_m2::float8, round(l.precio_m2)::bigint AS precio_m2, l.habitaciones, l.banos::float8,
     l.direccion_raw, l.url, l.foto_principal,
     g.lat, g.lon, l.barrio_id,
     b.nombre                     AS barrio_nombre,
