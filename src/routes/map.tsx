@@ -91,8 +91,6 @@ function MapPageInner() {
   // Mini popup (single-click on card or map point)
   const [miniPopupData, setMiniPopupData] = useState<{ listing: ApiListing; x: number; y: number } | null>(null);
 
-  // Filtered listings for map (updated by MLSPanel when filters change)
-  const [filteredListings, setFilteredListings] = useState<ApiListing[] | null>(null);
   // Listings currently rendered as map dots via viewport loading (FIX 1) — used
   // to resolve a map-point click into the listing for the mini-popup/drawer.
   const [viewportListings, setViewportListings] = useState<ApiListing[]>([]);
@@ -117,6 +115,19 @@ function MapPageInner() {
     amenidades: sharedFilters.amenidades,
     amoblado:   sharedFilters.amoblado,
   }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad, sharedFilters.amenidades, sharedFilters.amoblado]);
+
+  // Remaining shared filters applied server-side in /viewport (map + panel single source).
+  const mlsFilters = useMemo(() => ({
+    habitaciones: sharedFilters.habitaciones,
+    banos:        sharedFilters.banos,
+    areaMin:      sharedFilters.areaMin,
+    areaMax:      sharedFilters.areaMax,
+    estrato:      sharedFilters.estrato,
+    tipoInmueble: sharedFilters.tipoInmueble,
+    diasMercado:  sharedFilters.diasMercado,
+    busqueda:     sharedFilters.busqueda,
+  }), [sharedFilters.habitaciones, sharedFilters.banos, sharedFilters.areaMin, sharedFilters.areaMax,
+       sharedFilters.estrato, sharedFilters.tipoInmueble, sharedFilters.diasMercado, sharedFilters.busqueda]);
 
   // Pass tipoOp to backend so it returns the correct type (not a mixed 50/50 split).
   // undefined when "todos" so backend does the balanced venta+arriendo fetch.
@@ -211,11 +222,6 @@ function MapPageInner() {
     lat: 6.2442, lng: -75.5812,
   });
 
-  // Reset filtered listings when raw data changes (new barrio/commune loaded)
-  useEffect(() => {
-    setFilteredListings(null);
-  }, [mergedListings]);
-
   // Read ?listing=X from URL on mount → open modal automatically
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -282,7 +288,6 @@ function MapPageInner() {
         setActiveMunicipio(null);
       }
       setMlsBarrio(null);
-      setFilteredListings(null);
       setMapView("listings");
     }
   }
@@ -317,7 +322,6 @@ function MapPageInner() {
     setMlsBarrio({ ...barrio, id: resolvedId });
     setMapView("listings");
     setActiveBarrioInComune(null);
-    setFilteredListings(null);
   }
 
   // Called from MLSPanel all-barrios selector
@@ -337,7 +341,6 @@ function MapPageInner() {
     setMapView("listings");
     setSelected(null);
     setActiveBarrioInComune(null);
-    setFilteredListings(null);
     flyToListingRef.current?.(opt.lat, opt.lng);
   }
 
@@ -352,12 +355,10 @@ function MapPageInner() {
     setViewLevel("comunas");
     setHighlightedListingId(null);
     setActiveBarrioInComune(null);
-    setFilteredListings(null);
   }
 
   function handleBackToCommune() {
     setMlsBarrio(null);
-    setFilteredListings(null);
   }
 
   function handleSelectBarrioInComune(barrioId: number) {
@@ -378,7 +379,6 @@ function MapPageInner() {
       lat: item.lat ?? 6.2442,
       lng: item.lon ?? -75.5812,
     });
-    setFilteredListings(null);
     if (item.lat && item.lon) flyToListingRef.current?.(item.lat, item.lon);
   }
 
@@ -454,6 +454,7 @@ function MapPageInner() {
           mlsAmoblado={sharedFilters.amoblado}
           mlsCdComuna={cdComunaQuery ?? null}
           mlsMunicipio={activeMunicipio}
+          mlsFilters={mlsFilters}
           onViewportListingsChange={setViewportListings}
           onAutoSelectBarrio={handleAutoSelectBarrio}
           onAutoSelectComuna={handleAutoSelectComuna}

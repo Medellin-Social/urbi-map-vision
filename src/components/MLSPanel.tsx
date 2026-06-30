@@ -23,7 +23,6 @@ type Props = {
   onBarrioFilter?: (barrio: string | null) => void;
   allBarrios?: BarrioOption[];
   onBarrioNavigate?: (opt: BarrioOption) => void;
-  onFilteredListingsChange?: (listings: ApiListing[]) => void;
   radioUsadoMetros?: number | null;
   barriosIncluidos?: string[] | null;
   premiumExpanded?: ApiListing[];
@@ -359,7 +358,6 @@ export function MLSPanel({
   onBarrioFilter,
   allBarrios,
   onBarrioNavigate,
-  onFilteredListingsChange,
   radioUsadoMetros,
   barriosIncluidos,
   premiumExpanded = [],
@@ -413,50 +411,14 @@ export function MLSPanel({
     [listings],
   );
 
-  // Full filter logic — external filters (from FilterBar) + internal filters (premium, score, yield)
+  // Shared filters (precio/hab/banos/area/estrato/tipo/dias/busqueda/tipoOp) are now
+  // applied server-side in /viewport — the `listings` prop arrives pre-filtered, so the
+  // panel renders the same set as the map. Only the panel-local refinements remain
+  // client-side: premium toggle + investor score/yield (not part of the viewport query).
   const filtered = useMemo(() => {
     const src = (premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0)
       ? premiumExpanded : listings;
     return src.filter((l) => {
-      // External (shared) filters
-      if (ef.tipoOp !== "todos" && l.tipo_operacion !== ef.tipoOp) return false;
-      if (ef.precioMin !== null && (l.precio_cop ?? 0) < ef.precioMin) return false;
-      if (ef.precioMax !== null && (l.precio_cop ?? 0) > ef.precioMax) return false;
-      if (ef.areaMin !== null && (l.area_m2 ?? 0) < ef.areaMin) return false;
-      if (ef.areaMax !== null && (l.area_m2 ?? 0) > ef.areaMax) return false;
-      if (ef.banos !== null && ef.banos > 0 && (l.banos == null || l.banos < ef.banos)) return false;
-      if (ef.habitaciones !== null) {
-        if (ef.habitaciones === 4) {
-          if ((l.habitaciones ?? 0) < 4) return false;
-        } else {
-          if ((l.habitaciones ?? 0) < ef.habitaciones) return false;
-        }
-      }
-      if (ef.tipoInmueble !== null) {
-        const ti = (l.tipo_inmueble ?? "").toLowerCase();
-        if (!ti.includes(ef.tipoInmueble)) return false;
-      }
-      if (ef.estrato !== null && ef.estrato.length > 0) {
-        if (!ef.estrato.includes(l.estrato_real ?? 0)) return false;
-      }
-      if (ef.diasMercado !== null) {
-        const d = l.dias_en_mercado ?? 999;
-        if (ef.diasMercado === "nuevo"    && d >= 7)   return false;
-        if (ef.diasMercado === "reciente" && d >= 30)  return false;
-        if (ef.diasMercado === "demorado" && d < 90)   return false;
-        if (ef.diasMercado === "mas30"    && d < 30)   return false;
-        if (ef.diasMercado === "mas60"    && d < 60)   return false;
-      }
-      if (ef.busqueda) {
-        const q = ef.busqueda.toLowerCase();
-        const haystack = [
-          l.barrio_nombre, l.barrio_display,
-          l.municipio, l.municipio_display,
-          l.comuna_nombre, l.direccion_raw,
-        ].filter(Boolean).join(" ").toLowerCase();
-        if (!haystack.includes(q)) return false;
-      }
-      // Internal filters
       if (filters.soloPromium && l.tier !== "agencia_premium") return false;
       if (filters.scoreMin !== null && (l.barrio_score ?? 0) < filters.scoreMin) return false;
       if (filters.scoreMax !== null && (l.barrio_score ?? 0) > filters.scoreMax) return false;
@@ -464,7 +426,7 @@ export function MLSPanel({
       if (filters.yieldMax !== null && (l.barrio_yield ?? 0) > filters.yieldMax) return false;
       return true;
     });
-  }, [listings, ef, filters, premiumFilterActive, premiumInCurrent, premiumExpanded]);
+  }, [listings, filters, premiumFilterActive, premiumInCurrent, premiumExpanded]);
   useEffect(() => {
     if (premiumFilterActive && premiumInCurrent === 0) {
       onPremiumExpand?.(true);
@@ -483,10 +445,6 @@ export function MLSPanel({
   const effectiveBarrios = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
     ? premiumBarriosIncluidos
     : barriosIncluidos;
-
-  useEffect(() => {
-    onFilteredListingsChange?.(filtered);
-  }, [filtered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Scroll highlighted card into view
   useEffect(() => {

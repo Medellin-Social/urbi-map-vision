@@ -45,6 +45,17 @@ type Props = {
   mlsAmoblado?: boolean | null;
   mlsCdComuna?: number | null;
   mlsMunicipio?: string | null;
+  // Remaining shared filters, now applied server-side in /viewport (FIX 1d follow-up).
+  mlsFilters?: {
+    habitaciones: number | null;
+    banos: number | null;
+    areaMin: number | null;
+    areaMax: number | null;
+    estrato: number[] | null;
+    tipoInmueble: string | null;
+    diasMercado: string | null;
+    busqueda: string | null;
+  };
   onViewportListingsChange?: (listings: ApiListing[]) => void;
   onAutoSelectBarrio?: (barrioId: number | null) => void;
   onAutoSelectComuna?: (cd: number | null, municipio: string | null, nombre: string | null) => void;
@@ -209,6 +220,7 @@ export function MapView({
   mlsAmoblado,
   mlsCdComuna,
   mlsMunicipio,
+  mlsFilters,
   onViewportListingsChange,
   onAutoSelectBarrio,
   onAutoSelectComuna,
@@ -823,11 +835,22 @@ export function MapView({
       if (mlsBarrioId != null) params.set("barrio_id", String(mlsBarrioId));
       if (mlsCdComuna != null) params.set("cd_comuna", String(mlsCdComuna));
       if (mlsMunicipio) params.set("municipio", mlsMunicipio);
+      // Remaining shared filters — server-side WHERE in /viewport.
+      const f = mlsFilters;
+      if (f?.habitaciones != null) params.set("habitaciones", String(f.habitaciones));
+      if (f?.banos != null) params.set("banos", String(f.banos));
+      if (f?.areaMin != null) params.set("area_min", String(f.areaMin));
+      if (f?.areaMax != null) params.set("area_max", String(f.areaMax));
+      if (f?.estrato?.length) for (const e of f.estrato) params.append("estrato", String(e));
+      if (f?.tipoInmueble) params.set("tipo_inmueble", f.tipoInmueble);
+      if (f?.diasMercado) params.set("dias_mercado", f.diasMercado);
+      if (f?.busqueda?.trim()) params.set("busqueda", f.busqueda.trim());
       // Dedup: with a zone active the backend ignores bbox, so panning within the
       // zone returns identical data — skip the refetch (key excludes bbox then).
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
+      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}`;
       const dedupKey = hasGeo
-        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}`
+        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
         : params.toString();
       if (dedupKey === lastViewportQueryRef.current) return;
       lastViewportQueryRef.current = dedupKey;
@@ -885,7 +908,9 @@ export function MapView({
       map.off("zoomend", onMove);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax, mlsAmoblado]);
+  }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax, mlsAmoblado,
+      mlsFilters?.habitaciones, mlsFilters?.banos, mlsFilters?.areaMin, mlsFilters?.areaMax,
+      mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble, mlsFilters?.diasMercado, mlsFilters?.busqueda]);
 
   // ── FIX 1c: polígono tier (comuna↔barrio por zoom) + auto-select por cámara ──
   useEffect(() => {

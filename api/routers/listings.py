@@ -790,8 +790,39 @@ _VIEWPORT_PANEL_CAP = 200
 
 # Params (shared by both SQLs): $1-$4 bbox (NULLable — nulled when a zone is
 # active so the whole zone shows), $5 tipo_op, $6 precio_min, $7 precio_max,
-# $8 barrio_ids int[] (neighbor-expanded), $9 cd_comuna, $10 municipio.
-# Clusters adds $11 grid-cell size.
+# $8 barrio_ids int[] (neighbor-expanded), $9 cd_comuna, $10 municipio,
+# $11 amoblado, $12 habitaciones (>=), $13 banos (>=), $14 area_min, $15 area_max,
+# $16 estrato int[], $17 tipo_inmueble (substring), $18 dias_mercado bucket,
+# $19 busqueda (ILIKE direccion). Clusters adds $20 grid-cell size.
+
+# dias_en_mercado only exists for metrocuadrado listings (fecha_primera_vez).
+# Dedupe on url first (url is not unique in the raw table) so the LEFT JOIN can't
+# inflate cluster COUNT/AVG. MIN = earliest sighting = most days on market.
+_VIEWPORT_DM_JOIN = (
+    "LEFT JOIN (SELECT url, MIN(fecha_primera_vez) AS fecha_primera_vez\n"
+    "           FROM raw.listings_metrocuadrado GROUP BY url) _dm\n"
+    "       ON _dm.url = l.url AND l.fuente = 'metrocuadrado'"
+)
+
+# Shared $12-$19 filter block. NULLIF(habitaciones,-1) normalises the sentinel.
+# dias buckets replicate the old client-side semantics (NULL → 999 = "old").
+_VIEWPORT_EXTRA_WHERE = """\
+  AND ($12::int    IS NULL OR NULLIF(l.habitaciones, -1) >= $12)
+  AND ($13::float8 IS NULL OR l.banos >= $13)
+  AND ($14::float8 IS NULL OR l.area_m2 >= $14)
+  AND ($15::float8 IS NULL OR l.area_m2 <= $15)
+  AND ($16::int[]  IS NULL OR g.estrato_real = ANY($16))
+  AND ($17::text   IS NULL OR l.tipo_inmueble ILIKE '%' || $17 || '%')
+  AND ($18::text   IS NULL OR CASE $18
+        WHEN 'nuevo'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 7
+        WHEN 'reciente' THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 30
+        WHEN 'demorado' THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 90
+        WHEN 'mas30'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 30
+        WHEN 'mas60'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 60
+        ELSE TRUE END)
+  AND ($19::text   IS NULL OR l.direccion_raw ILIKE '%' || $19 || '%')
+"""
+
 _VIEWPORT_CLUSTERS_SQL = """
 SELECT
     COUNT(*)::int                    AS count,
@@ -802,6 +833,7 @@ FROM staging.stg_listings_unificado l
 JOIN analytics.listings_georef g  ON g.url = l.url
 JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+{dm_join}
 WHERE l.precio_cop >= 500000
   AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
   AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
@@ -816,8 +848,9 @@ WHERE l.precio_cop >= 500000
   AND ($9::int    IS NULL OR bc.cd_comuna = $9)
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
   AND ($11::boolean IS NULL OR l.amoblado = $11)
-GROUP BY floor(g.lon / $12::float8), floor(g.lat / $12::float8)
-"""
+{extra_where}
+GROUP BY floor(g.lon / $20::float8), floor(g.lat / $20::float8)
+""".format(dm_join=_VIEWPORT_DM_JOIN, extra_where=_VIEWPORT_EXTRA_WHERE)
 
 _VIEWPORT_POINTS_SQL = """
 WITH lraw AS (
@@ -851,6 +884,7 @@ FROM lraw l
 JOIN analytics.listings_georef g  ON g.url = l.url
 JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+{dm_join}
 LEFT JOIN (
     SELECT lp.id::text AS lp_url, u.plan AS owner_plan
     FROM public.listings_propios lp
@@ -867,12 +901,13 @@ WHERE ($1::float8 IS NULL OR g.lon >= $1)
   AND ($9::int    IS NULL OR bc.cd_comuna = $9)
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
   AND ($11::boolean IS NULL OR l.amoblado = $11)
+{extra_where}
 ORDER BY
     CASE WHEN l.tier = 'agente_premium'
               OR (l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente'))
          THEN 0 ELSE 1 END,
     l.fecha_scraping DESC NULLS LAST
-""".format(usd=int(_USD))
+""".format(usd=int(_USD), dm_join=_VIEWPORT_DM_JOIN, extra_where=_VIEWPORT_EXTRA_WHERE)
 
 
 @router.get("/viewport", response_model=ViewportResponse)
@@ -890,6 +925,14 @@ async def get_listings_viewport(
     cd_comuna: Optional[int] = Query(default=None),
     municipio: Optional[str] = Query(default=None),
     amoblado: Optional[bool] = Query(default=None),
+    habitaciones: Optional[int] = Query(default=None),
+    banos: Optional[float] = Query(default=None),
+    area_min: Optional[float] = Query(default=None),
+    area_max: Optional[float] = Query(default=None),
+    estrato: Optional[list[int]] = Query(default=None),
+    tipo_inmueble: Optional[str] = Query(default=None),
+    dias_mercado: Optional[str] = Query(default=None),
+    busqueda: Optional[str] = Query(default=None),
 ):
     """Listings within the map viewport. Server-side clustering at low zoom
     (mode=clusters), individual points at high zoom (mode=points, capped).
@@ -904,7 +947,13 @@ async def get_listings_viewport(
         barrio_ids, _, _ = await _expand_neighbors(pool, barrio_id)
     has_geo = barrio_ids is not None or cd_comuna is not None or municipio is not None
     bbox = (None, None, None, None) if has_geo else (min_lng, min_lat, max_lng, max_lat)
-    args = (*bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio, amoblado)
+    # estrato [] → None so the ANY() guard short-circuits instead of matching nothing.
+    estrato_arg = estrato if estrato else None
+    args = (
+        *bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio, amoblado,
+        habitaciones, banos, area_min, area_max, estrato_arg, tipo_inmueble,
+        (dias_mercado or None), (busqueda.strip() if busqueda and busqueda.strip() else None),
+    )
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
         rows = await pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
