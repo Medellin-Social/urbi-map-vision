@@ -20,6 +20,7 @@ import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { List, Map as MapIcon } from "lucide-react";
 
 export const Route = createFileRoute("/map")({
   component: MapPage,
@@ -98,17 +99,11 @@ function MapPageInner() {
 
   const [globalSearch, setGlobalSearch] = useState(false);
 
-  // Mobile bottom-sheet snap (vaul). Fractions of viewport height: peek / half / full.
-  // Lifted here so MapView can reconcile camera auto-select (FIX 1d) with sheet height.
+  // Mobile: Zillow-style toggle between two FULL-SCREEN views (map ⟷ list).
+  // Desktop ignores it — map + right panel show together. Full-screen map means the
+  // screen center IS the real center, so camera auto-select (FIX 1d) needs no offset.
   const isMobile = useIsMobile();
-  const SHEET_SNAPS = [0.12, 0.5, 0.9];
-  const SHEET_FULL = 0.9;
-  const [sheetSnap, setSheetSnap] = useState<number | string | null>(0.12);
-  const sheetFrac = typeof sheetSnap === "number" ? sheetSnap : 0.12;
-  // Visible-map fraction the sheet leaves uncovered → MapView centers its query there.
-  const mobileSheetFrac = isMobile && mapView === "listings" ? sheetFrac : null;
-  // At "full" the user is browsing the list, not the map → pause camera auto-select.
-  const mobileAutoSelectPaused = isMobile && mapView === "listings" && sheetFrac >= SHEET_FULL;
+  const [mobileView, setMobileView] = useState<"map" | "list">("map");
 
   // Count active filters for hint banner
   const activeFilterCount = [
@@ -362,6 +357,7 @@ function MapPageInner() {
   // Called from MLSPanel "← Volver" and Navbar breadcrumb
   function handleBackToZonas() {
     setMapView("zonas");
+    setMobileView("map");
     setMlsBarrio(null);
     setGlobalSearch(false);
     setActiveComuna(null);
@@ -479,8 +475,6 @@ function MapPageInner() {
           onListingDoubleClickFromMap={handleListingDoubleClickFromMap}
           activeBarrioName={activeBarrioInComune}
           activeTab={activeTab}
-          mobileSheetFrac={mobileSheetFrac}
-          mobileAutoSelectPaused={mobileAutoSelectPaused}
         />
       </div>
 
@@ -544,8 +538,8 @@ function MapPageInner() {
         </>
       )}
 
-      {/* Vista 2: panel de listings */}
-      {mapView === "listings" && panelBarrio && (
+      {/* Vista 2: panel de listings — desktop siempre; móvil solo en vista 'list' */}
+      {mapView === "listings" && panelBarrio && (!isMobile || mobileView === "list") && (
         <MLSPanel
           barrio={panelBarrio}
           listings={mergedListings}
@@ -570,10 +564,20 @@ function MapPageInner() {
           comunaBarrios={comunaBarriosList}
           onBackToComuna={handleBackToCommune}
           onSelectBarrioInComune={handleSelectBarrioInComune}
-          sheetSnapPoints={SHEET_SNAPS}
-          sheetSnap={sheetSnap}
-          onSheetSnapChange={setSheetSnap}
         />
+      )}
+
+      {/* Toggle mapa ⟷ lista (solo móvil, en modo listings) — estilo Zillow */}
+      {isMobile && mapView === "listings" && panelBarrio && (
+        <button
+          onClick={() => setMobileView((v) => (v === "map" ? "list" : "map"))}
+          className="fixed left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg"
+          style={{ bottom: 24, background: "#1A1208" }}
+        >
+          {mobileView === "map"
+            ? (<><List size={16} /> Lista</>)
+            : (<><MapIcon size={16} /> Mapa</>)}
+        </button>
       )}
 
       {/* Mini popup — single click on card or map point */}

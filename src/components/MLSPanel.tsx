@@ -1,6 +1,5 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Drawer } from "vaul";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ArrowLeft, ExternalLink, Plus, Check } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
@@ -40,11 +39,6 @@ type Props = {
   comunaBarrios?: Array<{ barrio_id: number; nombre: string }>;
   onBackToComuna?: () => void;
   onSelectBarrioInComune?: (barrioId: number) => void;
-  // Mobile bottom-sheet (vaul) — controlled snap, owned by map.tsx so MapView can
-  // reconcile camera auto-select with the sheet height. Ignored on desktop.
-  sheetSnapPoints?: (number | string)[];
-  sheetSnap?: number | string | null;
-  onSheetSnapChange?: (s: number | string | null) => void;
 };
 
 // Internal-only filters — common filters (precio, hab, tipo, area, banos, antiguedad, tipoOp)
@@ -425,9 +419,6 @@ export function MLSPanel({
   comunaBarrios,
   onBackToComuna,
   onSelectBarrioInComune,
-  sheetSnapPoints,
-  sheetSnap,
-  onSheetSnapChange,
 }: Props) {
   const isMobile = useIsMobile();
   const [filters, setFilters] = useState<Filters>({
@@ -533,18 +524,10 @@ export function MLSPanel({
 
   const panelVars = { '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties;
 
-  const peekCount = isLoading
-    ? "Cargando…"
-    : `${filtered.length} ${filtered.length === 1 ? "propiedad" : "propiedades"}`;
-
   const body = (
     <>
-      {/* Peek summary — always visible at the smallest snap (handle + count) */}
-      {isMobile && (
-        <p className="px-4 pb-1.5 pt-0.5 text-center text-sm font-semibold text-foreground">{peekCount}</p>
-      )}
-        {/* Header — desktop clears the navbar+filterbar (104px); mobile sits in the sheet */}
-        <div className={`border-b border-border px-4 pb-3 ${isMobile ? "pt-1" : "pt-[104px]"}`}>
+        {/* Header — desktop clears the navbar+filterbar (104px); mobile list sits below them */}
+        <div className={`border-b border-border px-4 pb-3 ${isMobile ? "pt-2" : "pt-[104px]"}`}>
           {isAtTopLevel ? (
             <button
               onClick={onBack}
@@ -696,7 +679,7 @@ export function MLSPanel({
         </div>
 
         {/* Lista */}
-        <div ref={listContainerRef} className="flex-1 overflow-y-auto px-4 py-3 space-y-2.5">
+        <div ref={listContainerRef} className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
           {isLoading && (
             <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
               Cargando listings…
@@ -737,28 +720,16 @@ export function MLSPanel({
     </>
   );
 
-  // Mobile: bottom-sheet over the full-screen map. modal=false keeps the map
-  // interactive behind the sheet; dismissible=false keeps it pinned (snaps only).
+  // Mobile: full-screen list (Zillow toggle) below the navbar+filterbar (top:100).
+  // The map.tsx toggle button swaps between this and the full-screen map.
   if (isMobile) {
     return (
-      <Drawer.Root
-        open
-        modal={false}
-        dismissible={false}
-        snapPoints={sheetSnapPoints ?? [0.12, 0.5, 0.9]}
-        activeSnapPoint={sheetSnap ?? 0.12}
-        setActiveSnapPoint={(s) => onSheetSnapChange?.(s)}
+      <div
+        className="fixed inset-x-0 bottom-0 z-20 flex flex-col"
+        style={{ top: 100, background: '#FAF7F2', ...panelVars }}
       >
-        <Drawer.Portal>
-          <Drawer.Content
-            className="fixed inset-x-0 bottom-0 z-30 flex h-full max-h-[97%] flex-col rounded-t-2xl shadow-2xl outline-none"
-            style={{ background: '#FAF7F2', borderTop: '0.5px solid #E8E0D0', ...panelVars }}
-          >
-            <Drawer.Handle className="!mx-auto !my-2 !h-1.5 !w-12 !rounded-full !bg-border" />
-            {body}
-          </Drawer.Content>
-        </Drawer.Portal>
-      </Drawer.Root>
+        {body}
+      </div>
     );
   }
 
