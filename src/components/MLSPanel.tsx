@@ -567,12 +567,6 @@ export function MLSPanel({
             </div>
           )}
 
-          {!isAtBarrioLevel && (
-            <div className="flex flex-col gap-0.5">
-              <h2 className="font-display text-base font-semibold">{headerName}</h2>
-            </div>
-          )}
-
           {activeComuna && comunaBarrios && comunaBarrios.length > 0 && (
             <select
               value={isAtBarrioLevel ? String(barrio.id) : ""}
@@ -594,17 +588,6 @@ export function MLSPanel({
                 ))}
             </select>
           )}
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {isLoading
-              ? "Cargando…"
-              : listings.length === 0
-              ? "Sin propiedades"
-              : filtered.length < listings.length
-              ? `${filtered.length} de ${listings.length} propiedades`
-              : ef.tipoOp === "todos"
-              ? `${listings.length} propiedades · ${nVenta} venta · ${nArriendo} arriendo`
-              : `${listings.length} propiedades`}
-          </p>
           {!isLoading && !premiumIsLoading && effectiveRadio != null && effectiveRadio > 0 && (
             <p className="mt-0.5 text-[10px] text-muted-foreground/70">
               {premiumFilterActive && premiumInCurrent === 0
@@ -644,38 +627,6 @@ export function MLSPanel({
             </>
           )}
 
-          {target === "investor" && (
-            <div className="w-full space-y-2 pt-1">
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Score: {filters.scoreMin ?? 0}–{filters.scoreMax ?? 100}</span>
-                  {(filters.scoreMin !== null || filters.scoreMax !== null) && (
-                    <button onClick={() => setFilters((f) => ({ ...f, scoreMin: null, scoreMax: null }))} className="text-[10px] text-primary">Reset</button>
-                  )}
-                </div>
-                <input type="range" min={0} max={100} step={5} value={filters.scoreMin ?? 0}
-                  onChange={(e) => { const v = Number(e.target.value); const curMax = filters.scoreMax ?? 100; setFilters((f) => ({ ...f, scoreMin: v === 0 ? null : v, scoreMax: v > curMax ? (v === 100 ? null : v) : f.scoreMax })); }}
-                  className="w-full accent-[#1D9E75] cursor-pointer" />
-                <input type="range" min={0} max={100} step={5} value={filters.scoreMax ?? 100}
-                  onChange={(e) => { const v = Number(e.target.value); const curMin = filters.scoreMin ?? 0; setFilters((f) => ({ ...f, scoreMax: v === 100 ? null : v, scoreMin: v < curMin ? (v === 0 ? null : v) : f.scoreMin })); }}
-                  className="w-full accent-[#1D9E75] cursor-pointer" />
-              </div>
-              <div className="space-y-0.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[11px] text-muted-foreground">Yield: {filters.yieldMin ?? 0}%–{filters.yieldMax ?? 15}%</span>
-                  {(filters.yieldMin !== null || filters.yieldMax !== null) && (
-                    <button onClick={() => setFilters((f) => ({ ...f, yieldMin: null, yieldMax: null }))} className="text-[10px] text-primary">Reset</button>
-                  )}
-                </div>
-                <input type="range" min={0} max={15} step={0.5} value={filters.yieldMin ?? 0}
-                  onChange={(e) => { const v = Number(e.target.value); const curMax = filters.yieldMax ?? 15; setFilters((f) => ({ ...f, yieldMin: v === 0 ? null : v, yieldMax: v > curMax ? (v >= 15 ? null : v) : f.yieldMax })); }}
-                  className="w-full accent-[#1D9E75] cursor-pointer" />
-                <input type="range" min={0} max={15} step={0.5} value={filters.yieldMax ?? 15}
-                  onChange={(e) => { const v = Number(e.target.value); const curMin = filters.yieldMin ?? 0; setFilters((f) => ({ ...f, yieldMax: v >= 15 ? null : v, yieldMin: v < curMin ? (v === 0 ? null : v) : f.yieldMin })); }}
-                  className="w-full accent-[#1D9E75] cursor-pointer" />
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Lista */}
