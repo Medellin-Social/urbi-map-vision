@@ -111,6 +111,39 @@ function CollapsibleDescription({ text }: { text: string }) {
   );
 }
 
+function Amenidades({ items }: { items: string[] }) {
+  const [expanded, setExpanded] = useState(false);
+  const clean = items.filter((a) => a && a.trim());
+  if (clean.length === 0) return null;
+  const CAP = 12;
+  const shown = expanded ? clean : clean.slice(0, CAP);
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-sm font-semibold text-[#1A1208]">Qué tiene</h3>
+      <div className="flex flex-wrap gap-1.5">
+        {shown.map((a, i) => (
+          <span
+            key={`${a}-${i}`}
+            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+            style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", color: "#1A1208" }}
+          >
+            <Check className="h-3 w-3 shrink-0 text-[#1D9E75]" /> {a}
+          </span>
+        ))}
+        {clean.length > CAP && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="rounded-full px-2.5 py-1 text-xs font-medium text-[#1D9E75] transition hover:text-[#085041]"
+            style={{ border: "0.5px solid #1D9E75" }}
+          >
+            {expanded ? "Ver menos" : `+${clean.length - CAP} más`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function PriceBadge({ listing }: { listing: ApiListingDetail }) {
   const pct = listing.pct_bajo_mediana;
   const barrio = listing.barrio_nombre ?? "el barrio";
@@ -1000,44 +1033,56 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </div>
       )}
 
-      {/* Description */}
-      <div className="space-y-2">
-        <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
-        {listing.descripcion ? (
-          <CollapsibleDescription text={listing.descripcion} />
-        ) : (
-          <p className="text-sm leading-relaxed text-[#9B8B75]">
-            Descripción no disponible.{" "}
-            {listing.url && (
-              <a href={listing.url} target="_blank" rel="noopener noreferrer" className="underline transition hover:text-[#1D9E75]">
-                Ver fuente original →
-              </a>
-            )}
-          </p>
-        )}
-      </div>
+      {/* Qué tiene — amenidades */}
+      {listing.amenidades && listing.amenidades.length > 0 && (
+        <Amenidades items={listing.amenidades} />
+      )}
 
-      {/* Details table */}
-      {(listing.tipo_inmueble || listing.antiguedad || listing.administracion) && (
-        <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-          {listing.tipo_inmueble && (
-            <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="flex items-center gap-2 text-[#6B5B45]"><Building2 className="h-3.5 w-3.5" /> Tipo</span>
-              <span className="font-medium capitalize" style={{ color: "#1A1208" }}>{listing.tipo_inmueble.replace(/_/g, " ")}</span>
-            </div>
-          )}
-          {listing.antiguedad && (
-            <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="flex items-center gap-2 text-[#6B5B45]">🗓 Antigüedad</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{cleanAntiguedad(listing.antiguedad)}</span>
-            </div>
-          )}
-          {!!listing.administracion && listing.administracion > 0 && (
-            <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-              <span className="flex items-center gap-2 text-[#6B5B45]">💳 Administración</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{formatCOP(listing.administracion)}/mes</span>
-            </div>
-          )}
+      {/* Description — solo si existe */}
+      {listing.descripcion && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
+          <CollapsibleDescription text={listing.descripcion} />
+        </div>
+      )}
+
+      {/* Facts & Features — cada fila condicional; sección oculta si nada */}
+      {(listing.tipo_inmueble || listing.estado_inmueble || listing.antiguedad
+        || (listing.parqueaderos != null && listing.parqueaderos > 0) || listing.piso != null) && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-semibold text-[#1A1208]">Detalles</h3>
+          <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+            {listing.tipo_inmueble && (
+              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-[#6B5B45]"><Building2 className="h-3.5 w-3.5" /> Tipo</span>
+                <span className="font-medium capitalize" style={{ color: "#1A1208" }}>{listing.tipo_inmueble.replace(/_/g, " ")}</span>
+              </div>
+            )}
+            {listing.estado_inmueble && (
+              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-[#6B5B45]">🏗 Estado</span>
+                <span className="font-medium capitalize" style={{ color: "#1A1208" }}>{listing.estado_inmueble.toLowerCase()}</span>
+              </div>
+            )}
+            {listing.antiguedad && (
+              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-[#6B5B45]">🗓 Antigüedad</span>
+                <span className="font-medium" style={{ color: "#1A1208" }}>{cleanAntiguedad(listing.antiguedad)}</span>
+              </div>
+            )}
+            {listing.parqueaderos != null && listing.parqueaderos > 0 && (
+              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-[#6B5B45]">🚗 Parqueaderos</span>
+                <span className="font-medium" style={{ color: "#1A1208" }}>{listing.parqueaderos}</span>
+              </div>
+            )}
+            {listing.piso != null && (
+              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
+                <span className="flex items-center gap-2 text-[#6B5B45]">🏢 Piso</span>
+                <span className="font-medium" style={{ color: "#1A1208" }}>{listing.piso}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -1128,13 +1173,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {(() => {
         const historia = listing.precio_historia ?? [];
 
-        if (historia.length === 0) {
-          return (
-            <div className="rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", color: "#9B8B75" }}>
-              Sin cambios de precio desde que se publicó en Medellín Social
-            </div>
-          );
-        }
+        if (historia.length === 0) return null;
 
         if (historia.length <= 2) {
           return (

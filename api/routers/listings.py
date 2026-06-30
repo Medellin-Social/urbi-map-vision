@@ -121,8 +121,11 @@ class ListingDetail(ListingFull):
     precio_historia: Optional[list[PrecioHistorialItem]] = None
     # Free-tier descriptive fields
     fotos: Optional[list[str]] = None
-    administracion: Optional[int] = None
+    amenidades: Optional[list[str]] = None
     antiguedad: Optional[str] = None
+    estado_inmueble: Optional[str] = None
+    parqueaderos: Optional[int] = None
+    piso: Optional[int] = None
     # Barrio context fields
     yield_bruto_pct: Optional[float] = None
     score_corto: Optional[float] = None
@@ -594,7 +597,7 @@ WITH listing AS (
            listing_uid,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop, area_m2, NULLIF(habitaciones, -1) AS habitaciones, banos,
-           direccion_raw, barrio_id, url, fotos,
+           direccion_raw, barrio_id, url, fotos, amenidades,
            NULL::date AS fecha_publicacion,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
@@ -680,7 +683,7 @@ SELECT
         THEN round(((m.arr_mediana * 12)::float8 / l.precio_cop * 100)::numeric, 2)::float8
         ELSE NULL
     END AS yield_estimado,
-    lp.descripcion AS descripcion,
+    COALESCE(lm.descripcion, lf.descripcion, lp.descripcion) AS descripcion,
     (CURRENT_DATE - lm.fecha_primera_vez::date)::int
                                        AS dias_en_mercado,
     l.fecha_publicacion::text,
@@ -696,7 +699,12 @@ SELECT
     COALESCE(_fav.favoritos_count, 0)  AS favoritos_count,
     COALESCE(_vistas.vistas, 0)        AS vistas,
     lm.raw_data->>'tiempoConstruido'   AS antiguedad,
-    NULLIF(REPLACE(COALESCE(lm.raw_data->>'valorAdministracion', ''), '.', ''), '')::bigint AS administracion,
+    l.amenidades                       AS amenidades,
+    lm.raw_data->>'mestadoinmueble'    AS estado_inmueble,
+    CASE WHEN lm.raw_data->>'nroGarajes' ~ '^\d+$'
+         THEN (lm.raw_data->>'nroGarajes')::int END AS parqueaderos,
+    CASE WHEN lm.raw_data->>'nroPiso' ~ '^\d+$'
+         THEN (lm.raw_data->>'nroPiso')::int END    AS piso,
     COALESCE(l.fotos, lp.fotos)        AS fotos,
     pr.m2_p25::int  AS precio_m2_p25,
     pr.m2_p75::int  AS precio_m2_p75,
@@ -711,6 +719,7 @@ LEFT JOIN analytics.barrios_medianas m
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
+LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_premium lp ON lp.url = l.url
 LEFT JOIN (
     SELECT url, COUNT(*)::int AS favoritos_count
