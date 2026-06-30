@@ -19,12 +19,10 @@ const K = {
 
 interface Agente {
   id: number;
-  nombre: string;
-  apellido: string;
-  foto_url: string | null;
+  nombre_completo: string;
+  foto_perfil: string | null;
   whatsapp: string | null;
-  bio: string | null;
-  barrios_especializados: string[] | null;
+  zonas_opera: number[] | null;
   email: string | null;
   telefono: string | null;
 }
@@ -150,8 +148,9 @@ function ConectarAgentePage() {
           {agentes.map((a) => {
             const sent = enviadas.has(a.id);
             const isSending = sending === a.id;
-            const initials = `${a.nombre[0] ?? ""}${a.apellido[0] ?? ""}`.toUpperCase();
-            const barrios = a.barrios_especializados?.slice(0, 3).join(", ") ?? "";
+            const partes = (a.nombre_completo ?? "").trim().split(/\s+/);
+            const initials = `${partes[0]?.[0] ?? ""}${partes[1]?.[0] ?? ""}`.toUpperCase();
+            const barrios = a.zonas_opera?.slice(0, 3).join(", ") ?? "";
 
             return (
               <div
@@ -174,8 +173,8 @@ function ConectarAgentePage() {
                   fontSize: 18, fontWeight: 800, color: "#fff",
                   flexShrink: 0, overflow: "hidden",
                 }}>
-                  {a.foto_url
-                    ? <img src={a.foto_url} alt={a.nombre} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  {a.foto_perfil
+                    ? <img src={a.foto_perfil} alt={a.nombre_completo} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                     : initials}
                 </div>
 
@@ -183,7 +182,7 @@ function ConectarAgentePage() {
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", marginBottom: 4 }}>
                     <span style={{ fontWeight: 800, fontSize: 15, color: K.ink }}>
-                      {a.nombre} {a.apellido}
+                      {a.nombre_completo}
                     </span>
                     <span style={{
                       background: K.tealLight, color: K.tealDeep,
@@ -192,12 +191,6 @@ function ConectarAgentePage() {
                       Verificado
                     </span>
                   </div>
-
-                  {a.bio && (
-                    <p style={{ fontSize: 13, color: K.muted, lineHeight: 1.6, marginBottom: 6 }}>
-                      {a.bio.length > 120 ? a.bio.slice(0, 120) + "…" : a.bio}
-                    </p>
-                  )}
 
                   {barrios && (
                     <p style={{ fontSize: 12, color: K.muted, marginBottom: 0 }}>

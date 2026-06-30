@@ -299,16 +299,11 @@ async def agente_por_zona(barrio_id: int = Query(..., description="ID del barrio
     pool = get_pool()
     row = await pool.fetchrow(
         """
-        SELECT id,
-               (nombre || ' ' || apellido) AS nombre_completo,
-               foto_url                    AS foto_perfil,
-               telefono,
-               whatsapp,
-               agencia                     AS inmobiliaria_nombre
+        SELECT id, nombre_completo, foto_perfil, telefono, whatsapp,
+               inmobiliaria_nombre
         FROM public.agentes
-        WHERE $1 = ANY(barrios_especializados)
-          AND verificado = true
-          AND activo = true
+        WHERE $1 = ANY(zonas_opera)
+          AND estado = 'aprobado'
         LIMIT 1
         """,
         barrio_id,
@@ -350,22 +345,11 @@ async def agentes_aprobados(
     pool = get_pool()
     rows = await pool.fetch(
         """
-        SELECT id,
-               (nombre || ' ' || apellido)  AS nombre_completo,
-               foto_url                     AS foto_perfil,
-               bio                          AS especialidad,
-               NULL::text[]                 AS tipo_inmueble,
-               barrios_especializados       AS zonas_opera,
-               NULL::text                   AS sitio_web,
-               NULL::int                    AS anos_experiencia,
-               NULL::int                    AS transacciones_cerradas,
-               agencia                      AS inmobiliaria_nombre,
-               (agencia IS NULL)            AS es_independiente,
-               NULL::text                   AS linkedin,
-               NULL::text                   AS instagram,
-               whatsapp
+        SELECT id, nombre_completo, foto_perfil, especialidad, tipo_inmueble,
+               zonas_opera, sitio_web, anos_experiencia, transacciones_cerradas,
+               inmobiliaria_nombre, es_independiente, linkedin, instagram, whatsapp
         FROM public.agentes
-        WHERE verificado = true AND activo = true
+        WHERE estado = 'aprobado'
         ORDER BY id DESC
         LIMIT $1 OFFSET $2
         """,

@@ -39,7 +39,7 @@ async def _get_user_from_token(token: str) -> dict:
                   perfil_busqueda, onboarding_completado, origen_registro,
                   EXISTS(SELECT 1 FROM agentes a
                          WHERE a.usuario_id = usuarios.id
-                           AND a.estado = 'aprobado' AND a.activo) AS es_agente
+                           AND a.estado = 'aprobado') AS es_agente
            FROM usuarios WHERE id = $1""",
         int(user_id),
     )
@@ -82,7 +82,7 @@ def is_agente(user: Optional[dict]) -> bool:
     """True when user is a sponsored/approved real-estate agent.
 
     Gates the only agent-exclusive map data: buena_oferta / pct_bajo_mediana.
-    plan == 'agente' OR an approved+active row in `agentes`.
+    plan == 'agente' OR an approved row (estado='aprobado') in `agentes`.
     """
     if not user:
         return False

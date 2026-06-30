@@ -22,7 +22,7 @@ _COP_TO_USD = 4200.0
 
 async def _get_agente_id(pool, user_id: int) -> Optional[int]:
     row = await pool.fetchrow(
-        "SELECT id FROM agentes WHERE usuario_id = $1 AND verificado = true AND activo = true",
+        "SELECT id FROM agentes WHERE usuario_id = $1 AND estado = 'aprobado'",
         user_id,
     )
     return row["id"] if row else None
@@ -348,11 +348,11 @@ async def agentes_para_contactar():
     pool = get_pool()
     rows = await pool.fetch(
         """
-        SELECT id, nombre, apellido, foto_url, whatsapp, bio,
-               barrios_especializados, email, telefono
+        SELECT id, nombre_completo, foto_perfil, whatsapp,
+               zonas_opera, email, telefono
         FROM public.agentes
-        WHERE verificado = true AND activo = true
-        ORDER BY nombre, apellido
+        WHERE estado = 'aprobado'
+        ORDER BY nombre_completo
         """
     )
     return [dict(r) for r in rows]
@@ -378,8 +378,8 @@ async def crear_solicitud(
         raise HTTPException(404, "Listing no encontrado o no es tuyo")
 
     agente = await pool.fetchrow(
-        """SELECT id, nombre, apellido, email, whatsapp
-           FROM public.agentes WHERE id = $1 AND verificado = true AND activo = true""",
+        """SELECT id, nombre_completo, email, whatsapp
+           FROM public.agentes WHERE id = $1 AND estado = 'aprobado'""",
         agente_id,
     )
     if not agente:
@@ -480,13 +480,13 @@ async def actualizar_solicitud(
     )
 
     agente_info = await pool.fetchrow(
-        "SELECT nombre, apellido FROM public.agentes WHERE id = $1", agente_id
+        "SELECT nombre_completo FROM public.agentes WHERE id = $1", agente_id
     )
     await _notify_propietario_respuesta(
         accion=accion,
         propietario_email=sol["propietario_email"],
         propietario_nombre=sol["propietario_nombre"],
-        agente_nombre=f"{agente_info['nombre']} {agente_info['apellido']}",
+        agente_nombre=agente_info["nombre_completo"],
         listing_id=sol["listing_id"],
     )
     return {"ok": True, "estado": nuevo_estado}
