@@ -1005,12 +1005,12 @@ export function MapFilterBar({
             <input
               type="number" placeholder="Mínimo" value={filters.precioMin ?? ""}
               onChange={(e) => onFiltersChange({ precioMin: e.target.value ? Number(e.target.value) : null })}
-              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}
+              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
             />
             <input
               type="number" placeholder="Máximo" value={filters.precioMax ?? ""}
               onChange={(e) => onFiltersChange({ precioMax: e.target.value ? Number(e.target.value) : null })}
-              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }}
+              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
             />
           </div>
         </div>
@@ -1063,8 +1063,8 @@ export function MapFilterBar({
         <div style={{ marginBottom: 20 }}>
           <span style={labelSm}>Área (m²)</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <input type="number" placeholder="Mínima" value={filters.areaMin ?? ""} onChange={(e) => onFiltersChange({ areaMin: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }} />
-            <input type="number" placeholder="Máxima" value={filters.areaMax ?? ""} onChange={(e) => onFiltersChange({ areaMax: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none" }} />
+            <input type="number" placeholder="Mínima" value={filters.areaMin ?? ""} onChange={(e) => onFiltersChange({ areaMin: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
+            <input type="number" placeholder="Máxima" value={filters.areaMax ?? ""} onChange={(e) => onFiltersChange({ areaMax: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
           </div>
         </div>
 
