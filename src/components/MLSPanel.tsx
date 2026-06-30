@@ -9,6 +9,7 @@ import { auth } from "@/lib/auth";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { useTrm } from "@/hooks/useTrm";
 import { useIsPro } from "@/components/LockedField";
 import { toast } from "sonner";
 
@@ -122,9 +123,10 @@ function ListingCard({
   const isPro = useIsPro();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
+  const trm = useTrm();
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
-  const precioUsd = listing.precio_usd
-    ? `~$${(listing.precio_usd / 1000).toFixed(0)}k USD`
+  const precioUsd = listing.precio_cop
+    ? `~$${(listing.precio_cop / trm / 1000).toFixed(0)}k USD`
     : null;
   const _pm2 = listing.precio_m2;
   const m2 =

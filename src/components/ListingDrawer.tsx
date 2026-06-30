@@ -24,6 +24,7 @@ import { toast } from "sonner";
 import type { ApiListingDetail, SimilarListing } from "@/lib/adapters";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { useTrm } from "@/hooks/useTrm";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -755,6 +756,7 @@ type Props = {
 };
 
 export function ListingDrawer({ listingId, onClose }: Props) {
+  const trm = useTrm();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
@@ -1342,7 +1344,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                               <div className="font-display text-2xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
                                 {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
                               </div>
-                              {listing.precio_usd && <div className="text-xs text-[#6B5B45]">~${(listing.precio_usd / 1000).toFixed(0)}k USD</div>}
+                              {listing.precio_cop && <div className="text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>}
                             </div>
                             {badgesRow}
                           </div>
@@ -1390,8 +1392,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           >
             {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
           </div>
-          {listing.precio_usd && (
-            <div className="mt-0.5 text-xs text-[#6B5B45]">~${(listing.precio_usd / 1000).toFixed(0)}k USD</div>
+          {listing.precio_cop && (
+            <div className="mt-0.5 text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>
           )}
           <div className="mt-2">{badgesRow}</div>
           {isPro && listing.pct_bajo_mediana != null && (

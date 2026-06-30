@@ -10,6 +10,8 @@ import {
   Shield, Camera, Trees, Baby, TrainFront, Sofa,
 } from "lucide-react";
 import { useIsPro } from "@/components/LockedField";
+import { useLang } from "@/lib/i18n";
+import { useTrm } from "@/hooks/useTrm";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
@@ -185,11 +187,23 @@ function fmtCOP(v: number): string {
   return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
-function precioLabel(f: SharedFilters, isRent: boolean): string {
+// USD label (own thresholds): <$1k exact, <$1M in k, >=$1M in M.
+function fmtUSD(v: number): string {
+  if (v < 1_000) return `$${Math.round(v)}`;
+  if (v < 1_000_000) return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
+// Values are always COP internally; in locale EN we only convert the LABEL to USD.
+function fmtPrice(cop: number, lang: string, trm: number): string {
+  return lang === "en" ? fmtUSD(cop / trm) : fmtCOP(cop);
+}
+
+function precioLabel(f: SharedFilters, isRent: boolean, lang: string, trm: number): string {
   if (f.precioMin !== null && f.precioMax !== null)
-    return `${fmtCOP(f.precioMin)} – ${fmtCOP(f.precioMax)}`;
-  if (f.precioMax !== null) return `Hasta ${fmtCOP(f.precioMax)}`;
-  if (f.precioMin !== null) return `Desde ${fmtCOP(f.precioMin)}`;
+    return `${fmtPrice(f.precioMin, lang, trm)} – ${fmtPrice(f.precioMax, lang, trm)}`;
+  if (f.precioMax !== null) return `Hasta ${fmtPrice(f.precioMax, lang, trm)}`;
+  if (f.precioMin !== null) return `Desde ${fmtPrice(f.precioMin, lang, trm)}`;
   return isRent ? "Precio/mes" : "Precio";
 }
 
@@ -294,12 +308,14 @@ function NumInput({
 }
 
 function PrecioPanel({
-  filters, isRent, onChange, onClose,
+  filters, isRent, onChange, onClose, lang, trm,
 }: {
   filters: SharedFilters;
   isRent: boolean;
   onChange: (f: Partial<SharedFilters>) => void;
   onClose: () => void;
+  lang: string;
+  trm: number;
 }) {
   const TOTAL_MIN = 0;
   // Ranges calibrated to real data (validity-capped): arriendo p99 ~38M (cap 50M);
@@ -340,7 +356,7 @@ function PrecioPanel({
   const fmt  = (v: number) => {
     if (v <= TOTAL_MIN) return "Mín";
     if (v >= TOTAL_MAX) return "Máx";
-    return fmtCOP(v);
+    return fmtPrice(v, lang, trm);
   };
 
   const thumbStyle: React.CSSProperties = {
@@ -815,6 +831,8 @@ export function MapFilterBar({
   activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
 }: MapFilterBarProps) {
   const isPro = useIsPro();
+  const { lang } = useLang();
+  const trm = useTrm();
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -973,7 +991,7 @@ export function MapFilterBar({
       {/* Precio */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
-          label={precioLabel(filters, isRent)}
+          label={precioLabel(filters, isRent, lang, trm)}
           active={precioActive}
           onClear={() => onFiltersChange({ precioMin: null, precioMax: null })}
           onClick={(a) => toggle("precio", a)}
@@ -1210,7 +1228,7 @@ export function MapFilterBar({
       case "precio":
         return (
           <div ref={dropdownRef} style={wrapStyle}>
-            <PrecioPanel filters={filters} isRent={isRent} onChange={onFiltersChange} onClose={close} />
+            <PrecioPanel filters={filters} isRent={isRent} onChange={onFiltersChange} onClose={close} lang={lang} trm={trm} />
           </div>
         );
       case "habBanos":

@@ -18,6 +18,7 @@ export const API_ENDPOINTS = {
   comparar: `${API_BASE_URL}/barrios/comparar`,
   listings: (id: number) => `${API_BASE_URL}/barrios/${id}/listings`,
   allListings: `${API_BASE_URL}/listings`,
+  trm: `${API_BASE_URL}/trm`,
   listing: (id: number) => `${API_BASE_URL}/listings/${id}`,
   listingVista: (id: number) => `${API_BASE_URL}/listings/${id}/vista`,
   listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
