@@ -1449,11 +1449,14 @@ function translateNode(root: Node) {
   let node: Node | null = walker.currentNode;
   while (node) {
     if (node.nodeType === Node.TEXT_NODE) {
-      const el = node as Text;
-      const orig = (el as any).__es ?? el.nodeValue ?? "";
-      if (!(el as any).__es) (el as any).__es = orig;
-      const next = translateString(orig);
+      const el = node as Text & { __es?: string; __t?: string };
+      const cur = el.nodeValue ?? "";
+      // If the current value isn't our own last translation, React wrote a fresh
+      // source (e.g. dynamic "$232.3k" label) → re-cache it as the ES original.
+      if (el.__t !== cur) el.__es = cur;
+      const next = translateString(el.__es ?? cur);
       if (next !== el.nodeValue) el.nodeValue = next;
+      el.__t = next;
     } else if (node.nodeType === Node.ELEMENT_NODE) {
       const el = node as Element;
       // Skip script/style
@@ -1529,11 +1532,13 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
           if (m.type === "childList") {
             m.addedNodes.forEach((n) => translateNode(n));
           } else if (m.type === "characterData") {
-            const t = m.target as Text;
-            const orig = (t as any).__es ?? t.nodeValue ?? "";
-            (t as any).__es = orig;
-            const next = translateString(orig);
+            const t = m.target as Text & { __es?: string; __t?: string };
+            const cur = t.nodeValue ?? "";
+            // Fresh React write (not our echo) → re-cache as new ES source.
+            if (t.__t !== cur) t.__es = cur;
+            const next = translateString(t.__es ?? cur);
             if (next !== t.nodeValue) t.nodeValue = next;
+            t.__t = next;
           } else if (m.type === "attributes" && m.attributeName) {
             if (TRANSLATABLE_ATTRS.includes(m.attributeName)) {
               translateNode(m.target);
