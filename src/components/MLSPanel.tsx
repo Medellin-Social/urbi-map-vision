@@ -128,6 +128,7 @@ function ListingCard({
   onSimular: () => void;
 }) {
   const isPro = useIsPro();
+  const isMobile = useIsMobile();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
   const trm = useTrm();
@@ -149,6 +150,50 @@ function ListingCard({
   ]
     .filter(Boolean)
     .join(" · ");
+
+  // Mobile: vertical compact card — photo + tipo badge + price + specs + fav only.
+  if (isMobile) {
+    return (
+      <div
+        ref={cardRef}
+        onClick={(e) => onSelect(e)}
+        className="cursor-pointer rounded-lg border overflow-hidden"
+        style={highlighted
+          ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+          : { border: '0.5px solid #E8E0D0', background: '#FFFFFF' }
+        }
+      >
+        <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F5F0E8' }}>
+          {listing.foto_principal ? (
+            <img src={listing.foto_principal} alt="" className="h-full w-full object-cover" loading="lazy" />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #085041 100%)' }}>
+              <span style={{ color: '#fff', opacity: 0.5, fontSize: 11, fontWeight: 700 }}>Medellín Social</span>
+            </div>
+          )}
+          <span
+            className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+            style={{ background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30", color: "#FFFFFF" }}
+          >
+            {tipo}
+          </span>
+        </div>
+        <div className="flex items-start justify-between gap-2 p-2">
+          <div className="min-w-0">
+            <div className="text-sm font-bold leading-tight text-[#1A1208]">{precio}</div>
+            {specs && <div className="mt-0.5 truncate text-[11px] text-[#6B5B45]">{specs}</div>}
+          </div>
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+            className="shrink-0 text-base leading-none transition hover:scale-110"
+            title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+          >
+            {isFav ? "❤️" : "🤍"}
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

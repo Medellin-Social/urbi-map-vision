@@ -1,7 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, ArrowLeft } from "lucide-react";
+import { LogOut, ArrowLeft, Menu, X } from "lucide-react";
+import { useState } from "react";
 import { auth } from "@/lib/auth";
 import { useLang } from "@/lib/i18n";
+import { useIsMobile } from "@/hooks/use-mobile";
 import type { Neighborhood } from "@/lib/adapters";
 
 export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
@@ -37,6 +39,8 @@ const C = {
 export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack }: MapNavbarProps) {
   const navigate = useNavigate();
   const { lang, toggle } = useLang();
+  const isMobile = useIsMobile();
+  const [menuOpen, setMenuOpen] = useState(false);
   const user = typeof window !== "undefined" ? auth.get() : null;
 
   const initials = (user?.name ?? "U")
@@ -45,6 +49,120 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
     .slice(0, 2)
     .join("")
     .toUpperCase();
+
+  // ── Mobile: logo + Comprar/Arrendar segmented + hamburger (rest in a menu) ──
+  if (isMobile) {
+    const menuTabs = TABS.filter((t) => t.route);
+    const itemStyle: React.CSSProperties = {
+      background: "none", border: "none", textAlign: "left", padding: "12px 16px",
+      fontSize: 14, fontWeight: 600, color: C.ink, cursor: "pointer",
+      borderBottom: `1px solid ${C.border}`, textDecoration: "none", display: "block",
+    };
+    return (
+      <header
+        style={{
+          position: "absolute", inset: "0 0 auto 0", zIndex: 40,
+          background: C.paper, borderBottom: `1px solid ${C.border}`,
+          display: "flex", alignItems: "center", padding: "0 12px", height: 52, gap: 8,
+          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+        }}
+      >
+        <Link to="/" style={{ textDecoration: "none", flexShrink: 0 }}>
+          <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1rem", color: C.ink, letterSpacing: "-0.5px" }}>
+            M<span style={{ color: C.teal }}>S</span><span style={{ color: C.coral }}>.</span>
+          </span>
+        </Link>
+
+        {/* Comprar / Arrendar — the two tabs that stay on /map */}
+        <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+          {(["buy", "rent"] as const).map((id) => {
+            const active = activeTab === id;
+            return (
+              <button
+                key={id}
+                onClick={() => { if (activeTab === "simulator" || activeTab === "comparador") navigate({ to: "/map" }); else onTabChange(id); }}
+                style={{
+                  border: "none", background: active ? C.teal : "transparent",
+                  color: active ? "#fff" : C.muted, padding: "6px 16px",
+                  fontSize: 13, fontWeight: 700, cursor: "pointer",
+                }}
+              >
+                {id === "buy" ? "Comprar" : "Arrendar"}
+              </button>
+            );
+          })}
+        </div>
+
+        <div style={{ flex: 1 }} />
+
+        <button
+          onClick={() => setMenuOpen((o) => !o)}
+          aria-label="Menú"
+          style={{
+            background: "none", border: `1px solid ${C.border}`, borderRadius: 8,
+            width: 36, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
+            color: C.ink, cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          {menuOpen ? <X size={18} /> : <Menu size={18} />}
+        </button>
+
+        {menuOpen && (
+          <>
+            <div onClick={() => setMenuOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 49 }} />
+            <div
+              style={{
+                position: "fixed", top: 56, right: 12, zIndex: 50,
+                background: C.paper, border: `1px solid ${C.border}`, borderRadius: 12,
+                boxShadow: "0 8px 28px rgba(0,0,0,0.18)", minWidth: 200, overflow: "hidden",
+                display: "flex", flexDirection: "column",
+              }}
+            >
+              {menuTabs.map((tab) => (
+                <button key={tab.id} onClick={() => { setMenuOpen(false); navigate({ to: tab.route as any }); }} style={itemStyle}>
+                  {tab.label}
+                </button>
+              ))}
+
+              <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Idioma</span>
+                <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", marginLeft: "auto" }}>
+                  {(["es", "en"] as const).map((l) => (
+                    <button
+                      key={l}
+                      onClick={toggle}
+                      style={{ border: "none", background: lang === l ? C.teal : "transparent", color: lang === l ? "#fff" : C.muted, padding: "3px 10px", fontWeight: 700, cursor: "pointer", fontSize: 11 }}
+                    >
+                      {l.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {user ? (
+                <>
+                  <Link to="/perfil" onClick={() => setMenuOpen(false)} style={itemStyle}>Mi perfil</Link>
+                  <button
+                    onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
+                    style={{ ...itemStyle, color: C.coral, display: "flex", alignItems: "center", gap: 8 }}
+                  >
+                    <LogOut size={15} /> Salir
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link to="/login" onClick={() => setMenuOpen(false)} style={itemStyle}>Ingresar</Link>
+                  <Link to="/register" onClick={() => { localStorage.setItem("registro_origen", "mls"); setMenuOpen(false); }} style={{ ...itemStyle, color: C.teal, fontWeight: 700, borderBottom: "none" }}>
+                    Registrarse
+                  </Link>
+                </>
+              )}
+            </div>
+          </>
+        )}
+      </header>
+    );
+  }
 
   return (
     <header
