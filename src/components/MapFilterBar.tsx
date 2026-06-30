@@ -94,22 +94,6 @@ const TIPO_OPTIONS = [
   { value: "bodega",        label: "Bodega" },
 ];
 
-const ANTIGUEDAD_OPTIONS = [
-  { value: "Entre 0 y 5 años",   label: "0 – 5 años" },
-  { value: "Entre 5 y 10 años",  label: "5 – 10 años" },
-  { value: "Entre 10 y 20 años", label: "10 – 20 años" },
-  { value: "Más de 20 años",     label: "+20 años" },
-  { value: "Remodelado",         label: "Remodelado" },
-];
-
-const ANTIGUEDAD_DIST: { value: string | null; label: string; h: number }[] = [
-  { value: "Entre 0 y 5 años",   label: "0–5a",   h: 0.50 },
-  { value: "Entre 5 y 10 años",  label: "5–10a",  h: 0.72 },
-  { value: "Entre 10 y 20 años", label: "10–20a", h: 0.90 },
-  { value: "Más de 20 años",     label: "+20a",   h: 0.60 },
-  { value: "Remodelado",         label: "Remods",  h: 0.28 },
-];
-
 type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
 
 function countActive(f: SharedFilters): number {
@@ -228,10 +212,6 @@ function banosLabel(f: SharedFilters): string {
   if (f.banos === null) return "Baños";
   if (f.banos === 4) return "4+ baños";
   return `${f.banos} baños`;
-}
-
-function antiguedadLabel(f: SharedFilters): string {
-  return ANTIGUEDAD_OPTIONS.find((o) => o.value === f.antiguedad)?.label ?? "Antigüedad";
 }
 
 function habBanosLabel(f: SharedFilters): string {
@@ -578,70 +558,6 @@ function AreaPanel({
   );
 }
 
-// ─── AntiguedadPanel ──────────────────────────────────────────────────────────
-
-function AntiguedadPanel({
-  filters, onChange, onClose,
-}: {
-  filters: SharedFilters;
-  onChange: (f: Partial<SharedFilters>) => void;
-  onClose: () => void;
-}) {
-  return (
-    <div style={{ ...panelBase, minWidth: 260, userSelect: "none" }}>
-      <div style={{ display: "flex", alignItems: "flex-end", gap: 5, height: 72, marginBottom: 6 }}>
-        {ANTIGUEDAD_DIST.map((opt) => {
-          const sel = filters.antiguedad === opt.value;
-          return (
-            <button
-              key={String(opt.value)}
-              onClick={() => { onChange({ antiguedad: opt.value as string | null }); onClose(); }}
-              title={opt.label}
-              style={{
-                flex: 1,
-                height: `${opt.h * 100}%`,
-                background: sel ? C.teal : "#D4CEC5",
-                opacity: sel ? 0.9 : 0.35,
-                border: `1.5px solid ${sel ? C.teal : "transparent"}`,
-                borderRadius: "4px 4px 0 0",
-                cursor: "pointer",
-                padding: 0,
-                transition: "background 0.1s, opacity 0.1s",
-              }}
-            />
-          );
-        })}
-      </div>
-
-      <div style={{ display: "flex", gap: 5, marginBottom: 12 }}>
-        {ANTIGUEDAD_DIST.map((opt) => {
-          const sel = filters.antiguedad === opt.value;
-          return (
-            <button
-              key={String(opt.value)}
-              onClick={() => { onChange({ antiguedad: opt.value as string | null }); onClose(); }}
-              style={{
-                flex: 1, fontSize: 9, padding: "2px 0", textAlign: "center",
-                color: sel ? C.teal : C.muted, fontWeight: sel ? 700 : 400,
-                background: "none", border: "none", cursor: "pointer",
-              }}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
-
-      <button
-        onClick={() => { onChange({ antiguedad: null }); onClose(); }}
-        style={{ width: "100%", padding: "7px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
-      >
-        Todas las antigüedades
-      </button>
-    </div>
-  );
-}
-
 // ─── HabBanosPanel ───────────────────────────────────────────────────────────
 
 function HabBanosPanel({
@@ -905,7 +821,6 @@ export function MapFilterBar({
   const tipoActive       = filters.tipoInmueble !== null;
   const areaActive       = filters.areaMin !== null || filters.areaMax !== null;
   const banosActive      = filters.banos !== null;
-  const antiguedadActive = filters.antiguedad !== null;
 
   // ── Sell tab: barrio selector ──────────────────────────────────────────────
   const sellContent = (
@@ -937,7 +852,6 @@ export function MapFilterBar({
   const habBanosActive = filters.habitaciones !== null || filters.banos !== null;
   const filtrosCount = [
     areaActive,
-    !isRent && antiguedadActive,
     isRent  && (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
   ].filter(Boolean).length;
@@ -1176,24 +1090,6 @@ export function MapFilterBar({
                 ))}
               </div>
             </div>
-
-            {/* Antigüedad */}
-            <div style={{ marginBottom: 20 }}>
-              <span style={labelSm}>Antigüedad</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-                {[{ value: null, label: "Todas" }, ...ANTIGUEDAD_OPTIONS].map((opt) => (
-                  <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.ink }}>
-                    <input
-                      type="radio" name="antiguedad-m"
-                      checked={filters.antiguedad === (opt.value as string | null)}
-                      onChange={() => onFiltersChange({ antiguedad: opt.value as string | null })}
-                      style={{ accentColor: C.teal }}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
           </>
         )}
 
@@ -1318,26 +1214,6 @@ export function MapFilterBar({
                   onChange={(v) => onFiltersChange({ areaMax: v })}
                 />
               </div>
-
-              {/* Antigüedad — solo compra */}
-              {!isRent && (
-                <>
-                  <span style={labelSm}>Antigüedad</span>
-                  <div style={{ display: "flex", flexDirection: "column", gap: 5, marginBottom: 16 }}>
-                    {[{ value: null as string | null, label: "Cualquiera" }, ...ANTIGUEDAD_OPTIONS].map((opt) => (
-                      <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 12, color: C.ink }}>
-                        <input
-                          type="radio" name="antg-dd"
-                          checked={filters.antiguedad === opt.value}
-                          onChange={() => onFiltersChange({ antiguedad: opt.value })}
-                          style={{ accentColor: C.teal }}
-                        />
-                        {opt.label}
-                      </label>
-                    ))}
-                  </div>
-                </>
-              )}
 
               {/* Estrato — solo arriendo */}
               {isRent && (
