@@ -126,8 +126,10 @@ function MapPageInner() {
     tipoInmueble: sharedFilters.tipoInmueble,
     diasMercado:  sharedFilters.diasMercado,
     busqueda:     sharedFilters.busqueda,
+    amenidades:   sharedFilters.amenidades,
   }), [sharedFilters.habitaciones, sharedFilters.banos, sharedFilters.areaMin, sharedFilters.areaMax,
-       sharedFilters.estrato, sharedFilters.tipoInmueble, sharedFilters.diasMercado, sharedFilters.busqueda]);
+       sharedFilters.estrato, sharedFilters.tipoInmueble, sharedFilters.diasMercado, sharedFilters.busqueda,
+       sharedFilters.amenidades]);
 
   // Pass tipoOp to backend so it returns the correct type (not a mixed 50/50 split).
   // undefined when "todos" so backend does the balanced venta+arriendo fetch.

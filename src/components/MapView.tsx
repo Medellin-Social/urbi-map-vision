@@ -55,6 +55,7 @@ type Props = {
     tipoInmueble: string | null;
     diasMercado: string | null;
     busqueda: string | null;
+    amenidades: string[] | null;
   };
   onViewportListingsChange?: (listings: ApiListing[]) => void;
   onAutoSelectBarrio?: (barrioId: number | null) => void;
@@ -845,10 +846,11 @@ export function MapView({
       if (f?.tipoInmueble) params.set("tipo_inmueble", f.tipoInmueble);
       if (f?.diasMercado) params.set("dias_mercado", f.diasMercado);
       if (f?.busqueda?.trim()) params.set("busqueda", f.busqueda.trim());
+      if (f?.amenidades?.length) for (const a of f.amenidades) params.append("amenidades", a);
       // Dedup: with a zone active the backend ignores bbox, so panning within the
       // zone returns identical data — skip the refetch (key excludes bbox then).
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
-      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}`;
+      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}`;
       const dedupKey = hasGeo
         ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
         : params.toString();
@@ -910,7 +912,8 @@ export function MapView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax, mlsAmoblado,
       mlsFilters?.habitaciones, mlsFilters?.banos, mlsFilters?.areaMin, mlsFilters?.areaMax,
-      mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble, mlsFilters?.diasMercado, mlsFilters?.busqueda]);
+      mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble, mlsFilters?.diasMercado, mlsFilters?.busqueda,
+      mlsFilters?.amenidades?.join(",")]);
 
   // ── FIX 1c: polígono tier (comuna↔barrio por zoom) + auto-select por cámara ──
   useEffect(() => {

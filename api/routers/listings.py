@@ -793,7 +793,8 @@ _VIEWPORT_PANEL_CAP = 200
 # $8 barrio_ids int[] (neighbor-expanded), $9 cd_comuna, $10 municipio,
 # $11 amoblado, $12 habitaciones (>=), $13 banos (>=), $14 area_min, $15 area_max,
 # $16 estrato int[], $17 tipo_inmueble (substring), $18 dias_mercado bucket,
-# $19 busqueda (ILIKE direccion). Clusters adds $20 grid-cell size.
+# $19 busqueda (ILIKE direccion), $20 amenidades ILIKE patterns text[] (OR match,
+# strict on NULL). Clusters adds $21 grid-cell size.
 
 # dias_en_mercado only exists for metrocuadrado listings (fecha_primera_vez).
 # Dedupe on url first (url is not unique in the raw table) so the LEFT JOIN can't
@@ -821,7 +822,40 @@ _VIEWPORT_EXTRA_WHERE = """\
         WHEN 'mas60'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 60
         ELSE TRUE END)
   AND ($19::text   IS NULL OR l.direccion_raw ILIKE '%' || $19 || '%')
+  AND ($20::text[] IS NULL OR EXISTS (
+        SELECT 1 FROM unnest(l.amenidades) _a WHERE _a ILIKE ANY($20)))
 """
+
+# UI amenity key → substring patterns matched (ILIKE, OR) against the source
+# amenidades labels. Stems avoid accent/variant mismatches across fuentes
+# (metrocuadrado vs fincaraiz use different vocab; MC has ~3k noisy tokens).
+# Heuristic — tune the stems if a label slips through. `amoblado` is NOT here:
+# it stays its own boolean param ($11), split out by the frontend.
+_AMENIDAD_PATTERNS: dict[str, list[str]] = {
+    "cocina_integral":        ["cocina integral"],
+    "balcon":                 ["balcón", "balcon", "terraza"],
+    "lavanderia":             ["lavander"],
+    "ascensor":               ["ascensor"],
+    "conjunto_cerrado":       ["conjunto cerrado"],
+    "salon_comunal":          ["comunal"],
+    "gimnasio":               ["gimnas"],
+    "piscina":                ["piscina"],
+    "parqueadero_visitantes": ["parqueadero visitant"],
+    "porteria":               ["portería", "porteria", "recepci"],
+    "vigilancia":             ["vigilanc"],
+    "camaras":                ["circuito cerrado", "cámara", "camara", "cctv"],
+    "zonas_verdes":           ["verde"],
+    "zona_ninos":             ["niñ", "nin", "infantil"],
+    "transporte":             ["transporte", "público cercano", "publico cercano"],
+}
+
+
+def _amenidad_like_patterns(keys: Optional[list[str]]) -> Optional[list[str]]:
+    """Flatten selected UI keys → ['%stem%', ...] (OR match). None if empty."""
+    if not keys:
+        return None
+    pats = [f"%{p}%" for k in keys for p in _AMENIDAD_PATTERNS.get(k, [])]
+    return pats or None
 
 _VIEWPORT_CLUSTERS_SQL = """
 SELECT
@@ -849,7 +883,7 @@ WHERE l.precio_cop >= 500000
   AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
   AND ($11::boolean IS NULL OR l.amoblado = $11)
 {extra_where}
-GROUP BY floor(g.lon / $20::float8), floor(g.lat / $20::float8)
+GROUP BY floor(g.lon / $21::float8), floor(g.lat / $21::float8)
 """.format(dm_join=_VIEWPORT_DM_JOIN, extra_where=_VIEWPORT_EXTRA_WHERE)
 
 _VIEWPORT_POINTS_SQL = """
@@ -857,7 +891,7 @@ WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, NULLIF(habitaciones, -1) AS habitaciones,
-           banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, fotos[1] AS foto_principal
+           banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, amenidades, fotos[1] AS foto_principal
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -933,6 +967,7 @@ async def get_listings_viewport(
     tipo_inmueble: Optional[str] = Query(default=None),
     dias_mercado: Optional[str] = Query(default=None),
     busqueda: Optional[str] = Query(default=None),
+    amenidades: Optional[list[str]] = Query(default=None),
 ):
     """Listings within the map viewport. Server-side clustering at low zoom
     (mode=clusters), individual points at high zoom (mode=points, capped).
@@ -953,6 +988,7 @@ async def get_listings_viewport(
         *bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio, amoblado,
         habitaciones, banos, area_min, area_max, estrato_arg, tipo_inmueble,
         (dias_mercado or None), (busqueda.strip() if busqueda and busqueda.strip() else None),
+        _amenidad_like_patterns(amenidades),
     )
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
