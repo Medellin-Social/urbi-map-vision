@@ -60,16 +60,16 @@ const COMPARISON = {
   cols: ['Característica', 'Gratis', 'Hotspot', 'Featured ★'],
   colColors: ['', '', K.coral, K.teal],
   rows: [
-    { feat: 'Precio', free: '$0', hot: 'desde $29 USD', feat: '$99 USD lanzamiento' },
-    { feat: 'Listado básico en directorio', free: '✓', hot: '✓', feat: '✓' },
-    { feat: 'Deal / Oferta flash', free: '—', hot: '✓', feat: '✓' },
-    { feat: 'Newsletter semanal del barrio', free: '—', hot: '✓', feat: '✓' },
-    { feat: 'Publicación en redes', free: '—', hot: '✓', feat: '✓' },
-    { feat: 'Exclusividad de categoría', free: '—', hot: '—', feat: '✓' },
-    { feat: 'Badge "Featured" en portada', free: '—', hot: '—', feat: '✓' },
-    { feat: 'Perfil dedicado con fotos y bio', free: '—', hot: '—', feat: '✓' },
-    { feat: 'Artículo IA al inicio', free: '—', hot: '—', feat: '✓' },
-    { feat: 'SEO + AEO + MEO', free: '—', hot: '—', feat: '✓' },
+    { feat: 'Precio', free: '$0', hot: 'desde $29 USD', featured: '$99 USD lanzamiento' },
+    { feat: 'Listado básico en directorio', free: '✓', hot: '✓', featured: '✓' },
+    { feat: 'Deal / Oferta flash', free: '—', hot: '✓', featured: '✓' },
+    { feat: 'Newsletter semanal del barrio', free: '—', hot: '✓', featured: '✓' },
+    { feat: 'Publicación en redes', free: '—', hot: '✓', featured: '✓' },
+    { feat: 'Exclusividad de categoría', free: '—', hot: '—', featured: '✓' },
+    { feat: 'Badge "Featured" en portada', free: '—', hot: '—', featured: '✓' },
+    { feat: 'Perfil dedicado con fotos y bio', free: '—', hot: '—', featured: '✓' },
+    { feat: 'Artículo IA al inicio', free: '—', hot: '—', featured: '✓' },
+    { feat: 'SEO + AEO + MEO', free: '—', hot: '—', featured: '✓' },
   ],
 }
 
@@ -408,7 +408,7 @@ function NegociosUnirsePage() {
                 <div style={{ padding: '11px 14px', fontSize: '.9rem', color: K.ink, fontWeight: row.feat === 'Precio' ? 700 : 400 }}>{row.feat}</div>
                 <div style={{ padding: '11px 14px', textAlign: 'center', fontSize: '.9rem', color: row.free === '✓' ? K.teal : K.muted, fontWeight: row.free === '✓' ? 800 : 400 }}>{row.free}</div>
                 <div style={{ padding: '11px 14px', textAlign: 'center', fontSize: '.9rem', color: row.hot === '✓' ? K.teal : row.hot === '—' ? K.muted : K.coral, fontWeight: row.hot === '—' ? 400 : 700 }}>{row.hot}</div>
-                <div style={{ padding: '11px 14px', textAlign: 'center', fontSize: '.9rem', color: row.feat === '✓' ? K.teal : row.feat === '—' ? K.muted : K.teal, fontWeight: row.feat === '—' ? 400 : 700 }}>{row.feat}</div>
+                <div style={{ padding: '11px 14px', textAlign: 'center', fontSize: '.9rem', color: row.featured === '✓' ? K.teal : row.featured === '—' ? K.muted : K.teal, fontWeight: row.featured === '—' ? 400 : 700 }}>{row.featured}</div>
               </div>
             ))}
           </div>
