@@ -178,13 +178,18 @@ function FilterPill({
 
 // ─── Label helpers ────────────────────────────────────────────────────────────
 
+// Price label by VALUE (not by operation): < $1M in K, >= $1M in millions with
+// one decimal, trailing ".0" trimmed. Border $1,000,000 → "$1M" (never "$1000K").
+function fmtCOP(v: number): string {
+  if (v < 1_000_000) return `$${Math.round(v / 1_000)}K`;
+  return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
 function precioLabel(f: SharedFilters, isRent: boolean): string {
-  const unit = isRent ? "k" : "M";
-  const div  = isRent ? 1_000 : 1_000_000;
   if (f.precioMin !== null && f.precioMax !== null)
-    return `$${(f.precioMin / div).toFixed(0)}${unit} – $${(f.precioMax / div).toFixed(0)}${unit}`;
-  if (f.precioMax !== null) return `Hasta $${(f.precioMax / div).toFixed(0)}${unit}`;
-  if (f.precioMin !== null) return `Desde $${(f.precioMin / div).toFixed(0)}${unit}`;
+    return `${fmtCOP(f.precioMin)} – ${fmtCOP(f.precioMax)}`;
+  if (f.precioMax !== null) return `Hasta ${fmtCOP(f.precioMax)}`;
+  if (f.precioMin !== null) return `Desde ${fmtCOP(f.precioMin)}`;
   return isRent ? "Precio/mes" : "Precio";
 }
 
@@ -297,8 +302,10 @@ function PrecioPanel({
   onClose: () => void;
 }) {
   const TOTAL_MIN = 0;
-  const TOTAL_MAX = isRent ? 10_000_000 : 2_000_000_000;
-  const STEP      = isRent ? 50_000    : 5_000_000;
+  // Ranges calibrated to real data (validity-capped): arriendo p99 ~38M (cap 50M);
+  // venta p99 ~9B. STEP: arriendo 0.5M uniforme; venta 5M.
+  const TOTAL_MAX = isRent ? 50_000_000 : 10_000_000_000;
+  const STEP      = isRent ? 500_000    : 5_000_000;
 
   const curMin = filters.precioMin ?? TOTAL_MIN;
   const curMax = filters.precioMax ?? TOTAL_MAX;
@@ -330,12 +337,10 @@ function PrecioPanel({
     return raw.map(h => h / maxH);
   }, [isRent]);
 
-  const unit = isRent ? "k" : "M";
-  const div  = isRent ? 1_000 : 1_000_000;
   const fmt  = (v: number) => {
     if (v <= TOTAL_MIN) return "Mín";
     if (v >= TOTAL_MAX) return "Máx";
-    return `$${Math.round(v / div)}${unit}`;
+    return fmtCOP(v);
   };
 
   const thumbStyle: React.CSSProperties = {
