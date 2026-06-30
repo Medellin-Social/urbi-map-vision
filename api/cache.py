@@ -200,7 +200,7 @@ WITH todas_fuentes AS (
         md5(id::text || '_lp')                                   AS dedup_hash,
         estrato                                                   AS estrato_real,
         NULL::boolean                                             AS amoblado,
-        antiguedad, amenidades
+        antiguedad::text, amenidades
     FROM public.listings_propios
     WHERE estado = 'activo' AND precio_cop > 0
 ),
