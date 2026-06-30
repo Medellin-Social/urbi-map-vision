@@ -141,7 +141,7 @@ function MapPageInner() {
     undefined,
     true,
   );
-  const premiumExpanded: ApiListing[] = premiumData?.listings ?? [];
+  const premiumExpanded: ApiListing[] = useMemo(() => premiumData?.listings ?? [], [premiumData]);
   const premiumRadio = premiumData?.radio_usado_metros ?? null;
   const premiumBarriosIncluidos = premiumData?.barrios_incluidos ?? null;
 
@@ -418,10 +418,6 @@ function MapPageInner() {
     openListingDetail(id);
   }
 
-  // MLSPanel reports which listings pass its filters → update map GeoJSON
-  function handleFilteredListingsChange(listings: ApiListing[]) {
-    setFilteredListings(listings);
-  }
 
   // Camera auto-select (FIX 1c): barrio under map center at high zoom → scope panel+dots.
   function handleAutoSelectBarrio(barrioId: number | null) {
@@ -543,7 +539,6 @@ function MapPageInner() {
           onBarrioFilter={handleBarrioFilter}
           allBarrios={allBarrioOptions}
           onBarrioNavigate={handleBarrioNavigate}
-          onFilteredListingsChange={handleFilteredListingsChange}
           radioUsadoMetros={mlsRadio}
           barriosIncluidos={mlsBarriosIncluidos}
           premiumExpanded={premiumExpanded}
