@@ -124,7 +124,7 @@ INSERT INTO staging.stg_listings_unificado
      precio_cop, precio_usd, precio_min_cluster, precio_max_cluster, precio_variable,
      area_m2, precio_m2, habitaciones, banos, barrio_raw, barrio_id,
      direccion_raw, lat, lon, geom, url, fotos, fecha_scraping, n_duplicados, estrato_real,
-     amoblado)
+     amoblado, antiguedad, amenidades)
 WITH todas_fuentes AS (
     SELECT id::text || '_mq'                       AS listing_uid,
            'metrocuadrado'                          AS fuente,
@@ -139,7 +139,8 @@ WITH todas_fuentes AS (
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
            url, fotos, fecha_scraping, dedup_hash,
            COALESCE(estrato_real, estrato)           AS estrato_real,
-           NULL::boolean                             AS amoblado
+           NULL::boolean                             AS amoblado,
+           antiguedad, amenidades
     FROM raw.listings_metrocuadrado WHERE activo = true AND precio > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_fz', 'fincaraiz', 'standard',
@@ -153,7 +154,8 @@ WITH todas_fuentes AS (
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
            url, fotos, fecha_scraping, dedup_hash,
            estrato_real,
-           ('Amoblado' = ANY(COALESCE(amenidades, '{}'::text[]))) AS amoblado
+           ('Amoblado' = ANY(COALESCE(amenidades, '{}'::text[]))) AS amoblado,
+           antiguedad, amenidades
     FROM raw.listings_fincaraiz WHERE activo = true AND precio > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_pr', fuente, COALESCE(fuente_tipo,'standard'), tipo_operacion,
@@ -162,7 +164,8 @@ WITH todas_fuentes AS (
            CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
            url, fotos, fecha_scraping, dedup_hash, NULL::integer,
-           NULL::boolean
+           NULL::boolean,
+           NULL::text AS antiguedad, amenidades
     FROM raw.listings_premium WHERE precio_cop > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_rm', fuente, 'renta_media', 'arriendo', 'apartamento', precio_mes_cop,
@@ -171,7 +174,8 @@ WITH todas_fuentes AS (
            CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END,
            url, NULL::text[], fecha_scraping, dedup_hash, NULL::integer,
-           amoblado
+           amoblado,
+           NULL::text AS antiguedad, amenidades
     FROM raw.listings_renta_media WHERE precio_mes_cop > 0
     UNION ALL
     SELECT
@@ -194,14 +198,15 @@ WITH todas_fuentes AS (
         COALESCE(fecha_publicacion, created_at)                  AS fecha_scraping,
         md5(id::text || '_lp')                                   AS dedup_hash,
         estrato                                                   AS estrato_real,
-        NULL::boolean                                             AS amoblado
+        NULL::boolean                                             AS amoblado,
+        antiguedad, amenidades
     FROM public.listings_propios
     WHERE estado = 'activo' AND precio_cop > 0
 ),
 con_geo AS (
     SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
            area_m2, habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
-           url, fotos, fecha_scraping, estrato_real, amoblado,
+           url, fotos, fecha_scraping, estrato_real, amoblado, antiguedad, amenidades,
            MIN(precio_cop) OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
                tipo_operacion, tipo_inmueble, habitaciones, (ROUND(area_m2::numeric/5)*5)) AS precio_min_cluster,
            MAX(precio_cop) OVER (PARTITION BY ROUND(lat::numeric,3), ROUND(lon::numeric,3),
@@ -217,7 +222,7 @@ con_geo AS (
 sin_geo AS (
     SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
            area_m2, habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
-           url, fotos, fecha_scraping, estrato_real, amoblado,
+           url, fotos, fecha_scraping, estrato_real, amoblado, antiguedad, amenidades,
            precio_cop AS precio_min_cluster, precio_cop AS precio_max_cluster,
            COUNT(*) OVER (PARTITION BY COALESCE(dedup_hash,
                COALESCE(barrio_id::text,barrio_raw,'x')||'|'||COALESCE(tipo_operacion,'?')||'|'||
@@ -237,14 +242,14 @@ SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, pre
             THEN true ELSE false END AS precio_variable,
        area_m2, CASE WHEN area_m2 > 0 THEN precio_cop / area_m2 END AS precio_m2,
        habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
-       url, fotos, fecha_scraping, n_duplicados, estrato_real, amoblado
+       url, fotos, fecha_scraping, n_duplicados, estrato_real, amoblado, antiguedad, amenidades
 FROM con_geo WHERE _rn = 1
 UNION ALL
 SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
        precio_min_cluster, precio_max_cluster, false AS precio_variable,
        area_m2, CASE WHEN area_m2 > 0 THEN precio_cop / area_m2 END AS precio_m2,
        habitaciones, banos, barrio_raw, barrio_id, direccion_raw, lat, lon, geom,
-       url, fotos, fecha_scraping, n_duplicados, estrato_real, amoblado
+       url, fotos, fecha_scraping, n_duplicados, estrato_real, amoblado, antiguedad, amenidades
 FROM sin_geo WHERE _rn = 1
 """
 
