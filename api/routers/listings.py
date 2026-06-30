@@ -683,7 +683,7 @@ SELECT
         THEN round(((m.arr_mediana * 12)::float8 / l.precio_cop * 100)::numeric, 2)::float8
         ELSE NULL
     END AS yield_estimado,
-    COALESCE(lm.descripcion, lp.descripcion) AS descripcion,
+    COALESCE(lm.descripcion, lf.descripcion, lp.descripcion) AS descripcion,
     (CURRENT_DATE - lm.fecha_primera_vez::date)::int
                                        AS dias_en_mercado,
     l.fecha_publicacion::text,
@@ -719,6 +719,7 @@ LEFT JOIN analytics.barrios_medianas m
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
+LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_premium lp ON lp.url = l.url
 LEFT JOIN (
     SELECT url, COUNT(*)::int AS favoritos_count
