@@ -20,6 +20,7 @@ from api.models.base import Base
 
 class IntakeEstado(str, enum.Enum):
     nuevo           = "nuevo"
+    en_pool         = "en_pool"           # sin patrocinador → pool abierto (0051)
     asignado        = "asignado"          # realtor asignado (paso 5)
     en_verificacion = "en_verificacion"   # due diligence en curso
     aceptado        = "aceptado"          # listing creado

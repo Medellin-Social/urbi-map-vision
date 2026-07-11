@@ -14,12 +14,15 @@ def _vigentes(
 ) -> list[UUID]:
     """Pure filter: returns agency_ids from active sponsorships for a zone today.
 
+    Ordenados por fecha_inicio ASC, agency_id — determinista y estable: el
+    asignador (paso 5) toma [0] como el patrocinio más antiguo para el reparto.
+
     sponsorships: iterable of objects/namespaces with fields
         agency_id, zona_nivel, zona_codigo, estado, fecha_inicio, fecha_fin.
     """
     hoy = hoy or date.today()
-    return [
-        s.agency_id
+    activos = [
+        s
         for s in sponsorships
         if (
             str(s.zona_nivel) == zona_nivel
@@ -28,6 +31,8 @@ def _vigentes(
             and s.fecha_inicio <= hoy <= s.fecha_fin
         )
     ]
+    activos.sort(key=lambda s: (s.fecha_inicio, str(s.agency_id)))
+    return [s.agency_id for s in activos]
 
 
 async def patrocinadores_vigentes(
@@ -51,6 +56,7 @@ async def patrocinadores_vigentes(
               AND estado      = 'activa'
               AND fecha_inicio <= $3
               AND fecha_fin    >= $3
+            ORDER BY fecha_inicio ASC, agency_id
             """,
             zona_nivel,
             str(zona_codigo),

@@ -36,6 +36,24 @@ def test_zona_diferente_no_aparece():
     assert _vigentes(sps, "barrio", "42", _HOY) == []
 
 
+# ── Orden por antigüedad (garantía que consume el asignador) ──────────────────
+
+def test_orden_por_fecha_inicio_ascendente():
+    """2 patrocinadores de distinta fecha_inicio → orden ASC (más antiguo [0]).
+    Compara LISTA, no set: vigila el ORDER BY que da determinismo al reparto."""
+    viejo  = _s(_A2, inicio=date(2026, 1, 1))   # más antiguo
+    nuevo  = _s(_A1, inicio=date(2026, 6, 1))
+    # aunque entren desordenados, salen por antigüedad
+    assert _vigentes([nuevo, viejo], "barrio", "42", _HOY) == [_A2, _A1]
+
+
+def test_empate_fecha_desempata_por_agency_id():
+    """Misma fecha_inicio → desempate estable por agency_id (no no-determinista)."""
+    a = _s(_A1, inicio=date(2026, 1, 1))
+    b = _s(_A2, inicio=date(2026, 1, 1))
+    assert _vigentes([b, a], "barrio", "42", _HOY) == [_A1, _A2]
+
+
 # ── 1 patrocinador ────────────────────────────────────────────────────────────
 
 def test_un_patrocinador_vigente():
