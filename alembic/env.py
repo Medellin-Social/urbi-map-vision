@@ -4,6 +4,13 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
+# ponytail: partial metadata — only ORM models in api/models/ are tracked.
+# Raw-SQL tables (the other 44 migrations) won't appear in autogenerate diffs.
+from api.models.base import Base  # noqa: E402  (import after sys.path is set)
+import api.models.realtors  # noqa: F401 — registers models onto Base.metadata
+import api.models.listing       # noqa: F401
+import api.models.sponsorship   # noqa: F401
+
 config = context.config
 
 if config.config_file_name is not None:
@@ -16,12 +23,24 @@ if db_url.startswith("postgres://"):
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 
-target_metadata = None
+target_metadata = Base.metadata
+
+
+def include_object(object, name, type_, reflected, compare_to):
+    # Only manage tables explicitly mapped in the ORM; ignore raw-SQL tables.
+    if type_ == "table" and name not in target_metadata.tables:
+        return False
+    return True
 
 
 def run_migrations_offline() -> None:
     url = config.get_main_option("sqlalchemy.url")
-    context.configure(url=url, target_metadata=target_metadata, literal_binds=True)
+    context.configure(
+        url=url,
+        target_metadata=target_metadata,
+        literal_binds=True,
+        include_object=include_object,
+    )
     with context.begin_transaction():
         context.run_migrations()
 
@@ -37,6 +56,7 @@ def run_migrations_online() -> None:
             connection=connection,
             target_metadata=target_metadata,
             transaction_per_migration=True,
+            include_object=include_object,
         )
         with context.begin_transaction():
             context.run_migrations()
