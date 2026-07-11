@@ -10,6 +10,9 @@ from api.models.base import Base  # noqa: E402  (import after sys.path is set)
 import api.models.realtors  # noqa: F401 — registers models onto Base.metadata
 import api.models.listing       # noqa: F401
 import api.models.sponsorship   # noqa: F401
+import api.models.intake        # noqa: F401
+import api.models.moderacion     # noqa: F401
+import api.models.due_diligence  # noqa: F401
 
 config = context.config
 

@@ -25,6 +25,7 @@ class EstadoAgent(str, enum.Enum):
     pendiente = "pendiente"
     activo = "activo"
     rechazado = "rechazado"
+    inactivo = "inactivo"  # suspendido: no opera ni recibe asignaciones (0050)
 
 
 class RolMember(str, enum.Enum):
@@ -68,6 +69,7 @@ class Agent(Base):
     nombre = Column(Text, nullable=False)
     telefono = Column(Text, nullable=False)
     foto_url = Column(Text)
+    motivo_estado = Column(Text)  # motivo de rechazo/suspensión (0050)
     estado = Column(
         Enum(EstadoAgent, name="agent_estado", create_type=False),
         nullable=False,

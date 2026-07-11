@@ -8,7 +8,14 @@ from api.services.listing_service import EstadoError, transition
 
 
 def _l(estado, published_at=None):
-    return SimpleNamespace(estado=estado, published_at=published_at)
+    # Datos mínimos completos por defecto: borrador→en_revision valida completitud
+    # (paso 6). Los tests de otras transiciones solo miran estado/published_at.
+    return SimpleNamespace(
+        estado=estado, published_at=published_at,
+        tipo_inmueble="apartamento", operacion="venta", precio=350_000_000,
+        geom="POINT(-75.5 6.2)", barrio="Laureles", municipio="Medellín",
+        area_m2=80, titulo="Apto", fotos_portada=1, habitaciones=3, banos=2,
+    )
 
 
 # ── Valid transitions ──────────────────────────────────────────────────────────
