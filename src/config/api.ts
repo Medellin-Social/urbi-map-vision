@@ -63,10 +63,11 @@ export const API_ENDPOINTS = {
   agentePerfilPublico: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil-publico`,
   agentePorSlug: (slug: string) => `${API_BASE_URL}/agentes/por-slug/${slug}`,
   agenteContacto: (id: number) => `${API_BASE_URL}/agentes/${id}/contacto`,
-  adminAgentes: `${API_BASE_URL}/agentes/admin`,
-  adminAgenteDetalle: (id: number) => `${API_BASE_URL}/agentes/admin/${id}`,
-  adminAgenteAprobar: (id: number) => `${API_BASE_URL}/agentes/${id}/aprobar`,
-  adminAgenteRechazar: (id: number) => `${API_BASE_URL}/agentes/${id}/rechazar`,
+  // Verificación de agentes (tabla `agent` UUID, 0045)
+  adminAgentes: `${API_BASE_URL}/admin/agentes`,
+  adminAgenteAprobar: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/aprobar`,
+  adminAgenteRechazar: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/rechazar`,
+  adminAgenteSuspender: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/suspender`,
 
   // Listings propios
   listingsPropiosAgente: (id: number) => `${API_BASE_URL}/listings-propios/agente/${id}`,

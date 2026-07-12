@@ -37,9 +37,9 @@ async def _get_user_from_token(token: str) -> dict:
     row = await pool.fetchrow(
         """SELECT id, email, nombre, apellido, activo, plan,
                   perfil_busqueda, onboarding_completado, origen_registro,
-                  EXISTS(SELECT 1 FROM agentes a
+                  EXISTS(SELECT 1 FROM agent a
                          WHERE a.usuario_id = usuarios.id
-                           AND a.estado = 'aprobado') AS es_agente
+                           AND a.estado = 'activo') AS es_agente
            FROM usuarios WHERE id = $1""",
         int(user_id),
     )

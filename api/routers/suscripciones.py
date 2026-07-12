@@ -68,7 +68,7 @@ async def iniciar_suscripcion(
     # Agente plan: require verification first
     if plan == "agente":
         agente = await pool.fetchrow(
-            "SELECT id FROM agentes WHERE usuario_id = $1 AND estado = 'aprobado'",
+            "SELECT id FROM agent WHERE usuario_id = $1 AND estado = 'activo'",
             user_id,
         )
         if not agente:
