@@ -55,14 +55,6 @@ export const API_ENDPOINTS = {
   comunasBarrios: (nombre: string) => `${API_BASE_URL}/comunas/${encodeURIComponent(nombre)}/barrios`,
   comunasBarriosByCd: (cd: number) => `${API_BASE_URL}/comunas/cd/${cd}/barrios`,
 
-  // Agentes
-  agentesRegistro: `${API_BASE_URL}/agentes/registro`,
-  agentesAprobados: `${API_BASE_URL}/agentes/aprobados/lista`,
-  agentesAprobadosFiltros: (params?: string) => `${API_BASE_URL}/agentes/aprobados${params ? `?${params}` : ""}`,
-  agentePerfil: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil`,
-  agentePerfilPublico: (id: number) => `${API_BASE_URL}/agentes/${id}/perfil-publico`,
-  agentePorSlug: (slug: string) => `${API_BASE_URL}/agentes/por-slug/${slug}`,
-  agenteContacto: (id: number) => `${API_BASE_URL}/agentes/${id}/contacto`,
   // Verificación de agentes (tabla `agent` UUID, 0045)
   adminAgentes: `${API_BASE_URL}/admin/agentes`,
   adminAgenteAprobar: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/aprobar`,
@@ -80,9 +72,6 @@ export const API_ENDPOINTS = {
   listingsPropiosSolicitudes: `${API_BASE_URL}/listings-propios/solicitudes`,
   listingsPropiosSolicitudesPendientes: `${API_BASE_URL}/listings-propios/solicitudes/pendientes`,
   listingsPropiosSolicitudById: (id: number) => `${API_BASE_URL}/listings-propios/solicitudes/${id}`,
-
-  // Agente zona
-  agenteZona: (barrioId: number) => `${API_BASE_URL}/agentes/zona?barrio_id=${barrioId}`,
 
   // Alertas de precio
   alertasCrear: `${API_BASE_URL}/alertas`,

@@ -7,7 +7,7 @@ export const Route = createFileRoute("/register")({
   component: RegisterPage,
 });
 
-const MLS_PATHS = ["/map", "/listing", "/vender", "/agentes", "/planes"];
+const MLS_PATHS = ["/map", "/listing", "/vender", "/planes"];
 
 function getOrigenFromReferrer(): "mls" | "comunidad" {
   try {

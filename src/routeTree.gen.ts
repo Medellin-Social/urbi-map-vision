@@ -31,15 +31,13 @@ import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
 import { Route as AfiliadoRouteImport } from './routes/afiliado'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AgentesIndexRouteImport } from './routes/agentes/index'
 import { Route as SuscripcionExitoRouteImport } from './routes/suscripcion/exito'
 import { Route as SuscripcionCanceladaRouteImport } from './routes/suscripcion/cancelada'
+import { Route as RealtorDashboardRouteImport } from './routes/realtor/dashboard'
 import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
-import { Route as AgentesRegistroRouteImport } from './routes/agentes/registro'
-import { Route as AgentesSlugRouteImport } from './routes/agentes/$slug'
 import { Route as AdminAgentesRouteImport } from './routes/admin/agentes'
 
 const VenderRoute = VenderRouteImport.update({
@@ -152,11 +150,6 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AgentesIndexRoute = AgentesIndexRouteImport.update({
-  id: '/agentes/',
-  path: '/agentes/',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SuscripcionExitoRoute = SuscripcionExitoRouteImport.update({
   id: '/suscripcion/exito',
   path: '/suscripcion/exito',
@@ -165,6 +158,11 @@ const SuscripcionExitoRoute = SuscripcionExitoRouteImport.update({
 const SuscripcionCanceladaRoute = SuscripcionCanceladaRouteImport.update({
   id: '/suscripcion/cancelada',
   path: '/suscripcion/cancelada',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RealtorDashboardRoute = RealtorDashboardRouteImport.update({
+  id: '/realtor/dashboard',
+  path: '/realtor/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
@@ -186,16 +184,6 @@ const ListingIdRoute = ListingIdRouteImport.update({
 const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
   id: '/eventos/$barrio_slug',
   path: '/eventos/$barrio_slug',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
-  id: '/agentes/registro',
-  path: '/agentes/registro',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AgentesSlugRoute = AgentesSlugRouteImport.update({
-  id: '/agentes/$slug',
-  path: '/agentes/$slug',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AdminAgentesRoute = AdminAgentesRouteImport.update({
@@ -228,15 +216,13 @@ export interface FileRoutesByFullPath {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
-  '/agentes/$slug': typeof AgentesSlugRoute
-  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
-  '/agentes/': typeof AgentesIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -262,15 +248,13 @@ export interface FileRoutesByTo {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
-  '/agentes/$slug': typeof AgentesSlugRoute
-  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
-  '/agentes': typeof AgentesIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -297,15 +281,13 @@ export interface FileRoutesById {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/admin/agentes': typeof AdminAgentesRoute
-  '/agentes/$slug': typeof AgentesSlugRoute
-  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
-  '/agentes/': typeof AgentesIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -333,15 +315,13 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/admin/agentes'
-    | '/agentes/$slug'
-    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
-    | '/agentes/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -367,15 +347,13 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/admin/agentes'
-    | '/agentes/$slug'
-    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
-    | '/agentes'
   id:
     | '__root__'
     | '/'
@@ -401,15 +379,13 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/admin/agentes'
-    | '/agentes/$slug'
-    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
-    | '/agentes/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -436,15 +412,13 @@ export interface RootRouteChildren {
   SuscribirseRoute: typeof SuscribirseRoute
   VenderRoute: typeof VenderRoute
   AdminAgentesRoute: typeof AdminAgentesRoute
-  AgentesSlugRoute: typeof AgentesSlugRoute
-  AgentesRegistroRoute: typeof AgentesRegistroRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
   NegociosUnirseRoute: typeof NegociosUnirseRoute
+  RealtorDashboardRoute: typeof RealtorDashboardRoute
   SuscripcionCanceladaRoute: typeof SuscripcionCanceladaRoute
   SuscripcionExitoRoute: typeof SuscripcionExitoRoute
-  AgentesIndexRoute: typeof AgentesIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -603,13 +577,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agentes/': {
-      id: '/agentes/'
-      path: '/agentes'
-      fullPath: '/agentes/'
-      preLoaderRoute: typeof AgentesIndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/suscripcion/exito': {
       id: '/suscripcion/exito'
       path: '/suscripcion/exito'
@@ -622,6 +589,13 @@ declare module '@tanstack/react-router' {
       path: '/suscripcion/cancelada'
       fullPath: '/suscripcion/cancelada'
       preLoaderRoute: typeof SuscripcionCanceladaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/realtor/dashboard': {
+      id: '/realtor/dashboard'
+      path: '/realtor/dashboard'
+      fullPath: '/realtor/dashboard'
+      preLoaderRoute: typeof RealtorDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/negocios/unirse': {
@@ -650,20 +624,6 @@ declare module '@tanstack/react-router' {
       path: '/eventos/$barrio_slug'
       fullPath: '/eventos/$barrio_slug'
       preLoaderRoute: typeof EventosBarrio_slugRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agentes/registro': {
-      id: '/agentes/registro'
-      path: '/agentes/registro'
-      fullPath: '/agentes/registro'
-      preLoaderRoute: typeof AgentesRegistroRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/agentes/$slug': {
-      id: '/agentes/$slug'
-      path: '/agentes/$slug'
-      fullPath: '/agentes/$slug'
-      preLoaderRoute: typeof AgentesSlugRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/admin/agentes': {
@@ -700,15 +660,13 @@ const rootRouteChildren: RootRouteChildren = {
   SuscribirseRoute: SuscribirseRoute,
   VenderRoute: VenderRoute,
   AdminAgentesRoute: AdminAgentesRoute,
-  AgentesSlugRoute: AgentesSlugRoute,
-  AgentesRegistroRoute: AgentesRegistroRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
   NegociosUnirseRoute: NegociosUnirseRoute,
+  RealtorDashboardRoute: RealtorDashboardRoute,
   SuscripcionCanceladaRoute: SuscripcionCanceladaRoute,
   SuscripcionExitoRoute: SuscripcionExitoRoute,
-  AgentesIndexRoute: AgentesIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

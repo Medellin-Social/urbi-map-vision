@@ -1094,7 +1094,8 @@ function NotLoggedIn() {
           </p>
         </Link>
         <Link
-          to="/agentes/registro"
+          to="/conectar-agente"
+          search={{ listing_id: 0 }}
           style={{
             display: "block",
             background: K.tealDeep,

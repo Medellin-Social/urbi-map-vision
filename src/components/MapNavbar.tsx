@@ -12,7 +12,6 @@ const TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "buy",        label: "Comprar" },
   { id: "rent",       label: "Arrendar" },
   { id: "sell",       label: "Vender / Arrendar", route: "/vender" },
-  { id: "agent",      label: "Agentes",            route: "/agentes" },
   { id: "simulator",  label: "Simulador",           route: "/simulador" },
   { id: "comparador", label: "Comparador",          route: "/comparador" },
 ];
