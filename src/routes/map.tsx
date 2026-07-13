@@ -18,6 +18,7 @@ import { barrioToNeighborhood, barrioToOption, type BarrioOption } from "@/lib/a
 import { useMemo } from "react";
 import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
+import { ListingPopup } from "@/components/listing-popup/ListingPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { List, Map as MapIcon } from "lucide-react";
@@ -25,6 +26,9 @@ import { List, Map as MapIcon } from "lucide-react";
 export const Route = createFileRoute("/map")({
   component: MapPage,
 });
+
+// Zillow-style popup rollout flag — false restores the old ListingMiniPopup.
+const NEW_POPUP = true;
 
 const GOAL_TO_PERFIL: Record<string, string> = {
   airbnb: "airbnb",
@@ -581,7 +585,16 @@ function MapPageInner() {
       )}
 
       {/* Mini popup — single click on card or map point */}
-      {miniPopupData && (
+      {miniPopupData && (NEW_POPUP ? (
+        <ListingPopup
+          listing={miniPopupData.listing}
+          onClose={() => setMiniPopupData(null)}
+          onViewMore={(id) => {
+            setMiniPopupData(null);
+            openListingDetail(id);
+          }}
+        />
+      ) : (
         <ListingMiniPopup
           listing={miniPopupData.listing}
           x={miniPopupData.x}
@@ -592,7 +605,7 @@ function MapPageInner() {
             openListingDetail(id);
           }}
         />
-      )}
+      ))}
 
       {/* Listing detail drawer — slide-in (desktop) / bottom sheet (mobile) */}
       <ListingDrawer listingId={listingDetailId} onClose={closeListingDetail} />

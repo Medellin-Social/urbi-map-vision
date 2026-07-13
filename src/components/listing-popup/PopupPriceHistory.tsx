@@ -1,0 +1,79 @@
+import {
+  Line,
+  LineChart,
+  ReferenceDot,
+  ResponsiveContainer,
+  Tooltip as RechartsTooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
+
+type HistoriaItem = { precio: number; fecha: string; delta_pct?: number | null };
+
+type Props = {
+  historia?: HistoriaItem[] | null;
+  /** Current listing price — appended as the final "Hoy" point. */
+  precioActual?: number | null;
+};
+
+/** Price history mini-chart. The API returns exact duplicates (same fecha+precio),
+ *  so dedupe first; renders only with >1 real point, otherwise null. */
+export function PopupPriceHistory({ historia, precioActual }: Props) {
+  if (!historia || historia.length === 0) return null;
+
+  const seen = new Set<string>();
+  const puntos = historia
+    .filter((h) => {
+      const k = `${h.fecha}|${h.precio}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    })
+    .sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  if (puntos.length < 2) return null;
+
+  const fmtFecha = (iso: string) =>
+    new Date(`${iso}T12:00:00`).toLocaleDateString("es-CO", { day: "2-digit", month: "short" });
+
+  const chartData = puntos.map((h) => ({
+    fecha: fmtFecha(h.fecha),
+    precio: +(h.precio / 1_000_000).toFixed(2),
+  }));
+  if (precioActual) {
+    chartData.push({ fecha: "Hoy", precio: +(precioActual / 1_000_000).toFixed(2) });
+  }
+  const ultimo = chartData[chartData.length - 1];
+
+  return (
+    <section className="space-y-1.5" aria-label="Historial de precio">
+      <h3 className="text-xs font-semibold" style={{ color: "#1A1208" }}>Historial de precio</h3>
+      <div className="overflow-hidden rounded-lg" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+        <div className="px-1 pb-1 pt-2" style={{ height: 120 }}>
+          <ResponsiveContainer width="100%" height="100%">
+            <LineChart data={chartData} margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
+              <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: "#9B8B75" }} tickLine={false} axisLine={false} />
+              <YAxis hide domain={["auto", "auto"]} />
+              <RechartsTooltip
+                formatter={(val: unknown) => [`$${val}M COP`, "Precio"]}
+                contentStyle={{ background: "#1A1208", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
+                labelStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}
+              />
+              <Line
+                type="monotone"
+                dataKey="precio"
+                stroke="#1D9E75"
+                strokeWidth={2}
+                dot={{ r: 2.5, fill: "#1D9E75", strokeWidth: 0 }}
+                activeDot={{ r: 4, fill: "#1D9E75" }}
+              />
+              {precioActual ? (
+                <ReferenceDot x="Hoy" y={ultimo.precio} r={4} fill="#D85A30" stroke="#fff" strokeWidth={2} />
+              ) : null}
+            </LineChart>
+          </ResponsiveContainer>
+        </div>
+      </div>
+    </section>
+  );
+}
