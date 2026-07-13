@@ -1,5 +1,12 @@
+// Environment-aware API base — zero manual switching between local and prod:
+//   - `npm run dev`   → import.meta.env.DEV → local API
+//   - `npm run build` → prod bundle         → Railway API
+//   - VITE_API_URL (en .env.local o build ARG de Railway) overridea ambos.
 const API_BASE_URL =
-  (import.meta.env.VITE_API_URL as string | undefined) ?? "http://localhost:8001/api/v1";
+  (import.meta.env.VITE_API_URL as string | undefined) ??
+  (import.meta.env.DEV
+    ? "http://localhost:8001/api/v1"
+    : "https://medellinsocial-api.up.railway.app/api/v1");
 
 export const API_ENDPOINTS = {
   // Auth

@@ -1,7 +1,13 @@
 #!/usr/bin/env bash
-# Urbidata — arranca postgres (docker) + backend (FastAPI) + frontend (Vite)
-# Uso: ./start.sh
+# Medellín Social — arranca postgres (docker) + backend (FastAPI) + frontend (Vite)
+# Uso: ./start.sh            (API en $API_PORT, frontend en 5173)
+#      API_PORT=8001 ./start.sh   para otro puerto
 # Detener: Ctrl+C  (mata todos los procesos)
+#
+# Default 8011: Cursor (Windows) suele secuestrar localhost:8001 con un
+# port-forward stale → el browser recibe 404/CORS aunque el API esté vivo en WSL.
+API_PORT="${API_PORT:-8011}"
+WEB_PORT="${WEB_PORT:-5173}"
 
 set -e
 
@@ -32,6 +38,15 @@ trap cleanup SIGINT SIGTERM
 
 cd "$SCRIPT_DIR"
 
+# ── 0. Liberar puertos de arranques anteriores ────────────────────────────────
+for p in "$API_PORT" "$WEB_PORT"; do
+  if fuser "$p/tcp" >/dev/null 2>&1; then
+    echo "Liberando puerto $p..."
+    fuser -k "$p/tcp" >/dev/null 2>&1 || true
+    sleep 1
+  fi
+done
+
 # ── 1. PostgreSQL (Docker, puerto 5433) ──────────────────────────────────────
 POSTGRES_CONTAINER="urbidata-postgres"
 if ! docker inspect "$POSTGRES_CONTAINER" --format '{{.State.Status}}' 2>/dev/null | grep -q "running"; then
@@ -53,20 +68,19 @@ else
 fi
 
 # ── 2. Backend (FastAPI + uvicorn) ────────────────────────────────────────────
-# Resolve uvicorn: prefer ~/.local/bin (pip install --user) then system PATH
+# Resolve uvicorn: prefer system PATH, luego ~/.local/bin (pip install --user)
 UVICORN=$(command -v uvicorn 2>/dev/null \
   || echo "$HOME/.local/bin/uvicorn")
 
-echo "Iniciando backend  → http://localhost:8001"
+echo "Iniciando backend  → http://localhost:$API_PORT"
 : > "$BACKEND_LOG"
-"$UVICORN" api.main:app --host 0.0.0.0 --port 8001 \
+"$UVICORN" api.main:app --host 0.0.0.0 --port "$API_PORT" \
   > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
 
-# Esperar a que el backend levante
 echo -n "Esperando backend"
-for i in $(seq 1 20); do
-  if curl -sf http://localhost:8001/docs >/dev/null 2>&1; then
+for i in $(seq 1 30); do
+  if curl -sf "http://localhost:$API_PORT/health" >/dev/null 2>&1; then
     echo " OK"
     break
   fi
@@ -75,27 +89,30 @@ for i in $(seq 1 20); do
 done
 
 # ── 3. Frontend (Vite) ───────────────────────────────────────────────────────
-echo "Iniciando frontend → http://localhost:5173"
+echo "Iniciando frontend → http://localhost:$WEB_PORT"
 : > "$FRONTEND_LOG"
 if [ ! -d node_modules ]; then
   echo "Instalando dependencias del frontend..."
   npm install
 fi
-VITE_API_URL=http://localhost:8001/api/v1 npm run dev -- --host --port 5173 \
+# VITE_API_URL como env real del proceso: gana sobre .env/.env.local, así el
+# frontend SIEMPRE apunta al backend que este script levantó. En prod nadie
+# ejecuta esto — el default de src/config/api.ts resuelve a Railway.
+VITE_API_URL="http://localhost:$API_PORT/api/v1" npm run dev -- --host --port "$WEB_PORT" \
   > "$FRONTEND_LOG" 2>&1 &
 FRONTEND_PID=$!
 
 sleep 3
 # Detectar puerto real en caso de colisión
-FRONTEND_URL=$(grep -oP 'Local:\s+\Khttp://localhost:[0-9]+' "$FRONTEND_LOG" 2>/dev/null | head -1 || echo "http://localhost:5173")
+FRONTEND_URL=$(grep -oP 'Local:\s+\Khttp://localhost:[0-9]+' "$FRONTEND_LOG" 2>/dev/null | head -1 || echo "http://localhost:$WEB_PORT")
 
 echo ""
 echo "────────────────────────────────────────────────────"
 echo "  Backend PID  : $BACKEND_PID"
 echo "  Frontend PID : $FRONTEND_PID"
 echo ""
-echo "  API          : http://localhost:8001/api/v1"
-echo "  API docs     : http://localhost:8001/docs"
+echo "  API          : http://localhost:$API_PORT/api/v1"
+echo "  API docs     : http://localhost:$API_PORT/docs"
 echo "  Mapa         : $FRONTEND_URL"
 echo "────────────────────────────────────────────────────"
 echo "Logs: .logs/backend.log | .logs/frontend.log"
