@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -9,8 +10,14 @@ from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
+from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
-from api.services.intake_service import IntakeError, crear_intake
+from api.services.due_diligence_service import (
+    checklist_completo, generar_checklist, verificar_item,
+)
+from api.services.intake_service import (
+    IntakeError, aceptar_intake, crear_intake, get_or_create_owner,
+)
 
 router = APIRouter()
 
@@ -38,6 +45,11 @@ class IntakeCreateRequest(BaseModel):
     notas_owner: Optional[str] = None
 
 
+class VerificarItemRequest(BaseModel):
+    estado: str              # 'verificado' | 'rechazado'
+    nota: Optional[str] = None
+
+
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.post("/intake", status_code=201)
@@ -48,9 +60,8 @@ async def crear_intake_endpoint(
 ):
     """Owner crea una solicitud de captación. Valida cuestionario, resuelve zona,
     guarda en 'nuevo'."""
-    owner_id = user.get("id")
-    if not owner_id:
-        raise HTTPException(status_code=403, detail="No owner linked to user")
+    # intake.owner_id es UUID FK→owner; el INT de usuarios.id jamás entra aquí.
+    owner_id = await get_or_create_owner(user, pool)
 
     payload = req.model_dump(exclude={"operacion", "tipo_inmueble", "geom"})
     try:
@@ -95,8 +106,12 @@ async def mis_intakes(
     pool=Depends(get_pool),
 ):
     """Owner ve sus propias solicitudes."""
-    owner_id = user.get("id")
     async with pool.acquire() as conn:
+        owner_id = await conn.fetchval(
+            "SELECT id FROM owner WHERE usuario_id = $1", user["id"]
+        )
+        if owner_id is None:
+            return []  # nunca ha subido inmueble → sin owner, sin intakes
         rows = await conn.fetch(
             "SELECT id, estado, operacion, tipo_inmueble, zona_codigo, created_at "
             "FROM intake WHERE owner_id = $1 ORDER BY created_at DESC",
@@ -114,13 +129,86 @@ async def get_intake(
     """Detalle del intake (owner dueño o realtor asignado)."""
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT * FROM intake WHERE id = $1", intake_id)
-    if not row:
-        raise HTTPException(status_code=404)
-
-    uid = str(user.get("id"))
-    if str(row["owner_id"]) != uid and str(row["agent_id"]) != uid:
+        if not row:
+            raise HTTPException(status_code=404)
+        # Acceso UUID vs UUID: dueño (owner del usuario) o realtor asignado
+        # (agent del usuario). agent_id NULL → EXISTS false.
+        acceso = await conn.fetchval(
+            """
+            SELECT EXISTS(SELECT 1 FROM owner WHERE usuario_id = $1 AND id = $2)
+                OR EXISTS(SELECT 1 FROM agent WHERE usuario_id = $1 AND id = $3)
+            """,
+            user["id"], row["owner_id"], row["agent_id"],
+        )
+    if not acceso:
         raise HTTPException(status_code=403)
     return dict(row)
+
+
+@router.post("/intake/{intake_id}/aceptar")
+async def aceptar_intake_endpoint(
+    intake_id: str,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """El realtor ASIGNADO acepta el intake: crea el listing 'borrador' y genera
+    el checklist de due diligence. Idempotente: re-aceptar devuelve el listing
+    existente sin crear otro."""
+    agent = await _agent_del_usuario(user, pool)  # 403 si el usuario no es agente
+
+    async with pool.acquire() as conn:
+        # ST_AsText: aceptar_intake re-inserta la geom vía ST_GeomFromText (WKT).
+        row = await conn.fetchrow(
+            "SELECT id, estado, agent_id, listing_id, zona_codigo, municipio, "
+            "barrio, direccion_aprox, operacion, precio_esperado, tipo_inmueble, "
+            "area_m2, habitaciones, banos, declaraciones, ST_AsText(geom) AS geom "
+            "FROM intake WHERE id = $1",
+            intake_id,
+        )
+        if not row:
+            raise HTTPException(status_code=404, detail="Intake no encontrado")
+        if row["agent_id"] != agent.id:  # UUID vs UUID
+            raise HTTPException(status_code=403, detail="Solo el realtor asignado puede aceptar")
+
+        # Idempotente: ya aceptado → mismo listing, sin duplicar.
+        if str(row["estado"]) == "aceptado" and row["listing_id"]:
+            return {"intake_id": intake_id, "listing_id": str(row["listing_id"]),
+                    "estado": "aceptado", "dd_items": 0}
+
+        # listing.agency_id es NOT NULL: la agency del agent (owner primero —
+        # cubre al independiente, que es owner de su propia agency).
+        agency_id = await conn.fetchval(
+            "SELECT agency_id FROM agency_member WHERE agent_id = $1 "
+            "ORDER BY (rol = 'owner') DESC LIMIT 1",
+            agent.id,
+        )
+        if agency_id is None:
+            raise HTTPException(status_code=409, detail="El agente no pertenece a ninguna agency")
+
+    try:
+        listing_id = await aceptar_intake(
+            intake_id, SimpleNamespace(**dict(row)), str(agent.id), str(agency_id), pool,
+        )
+    except IntakeError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+
+    # El checklist DD nace al aceptar (la verificación empieza cuando el realtor
+    # toma el caso). Guard de idempotencia: generar_checklist duplicaría.
+    async with pool.acquire() as conn:
+        ya_hay = await conn.fetchval(
+            "SELECT COUNT(*) FROM due_diligence_item WHERE intake_id = $1", intake_id
+        )
+    dd_items = 0
+    if not ya_hay:
+        decl = row["declaraciones"]
+        if isinstance(decl, str):  # asyncpg entrega JSONB como str
+            decl = json.loads(decl)
+        dd_items = await generar_checklist(
+            SimpleNamespace(id=intake_id, declaraciones=decl), pool
+        )
+
+    return {"intake_id": intake_id, "listing_id": listing_id,
+            "estado": "aceptado", "dd_items": dd_items}
 
 
 @router.get("/intake/{intake_id}/due-diligence")
@@ -131,6 +219,21 @@ async def get_due_diligence(
 ):
     """Checklist de due diligence del intake (alimenta el badge del dashboard)."""
     async with pool.acquire() as conn:
+        intake_row = await conn.fetchrow(
+            "SELECT owner_id, agent_id FROM intake WHERE id = $1", intake_id
+        )
+        if not intake_row:
+            raise HTTPException(status_code=404, detail="Intake no encontrado")
+        # Mismo patrón UUID vs UUID de get_intake: dueño o realtor asignado.
+        acceso = await conn.fetchval(
+            """
+            SELECT EXISTS(SELECT 1 FROM owner WHERE usuario_id = $1 AND id = $2)
+                OR EXISTS(SELECT 1 FROM agent WHERE usuario_id = $1 AND id = $3)
+            """,
+            user["id"], intake_row["owner_id"], intake_row["agent_id"],
+        )
+        if not acceso:
+            raise HTTPException(status_code=403)
         rows = await conn.fetch(
             "SELECT id, clave, declarado, estado, nota, verificado_por, verificado_at "
             "FROM due_diligence_item WHERE intake_id = $1 ORDER BY clave",
@@ -142,6 +245,37 @@ async def get_due_diligence(
         "items": items,
         "completo": all(i["estado"] != "pendiente" for i in items) if items else False,
     }
+
+
+@router.post("/due-diligence/{item_id}/verificar")
+async def verificar_item_endpoint(
+    item_id: str,
+    req: VerificarItemRequest,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """El realtor asignado marca un item verificado|rechazado (con nota opcional).
+    Devuelve si el checklist quedó completo (badge del dashboard)."""
+    agent = await _agent_del_usuario(user, pool)
+
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT d.intake_id, i.agent_id FROM due_diligence_item d "
+            "JOIN intake i ON i.id = d.intake_id WHERE d.id = $1",
+            item_id,
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Item no encontrado")
+    if row["agent_id"] != agent.id:  # UUID vs UUID
+        raise HTTPException(status_code=403, detail="Solo el realtor asignado puede verificar")
+
+    try:
+        await verificar_item(item_id, str(agent.id), req.estado, req.nota, pool)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    completo = await checklist_completo(str(row["intake_id"]), pool)
+    return {"id": item_id, "estado": req.estado, "checklist_completo": completo}
 
 
 @router.get("/cuestionario")

@@ -42,6 +42,37 @@ def _validar_payload(payload: Dict[str, Any], cuestionario: List[Pregunta]) -> N
             raise IntakeError(f"Campo obligatorio faltante: {preg['id']}")
 
 
+async def get_or_create_owner(user: Dict[str, Any], pool: Any) -> str:
+    """Owner (UUID) del usuario autenticado; lo crea en su primer intake.
+
+    intake.owner_id es FK a owner(id) UUID — nunca usuarios.id. Un usuario tiene
+    un solo owner: se busca por usuario_id y el ON CONFLICT sobre owner.email
+    (UNIQUE, mismo valor que usuarios.email) absorbe carreras y adopta owners
+    pre-creados sin vínculo.
+    """
+    async with pool.acquire() as conn:
+        owner_id = await conn.fetchval(
+            "SELECT id::text FROM owner WHERE usuario_id = $1", user["id"]
+        )
+        if owner_id:
+            return owner_id
+        nombre = (
+            f"{user.get('nombre') or ''} {user.get('apellido') or ''}".strip()
+            or user["email"]
+        )
+        # ponytail: usuarios no tiene teléfono y owner.telefono es NOT NULL →
+        # '' hasta que el perfil/cuestionario lo capture.
+        return await conn.fetchval(
+            """
+            INSERT INTO owner (usuario_id, nombre, email, telefono)
+            VALUES ($1, $2, $3, '')
+            ON CONFLICT (email) DO UPDATE SET usuario_id = EXCLUDED.usuario_id
+            RETURNING id::text
+            """,
+            user["id"], nombre, user["email"],
+        )
+
+
 async def crear_intake(
     owner_id: str,
     geom: str,        # WKT Point, SRID 4326 — p.ej. 'POINT(-75.56 6.24)'
@@ -101,6 +132,10 @@ async def crear_intake(
     }
 
 
+class _PerdioCarrera(Exception):
+    """Interno: otro aceptar enlazó el intake primero; rollback del INSERT."""
+
+
 async def aceptar_intake(
     intake_id: str,
     intake: Any,
@@ -113,6 +148,11 @@ async def aceptar_intake(
     Requiere que el intake ya esté 'asignado' (paso 5 puso agent_id/agency).
     El listing nace en 'borrador' — el realtor decide publicar más tarde.
     Devuelve el listing_id creado.
+
+    Carrera: el UPDATE que enlaza es condicional (WHERE estado='asignado' +
+    rowcount, mismo patrón que asignador.tomar_del_pool) dentro de una
+    transacción; si otro aceptar ganó, se revierte el INSERT y se devuelve el
+    listing que quedó enlazado. Nunca dos listings por intake.
     """
     if str(intake.estado) != "asignado":
         raise IntakeError(
@@ -124,28 +164,44 @@ async def aceptar_intake(
 
     # ponytail: listing.precio es NOT NULL (0046); en borrador el owner puede no
     # haber dado precio → placeholder 0, el realtor lo corrige antes de publicar.
+    # El 0 NO puede publicarse: datos_minimos_completos rechaza precio <= 0 y
+    # transition() lo exige en borrador → en_revision (listing_service.py).
     precio = intake.precio_esperado if intake.precio_esperado is not None else 0
 
-    async with pool.acquire() as conn:
-        await conn.execute(
-            """
-            INSERT INTO listing (
-                id, slug, agency_id, agent_id, estado, geom, municipio, barrio,
-                direccion_aprox, mostrar_exacto, operacion, precio, moneda,
-                tipo_inmueble, area_m2, habitaciones, banos, created_at, updated_at
-            ) VALUES (
-                $1, $2, $3, $4, 'borrador', ST_GeomFromText($5, 4326), $6, $7, $8,
-                FALSE, $9, $10, 'COP', $11, $12, $13, $14, NOW(), NOW()
+    try:
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                await conn.execute(
+                    """
+                    INSERT INTO listing (
+                        id, slug, agency_id, agent_id, estado, geom, municipio, barrio,
+                        direccion_aprox, mostrar_exacto, operacion, precio, moneda,
+                        tipo_inmueble, area_m2, habitaciones, banos, created_at, updated_at
+                    ) VALUES (
+                        $1, $2, $3, $4, 'borrador', ST_GeomFromText($5, 4326), $6, $7, $8,
+                        FALSE, $9, $10, 'COP', $11, $12, $13, $14, NOW(), NOW()
+                    )
+                    """,
+                    listing_id, slug, agency_id, agent_id, intake.geom,
+                    intake.municipio, intake.barrio, intake.direccion_aprox,
+                    intake.operacion, precio, intake.tipo_inmueble,
+                    intake.area_m2, intake.habitaciones, intake.banos,
+                )
+                res = await conn.execute(
+                    "UPDATE intake SET listing_id = $1, estado = 'aceptado' "
+                    "WHERE id = $2 AND estado = 'asignado'",
+                    listing_id, intake_id,
+                )
+                if res != "UPDATE 1":
+                    raise _PerdioCarrera()
+    except _PerdioCarrera:
+        async with pool.acquire() as conn:
+            existente = await conn.fetchval(
+                "SELECT listing_id::text FROM intake WHERE id = $1", intake_id
             )
-            """,
-            listing_id, slug, agency_id, agent_id, intake.geom,
-            intake.municipio, intake.barrio, intake.direccion_aprox,
-            intake.operacion, precio, intake.tipo_inmueble,
-            intake.area_m2, intake.habitaciones, intake.banos,
-        )
-        await conn.execute(
-            "UPDATE intake SET listing_id = $1, estado = 'aceptado' WHERE id = $2",
-            listing_id, intake_id,
-        )
+        if existente:
+            return existente
+        # Cambió a un estado sin listing (p.ej. descartado) entre el check y el UPDATE.
+        raise IntakeError(f"Intake {intake_id} ya no está 'asignado' y no tiene listing")
 
     return listing_id

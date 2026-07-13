@@ -19,6 +19,8 @@ class FakeConn:
         self.barrio_nombre = barrio_nombre
         self.municipio = municipio
         self.executed = []  # [(sql, args)]
+        self.update_result = "UPDATE 1"   # simular carrera perdida: "UPDATE 0"
+        self.listing_enlazado = None      # lo que devolvería intake.listing_id
 
     async def fetchrow(self, sql, *args):
         if "ST_Contains" in sql:
@@ -31,9 +33,25 @@ class FakeConn:
     async def fetch(self, sql, *args):
         return []
 
+    async def fetchval(self, sql, *args):
+        if "listing_id" in sql:
+            return self.listing_enlazado
+        return None
+
     async def execute(self, sql, *args):
         self.executed.append((sql, args))
-        return "OK"
+        # Tags de asyncpg: el rowcount del UPDATE condicional importa.
+        return self.update_result if sql.lstrip().startswith("UPDATE") else "INSERT 0 1"
+
+    def transaction(self):
+        class _Tx:
+            async def __aenter__(self):
+                return None
+
+            async def __aexit__(self, *a):
+                return False
+
+        return _Tx()
 
 
 class FakePool:
@@ -204,3 +222,32 @@ async def test_aceptar_intake_rechaza_estado_no_asignado():
     intake = SimpleNamespace(estado="nuevo", zona_codigo="42")
     with pytest.raises(IntakeError, match="no está listo"):
         await aceptar_intake("i-1", intake, "ag", "agc", pool)
+
+
+def _intake_asignado_ns():
+    return SimpleNamespace(
+        estado="asignado", geom="POINT(-75.56 6.24)", municipio="M", barrio="B",
+        direccion_aprox=None, operacion="venta", precio_esperado=100,
+        tipo_inmueble="casa", area_m2=50, habitaciones=2, banos=1, zona_codigo="42",
+    )
+
+
+@pytest.mark.asyncio
+async def test_aceptar_intake_pierde_carrera_devuelve_listing_ganador():
+    """UPDATE condicional afecta 0 filas → no crea segundo listing, devuelve el enlazado."""
+    conn = FakeConn()
+    conn.update_result = "UPDATE 0"
+    conn.listing_enlazado = "listing-del-ganador"
+    listing_id = await aceptar_intake(
+        "i-1", _intake_asignado_ns(), "ag", "agc", pool=FakePool(conn)
+    )
+    assert listing_id == "listing-del-ganador"
+
+
+@pytest.mark.asyncio
+async def test_aceptar_intake_pierde_carrera_sin_listing_es_error():
+    """Estado cambió en vuelo (p.ej. descartado) sin listing → IntakeError."""
+    conn = FakeConn()
+    conn.update_result = "UPDATE 0"   # y listing_enlazado = None
+    with pytest.raises(IntakeError, match="ya no está 'asignado'"):
+        await aceptar_intake("i-1", _intake_asignado_ns(), "ag", "agc", pool=FakePool(conn))
