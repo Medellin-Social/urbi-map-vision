@@ -341,6 +341,29 @@ _BARRIO_CTX_KEYS = (
     "n_listings_airbnb", "pct_wifi",
 )
 
+# Inteligencia de mercado/barrio — activo monetizable, solo agentes (is_agente).
+# Datos del inmueble (precio, specs, fotos, descripción, historial, estrato,
+# amenidades, dias_en_mercado) son públicos y NO se tocan. El shape no cambia:
+# los campos siguen existiendo, van null para el público.
+_MARKET_INTEL_FIELDS = (
+    "buena_oferta", "pct_bajo_mediana",
+    "liquidez_score", "seguridad_score",
+    "score_corto", "score_mediano", "score_largo",
+    "var_anual_pct", "precio_m2_mediana_barrio",
+    "precio_m2_p25", "precio_m2_p75", "arr_p25", "arr_p75",
+    "arriendo_p50_barrio", "yield_estimado", "yield_bruto_pct",
+    "indice_nomada", "barrio_score", "barrio_yield",
+)
+
+
+def _gate_market_fields(row_d: dict, agente: bool) -> dict:
+    """Único punto de gate server-side de inteligencia de mercado."""
+    if not agente:
+        for f in _MARKET_INTEL_FIELDS:
+            if f in row_d:
+                row_d[f] = None
+    return row_d
+
 _NEARBY_BARRIOS_SQL = """
     SELECT b.id, b.nombre
     FROM raw.barrios b, raw.barrios base
@@ -555,11 +578,11 @@ async def get_all_listings(
     items: list[ListingFull] = []
     for r in rows:
         row_d = dict(r)
-        if not _is_agente:
-            row_d["buena_oferta"] = None
-            row_d["pct_bajo_mediana"] = None
+        # Extraer ctx de barrio ANTES del gate — la personalización lo necesita
+        # (comportamiento idéntico al actual para usuarios públicos).
+        barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS} if perfil_dict else None
+        _gate_market_fields(row_d, _is_agente)
         if perfil_dict:
-            barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS}
             score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
 
             # Apply prefiltro penalties (soft — bias sort, don't hard-remove)
@@ -1045,10 +1068,8 @@ async def get_listing_by_id(
     row_d = dict(row)
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []
-    # buena_oferta / pct_bajo_mediana are agent-only; price range (p25/p75) is free.
-    if not is_agente(current_user):
-        row_d["buena_oferta"] = None
-        row_d["pct_bajo_mediana"] = None
+    # Inteligencia de mercado/barrio — solo agentes; el front solo decide UI.
+    _gate_market_fields(row_d, is_agente(current_user))
     return ListingDetail(**row_d)
 
 

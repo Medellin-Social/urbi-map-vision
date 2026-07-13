@@ -12,7 +12,7 @@ import {
   Shield, Bell, BellRing, User, BarChart2, Plus, Check,
 } from "lucide-react";
 import { useTarget } from "@/contexts/TargetContext";
-import { useIsPro } from "@/components/LockedField";
+import { useIsPro, useIsAgente } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
@@ -817,6 +817,12 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     staleTime: 120_000,
   });
 
+  // Regla de negocio: inmueble = público; inteligencia de barrio/mercado = solo realtor.
+  // Flag local (plan==='agente') OR señal server-side (buena_oferta/pct_bajo_mediana
+  // solo llegan non-null si is_agente() pasó — cubre aprobados en tabla `agentes`).
+  const isRealtor =
+    useIsAgente() || listing?.buena_oferta != null || listing?.pct_bajo_mediana != null;
+
   useEffect(() => {
     if (!listingId) return;
     closedRef.current = false;
@@ -1086,11 +1092,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </div>
       )}
 
-      {/* El vecindario */}
-      {listing.barrio_id && <BarrioReport barrioId={listing.barrio_id} listingSegScore={listing.seguridad_score} />}
+      {/* El vecindario — inteligencia de barrio, solo realtor */}
+      {isRealtor && listing.barrio_id && <BarrioReport barrioId={listing.barrio_id} listingSegScore={listing.seguridad_score} />}
 
-      {/* ── BUYER: análisis para quien quiere vivir ────────────────────────────── */}
-      {isBuyer && (
+      {/* ── BUYER: análisis para quien quiere vivir (mercado → solo realtor) ───── */}
+      {isRealtor && isBuyer && (
         <>
           {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
           <PriceRange listing={listing} />
@@ -1107,8 +1113,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </>
       )}
 
-      {/* ── INVESTOR: análisis completo de rentabilidad ─────────────────────────── */}
-      {isInvestor && (
+      {/* ── INVESTOR: análisis completo de rentabilidad (mercado → solo realtor) ── */}
+      {isRealtor && isInvestor && (
         <>
           {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
           <PriceRange listing={listing} />
@@ -1141,8 +1147,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </>
       )}
 
-      {/* ── LANDLORD: yield sin badge de compra ─────────────────────────────────── */}
-      {isLandlord && (
+      {/* ── LANDLORD: yield sin badge de compra (mercado → solo realtor) ────────── */}
+      {isRealtor && isLandlord && (
         <>
           <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
             <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
@@ -1155,8 +1161,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </>
       )}
 
-      {/* ── RENTER: canon típico + comparativo de precio ───────────────────────── */}
-      {isRenter && (
+      {/* ── RENTER: canon típico + comparativo de precio (mercado → solo realtor) ─ */}
+      {isRealtor && isRenter && (
         <>
           <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
             <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
@@ -1255,8 +1261,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </a>
       )}
 
-      {/* Sobre este barrio — editorial PRO */}
-      <SobreBarrio listing={listing} target={target} />
+      {/* Sobre este barrio — editorial, solo realtor */}
+      {isRealtor && <SobreBarrio listing={listing} target={target} />}
 
       {/* Mini mapa */}
       {heroMapUrl && (
@@ -1398,7 +1404,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                             </div>
                           )}
                         </div>
-                        {(isInvestor || isBuyer) && <ValorEstimado listing={listing} />}
+                        {isRealtor && (isInvestor || isBuyer) && <ValorEstimado listing={listing} />}
                         {metricsChips}
                         {ctaButtons}
                         {analysisContent}
@@ -1438,7 +1444,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           {isPro && listing.pct_bajo_mediana != null && (
             <div className="mt-3"><PriceBadge listing={listing} /></div>
           )}
-          {(isInvestor || isBuyer) && listing.precio_m2_p25 && listing.precio_m2_p75 && (
+          {isRealtor && (isInvestor || isBuyer) && listing.precio_m2_p25 && listing.precio_m2_p75 && (
             <div className="mt-3"><ValorEstimado listing={listing} /></div>
           )}
         </div>
@@ -1477,8 +1483,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </div>
       </div>
 
-      {/* Zone card */}
-      <ZonaCard listing={listing} />
+      {/* Zone card — inteligencia de zona, solo realtor */}
+      {isRealtor && <ZonaCard listing={listing} />}
     </div>
   ) : null;
 
