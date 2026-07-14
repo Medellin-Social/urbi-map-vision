@@ -8,8 +8,10 @@ Schedule: cada 3 días a las 3:00 AM COT (08:00 UTC)
 Tasks:
     t1 — scrape Fincaraiz  (--since-days 4, todos los municipios)
     t2 — load Fincaraiz a DB
+    t2b — dedup Fincaraiz (borra duplicados por hash; metrocuadrado dedupa al insertar)
     t3 — scrape Metrocuadrado (--since-days 4, all_valle)
     t4 — refresh analytics cache (enrich_barrios_stats)
+    t5 — validar URLs activas (url_activa, ventana 7 días)
 """
 
 import os
@@ -76,6 +78,54 @@ def refresh_analytics() -> None:
     )
 
 
+# Misma fórmula de hash que scripts/sql/dedup_cleanup.sql. El loader hace
+# ON CONFLICT (url), así que el mismo inmueble re-publicado con otra URL
+# entra duplicado; aquí se borra conservando el id más alto (más reciente).
+_DEDUP_HASH_EXPR = """MD5(
+    LOWER(TRIM(COALESCE(barrio_raw, ''))) || '|' ||
+    COALESCE(tipo_inmueble, '') || '|' ||
+    COALESCE(tipo_operacion, '') || '|' ||
+    COALESCE(habitaciones, 0)::text || '|' ||
+    COALESCE(banos, 0)::text || '|' ||
+    ROUND(COALESCE(area_m2, 0))::text || '|' ||
+    CASE COALESCE(tipo_operacion, '')
+        WHEN 'arriendo' THEN (ROUND(COALESCE(precio, 0) / 500000)  * 500000)::text
+        ELSE                 (ROUND(COALESCE(precio, 0) / 10000000) * 10000000)::text
+    END
+)"""
+
+
+def dedup_fincaraiz() -> None:
+    import psycopg2
+
+    conn = psycopg2.connect(os.environ["DATABASE_URL"])
+    try:
+        with conn, conn.cursor() as cur:
+            cur.execute(f"""
+                DELETE FROM raw.listings_fincaraiz
+                WHERE id IN (
+                    SELECT id FROM (
+                        SELECT id, ROW_NUMBER() OVER (
+                            PARTITION BY {_DEDUP_HASH_EXPR} ORDER BY id DESC
+                        ) AS rn
+                        FROM raw.listings_fincaraiz
+                    ) x WHERE rn > 1
+                )
+            """)
+            print(f"[dedup_fincaraiz] {cur.rowcount} duplicados eliminados")
+    finally:
+        conn.close()
+
+
+def validate_urls() -> None:
+    # ponytail: batch 3000 ≈ 9k urls/semana; si el backlog activo supera eso,
+    # subir batch o mover a DAG diario propio
+    _run(
+        [sys.executable, "validate_listings_urls.py", "--batch", "3000"],
+        cwd=SCRIPTS_DIR,
+    )
+
+
 with DAG(
     dag_id="scrape_listings",
     default_args=default_args,
@@ -105,14 +155,27 @@ with DAG(
         execution_timeout=timedelta(hours=3),
     )
 
+    t2b = PythonOperator(
+        task_id="dedup_fincaraiz",
+        python_callable=dedup_fincaraiz,
+        execution_timeout=timedelta(minutes=10),
+    )
+
     t4 = PythonOperator(
         task_id="refresh_analytics",
         python_callable=refresh_analytics,
         execution_timeout=timedelta(minutes=20),
     )
 
-    # fincaraiz: scrape → load → analytics
-    # metrocuadrado: scrape → analytics
-    # analytics waits for both loaders
-    t1 >> t2 >> t4
+    t5 = PythonOperator(
+        task_id="validate_urls",
+        python_callable=validate_urls,
+        execution_timeout=timedelta(hours=1),
+    )
+
+    # fincaraiz: scrape → load → dedup → analytics
+    # metrocuadrado: scrape → analytics (dedupa al insertar)
+    # analytics espera ambos; validación de URLs al final
+    t1 >> t2 >> t2b >> t4
     t3 >> t4
+    t4 >> t5

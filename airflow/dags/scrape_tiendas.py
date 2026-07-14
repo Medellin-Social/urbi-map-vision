@@ -1,6 +1,6 @@
 """
 DAG: scrape_tiendas_google
-Schedule: Monday 03:00 COT (08:00 UTC)
+Schedule: día 1 de enero/julio 03:00 COT (08:00 UTC) — pausado por defecto
 Tasks:
   scrape_google_places — UPSERT tiendas from Google Places (New) API
 """
@@ -32,7 +32,7 @@ with DAG(
     "scrape_tiendas_google",
     default_args=default_args,
     description="Scrape tiendas por barrio vía Google Places API",
-    schedule_interval="0 8 1 * *",
+    schedule_interval="0 8 1 */6 *",  # cada 6 meses (ene/jul) — API Google Places cuesta; DAG pausado por ahora
     start_date=datetime(2026, 6, 1),
     catchup=False,
     tags=["tiendas", "google_places", "comunidad"],
