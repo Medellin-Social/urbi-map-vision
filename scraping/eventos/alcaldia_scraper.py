@@ -115,8 +115,8 @@ async def scrape_async(test: bool = False) -> list[dict]:
         page.on("response", handle_response)
 
         try:
-            await page.goto(EVENTOS_URL, wait_until="networkidle", timeout=30000)
-            await page.wait_for_timeout(3000)
+            await page.goto(EVENTOS_URL, wait_until="domcontentloaded", timeout=60000)
+            await page.wait_for_timeout(5000)
 
             # Scroll to trigger lazy loads
             await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")

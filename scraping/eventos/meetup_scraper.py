@@ -199,8 +199,8 @@ def scrape_playwright_fallback(ciudad: str = "Medellín") -> list[dict]:
         page.on("response", handle_response)
 
         try:
-            page.goto(url, wait_until="networkidle", timeout=30000)
-            page.wait_for_timeout(3000)
+            page.goto(url, wait_until="domcontentloaded", timeout=60000)
+            page.wait_for_timeout(5000)
         except Exception as exc:
             print(f"[meetup:playwright] navigation error: {exc}")
         finally:

@@ -184,7 +184,7 @@ async def scrape_async() -> list[dict]:
 
         for url in urls_to_scrape:
             try:
-                await page.goto(url, wait_until="networkidle", timeout=30000)
+                await page.goto(url, wait_until="domcontentloaded", timeout=60000)
                 await page.wait_for_timeout(2000)
 
                 next_data = await page.evaluate("""

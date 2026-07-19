@@ -277,7 +277,7 @@ async def _scrape_url(
         # Retry once on network error
         for attempt in range(2):
             try:
-                await page.goto(pg_url, wait_until="networkidle", timeout=30000)
+                await page.goto(pg_url, wait_until="domcontentloaded", timeout=60000)
                 await asyncio.sleep(2)
                 break
             except Exception as exc:
