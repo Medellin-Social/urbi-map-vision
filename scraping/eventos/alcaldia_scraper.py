@@ -22,24 +22,48 @@ FUENTE = "alcaldia_medellin"
 BASE_URL = "https://www.medellin.gov.co"
 EVENTOS_URL = f"{BASE_URL}/es/eventos/"
 
+# año opcional: las cards suelen mostrar "12 de julio" sin año
 _DATE_RE = re.compile(
-    r"(\d{1,2})\s+de\s+(\w+)\s+(?:de\s+)?(\d{4})", re.IGNORECASE
+    r"(\d{1,2})\s+(?:de\s+)?(\w+)(?:\s+(?:de\s+)?(\d{4}))?", re.IGNORECASE
 )
+_ISO_RE = re.compile(r"(\d{4})-(\d{2})-(\d{2})")
 _MONTH_ES = {
     "enero": "01", "febrero": "02", "marzo": "03", "abril": "04",
     "mayo": "05", "junio": "06", "julio": "07", "agosto": "08",
     "septiembre": "09", "octubre": "10", "noviembre": "11", "diciembre": "12",
+    # abreviaturas
+    "ene": "01", "feb": "02", "mar": "03", "abr": "04", "may": "05",
+    "jun": "06", "jul": "07", "ago": "08", "sep": "09", "sept": "09",
+    "oct": "10", "nov": "11", "dic": "12",
 }
 
 
 def _parse_fecha_alcaldia(text: str) -> str | None:
-    m = _DATE_RE.search(text.lower())
-    if not m:
-        return None
-    day, month_es, year = m.group(1), m.group(2), m.group(3)
-    month_num = _MONTH_ES.get(month_es.lower())
+    from datetime import date
+
+    # 1) ISO directo (p.ej. atributo datetime de <time>)
+    m = _ISO_RE.search(text)
+    if m:
+        return m.group(0)
+
+    day = month_num = year = None
+    for m in _DATE_RE.finditer(text.lower()):
+        month_num = _MONTH_ES.get(m.group(2).lower())
+        if month_num:
+            day, year = m.group(1), m.group(3)
+            break
     if not month_num:
         return None
+    if not year:
+        # sin año: actual, o siguiente si quedó >60 días en el pasado
+        hoy = date.today()
+        anio = hoy.year
+        try:
+            if (hoy - date(anio, int(month_num), int(day))).days > 60:
+                anio += 1
+        except ValueError:
+            return None
+        year = str(anio)
     return f"{year}-{month_num}-{int(day):02d}"
 
 
@@ -138,7 +162,11 @@ async def scrape_async(test: bool = False) -> list[dict]:
                     }
                     cards.forEach(card => {
                         const title = card.querySelector('h2,h3,h4,.title,.titulo')?.textContent?.trim();
-                        const date = card.querySelector('time,[class*="date"],[class*="fecha"]')?.textContent?.trim();
+                        const timeEl = card.querySelector('time');
+                        const date = timeEl?.getAttribute('datetime')
+                            || (timeEl?.textContent?.trim())
+                            || card.querySelector('[class*="date"],[class*="fecha"]')?.textContent?.trim()
+                            || card.innerText;
                         const link = card.querySelector('a')?.href;
                         const img = card.querySelector('img')?.src;
                         const lugar = card.querySelector('[class*="lugar"],[class*="venue"]')?.textContent?.trim();
