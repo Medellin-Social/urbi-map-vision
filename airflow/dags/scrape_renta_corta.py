@@ -42,7 +42,7 @@ def _run(cmd: list[str]) -> None:
 def scrape_airbnb() -> None:
     _run([
         sys.executable, "scraping/renta_media/airbnb_mensual_scraper.py",
-        "--detail-limit", "150",
+        "--detail-limit", "50",  # reduced from 150 — Playwright crashes on long runs in container
     ])
 
 
