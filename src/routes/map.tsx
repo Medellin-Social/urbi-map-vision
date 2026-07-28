@@ -383,8 +383,8 @@ function MapPageInner() {
   }
 
   // Cascader Zona (filter bar): null = toda la ciudad; cd = activar comuna + volar.
-  function handleComunaSelect(cd: number | null, nombre: string | null) {
-    if (cd == null) {
+  function handleComunaSelect(cd: number | null, nombre: string | null, municipio?: string | null) {
+    if (cd == null && !municipio) {
       setActiveComuna(null);
       setActiveComunaCd(null);
       setActiveMunicipio(null);
@@ -392,6 +392,17 @@ function MapPageInner() {
       setActiveBarrioInComune(null);
       setGlobalSearch(true);
       setMapView("listings");
+      return;
+    }
+    if (municipio) {
+      handleViewLevelChange("barrios", nombre, municipio, null);
+      setGlobalSearch(false);
+      const barrios = allBarrioOptions.filter((o) => o.municipio?.toUpperCase() === municipio.toUpperCase());
+      if (barrios.length > 0) {
+        const lat = barrios.reduce((s, o) => s + o.lat, 0) / barrios.length;
+        const lng = barrios.reduce((s, o) => s + o.lng, 0) / barrios.length;
+        flyToListingRef.current?.(lat, lng);
+      }
       return;
     }
     handleViewLevelChange("barrios", nombre, null, cd);
@@ -550,6 +561,7 @@ function MapPageInner() {
         onSearchAll={() => { setGlobalSearch(true); setMapView("listings"); }}
         hasActiveScope={!!mlsBarrio || !!activePanelName}
         activeComunaCd={activeComunaCd}
+        activeMunicipio={activeMunicipio}
         onComunaSelect={handleComunaSelect}
       />
       <ProfileChipMobile />

@@ -73,14 +73,15 @@ type MapFilterBarProps = {
   hasActiveScope?: boolean;
   // Cascader Comuna → Barrio (entre buscador y precio)
   activeComunaCd?: number | null;
-  onComunaSelect?: (cd: number | null, nombre: string | null) => void;
+  activeMunicipio?: string | null;
+  onComunaSelect?: (cd: number | null, nombre: string | null, municipio?: string | null) => void;
 };
 
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/(^|\s|-)\p{L}/gu, (c) => c.toUpperCase());
 }
 
-type ComunaGroup = { cd: number; nombre: string; barrios: BarrioOption[] };
+type ComunaGroup = { cd: number | null; nombre: string; municipio?: string; barrios: BarrioOption[] };
 function groupComunas(allBarrios?: BarrioOption[]): ComunaGroup[] {
   const m = new Map<number, ComunaGroup>();
   for (const b of allBarrios ?? []) {
@@ -91,12 +92,24 @@ function groupComunas(allBarrios?: BarrioOption[]): ComunaGroup[] {
   }
   return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
+function groupMunicipios(allBarrios?: BarrioOption[]): ComunaGroup[] {
+  const m = new Map<string, ComunaGroup>();
+  for (const b of allBarrios ?? []) {
+    if (b.cd_comuna != null) continue; // Medellín barrios have cd_comuna
+    const mun = b.municipio?.toUpperCase();
+    if (!mun || mun === "MEDELLÍN" || mun === "MEDELLIN" || mun === "—") continue;
+    if (!m.has(mun)) m.set(mun, { cd: null, nombre: mun, municipio: mun, barrios: [] });
+    m.get(mun)!.barrios.push(b);
+  }
+  return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
 
-/** Filtro cascada: Todo (todas las comunas) → comuna → barrio de esa comuna. */
-function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavigate }: {
+/** Filtro cascada: Todo → comunas Medellín / municipios Valle de Aburrá → barrio. */
+function ZonaCascader({ allBarrios, activeComunaCd, activeMunicipio, onComunaSelect, onBarrioNavigate }: {
   allBarrios?: BarrioOption[];
   activeComunaCd?: number | null;
-  onComunaSelect?: (cd: number | null, nombre: string | null) => void;
+  activeMunicipio?: string | null;
+  onComunaSelect?: (cd: number | null, nombre: string | null, municipio?: string | null) => void;
   onBarrioNavigate?: (opt: BarrioOption) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -114,9 +127,14 @@ function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavi
   }, [open]);
 
   const comunas = useMemo(() => groupComunas(allBarrios), [allBarrios]);
+  const municipioGroups = useMemo(() => groupMunicipios(allBarrios), [allBarrios]);
 
-  const active = comunas.find((c) => c.cd === activeComunaCd) ?? null;
-  const label = active ? titleCase(active.nombre) : "Toda la ciudad";
+  const active: ComunaGroup | null =
+    activeComunaCd != null ? (comunas.find((c) => c.cd === activeComunaCd) ?? null) :
+    activeMunicipio ? (municipioGroups.find((m) => m.municipio === activeMunicipio) ?? null) :
+    null;
+  const isSelected = !!active || !!activeMunicipio;
+  const label = active ? titleCase(active.nombre) : activeMunicipio ? titleCase(activeMunicipio) : "Toda la ciudad";
 
   const openIt = () => { setRect(ref.current?.getBoundingClientRect() ?? null); setOpen((o) => !o); };
 
@@ -133,9 +151,9 @@ function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavi
         onClick={openIt}
         style={{
           display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 11px",
-          border: `1px solid ${active ? C.teal : C.border}`, borderRadius: 8,
-          background: active ? "#E1F5EE" : C.white, color: active ? C.tealDeep : C.ink,
-          fontSize: 12, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
+          border: `1px solid ${isSelected ? C.teal : C.border}`, borderRadius: 8,
+          background: isSelected ? "#E1F5EE" : C.white, color: isSelected ? C.tealDeep : C.ink,
+          fontSize: 12, fontWeight: isSelected ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
         }}
       >
         {label}
@@ -153,15 +171,25 @@ function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavi
         >
           {!active ? (
             <>
-              <button style={itemStyle(activeComunaCd == null)} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
+              <button style={itemStyle(activeComunaCd == null && !activeMunicipio)} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
                 Toda la ciudad
               </button>
-              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Comunas</div>
+              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Comunas Medellín</div>
               {comunas.map((c) => (
-                <button key={c.cd} style={itemStyle()} onClick={() => onComunaSelect?.(c.cd, c.nombre)}>
+                <button key={c.cd} style={itemStyle()} onClick={() => onComunaSelect?.(c.cd as number, c.nombre)}>
                   {titleCase(c.nombre)}
                 </button>
               ))}
+              {municipioGroups.length > 0 && (
+                <>
+                  <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Otros municipios</div>
+                  {municipioGroups.map((g) => (
+                    <button key={g.municipio} style={itemStyle()} onClick={() => onComunaSelect?.(null, g.nombre, g.municipio)}>
+                      {titleCase(g.nombre)}
+                    </button>
+                  ))}
+                </>
+              )}
             </>
           ) : (
             <>
@@ -169,7 +197,7 @@ function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavi
                 onClick={() => onComunaSelect?.(null, null)}
                 style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: "6px 12px", fontSize: 12, fontWeight: 600, color: C.teal }}
               >
-                ‹ Comunas
+                ‹ {active.municipio ? "Municipios" : "Comunas"}
               </button>
               {/* "Toda la ciudad" siempre a 1 click, aun con comuna activa */}
               <button style={itemStyle()} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
@@ -872,7 +900,7 @@ function AmenidadesPanel({
 
 export function MapFilterBar({
   activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
-  activeComunaCd, onComunaSelect,
+  activeComunaCd, activeMunicipio, onComunaSelect,
 }: MapFilterBarProps) {
   const isPro = useIsPro();
   const { lang } = useLang();
@@ -1031,6 +1059,7 @@ export function MapFilterBar({
       <ZonaCascader
         allBarrios={allBarrios}
         activeComunaCd={activeComunaCd}
+        activeMunicipio={activeMunicipio}
         onComunaSelect={onComunaSelect}
         onBarrioNavigate={onBarrioNavigate}
       />
@@ -1139,21 +1168,34 @@ export function MapFilterBar({
           <span style={labelSm}>Zona</span>
           <div style={{ display: "flex", gap: 8 }}>
             <select
-              value={activeComunaCd ?? ""}
+              value={activeComunaCd != null ? String(activeComunaCd) : (activeMunicipio ? `mun:${activeMunicipio}` : "")}
               onChange={(e) => {
                 const v = e.target.value;
-                if (!v) onComunaSelect?.(null, null);
-                else {
-                  const c = groupComunas(allBarrios).find((g) => String(g.cd) === v);
-                  if (c) onComunaSelect?.(c.cd, c.nombre);
+                if (!v) { onComunaSelect?.(null, null); return; }
+                if (v.startsWith("mun:")) {
+                  const mun = v.slice(4);
+                  const g = groupMunicipios(allBarrios).find((x) => x.municipio === mun);
+                  if (g) onComunaSelect?.(null, g.nombre, g.municipio);
+                  return;
                 }
+                const c = groupComunas(allBarrios).find((g) => String(g.cd) === v);
+                if (c) onComunaSelect?.(c.cd as number, c.nombre);
               }}
               style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: "#fff" }}
             >
               <option value="">Toda la ciudad</option>
-              {groupComunas(allBarrios).map((c) => (
-                <option key={c.cd} value={c.cd}>{titleCase(c.nombre)}</option>
-              ))}
+              <optgroup label="Comunas Medellín">
+                {groupComunas(allBarrios).map((c) => (
+                  <option key={c.cd} value={c.cd!}>{titleCase(c.nombre)}</option>
+                ))}
+              </optgroup>
+              {groupMunicipios(allBarrios).length > 0 && (
+                <optgroup label="Otros municipios">
+                  {groupMunicipios(allBarrios).map((g) => (
+                    <option key={g.municipio} value={`mun:${g.municipio}`}>{titleCase(g.nombre)}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
             {activeComunaCd != null && (
               <select

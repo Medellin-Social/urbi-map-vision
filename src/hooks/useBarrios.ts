@@ -64,6 +64,7 @@ async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature
 
 const _geoMap = new Map<string, ApiBarrio["geometry"]>();
 const _comunaMap = new Map<string, number | null>();
+const _nombreComunaMap = new Map<string, string>(); // barrio key → nombre_comuna from GeoJSON
 let _geoPromise: Promise<Map<string, ApiBarrio["geometry"]>> | null = null;
 
 function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
@@ -75,6 +76,7 @@ function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
           const key = geoKey(f.properties.nombre, f.properties.municipio);
           _geoMap.set(key, f.geometry);
           _comunaMap.set(key, f.properties.cd_comuna ?? null);
+          if (f.properties.nombre_comuna) _nombreComunaMap.set(key, f.properties.nombre_comuna);
         }
       }
       return _geoMap;
@@ -347,14 +349,17 @@ export function useBarriosRaw(perfil?: string) {
         loadBarrioStats(),
       ]);
 
-      // Patch API barrios that lack geometry, and attach cd_comuna from static GeoJSON
+      // Patch API barrios: attach cd_comuna + authoritative nombre_comuna from static GeoJSON.
+      // raw.barrios.comuna has incorrect values for some barrios (off-by-one commune assignments
+      // in the source data). The GeoJSON is the authoritative source for commune membership.
       const apiKeys = new Set<string>();
       const patched = apiData.map((b) => {
         const key = geoKey(b.nombre ?? "", b.municipio ?? "");
         apiKeys.add(key);
         const cd_comuna = _comunaMap.get(key) ?? null;
-        if (b.geometry) return { ...b, cd_comuna };
-        return { ...b, geometry: geoLookup.get(key) ?? null, cd_comuna };
+        const comuna = _nombreComunaMap.get(key) ?? b.comuna;
+        if (b.geometry) return { ...b, cd_comuna, comuna };
+        return { ...b, geometry: geoLookup.get(key) ?? null, cd_comuna, comuna };
       });
 
       // For barrios not in API: use scraped stats if available, else grey fallback
