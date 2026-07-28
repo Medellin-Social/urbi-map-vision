@@ -89,7 +89,7 @@ function MapPageInner() {
   const [mlsBarrio, setMlsBarrio] = useState<Neighborhood | null>(null);
   const [highlightedListingId, setHighlightedListingId] = useState<number | null>(null);
   const [activeBarrioInComune, setActiveBarrioInComune] = useState<string | null>(null);
-  const flyToListingRef = useRef<((lat: number, lng: number) => void) | null>(null);
+  const flyToListingRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
 
   // Listing detail modal
   const [listingDetailId, setListingDetailId] = useState<number | null>(null);
@@ -401,7 +401,8 @@ function MapPageInner() {
       if (barrios.length > 0) {
         const lat = barrios.reduce((s, o) => s + o.lat, 0) / barrios.length;
         const lng = barrios.reduce((s, o) => s + o.lng, 0) / barrios.length;
-        flyToListingRef.current?.(lat, lng);
+        // Zoom bajo POLYGON_TIER_ZOOM (13) para no caer en auto-select de barrio.
+        flyToListingRef.current?.(lat, lng, 12);
       }
       return;
     }
@@ -412,7 +413,8 @@ function MapPageInner() {
     if (barriosDeComuna.length > 0) {
       const lat = barriosDeComuna.reduce((s, o) => s + o.lat, 0) / barriosDeComuna.length;
       const lng = barriosDeComuna.reduce((s, o) => s + o.lng, 0) / barriosDeComuna.length;
-      flyToListingRef.current?.(lat, lng);
+      // Zoom bajo POLYGON_TIER_ZOOM (13) para no caer en auto-select de barrio.
+      flyToListingRef.current?.(lat, lng, 12);
     }
   }
 

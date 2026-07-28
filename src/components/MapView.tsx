@@ -63,7 +63,7 @@ type Props = {
   onAutoSelectBarrio?: (barrioId: number | null) => void;
   onAutoSelectComuna?: (cd: number | null, municipio: string | null, nombre: string | null) => void;
   highlightedListingId?: number | null;
-  flyToListingRef?: React.MutableRefObject<((lat: number, lng: number) => void) | null>;
+  flyToListingRef?: React.MutableRefObject<((lat: number, lng: number, zoom?: number) => void) | null>;
   onListingClickFromMap?: (id: number, screenX: number, screenY: number) => void;
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
@@ -1101,9 +1101,9 @@ export function MapView({
   // ── Exponer flyTo al padre ───────────────────────────────────────────────────
   useEffect(() => {
     if (!flyToListingRef) return;
-    flyToListingRef.current = (lat: number, lng: number) => {
+    flyToListingRef.current = (lat: number, lng: number, zoom = 16) => {
       const map = mapRef.current;
-      if (map && mapLoadedRef.current) map.flyTo({ center: [lng, lat], zoom: 16, speed: 0.9 });
+      if (map && mapLoadedRef.current) map.flyTo({ center: [lng, lat], zoom, speed: 0.9 });
     };
   });
 
