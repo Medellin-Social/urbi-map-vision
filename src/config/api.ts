@@ -76,6 +76,9 @@ export const API_ENDPOINTS = {
   adminAgenteZonas: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/zonas`,
   adminSponsorshipDelete: (id: string) => `${API_BASE_URL}/admin/sponsorship/${id}`,
   adminZonasCatalogo: `${API_BASE_URL}/admin/zonas-catalogo`,
+  adminListingsEnRevision: `${API_BASE_URL}/admin/listings/en-revision`,
+  adminListingAprobar: (id: string) => `${API_BASE_URL}/admin/listings/${id}/aprobar`,
+  adminListingRechazar: (id: string) => `${API_BASE_URL}/admin/listings/${id}/rechazar`,
   // Compra de zonas (realtor self-serve)
   zonasDisponibles: `${API_BASE_URL}/zonas/disponibles`,
   zonasCheckout: `${API_BASE_URL}/zonas/checkout`,

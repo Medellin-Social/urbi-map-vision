@@ -17,7 +17,7 @@ async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
     transition(listing, "publicado")  # valida en_revision→publicado
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE listing SET estado = 'publicado', "
+            "UPDATE listing SET estado = 'publicado', verificado = TRUE, "
             "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
             listing.id,
         )

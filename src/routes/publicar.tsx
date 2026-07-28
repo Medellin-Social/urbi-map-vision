@@ -1283,14 +1283,13 @@ function SuccessAgente({ listingId }: { listingId: string }) {
 function SuccessPropietario({ listingId }: { listingId: string }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 24px", maxWidth: 480, margin: "0 auto" }}>
-      <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
+      <div style={{ fontSize: 52, marginBottom: 16 }}>🕐</div>
       <h2 style={{ fontFamily: K.serif, color: K.ink, fontSize: "1.5rem", fontWeight: 800, marginBottom: 12 }}>
-        Tu propiedad ya está en el mapa
+        Tu propiedad está en revisión
       </h2>
       <p style={{ color: K.muted, fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>
-        Aparece como <strong>sin verificar</strong>. Un agente de tu zona la revisará
-        y le pondrá el sello de verificada en <strong>máximo 72 horas</strong>;
-        te avisaremos por email.
+        Nuestro equipo verificará las fotos y los datos antes de publicarla en el mapa.
+        Recibirás un email cuando esté activa, normalmente en <strong>menos de 24 horas</strong>.
       </p>
       <div
         style={{
@@ -1525,6 +1524,7 @@ function PublicarPage() {
   const next = () => {
     const err = validateStep(step, form);
     if (err) { setError(err); return; }
+    if (step === 2 && photos.length === 0) { setError("Agrega al menos una foto de la propiedad"); return; }
     setError(null);
     setStep((s) => Math.min(s + 1, STEPS.length - 1));
   };

@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban, Building2, CreditCard, MapPinned, Plus, Trash2 } from "lucide-react";
+import { Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban, Building2, CreditCard, MapPinned, Plus, Trash2, ClipboardList } from "lucide-react";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
@@ -24,11 +24,12 @@ const K = {
   amber: "#D97706", fucsia: "#FF2D95", serif: "'Fraunces', Georgia, serif" as const,
 };
 
-type Tab = "overview" | "realtors" | "usuarios";
+type Tab = "overview" | "realtors" | "usuarios" | "listings";
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
-  { id: "overview", label: "Resumen", Icon: LayoutDashboard },
-  { id: "realtors", label: "Realtors", Icon: ShieldCheck },
-  { id: "usuarios", label: "Usuarios", Icon: Users },
+  { id: "overview",  label: "Resumen",   Icon: LayoutDashboard },
+  { id: "listings",  label: "Listings",  Icon: ClipboardList },
+  { id: "realtors",  label: "Realtors",  Icon: ShieldCheck },
+  { id: "usuarios",  label: "Usuarios",  Icon: Users },
 ];
 
 function AdminPanel() {
@@ -51,9 +52,10 @@ function AdminPanel() {
         </div>
       </header>
       <main className="mx-auto max-w-5xl px-4 py-8">
-        {tab === "overview" && <OverviewTab />}
-        {tab === "realtors" && <RealtorsTab />}
-        {tab === "usuarios" && <UsuariosTab />}
+        {tab === "overview"  && <OverviewTab />}
+        {tab === "listings"  && <ListingsTab />}
+        {tab === "realtors"  && <RealtorsTab />}
+        {tab === "usuarios"  && <UsuariosTab />}
       </main>
     </div>
   );
@@ -141,6 +143,138 @@ function OverviewTab() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Listings en revisión ──────────────────────────────────────────────────────
+type ListingRevision = {
+  id: string;
+  tipo_operacion: string;
+  tipo_inmueble: string;
+  precio_cop: number;
+  barrio: string | null;
+  municipio: string | null;
+  nombre_contacto: string | null;
+  telefono: string | null;
+  email_contacto: string | null;
+  created_at: string;
+  fotos: string[] | null;
+};
+
+const fmtCOP = (n: number) =>
+  n >= 1_000_000_000 ? `$${(n / 1e9).toFixed(1)}B` : n >= 1_000_000 ? `$${Math.round(n / 1e6)}M` : `$${n.toLocaleString("es-CO")}`;
+
+function ListingsTab() {
+  const qc = useQueryClient();
+  const [motivoAbierto, setMotivoAbierto] = useState<string | null>(null);
+  const [motivo, setMotivo] = useState("");
+
+  const { data, isLoading, error } = useQuery<ListingRevision[]>({
+    queryKey: ["admin", "listings-revision"],
+    queryFn: () => apiFetch<ListingRevision[]>(API_ENDPOINTS.adminListingsEnRevision),
+  });
+
+  const aprobar = useMutation({
+    mutationFn: (id: string) => apiFetch<void>(API_ENDPOINTS.adminListingAprobar(id), { method: "POST" }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "listings-revision"] }); qc.invalidateQueries({ queryKey: ["admin", "dashboard"] }); toast.success("Listing publicado"); },
+    onError: () => toast.error("No se pudo aprobar"),
+  });
+
+  const rechazar = useMutation({
+    mutationFn: ({ id, mot }: { id: string; mot: string }) =>
+      apiFetch<void>(API_ENDPOINTS.adminListingRechazar(id), { method: "POST", body: JSON.stringify({ motivo: mot }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "listings-revision"] }); qc.invalidateQueries({ queryKey: ["admin", "dashboard"] }); setMotivoAbierto(null); setMotivo(""); toast.success("Listing rechazado"); },
+    onError: () => toast.error("No se pudo rechazar"),
+  });
+
+  if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
+  if (error) return <AccessError error={error} />;
+  if (!data?.length) return <p className="text-sm" style={{ color: K.muted }}>Sin listings pendientes de revisión. ✓</p>;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm" style={{ color: K.muted }}>{data.length} listing{data.length !== 1 ? "s" : ""} en revisión</p>
+      {data.map((l) => (
+        <div key={l.id} className="rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          {/* Fotos */}
+          {l.fotos && l.fotos.length > 0 && (
+            <div className="flex gap-2 overflow-x-auto p-3 pb-0">
+              {l.fotos.slice(0, 5).map((url, i) => (
+                <img key={i} src={url} alt="" style={{ height: 100, width: 140, objectFit: "cover", borderRadius: 8, flexShrink: 0 }} />
+              ))}
+            </div>
+          )}
+          {(!l.fotos || l.fotos.length === 0) && (
+            <div className="p-3 pb-0">
+              <div className="flex h-24 items-center justify-center rounded-lg" style={{ background: K.surface }}>
+                <span className="text-xs" style={{ color: K.muted }}>Sin fotos</span>
+              </div>
+            </div>
+          )}
+          {/* Info */}
+          <div className="flex flex-wrap items-start justify-between gap-3 p-3">
+            <div className="min-w-0 space-y-0.5">
+              <div className="font-semibold capitalize" style={{ color: K.ink }}>
+                {l.tipo_inmueble} en {l.tipo_operacion} · {fmtCOP(l.precio_cop)}
+              </div>
+              <div className="text-xs" style={{ color: K.muted }}>
+                {[l.barrio, l.municipio].filter(Boolean).join(", ")}
+              </div>
+              <div className="text-xs" style={{ color: K.muted }}>
+                {l.nombre_contacto && <span>{l.nombre_contacto} · </span>}
+                {l.telefono && <span>{l.telefono} · </span>}
+                {l.email_contacto && <span>{l.email_contacto}</span>}
+              </div>
+              <div className="text-[11px]" style={{ color: K.muted }}>
+                {new Date(l.created_at).toLocaleString("es-CO", { dateStyle: "short", timeStyle: "short" })}
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => aprobar.mutate(l.id)}
+                disabled={aprobar.isPending}
+                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
+                style={{ background: K.teal }}
+              >
+                <Check className="h-4 w-4" /> Aprobar
+              </button>
+              {motivoAbierto === l.id ? (
+                <div className="flex flex-col gap-1.5">
+                  <textarea
+                    value={motivo}
+                    onChange={(e) => setMotivo(e.target.value)}
+                    placeholder="Motivo del rechazo…"
+                    rows={2}
+                    className="rounded-md border px-2 py-1.5 text-xs"
+                    style={{ borderColor: K.coral, color: K.ink, resize: "none", minWidth: 200 }}
+                  />
+                  <div className="flex gap-1.5">
+                    <button
+                      onClick={() => motivo.trim() && rechazar.mutate({ id: l.id, mot: motivo.trim() })}
+                      disabled={!motivo.trim() || rechazar.isPending}
+                      className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+                      style={{ background: K.coral }}
+                    >
+                      <X className="h-3.5 w-3.5" /> Confirmar rechazo
+                    </button>
+                    <button onClick={() => { setMotivoAbierto(null); setMotivo(""); }}
+                      className="text-xs" style={{ color: K.muted }}>Cancelar</button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setMotivoAbierto(l.id)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border px-4 py-2 text-sm font-semibold"
+                  style={{ borderColor: K.coral, color: K.coral }}
+                >
+                  <X className="h-4 w-4" /> Rechazar
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

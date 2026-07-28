@@ -1,9 +1,8 @@
-"""Publicación directa de listings — owner/agente publica y sale al mapa.
+"""Publicación directa de listings — owner/agente publica vía tabla `listing`.
 
-Modelo unificado (doc UNIFICACION_PUBLICACION): escribe a la tabla `listing`
-como 'publicado' + verificado=false ("publica primero, verifica después"). El
-realtor asignado hace due diligence y levanta verificado. Las declaraciones
-legales (predial/hipoteca/escritura/PH/servicios) van en listing.declaraciones.
+Agentes verificados → 'publicado' + verificado=true (salen al mapa de inmediato).
+Propietarios (no agentes) → 'en_revision' (requieren aprobación admin antes de
+aparecer en el mapa). Las declaraciones legales van en listing.declaraciones.
 """
 from __future__ import annotations
 
@@ -318,7 +317,9 @@ async def crear_listing(
                     declaraciones, destacado, tour_url, video_url,
                     published_at, created_at, updated_at
                 ) VALUES (
-                    $1, $2, $3, NULL, NULL, 'publicado', FALSE,
+                    $1, $2, $3, NULL, NULL,
+                    CASE WHEN $34 THEN 'publicado'::listing_estado ELSE 'en_revision'::listing_estado END,
+                    $34,
                     ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, FALSE,
                     $9, $10, 'COP', $11,
                     $12, $13, $14, $15, $16,
@@ -340,6 +341,7 @@ async def crear_listing(
                 nombre_contacto, telefono, email_contacto, horario_contacto,
                 json.dumps(declaraciones_obj), es_agente,
                 _safe_embed_url(tour_url), _safe_embed_url(video_url),
+                es_agente,  # $34: estado/verificado CASE
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
@@ -384,19 +386,26 @@ async def crear_listing(
             # El listing ya está publicado; la asignación no puede tumbar el flujo.
             logger.exception("crear_listing: intake/asignación falló para listing %s", listing_id)
 
-    # Listing publicado pero sin verificar → avisar para asignar realtor + dd.
     await _notify_admin_new_listing(
         listing_id=listing_id, tipo_inmueble=tipo_inmueble,
         tipo_operacion=operacion, precio_cop=precio_cop,
         nombre_contacto=nombre_contacto, email_contacto=email_contacto,
     )
 
+    if es_agente:
+        return {
+            "id": listing_id,
+            "estado": "publicado",
+            "verificado": True,
+            "es_agente": True,
+            "mensaje": "Tu propiedad ya está en el mapa.",
+        }
     return {
         "id": listing_id,
-        "estado": "publicado",
+        "estado": "en_revision",
         "verificado": False,
-        "es_agente": es_agente,
-        "mensaje": "Tu propiedad ya está en el mapa. Un asesor la verificará pronto.",
+        "es_agente": False,
+        "mensaje": "Tu propiedad está en revisión. La publicaremos en el mapa una vez verificada.",
     }
 
 
