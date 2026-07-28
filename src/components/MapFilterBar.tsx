@@ -1010,6 +1010,7 @@ export function MapFilterBar({
     areaActive,
     isRent  && (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
+    filters.tipoInmueble !== null,
   ].filter(Boolean).length;
   const amenCount = filters.amenidades?.length ?? 0;
 
@@ -1089,23 +1090,12 @@ export function MapFilterBar({
         />
       </div>
 
-      {/* Tipo */}
-      <div style={{ position: "relative", flexShrink: 0 }}>
-        <FilterPill
-          label={tipoLabel(filters)}
-          active={tipoActive}
-          onClear={() => onFiltersChange({ tipoInmueble: null })}
-          onClick={(a) => toggle("tipo", a)}
-          isOpen={open === "tipo"}
-        />
-      </div>
-
       {/* Filtros */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
           label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1350,27 +1340,6 @@ export function MapFilterBar({
         return (
           <div ref={dropdownRef} style={wrapStyle}>
             <HabBanosPanel filters={filters} onChange={onFiltersChange} />
-          </div>
-        );
-      case "tipo":
-        return (
-          <div ref={dropdownRef} style={wrapStyle}>
-            <div style={panelBase}>
-              <span style={labelSm}>Tipo de inmueble</span>
-              <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
-                {[{ value: null, label: "Todos los tipos" }, ...TIPO_OPTIONS].map((opt) => (
-                  <label key={String(opt.value)} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.ink }}>
-                    <input
-                      type="radio" name="tipo-dd"
-                      checked={filters.tipoInmueble === opt.value}
-                      onChange={() => { onFiltersChange({ tipoInmueble: opt.value }); close(); }}
-                      style={{ accentColor: C.teal }}
-                    />
-                    {opt.label}
-                  </label>
-                ))}
-              </div>
-            </div>
           </div>
         );
       case "amenidades":
