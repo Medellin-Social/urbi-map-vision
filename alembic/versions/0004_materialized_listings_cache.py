@@ -89,14 +89,21 @@ def upgrade() -> None:
         )
     """)
 
-    # Populate barrios_cd immediately — static data, no periodic refresh needed
+    # Populate barrios_cd — skipped on fresh DB where catastro_medellin hasn't been loaded yet
     op.execute("""
-        INSERT INTO analytics.barrios_cd (barrio_id, cd_comuna)
-        SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
-        FROM raw.barrios b2
-        JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
-        ORDER BY b2.id
-        ON CONFLICT (barrio_id) DO NOTHING
+        DO $$ BEGIN
+            IF EXISTS (
+                SELECT 1 FROM information_schema.tables
+                WHERE table_schema = 'raw' AND table_name = 'catastro_medellin'
+            ) THEN
+                INSERT INTO analytics.barrios_cd (barrio_id, cd_comuna)
+                SELECT DISTINCT ON (b2.id) b2.id AS barrio_id, c.cd_comuna
+                FROM raw.barrios b2
+                JOIN raw.catastro_medellin c ON UPPER(c.ds_comuna) = UPPER(b2.comuna)
+                ORDER BY b2.id
+                ON CONFLICT (barrio_id) DO NOTHING;
+            END IF;
+        END $$;
     """)
 
 

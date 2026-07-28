@@ -119,6 +119,26 @@ JOIN seg_score     ss ON b.barrio_id = ss.barrio_id;
 
 
 def upgrade() -> None:
+    # Bootstrap raw schema + barrios stub so FK-dependent migrations (0005+) work on fresh DB.
+    # Real data loaded separately via pg_dump from local.
+    op.execute("CREATE SCHEMA IF NOT EXISTS raw")
+    op.execute("""
+        CREATE TABLE IF NOT EXISTS raw.barrios (
+            id                   SERIAL PRIMARY KEY,
+            nombre               text,
+            comuna               text,
+            municipio            text,
+            fuente               text,
+            raw_props            jsonb,
+            geometry             geometry(MultiPolygon,4326),
+            cargado_en           timestamptz DEFAULT now(),
+            excluir_inversion    boolean DEFAULT false,
+            uso_suelo_dominante  varchar,
+            uso_suelo_score      integer,
+            ciudad_id            integer DEFAULT 1
+        )
+    """)
+    op.execute("CREATE INDEX IF NOT EXISTS idx_barrios_geometry ON raw.barrios USING GIST (geometry)")
     op.execute("CREATE SCHEMA IF NOT EXISTS analytics")
     op.execute("CREATE EXTENSION IF NOT EXISTS unaccent")
     op.execute("ALTER TABLE raw.barrios ADD COLUMN IF NOT EXISTS uso_suelo_dominante varchar")
