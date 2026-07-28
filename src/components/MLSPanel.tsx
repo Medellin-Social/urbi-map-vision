@@ -45,7 +45,6 @@ type Props = {
 // Internal-only filters — common filters (precio, hab, tipo, area, banos, antiguedad, tipoOp)
 // now live in SharedFilters and come via the externalFilters prop from map.tsx.
 type Filters = {
-  soloPromium: boolean;
   modalidad: "corto" | "medio" | "largo" | null;
   scoreMin: number | null;
   scoreMax: number | null;
@@ -458,7 +457,6 @@ export function MLSPanel({
 }: Props) {
   const isMobile = useIsMobile();
   const [filters, setFilters] = useState<Filters>({
-    soloPromium: false,
     modalidad: null,
     scoreMin: null,
     scoreMax: null,
@@ -475,7 +473,7 @@ export function MLSPanel({
 
   // Reset internal filters when target or barrio changes
   useEffect(() => {
-    setFilters({ soloPromium: false, modalidad: null, scoreMin: null, scoreMax: null, yieldMin: null, yieldMax: null });
+    setFilters({ modalidad: null, scoreMin: null, scoreMax: null, yieldMin: null, yieldMax: null });
   }, [target, barrio.id]);
 
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
@@ -498,8 +496,8 @@ export function MLSPanel({
     [listings],
   );
 
-  // Premium state — must be declared before filtered useMemo
-  const premiumFilterActive = filters.soloPromium;
+  // Premium state — reads from SharedFilters (controlled by MapFilterBar)
+  const premiumFilterActive = ef.soloPromium;
   const premiumInCurrent = useMemo(
     () => listings.filter((l) => l.tier === "agencia_premium").length,
     [listings],
@@ -513,7 +511,7 @@ export function MLSPanel({
     const src = (premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0)
       ? premiumExpanded : listings;
     return src.filter((l) => {
-      if (filters.soloPromium && l.tier !== "agencia_premium") return false;
+      if (premiumFilterActive && l.tier !== "agencia_premium") return false;
       if (filters.scoreMin !== null && (l.barrio_score ?? 0) < filters.scoreMin) return false;
       if (filters.scoreMax !== null && (l.barrio_score ?? 0) > filters.scoreMax) return false;
       if (filters.yieldMin !== null && (l.barrio_yield ?? 0) < filters.yieldMin) return false;
@@ -662,35 +660,21 @@ export function MLSPanel({
           )}
         </div>
 
-        {/* Filtros internos: premium + landlord + investor */}
-        <div className="border-b border-border px-4 py-2.5 flex gap-2 flex-wrap items-center">
-          <button
-            onClick={() => setFilters((f) => ({ ...f, soloPromium: !f.soloPromium }))}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium transition border ${
-              filters.soloPromium
-                ? "bg-amber-500/20 text-amber-400 border-amber-500/40"
-                : "bg-surface/60 text-muted-foreground border-border hover:text-foreground"
-            }`}
-          >
-            ✦ Premium
-          </button>
-
-          {target === "landlord" && (
-            <>
-              <span className="text-[11px] text-muted-foreground">Modalidad:</span>
-              {([null, "corto", "medio", "largo"] as const).map((m) => (
-                <button
-                  key={String(m)}
-                  onClick={() => setFilters((f) => ({ ...f, modalidad: m }))}
-                  className={btnFilter(filters.modalidad === m)}
-                >
-                  {m === null ? "Todas" : m === "corto" ? "Corto" : m === "medio" ? "Medio" : "Largo"}
-                </button>
-              ))}
-            </>
-          )}
-
-        </div>
+        {/* Filtros internos: modalidad (solo landlord) */}
+        {target === "landlord" && (
+          <div className="border-b border-border px-4 py-2.5 flex gap-2 flex-wrap items-center">
+            <span className="text-[11px] text-muted-foreground">Modalidad:</span>
+            {([null, "corto", "medio", "largo"] as const).map((m) => (
+              <button
+                key={String(m)}
+                onClick={() => setFilters((f) => ({ ...f, modalidad: m }))}
+                className={btnFilter(filters.modalidad === m)}
+              >
+                {m === null ? "Todas" : m === "corto" ? "Corto" : m === "medio" ? "Medio" : "Largo"}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* Contador de resultados + orden */}
         {!isLoading && (

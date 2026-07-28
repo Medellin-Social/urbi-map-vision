@@ -31,6 +31,7 @@ export type SharedFilters = {
   amenidades: string[] | null;
   amoblado: boolean | null;
   busqueda: string | null;
+  soloPromium: boolean;
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
@@ -48,6 +49,7 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   amenidades: null,
   amoblado: null,
   busqueda: null,
+  soloPromium: false,
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
@@ -1011,6 +1013,7 @@ export function MapFilterBar({
     isRent  && (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
     filters.tipoInmueble !== null,
+    filters.soloPromium,
   ].filter(Boolean).length;
   const amenCount = filters.amenidades?.length ?? 0;
 
@@ -1095,7 +1098,7 @@ export function MapFilterBar({
         <FilterPill
           label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null, soloPromium: false }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1267,6 +1270,22 @@ export function MapFilterBar({
           </div>
         </div>
 
+        {/* Premium */}
+        <div style={{ marginBottom: 20 }}>
+          <button
+            onClick={() => onFiltersChange({ soloPromium: !filters.soloPromium })}
+            style={{
+              width: "100%", padding: "10px 14px", borderRadius: 8, cursor: "pointer",
+              fontSize: 13, fontWeight: 600, textAlign: "left",
+              border: `1.5px solid ${filters.soloPromium ? "#f59e0b" : C.border}`,
+              background: filters.soloPromium ? "rgba(245,158,11,0.12)" : "transparent",
+              color: filters.soloPromium ? "#b45309" : C.ink,
+            }}
+          >
+            ✦ Solo Premium
+          </button>
+        </div>
+
         {/* Área */}
         <div style={{ marginBottom: 20 }}>
           <span style={labelSm}>Área (m²)</span>
@@ -1407,6 +1426,20 @@ export function MapFilterBar({
                   </button>
                 ))}
               </div>
+
+              {/* Premium */}
+              <button
+                onClick={() => onFiltersChange({ soloPromium: !filters.soloPromium })}
+                style={{
+                  width: "100%", padding: "8px 12px", borderRadius: 8, cursor: "pointer",
+                  marginBottom: 16, fontSize: 12, fontWeight: 600, textAlign: "left",
+                  border: `1.5px solid ${filters.soloPromium ? "#f59e0b" : C.border}`,
+                  background: filters.soloPromium ? "rgba(245,158,11,0.12)" : "transparent",
+                  color: filters.soloPromium ? "#b45309" : C.ink,
+                }}
+              >
+                ✦ Solo Premium
+              </button>
 
               {/* Área m² */}
               <span style={labelSm}>Área m²</span>
