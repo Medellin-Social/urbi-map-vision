@@ -1388,6 +1388,26 @@ export function MapFilterBar({
                 Filtros
               </span>
 
+              {/* Tipo de inmueble */}
+              <span style={labelSm}>Tipo de inmueble</span>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
+                {[{ value: null, label: "Todos" }, ...TIPO_OPTIONS].map((opt) => (
+                  <button
+                    key={String(opt.value)}
+                    onClick={() => onFiltersChange({ tipoInmueble: opt.value })}
+                    style={{
+                      padding: "6px 12px", borderRadius: 8, fontSize: 12,
+                      border: `1px solid ${filters.tipoInmueble === opt.value ? C.teal : C.border}`,
+                      background: filters.tipoInmueble === opt.value ? C.teal : "transparent",
+                      color: filters.tipoInmueble === opt.value ? "#fff" : C.ink,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
               {/* Área m² */}
               <span style={labelSm}>Área m²</span>
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
