@@ -24,7 +24,7 @@ SELECT
     ROUND(AVG({score_col}) FILTER (WHERE {score_col} > 0))::int  AS score_promedio,
     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bm.precio_venta_m2_p50)
         FILTER (WHERE bm.precio_venta_m2_p50 > 0))::int          AS precio_m2_cop,
-    ROUND(AVG(bm.yield_bruto) FILTER (WHERE bm.yield_bruto > 0), 2) AS yield_promedio,
+    ROUND(AVG(bm.yield_bruto) FILTER (WHERE bm.yield_bruto > 0)::numeric, 2) AS yield_promedio,
     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bm.precio_arriendo_p50)
         FILTER (WHERE bm.precio_arriendo_p50 > 0))::int          AS arriendo_cop,
     ROUND(AVG(lq.liquidez_score) FILTER (WHERE lq.liquidez_score > 0))::int AS liquidez_score,
@@ -62,7 +62,7 @@ SELECT
     ROUND(AVG({score_col}) FILTER (WHERE {score_col} > 0))::int  AS score_promedio,
     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bm.precio_venta_m2_p50)
         FILTER (WHERE bm.precio_venta_m2_p50 > 0))::int          AS precio_m2_cop,
-    ROUND(AVG(bm.yield_bruto) FILTER (WHERE bm.yield_bruto > 0), 2) AS yield_promedio,
+    ROUND(AVG(bm.yield_bruto) FILTER (WHERE bm.yield_bruto > 0)::numeric, 2) AS yield_promedio,
     ROUND(PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY bm.precio_arriendo_p50)
         FILTER (WHERE bm.precio_arriendo_p50 > 0))::int          AS arriendo_cop,
     ROUND(AVG(lq.liquidez_score) FILTER (WHERE lq.liquidez_score > 0))::int AS liquidez_score,
