@@ -12,8 +12,7 @@ const TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "buy",        label: "Comprar" },
   { id: "rent",       label: "Arrendar" },
   { id: "sell",       label: "Vender / Arrendar", route: "/vender" },
-  { id: "simulator",  label: "Simulador",           route: "/simulador" },
-  { id: "comparador", label: "Comparador",          route: "/comparador" },
+  // ponytail: simulador/comparador ocultos temporalmente del nav, rutas siguen vivas
 ];
 
 type MapNavbarProps = {
