@@ -100,6 +100,20 @@ def upgrade() -> None:
     """)
 
 
+    # barrios_pois_distancia stub also needs columns from compute_barrios_pois.py
+    op.execute("""
+        ALTER TABLE analytics.barrios_pois_distancia
+          ADD COLUMN IF NOT EXISTS dist_metro_km   numeric,
+          ADD COLUMN IF NOT EXISTS dist_parque_km  numeric,
+          ADD COLUMN IF NOT EXISTS dist_mall_km    numeric,
+          ADD COLUMN IF NOT EXISTS dist_colegio_km numeric,
+          ADD COLUMN IF NOT EXISTS n_yoga_1km      integer,
+          ADD COLUMN IF NOT EXISTS n_colegios_1km  integer,
+          ADD COLUMN IF NOT EXISTS walk_score      integer,
+          ADD COLUMN IF NOT EXISTS transit_score   integer
+    """)
+
+
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS analytics.barrios_score_consolidado")
     op.execute("DROP TABLE IF EXISTS analytics.barrios_liquidez")
