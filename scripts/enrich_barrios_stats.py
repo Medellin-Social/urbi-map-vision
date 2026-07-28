@@ -81,21 +81,9 @@ SELECT
     sg.score_seguridad_residente    AS score_seguridad,
     sg.categoria_seguridad,
     sg.nota_seguridad,
-    -- remates (from raw.remates_judiciales; 0 if table empty / scraper not run yet)
-    COALESCE(
-        (SELECT COUNT(*)::int FROM raw.remates_judiciales rj
-         WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo'),
-        0
-    ) AS n_remates_municipio,
-    CASE
-        WHEN COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0) > 0
-        THEN ROUND(
-            (SELECT COUNT(*)::float FROM raw.remates_judiciales rj
-             WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo')
-            / (COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0)) * 100, 2
-        )
-        ELSE NULL
-    END AS remates_por_100_listings
+    -- remates (from raw.remates_judiciales; 0 if table absent)
+    COALESCE({remates_count}, 0) AS n_remates_municipio,
+    {remates_ratio}              AS remates_por_100_listings
 FROM raw.barrios b
 LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
 LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
@@ -125,7 +113,35 @@ def main():
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
 
-    sql = QUERY.format(municipio_filter=mun_filter)
+    cur.execute("""
+        SELECT EXISTS (
+            SELECT 1 FROM information_schema.tables
+            WHERE table_schema = 'raw' AND table_name = 'remates_judiciales'
+        )
+    """)
+    remates_exists = cur.fetchone()["exists"]
+    if not remates_exists:
+        print("raw.remates_judiciales no existe — remates_municipio = 0")
+
+    remates_count_sql = (
+        "(SELECT COUNT(*)::int FROM raw.remates_judiciales rj"
+        " WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo')"
+        if remates_exists else "0"
+    )
+    remates_ratio_sql = (
+        "CASE WHEN COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0) > 0"
+        " THEN ROUND((SELECT COUNT(*)::float FROM raw.remates_judiciales rj"
+        "  WHERE LOWER(rj.municipio) = LOWER(b.municipio) AND rj.estado = 'activo')"
+        "  / (COALESCE(bm.n_venta, 0) + COALESCE(bm.n_arriendo, 0)) * 100, 2)"
+        " ELSE NULL END"
+        if remates_exists else "NULL"
+    )
+
+    sql = QUERY.format(
+        municipio_filter=mun_filter,
+        remates_count=remates_count_sql,
+        remates_ratio=remates_ratio_sql,
+    )
     cur.execute(sql)
     rows = cur.fetchall()
     conn.close()
