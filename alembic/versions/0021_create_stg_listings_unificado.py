@@ -40,8 +40,13 @@ CREATE TABLE IF NOT EXISTS raw.listings_premium (
     fotos         TEXT[],
     fecha_scraping TIMESTAMPTZ DEFAULT now(),
     dedup_hash    VARCHAR,
+    amenidades    TEXT[],
+    antiguedad    TEXT,
     UNIQUE(dedup_hash)
 );
+-- Idempotent: add columns that cache.py references but may be missing from old stubs
+ALTER TABLE raw.listings_premium ADD COLUMN IF NOT EXISTS amenidades text[];
+ALTER TABLE raw.listings_premium ADD COLUMN IF NOT EXISTS antiguedad text;
 
 CREATE TABLE IF NOT EXISTS raw.listings_renta_media (
     id            SERIAL PRIMARY KEY,

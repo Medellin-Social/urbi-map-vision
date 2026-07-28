@@ -151,9 +151,11 @@ def upgrade() -> None:
             barrio_id              integer,
             yield_renta_media_pct  double precision,
             yield_bruto            double precision,
-            estado_precio          text
+            estado_precio          text,
+            airbnb_n_listings      integer
         )
     """)
+    op.execute("ALTER TABLE analytics.barrios_mercado ADD COLUMN IF NOT EXISTS airbnb_n_listings integer")
     op.execute("""
         CREATE TABLE IF NOT EXISTS analytics.barrios_pois_distancia (
             barrio_id       integer,

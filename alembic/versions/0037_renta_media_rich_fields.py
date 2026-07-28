@@ -20,7 +20,8 @@ def upgrade() -> None:
         ALTER TABLE raw.listings_renta_media
             ADD COLUMN IF NOT EXISTS descripcion  TEXT,
             ADD COLUMN IF NOT EXISTS fotos        TEXT[],
-            ADD COLUMN IF NOT EXISTS amenidades   TEXT[];
+            ADD COLUMN IF NOT EXISTS amenidades   TEXT[],
+            ADD COLUMN IF NOT EXISTS amoblado     BOOLEAN;
     """)
 
 
