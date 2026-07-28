@@ -29,7 +29,8 @@ interface Agente {
 
 export const Route = createFileRoute("/conectar-agente")({
   validateSearch: (s: Record<string, unknown>) => ({
-    listing_id: typeof s.listing_id === "number" ? s.listing_id : Number(s.listing_id) || 0,
+    // listing.id es UUID (modelo unificado). Se conserva como string.
+    listing_id: s.listing_id != null ? String(s.listing_id) : "",
   }),
   component: ConectarAgentePage,
 });

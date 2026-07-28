@@ -1,4 +1,4 @@
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_BASE_URL } from "@/config/api";
 
 // ── Enums — aligned with backend models (realtors.py / listing.py) ─────────────
@@ -6,7 +6,8 @@ import { API_BASE_URL } from "@/config/api";
 export type EstadoListing  = "borrador" | "en_revision" | "publicado" | "rechazado" | "pausado" | "cerrado";
 export type TipoInmueble   = "apartamento" | "casa" | "local" | "oficina" | "lote" | "finca";
 export type Operacion      = "venta" | "arriendo";
-export type EstadoAgent    = "pendiente" | "activo" | "rechazado";
+export type EstadoAgent    = "pendiente" | "activo" | "rechazado" | "inactivo";
+export type EstadoIntake   = "asignado" | "en_verificacion" | "aceptado";
 export type ZonaNivel      = "barrio" | "comuna" | "municipio";
 
 // ── Domain types ───────────────────────────────────────────────────────────────
@@ -49,6 +50,7 @@ export type ListingDraft = {
 
 export type ItemAsignado = {
   id: string; // intake.id
+  estado: EstadoIntake;
   tipo_inmueble: TipoInmueble;
   operacion: Operacion;
   precio_esperado: number;
@@ -65,7 +67,7 @@ export type ItemAsignado = {
     tiene_hipoteca: boolean | null;
   };
   due_diligence: DueDiligence;
-  listing?: ListingDraft; // borrador asociado (puede no existir aún)
+  listing?: ListingDraft | null; // borrador asociado (existe tras aceptar)
   created_at: string;
 };
 
@@ -88,15 +90,106 @@ export type MiListing = {
   barrio: string;
   estado: EstadoListing;
   updated_at: string;
+  vistas_total: number;
+  vistas_30d: number;
 };
 
 export type InteligenciaBarrio = {
   zona_codigo: string;
   zona_nombre: string;
   score_consolidado: number;
-  liquidez: number;         // 0–100
-  mediana_venta_m2: number; // COP por m²
-  dias_promedio_mercado: number;
+  liquidez: number;                     // 0–100
+  mediana_venta_m2: number;             // COP por m²
+  tiempo_estimado_venta: string | null; // ej. "3-6 meses"
+};
+
+export type RoiZona = {
+  zona_codigo: string;
+  zona_nombre: string;
+  nivel: ZonaNivel;
+  tier: string | null;
+  precio_mensual: number;
+  intakes_mes: number;
+  tomados_mes: number;
+  publicados_total: number;
+  cerrados_total: number;
+  costo_por_intake: number | null;
+  vistas_30d: number;
+};
+
+export type Desempeno = {
+  asignados_90d: number;
+  aceptados_90d: number;
+  tasa_aceptacion: number | null;       // 0–1
+  mediana_horas_aceptar: number | null;
+  vistas_30d: number;
+  vistas_total: number;
+  visitas_realizadas_90d: number;
+  visitas_no_show_90d: number;
+  show_rate: number | null;             // 0–1
+  ofertas_90d: number;
+  interesados_90d: number;
+  zonas: RoiZona[];
+};
+
+export type EstadoVisita = "pendiente" | "confirmada" | "realizada" | "cancelada" | "no_asistio";
+export type ResultadoVisita = "interesado" | "oferta" | "descartado";
+
+export type VisitaSolicitud = {
+  id: string;
+  listing_url: string;
+  listing_titulo: string;
+  nombre: string;
+  telefono: string | null;
+  email: string | null;
+  fecha_visita: string | null;
+  mensaje: string | null;
+  estado: EstadoVisita;
+  resultado: ResultadoVisita | null;
+  created_at: string;
+  es_pro: boolean;
+  horas_pendiente: number | null; // horas sin responder; null si ya se atendió
+};
+
+// Franja de disponibilidad semanal del agente (dia_semana 0=lunes..6=domingo).
+export type Franja = { dia_semana: number; hora_inicio: string; hora_fin: string };
+
+export type ListingPatch = {
+  titulo?: string;
+  descripcion?: string;
+  precio?: number;
+  area_m2?: number;
+  habitaciones?: number;
+  banos?: number;
+  direccion_aprox?: string;
+};
+
+export type DDItemEstado = "pendiente" | "verificado" | "rechazado";
+
+export type DDItem = {
+  id: string;
+  clave: string;
+  declarado: boolean | string | null;
+  estado: DDItemEstado;
+  nota: string | null;
+};
+
+export type DDChecklist = {
+  intake_id: string;
+  items: DDItem[];
+  completo: boolean;
+};
+
+export type Interesado = {
+  nombre: string | null;
+  email: string;
+  listing_titulo: string;
+  created_at: string;
+};
+
+export type Agenda = {
+  visitas: VisitaSolicitud[];
+  interesados: Interesado[];
 };
 
 // ── Business logic ─────────────────────────────────────────────────────────────
@@ -122,20 +215,39 @@ export function datosMinimosCompletos(l: ListingDraft): { ok: boolean; faltan: s
 // ── API interface ──────────────────────────────────────────────────────────────
 
 export interface RealtorDashboardApi {
-  /** TODO: GET /api/v1/realtor/me */
+  /** GET /api/v1/realtor/me */
   getPerfil(): Promise<PerfilAgente>;
-  /** TODO: GET /api/v1/realtor/asignados */
+  /** GET /api/v1/realtor/asignados */
   getAsignados(): Promise<ItemAsignado[]>;
-  /** TODO: GET /api/v1/realtor/pool */
+  /** GET /api/v1/realtor/pool */
   getPool(): Promise<ItemPool[]>;
-  /** TODO: POST /api/v1/realtor/pool/:id/tomar */
+  /** POST /api/v1/realtor/pool/:id/tomar */
   tomarDelPool(id: string): Promise<void>;
-  /** TODO: GET /api/v1/realtor/listings */
+  /** POST /api/v1/intake/:id/aceptar — crea listing borrador + checklist DD */
+  aceptarAsignado(intakeId: string): Promise<void>;
+  /** GET /api/v1/realtor/listings */
   getMisListings(): Promise<MiListing[]>;
-  /** TODO: POST /api/v1/realtor/asignados/:id/publicar  (borrador → en_revision) */
+  /** POST /api/v1/realtor/asignados/:id/publicar  (borrador → en_revision) */
   publicarAsignado(intakeId: string): Promise<void>;
-  /** TODO: GET /api/v1/barrios/:codigo/inteligencia */
+  /** GET /api/v1/realtor/desempeno */
+  getDesempeno(): Promise<Desempeno>;
+  /** GET /api/v1/realtor/agenda */
+  getAgenda(): Promise<Agenda>;
+  /** PATCH /api/v1/realtor/visitas/:id */
+  actualizarVisita(id: string, estado: Exclude<EstadoVisita, "pendiente">, resultado?: ResultadoVisita): Promise<void>;
+  /** GET /api/v1/realtor/inteligencia/:codigo */
   getInteligenciaBarrio(zonaCodigo: string): Promise<InteligenciaBarrio>;
+  /** GET/PUT /api/v1/realtor/disponibilidad */
+  getDisponibilidad(): Promise<Franja[]>;
+  putDisponibilidad(franjas: Franja[]): Promise<void>;
+  /** GET /api/v1/intake/:id/due-diligence */
+  getDueDiligence(intakeId: string): Promise<DDChecklist>;
+  /** POST /api/v1/due-diligence/:itemId/verificar */
+  verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string): Promise<void>;
+  /** PATCH /api/v1/realtor/listings/:id */
+  actualizarListing(listingId: string, campos: ListingPatch): Promise<void>;
+  /** POST /api/v1/realtor/listings/:id/fotos (multipart) */
+  subirFotosListing(listingId: string, files: File[]): Promise<void>;
 }
 
 // ── Mock ───────────────────────────────────────────────────────────────────────
@@ -167,9 +279,25 @@ const mockApi: RealtorDashboardApi = {
   async getAsignados() {
     await _d(600);
     return [
+      // ── Caso 0: recién asignado → "Aceptar" (el lead nuevo de Zillow) ────────
+      {
+        id: "intake-0",
+        estado: "asignado",
+        tipo_inmueble: "apartamento",
+        operacion: "venta",
+        precio_esperado: 450_000_000,
+        barrio: "El Poblado",
+        municipio: "Medellín",
+        owner_nombre: "Lucía Fernández",
+        declarado: { area_m2: 95, habitaciones: 3, banos: 2, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: true, tiene_hipoteca: null },
+        due_diligence: { documentos_completos: false, faltantes: [] },
+        listing: null,
+        created_at: "2026-07-11T16:00:00Z",
+      },
       // ── Caso 1: due diligence OK + listing completo → "Publicar" ────────────
       {
         id: "intake-1",
+        estado: "aceptado",
         tipo_inmueble: "apartamento",
         operacion: "venta",
         precio_esperado: 620_000_000,
@@ -197,6 +325,7 @@ const mockApi: RealtorDashboardApi = {
       // ── Caso 2: due diligence OK + listing sin foto portada → "Completar ficha" ──
       {
         id: "intake-2",
+        estado: "aceptado",
         tipo_inmueble: "casa",
         operacion: "venta",
         precio_esperado: 890_000_000,
@@ -224,6 +353,7 @@ const mockApi: RealtorDashboardApi = {
       // ── Caso 3: documentos incompletos → "Revisar" ───────────────────────────
       {
         id: "intake-3",
+        estado: "en_verificacion",
         tipo_inmueble: "apartamento",
         operacion: "arriendo",
         precio_esperado: 3_200_000,
@@ -247,14 +377,19 @@ const mockApi: RealtorDashboardApi = {
     _pool = _pool.filter((p) => p.id !== id);
   },
 
+  async aceptarAsignado(_intakeId) {
+    await _d(500);
+    // ponytail: mock no-op; real impl POST /intake/:id/aceptar
+  },
+
   async getMisListings() {
     await _d(600);
     return [
-      { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z" },
-      { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z" },
-      { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z" },
-      { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z" },
-      { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z" },
+      { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z", vistas_total: 1240, vistas_30d: 312 },
+      { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z", vistas_total: 0,    vistas_30d: 0 },
+      { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z", vistas_total: 0,    vistas_30d: 0 },
+      { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z", vistas_total: 85,   vistas_30d: 4 },
+      { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z", vistas_total: 2100, vistas_30d: 12 },
     ];
   },
 
@@ -263,31 +398,140 @@ const mockApi: RealtorDashboardApi = {
     // ponytail: mock no-op; real impl POSTs intake → listing borrador → en_revision
   },
 
+  async getDesempeno() {
+    await _d(500);
+    return {
+      asignados_90d: 12,
+      aceptados_90d: 10,
+      tasa_aceptacion: 0.833,
+      mediana_horas_aceptar: 3.5,
+      visitas_realizadas_90d: 6,
+      visitas_no_show_90d: 2,
+      show_rate: 0.75,
+      ofertas_90d: 2,
+      interesados_90d: 3,
+      vistas_30d: 328,
+      vistas_total: 3425,
+      zonas: [
+        {
+          zona_codigo: "el-poblado", zona_nombre: "El Poblado", nivel: "barrio", tier: "barrio",
+          precio_mensual: 200_000, intakes_mes: 9, tomados_mes: 7,
+          publicados_total: 5, cerrados_total: 2, costo_por_intake: 22_222, vistas_30d: 290,
+        },
+        {
+          zona_codigo: "laureles", zona_nombre: "Laureles", nivel: "barrio", tier: "barrio",
+          precio_mensual: 200_000, intakes_mes: 4, tomados_mes: 3,
+          publicados_total: 2, cerrados_total: 0, costo_por_intake: 50_000, vistas_30d: 38,
+        },
+      ],
+    };
+  },
+
+  async getAgenda() {
+    await _d(500);
+    return {
+      visitas: [
+        { id: "v-1", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Andrés Gómez",  telefono: "3001234567", email: "andres@example.com", fecha_visita: "2026-07-17T15:00:00Z", mensaje: "Viernes 17 jul a las 10:00 AM", estado: "pendiente",  resultado: null, created_at: "2026-07-15T09:00:00Z", es_pro: true, horas_pendiente: 9 },
+        { id: "v-2", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Sara Vélez",    telefono: null,         email: "sara@example.com",   fecha_visita: "2026-07-18T19:30:00Z", mensaje: null,                          estado: "confirmada", resultado: null, created_at: "2026-07-14T12:00:00Z", es_pro: false, horas_pendiente: null },
+        { id: "v-3", listing_url: "l-5", listing_titulo: "Oficina zona financiera El Poblado", nombre: "Camilo Ruiz",  telefono: "3017654321", email: null,                 fecha_visita: null,                    mensaje: "¿Se puede ver este fin de semana?", estado: "realizada", resultado: "interesado", created_at: "2026-07-08T16:00:00Z", es_pro: false, horas_pendiente: null },
+      ],
+      interesados: [
+        { nombre: "Laura Martínez", email: "laura@example.com",  listing_titulo: "Apartamento moderno en El Poblado", created_at: "2026-07-14T18:00:00Z" },
+        { nombre: null,             email: "pedro@example.com",  listing_titulo: "Casa esquinera Laureles — 4 hab",   created_at: "2026-07-13T10:00:00Z" },
+      ],
+    } satisfies Agenda;
+  },
+
+  async actualizarVisita(_id, _estado, _resultado) {
+    await _d(300);
+  },
+
+  async getDueDiligence(intakeId) {
+    await _d(400);
+    return {
+      intake_id: intakeId,
+      items: [
+        { id: "dd-1", clave: "tiene_escritura",        declarado: true,  estado: "verificado", nota: null },
+        { id: "dd-2", clave: "al_dia_predial",         declarado: true,  estado: "pendiente",  nota: null },
+        { id: "dd-3", clave: "al_dia_administracion",  declarado: false, estado: "pendiente",  nota: null },
+        { id: "dd-4", clave: "tiene_hipoteca",         declarado: null,  estado: "pendiente",  nota: null },
+      ],
+      completo: false,
+    } satisfies DDChecklist;
+  },
+
+  async verificarDDItem(_itemId, _estado, _nota) {
+    await _d(300);
+  },
+
+  async actualizarListing(_listingId, _campos) {
+    await _d(300);
+  },
+
+  async subirFotosListing(_listingId, _files) {
+    await _d(500);
+  },
+
   async getInteligenciaBarrio(zonaCodigo) {
     await _d(500);
     const table: Record<string, InteligenciaBarrio> = {
-      "el-poblado": { zona_codigo: "el-poblado", zona_nombre: "El Poblado", score_consolidado: 78, liquidez: 72, mediana_venta_m2: 8_500_000, dias_promedio_mercado: 45 },
-      "laureles":   { zona_codigo: "laureles",   zona_nombre: "Laureles",   score_consolidado: 71, liquidez: 68, mediana_venta_m2: 6_800_000, dias_promedio_mercado: 55 },
+      "el-poblado": { zona_codigo: "el-poblado", zona_nombre: "El Poblado", score_consolidado: 78, liquidez: 72, mediana_venta_m2: 8_500_000, tiempo_estimado_venta: "2-4 meses" },
+      "laureles":   { zona_codigo: "laureles",   zona_nombre: "Laureles",   score_consolidado: 71, liquidez: 68, mediana_venta_m2: 6_800_000, tiempo_estimado_venta: "3-6 meses" },
     };
     return table[zonaCodigo] ?? {
       zona_codigo: zonaCodigo, zona_nombre: zonaCodigo,
-      score_consolidado: 60, liquidez: 55, mediana_venta_m2: 5_500_000, dias_promedio_mercado: 70,
+      score_consolidado: 60, liquidez: 55, mediana_venta_m2: 5_500_000, tiempo_estimado_venta: "4-8 meses",
     };
+  },
+
+  async getDisponibilidad() {
+    await _d(300);
+    return [
+      { dia_semana: 1, hora_inicio: "09:00", hora_fin: "18:00" },
+      { dia_semana: 3, hora_inicio: "09:00", hora_fin: "18:00" },
+    ];
+  },
+  async putDisponibilidad(_franjas) {
+    await _d(300);
   },
 };
 
-// ── HTTP skeleton — ponytail: wire when backend routes exist ───────────────────
+// ── HTTP — api/routers/realtor.py ──────────────────────────────────────────────
 
 const httpApi: RealtorDashboardApi = {
   getPerfil:            ()     => apiFetch<PerfilAgente>       (`${API_BASE_URL}/realtor/me`),
   getAsignados:         ()     => apiFetch<ItemAsignado[]>     (`${API_BASE_URL}/realtor/asignados`),
   getPool:              ()     => apiFetch<ItemPool[]>         (`${API_BASE_URL}/realtor/pool`),
   tomarDelPool:         (id)   => apiFetch<void>               (`${API_BASE_URL}/realtor/pool/${id}/tomar`,         { method: "POST" }),
+  aceptarAsignado:      (id)   => apiFetch<void>               (`${API_BASE_URL}/intake/${id}/aceptar`,             { method: "POST" }),
   getMisListings:       ()     => apiFetch<MiListing[]>        (`${API_BASE_URL}/realtor/listings`),
   publicarAsignado:     (id)   => apiFetch<void>               (`${API_BASE_URL}/realtor/asignados/${id}/publicar`, { method: "POST" }),
-  getInteligenciaBarrio:(code) => apiFetch<InteligenciaBarrio> (`${API_BASE_URL}/barrios/${code}/inteligencia`),
+  getDesempeno:         ()     => apiFetch<Desempeno>          (`${API_BASE_URL}/realtor/desempeno`),
+  getAgenda:            ()     => apiFetch<Agenda>             (`${API_BASE_URL}/realtor/agenda`),
+  actualizarVisita:     (id, estado, resultado) => apiFetch<void>(`${API_BASE_URL}/realtor/visitas/${id}`, { method: "PATCH", body: JSON.stringify({ estado, resultado }) }),
+  getInteligenciaBarrio:(code) => apiFetch<InteligenciaBarrio> (`${API_BASE_URL}/realtor/inteligencia/${code}`),
+  getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
+  putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),
+  getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),
+  verificarDDItem:      (id, estado, nota) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota }) }),
+  actualizarListing:    (id, campos) => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}`, { method: "PATCH", body: JSON.stringify(campos) }),
+  async subirFotosListing(id, files) {
+    // multipart — no puede pasar por apiFetch (fuerza Content-Type JSON)
+    const fd = new FormData();
+    for (const f of files) fd.append("fotos", f);
+    const t = getToken();
+    const res = await fetch(`${API_BASE_URL}/realtor/listings/${id}/fotos`, {
+      method: "POST",
+      headers: t ? { Authorization: `Bearer ${t}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error((b as { detail?: string }).detail ?? `Error ${res.status}`);
+    }
+  },
 };
 
-// Cambia a false en .env (VITE_REALTOR_USE_MOCK=false) para usar el backend real
+// Backend real por defecto. Mock solo si VITE_REALTOR_USE_MOCK="true" explícito.
 export const realtorApi: RealtorDashboardApi =
-  import.meta.env.VITE_REALTOR_USE_MOCK !== "false" ? mockApi : httpApi;
+  import.meta.env.VITE_REALTOR_USE_MOCK === "true" ? mockApi : httpApi;

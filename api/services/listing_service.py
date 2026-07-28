@@ -2,8 +2,11 @@
 from datetime import datetime, timezone
 from typing import Any, Dict, FrozenSet, List
 
+# "Publica primero, verifica después": borrador → publicado es directo (owner
+# publica sin moderación previa; la verificación es un flag aparte, no un estado).
+# Se conserva borrador → en_revision para el flujo realtor clásico (aceptar_intake).
 TRANSICIONES_VALIDAS: Dict[str, FrozenSet[str]] = {
-    "borrador":    frozenset(["en_revision"]),
+    "borrador":    frozenset(["en_revision", "publicado"]),
     "en_revision": frozenset(["publicado", "rechazado"]),
     "rechazado":   frozenset(["borrador"]),
     "publicado":   frozenset(["pausado", "cerrado"]),
@@ -84,7 +87,7 @@ def transition(listing: Any, nuevo_estado: str) -> None:
     if nuevo_estado not in TRANSICIONES_VALIDAS.get(actual, frozenset()):
         raise EstadoError(f"Transición inválida: {actual!r} → {nuevo_estado!r}")
 
-    if actual == "borrador" and nuevo_estado == "en_revision":
+    if actual == "borrador" and nuevo_estado in ("en_revision", "publicado"):
         chk = datos_minimos_completos(listing)
         if not chk["ok"]:
             raise EstadoError("Faltan datos mínimos: " + ", ".join(chk["faltan"]))

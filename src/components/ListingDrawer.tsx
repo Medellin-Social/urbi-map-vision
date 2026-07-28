@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import {
-  LineChart, Line, XAxis, YAxis, Tooltip as RechartsTooltip,
+  AreaChart, Area, XAxis, YAxis, Tooltip as RechartsTooltip,
   ResponsiveContainer, ReferenceDot,
 } from "recharts";
 import { motion, AnimatePresence } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import {
-  X, Heart, Phone, ExternalLink, ChevronDown, ChevronUp,
-  MapPin, Eye, Clock, Building2, Bed, Bath, Maximize2, Share2,
-  Shield, Bell, BellRing, User, BarChart2, Plus, Check,
+  X, Heart, Phone, ExternalLink, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  MapPin, Clock, Building2, Bed, Bath, Maximize2, Share2,
+  Shield, Bell, BellRing, User, BarChart2, Plus, Check, Calendar,
 } from "lucide-react";
 import { useTarget } from "@/contexts/TargetContext";
 import { useIsPro, useIsAgente } from "@/components/LockedField";
@@ -21,7 +21,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { auth } from "@/lib/auth";
 import { toast } from "sonner";
-import type { ApiListingDetail, SimilarListing } from "@/lib/adapters";
+import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, SimilarListing } from "@/lib/adapters";
+import { toEmbedSrc } from "@/lib/embed";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { useTrm } from "@/hooks/useTrm";
@@ -64,6 +65,27 @@ function normalizeTipoOp(val: string | null | undefined): "arriendo" | "venta" {
   return "venta";
 }
 
+/** Limpia descripciones del scraper: mojibake, símbolos sueltos, espaciado. */
+function cleanDescripcion(text: string): string {
+  return text
+    // Reemplaza el carácter de reemplazo Unicode y emojis rotos ("? Ubicación")
+    .replace(/�/g, "")
+    // Bullets/símbolos sueltos al inicio de línea (?, *, -, •, · seguidos de espacio)
+    .replace(/^[\s]*[?*•·▪◦‣−–—-]+[\s]+/gm, "• ")
+    // "?" pegado antes de texto (emoji perdido): "? Ubicación" → "Ubicación"
+    .replace(/(^|\n)\s*\?\s+/g, "$1")
+    // Quita caracteres de control / no imprimibles
+    // eslint-disable-next-line no-control-regex
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, "")
+    // Colapsa 3+ saltos de línea a máximo 2
+    .replace(/\n{3,}/g, "\n\n")
+    // Colapsa espacios/tabs múltiples
+    .replace(/[ \t]{2,}/g, " ")
+    // Espacios al final de cada línea
+    .replace(/[ \t]+\n/g, "\n")
+    .trim();
+}
+
 function cleanAntiguedad(val: string | null | undefined): string | null | undefined {
   if (!val) return val;
   return val
@@ -76,18 +98,6 @@ function cleanAntiguedad(val: string | null | undefined): string | null | undefi
 }
 
 // ─── sub-components ────────────────────────────────────────────────────────────
-
-function MetricChip({ icon, label }: { icon: React.ReactNode; label: string | number }) {
-  return (
-    <div
-      className="flex flex-col items-center gap-0.5 rounded-lg px-3 py-2 text-center"
-      style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}
-    >
-      <span style={{ color: "#6B5B45" }}>{icon}</span>
-      <span className="text-xs font-semibold" style={{ color: "#1A1208" }}>{label}</span>
-    </div>
-  );
-}
 
 function CollapsibleDescription({ text }: { text: string }) {
   const [expanded, setExpanded] = useState(false);
@@ -144,133 +154,113 @@ function Amenidades({ items }: { items: string[] }) {
   );
 }
 
-function PriceBadge({ listing }: { listing: ApiListingDetail }) {
-  const pct = listing.pct_bajo_mediana;
-  const barrio = listing.barrio_nombre ?? "el barrio";
-  if (pct == null) return null;
-  if (pct > 10)
-    return (
-      <div className="rounded-xl p-3 text-sm" style={{ background: "#E1F5EE", border: "1px solid #1D9E75" }}>
-        <div className="font-bold text-[#085041]">✓ BUENA OFERTA</div>
-        <div className="mt-0.5 text-[#085041]">{pct.toFixed(0)}% bajo el precio típico de {barrio}</div>
-      </div>
-    );
-  if (pct >= -10)
-    return (
-      <div className="rounded-xl p-3 text-sm" style={{ background: "#F5F0E8", border: "1px solid #E8E0D0" }}>
-        <div className="font-bold text-[#6B5B45]">◎ PRECIO JUSTO</div>
-        <div className="mt-0.5 text-[#6B5B45]">Dentro del rango típico de {barrio}</div>
-      </div>
-    );
-  return (
-    <div className="rounded-xl p-3 text-sm" style={{ background: "#FAECE7", border: "1px solid #D85A30" }}>
-      <div className="font-bold text-[#D85A30]">↑ SOBRE PRECIO</div>
-      <div className="mt-0.5 text-[#D85A30]">{Math.abs(pct).toFixed(0)}% sobre el precio típico de {barrio}</div>
-    </div>
-  );
-}
+// ─── InfoTip — botón ⓘ con popover al click (cierra al clic afuera) ──────────────
 
-function PriceRange({ listing }: { listing: ApiListingDetail }) {
-  const isVenta = normalizeTipoOp(listing.tipo_operacion) === "venta";
-  const p25 = isVenta ? listing.precio_m2_p25 : listing.arr_p25;
-  const p50 = isVenta ? listing.precio_m2_mediana_barrio : listing.arriendo_p50_barrio;
-  const p75 = isVenta ? listing.precio_m2_p75 : listing.arr_p75;
-  const actual = isVenta ? listing.precio_m2 : listing.precio_cop;
-  if (!p25 || !p50 || !p75 || !actual) return null;
-  const pct = Math.min(100, Math.max(0, ((actual - p25) / (p75 - p25)) * 100));
-  const unit = isVenta ? "/m²" : "/mes";
-  return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-[#1A1208]">Precios en {listing.barrio_nombre ?? "el barrio"}</h3>
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-        <div className="grid grid-cols-3 divide-x text-center">
-          {[
-            { label: "Mínimo mercado", val: p25, sub: "p25" },
-            { label: "Típico del barrio", val: p50, sub: "p50" },
-            { label: "Premium del barrio", val: p75, sub: "p75" },
-          ].map(({ label, val, sub }) => (
-            <div key={sub} className="px-2 py-2.5">
-              <div className="text-[10px] uppercase tracking-wider text-[#6B5B45]">{label}</div>
-              <div className="mt-0.5 text-xs font-bold text-[#1A1208]">{formatCOP(val)}{unit}</div>
-              <div className="text-[9px] text-[#9B8B75]">({sub})</div>
-            </div>
-          ))}
-        </div>
-        <div className="px-4 py-3" style={{ borderTop: "0.5px solid #E8E0D0" }}>
-          <div className="relative h-2 rounded-full" style={{ background: "#E8E0D0" }}>
-            <div className="absolute inset-y-0 left-0 rounded-full" style={{ width: `${pct}%`, background: "linear-gradient(90deg,#5DCAA5,#1D9E75)" }} />
-            <div className="absolute top-1/2 h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white" style={{ left: `${pct}%`, background: "#1D9E75" }} />
-          </div>
-          <div className="mt-1.5 flex justify-between text-[9px] text-[#9B8B75]">
-            <span>Mínimo</span>
-            <span className="font-medium text-[#1D9E75]">Este listing</span>
-            <span>Premium</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── ValorEstimado ─────────────────────────────────────────────────────────────
-
-function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
-  const [tipOpen, setTipOpen] = useState(false);
-
-  const isVenta = normalizeTipoOp(listing.tipo_operacion) === "venta";
-  const p25 = listing.precio_m2_p25;
-  const p75 = listing.precio_m2_p75;
-  const area = listing.area_m2;
-  if (!isVenta || !p25 || !p75 || !area) return null;
-
-  const min = Math.round(p25 * area);
-  const max = Math.round(p75 * area);
-  const barrio = listing.barrio_nombre ?? "el barrio";
-
+function InfoTip({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
   useEffect(() => {
-    if (!tipOpen) return;
-    const close = () => setTipOpen(false);
+    if (!open) return;
+    const close = () => setOpen(false);
     document.addEventListener("click", close);
     return () => document.removeEventListener("click", close);
-  }, [tipOpen]);
+  }, [open]);
+  return (
+    <span className="relative inline-flex">
+      <button
+        type="button"
+        aria-label="Más información"
+        onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
+        className="grid h-4 w-4 place-items-center rounded-full text-[10px] font-bold leading-none transition"
+        style={{ border: "1px solid #C8B8A2", color: open ? "#1D9E75" : "#9B8B75", cursor: "pointer" }}
+      >
+        i
+      </button>
+      {open && (
+        <span
+          className="absolute z-50 block rounded-xl shadow-2xl"
+          style={{ bottom: "calc(100% + 8px)", left: -8, width: "min(240px, 70vw)", background: "#1A1208", color: "#fff", padding: "10px 12px" }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <span className="absolute" style={{ bottom: -6, left: 12, width: 12, height: 6, background: "#1A1208", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
+          <span className="block text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.82)" }}>{text}</span>
+        </span>
+      )}
+    </span>
+  );
+}
+
+// ─── ValorEstimado — "Estimated market value" estilo Zillow (Zestimate) ──────────
+
+function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
+  const isVenta = normalizeTipoOp(listing.tipo_operacion) === "venta";
+  const area = listing.area_m2;
+  const barrio = listing.barrio_nombre ?? "el barrio";
+
+  // Valor estimado (Zestimate) + rango de venta, desde medianas del barrio × área.
+  const p50 = listing.precio_m2_mediana_barrio;
+  const p25 = listing.precio_m2_p25;
+  const p75 = listing.precio_m2_p75;
+  const valor = isVenta && p50 && area ? Math.round(p50 * area) : null;
+  const rangoMin = isVenta && p25 && area ? Math.round(p25 * area) : null;
+  const rangoMax = isVenta && p75 && area ? Math.round(p75 * area) : null;
+
+  // Renta estimada del barrio (canon típico p50).
+  const renta = listing.arriendo_p50_barrio ?? null;
+
+  // Avalúo catastral (comuna) × área — base fiscal, típicamente menor al mercado.
+  const avaluoM2 = listing.avaluo_m2_catastro;
+  const avaluo = isVenta && avaluoM2 && area ? Math.round(avaluoM2 * area) : null;
+
+  // Predial anual estimado = avalúo × tarifa municipal (‰ por estrato, Medellín).
+  const PREDIAL_MILAJE: Record<number, number> = { 1: 5, 2: 5, 3: 6, 4: 8, 5: 10, 6: 11 };
+  const milaje = listing.estrato_real != null ? PREDIAL_MILAJE[listing.estrato_real] ?? 8 : 8;
+  const predial = avaluo != null ? Math.round(avaluo * milaje / 1000) : null;
+
+  if (valor == null && renta == null && avaluo == null) return null;
+
+  const Row = ({ label, tip, children }: { label: string; tip: string; children: React.ReactNode }) => (
+    <div className="flex items-start justify-between gap-3 border-b py-3 last:border-0" style={{ borderColor: "#EAE3D6" }}>
+      <div className="flex items-center gap-1.5 pt-0.5">
+        <span className="text-[13px]" style={{ color: "#6B5B45" }}>{label}</span>
+        <InfoTip text={tip} />
+      </div>
+      <div className="text-right">{children}</div>
+    </div>
+  );
 
   return (
-    <div className="rounded-xl px-4 py-3 space-y-1" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <span className="text-xs font-semibold" style={{ color: "#6B5B45" }}>Valor estimado de mercado</span>
-        <div className="relative">
-          <button
-            type="button"
-            onClick={(e) => { e.stopPropagation(); setTipOpen(v => !v); }}
-            className="text-sm leading-none"
-            style={{ color: tipOpen ? "#1D9E75" : "#9B8B75", cursor: "pointer" }}
+    <div className="space-y-3">
+      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Valor estimado</h3>
+      <div>
+        {valor != null && (
+          <Row label="Valor de mercado" tip={`Precio de venta probable, estimado con el precio/m² típico de ${barrio} multiplicado por los ${area}m² de este inmueble.`}>
+            <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#1D9E75" }}>{formatCOP(valor)}</div>
+            {rangoMin != null && rangoMax != null && (
+              <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#9B8B75" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
+            )}
+          </Row>
+        )}
+        {renta != null && (
+          <Row label="Renta estimada" tip={`Canon de arriendo mensual típico para inmuebles similares en ${barrio}.`}>
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(renta)}<span className="text-[11px] font-normal" style={{ color: "#9B8B75" }}>/mes</span></div>
+          </Row>
+        )}
+        {avaluo != null && (
+          <Row
+            label="Avalúo catastral"
+            tip={`Valor fiscal del predio según el catastro de Medellín (estimado con el avalúo/m² de la comuna). Es la base sobre la que se cobran los impuestos y casi siempre es menor al precio de mercado — aquí, cerca de ${valor && avaluo ? Math.round(valor / avaluo) : 4}× por debajo.`}
           >
-            ⓘ
-          </button>
-          {tipOpen && (
-            <div
-              className="absolute z-50 rounded-xl shadow-2xl"
-              style={{ bottom: "calc(100% + 8px)", right: -4, width: "min(260px, 80vw)", background: "#1A1208", color: "#fff", padding: "12px 14px" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className="absolute" style={{ bottom: -6, right: 10, width: 12, height: 6, background: "#1A1208", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
-              <p className="mb-2 text-xs font-bold">¿Cómo se calcula este estimado?</p>
-              <p className="text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-                Estimado calculado con el rango de precios reales de propiedades similares en {barrio}.
-                A medida que más ventas se cierren en la plataforma, este estimado será más preciso.
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
-      {/* Range */}
-      <div className="text-base font-bold" style={{ color: "#1A1208" }}>
-        {formatCOP(min)} – {formatCOP(max)}
-      </div>
-      {/* Explanation */}
-      <div className="text-[11px] leading-snug" style={{ color: "#9B8B75" }}>
-        Basado en el precio/m² de {barrio} × {area}m² de esta propiedad
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(avaluo)}</div>
+          </Row>
+        )}
+        {predial != null && (
+          <Row
+            label="Predial estimado"
+            tip={`Impuesto predial anual aproximado: avalúo catastral × tarifa del municipio (~${milaje} por mil${listing.estrato_real != null ? ` para estrato ${listing.estrato_real}` : ""} en Medellín). La tarifa exacta la fija la Alcaldía según estrato y uso.`}
+          >
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(predial)}<span className="text-[11px] font-normal" style={{ color: "#9B8B75" }}>/año</span></div>
+          </Row>
+        )}
       </div>
     </div>
   );
@@ -320,7 +310,7 @@ function YieldMultiModal({ listing }: { listing: ApiListingDetail }) {
         <div className="px-4 py-2.5 space-y-1" style={{ background: "#F5F0E8" }}>
           <div>
             <span className="text-xs text-[#6B5B45]">Mejor opción para {listing.barrio_nombre ?? "la zona"}: </span>
-            <span className="text-xs font-semibold text-[#1A1208]">★ {mejorOpcion}</span>
+            <span className="text-xs font-semibold text-[#1A1208]">{mejorOpcion}</span>
           </div>
           <p className="text-[12px] italic leading-snug text-[#6B5B45]">{razon}</p>
         </div>
@@ -387,397 +377,454 @@ function AlertModal({ listing, onClose }: { listing: ApiListingDetail; onClose: 
 
 type BarrioFetch = {
   seguridad?: { score?: number | null } | null;
-  conectividad?: { dist_metro_km?: number | null; indice_nomada?: number | null } | null;
+  conectividad?: {
+    dist_metro_km?: number | null;
+    indice_nomada?: number | null;
+    n_colegios_1km?: number | null;
+    dist_colegio_km?: number | null;
+    walk_score?: number | null;
+    transit_score?: number | null;
+  } | null;
   liquidez?: { score?: number | null } | null;
 };
 
-type TooltipDef = {
-  title: string;
-  desc: string;
-  scale: { emoji: string; label: string; sub: string }[];
-};
-
-const BARRIO_TOOLTIPS: Record<string, TooltipDef> = {
-  Seguridad: {
-    title: "¿Cómo calculamos la seguridad?",
-    desc: "Combinamos reportes de incidentes de la zona, datos de iluminación pública y densidad de comercio activo. Una zona segura tiene menor incidencia de reportes y mayor actividad comercial durante el día y la noche.",
-    scale: [
-      { emoji: "🟢", label: "Zona segura",          sub: "baja incidencia" },
-      { emoji: "🟡", label: "Seguridad moderada",    sub: "incidencia media" },
-      { emoji: "🔴", label: "Zona de precaución",    sub: "alta incidencia" },
-    ],
-  },
-  Transporte: {
-    title: "¿Cómo medimos el transporte?",
-    desc: "Calculamos la distancia en línea recta desde la propiedad a la estación de metro más cercana del Valle de Aburrá (Medellín Metro). A menor distancia, mayor conectividad.",
-    scale: [
-      { emoji: "🟢", label: "< 500m",    sub: "Excelente conectividad" },
-      { emoji: "🟡", label: "500m-1km",  sub: "Buena conectividad" },
-      { emoji: "🟠", label: "1km-2km",   sub: "Conectividad moderada" },
-      { emoji: "🔴", label: "> 2km",     sub: "Zona alejada del metro" },
-    ],
-  },
-  "Perfil de zona": {
-    title: "¿Qué es el perfil de zona?",
-    desc: "Indica qué tipo de arrendatario predomina en esta zona, basado en la demanda de arriendos cortos, presencia de plataformas como Airbnb y el tipo de comercio cercano.",
-    scale: [
-      { emoji: "🟢", label: "Zona turística",    sub: "alta demanda Airbnb, ideal para renta corta" },
-      { emoji: "🟡", label: "Zona mixta",         sub: "demanda variada, funciona para varios perfiles" },
-      { emoji: "⚫", label: "Zona residencial",   sub: "familias y profesionales, ideal para renta larga" },
-    ],
-  },
-  Mercado: {
-    title: "¿Qué significa mercado activo?",
-    desc: "Mide qué tan rápido se venden o arriendan propiedades en esta zona, basado en el volumen de transacciones y el tiempo promedio en mercado.",
-    scale: [
-      { emoji: "🟢", label: "Mercado activo",    sub: "propiedades se venden/arriendan en menos de 30 días" },
-      { emoji: "🟡", label: "Mercado moderado",  sub: "30 a 90 días" },
-      { emoji: "🔴", label: "Mercado lento",     sub: "más de 90 días" },
-    ],
-  },
-};
-
-function BarrioInfoTooltip({ tooltipKey, open, onToggle }: {
-  tooltipKey: string;
-  open: boolean;
-  onToggle: () => void;
-}) {
-  const tip = BARRIO_TOOLTIPS[tooltipKey];
-  if (!tip) return null;
-
+/** Score bar en escala 1-10 estilo Zillow. Recibe score interno 0-100. Público. */
+function ScoreBar({ label, score, sub }: { label: string; score: number; sub: string }) {
+  const color = score >= 70 ? "#1D9E75" : score >= 40 ? "#BA7517" : "#D85A30";
+  const s10 = score > 0 ? Math.max(1, Math.round(score / 10)) : 0;
   return (
-    <div className="relative">
-      <button
-        type="button"
-        onClick={(e) => { e.stopPropagation(); onToggle(); }}
-        className="flex items-center justify-center rounded-full transition"
-        style={{
-          width: 18, height: 18,
-          color: open ? "#1D9E75" : "#9B8B75",
-          fontSize: 14,
-          lineHeight: 1,
-          cursor: "pointer",
-        }}
-        aria-label={`Info: ${tip.title}`}
-      >
-        ⓘ
-      </button>
-
-      {open && (
-        <div
-          className="absolute z-50 rounded-xl shadow-2xl"
-          style={{
-            bottom: "calc(100% + 8px)",
-            right: -8,
-            width: "min(260px, 80vw)",
-            background: "#1A1208",
-            color: "#FFFFFF",
-            padding: "12px 14px",
-          }}
-          onClick={(e) => e.stopPropagation()}
-        >
-          {/* arrow */}
-          <div
-            className="absolute"
-            style={{
-              bottom: -6, right: 14,
-              width: 12, height: 6,
-              background: "#1A1208",
-              clipPath: "polygon(0 0, 100% 0, 50% 100%)",
-            }}
-          />
-          <p className="mb-2 text-xs font-bold leading-snug">{tip.title}</p>
-          <p className="mb-3 text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.75)" }}>
-            {tip.desc}
-          </p>
-          <div className="space-y-1">
-            {tip.scale.map(({ emoji, label, sub }) => (
-              <div key={label} className="flex items-baseline gap-1.5 text-[11px]">
-                <span>{emoji}</span>
-                <span className="font-semibold">{label}</span>
-                <span style={{ color: "rgba(255,255,255,0.6)" }}>— {sub}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+    <div className="rounded-xl px-4 py-3" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
+      <div className="flex items-baseline justify-between">
+        <span className="text-xs font-semibold text-[#6B5B45]">{label}</span>
+        <span className="text-lg font-bold" style={{ color }}>{s10}<span className="text-[11px] font-normal text-[#9B8B75]">/10</span></span>
+      </div>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "#E8E0D0" }}>
+        <div className="h-full rounded-full" style={{ width: `${score}%`, background: color }} />
+      </div>
+      <div className="mt-1 text-[11px]" style={{ color: "#9B8B75" }}>{sub}</div>
     </div>
   );
 }
 
-function BarrioReport({ barrioId, listingSegScore }: { barrioId: number; listingSegScore?: number | null }) {
-  const [openTip, setOpenTip] = useState<string | null>(null);
-
+/** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow. */
+function GettingAround({ barrioId }: { barrioId: number }) {
   const { data } = useQuery<BarrioFetch>({
     queryKey: ["barrio-full", barrioId],
     queryFn: () => apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId)),
     staleTime: 300_000,
   });
+  const c = data?.conectividad;
+  if (!c) return null;
+  const walk = c.walk_score;
+  const transit = c.transit_score;
+  const nColegios = c.n_colegios_1km;
+  const distColegio = c.dist_colegio_km;
+  const walkSub = (s: number) => s >= 70 ? "Muy caminable" : s >= 40 ? "Algo caminable" : "Requiere carro";
+  const transitSub = (s: number) => s >= 70 ? "Metro a pasos" : s >= 40 ? "Metro cercano" : "Metro lejos";
 
-  // Close tooltip on outside click
-  useEffect(() => {
-    if (!openTip) return;
-    const handler = () => setOpenTip(null);
-    document.addEventListener("click", handler);
-    return () => document.removeEventListener("click", handler);
-  }, [openTip]);
+  // Score de colegios 0-100 desde densidad en 1km (n*16, satura ~6+ colegios).
+  const colegioScore = nColegios != null && nColegios > 0 ? Math.min(100, nColegios * 16) : null;
+  const colegioSub = nColegios != null
+    ? `${nColegios} a 1 km${distColegio != null ? ` · ${distColegio.toFixed(1)} km` : ""}`
+    : "";
 
-  if (!data) return null;
-
-  // Use listing.seguridad_score as fallback if barrio endpoint doesn't return it
-  const segScore  = listingSegScore ?? data.seguridad?.score ?? null;
-  const distMetro = data.conectividad?.dist_metro_km ?? null;
-  const nomada    = data.conectividad?.indice_nomada ?? null;
-  const liqScore  = data.liquidez?.score ?? null;
-
-  type Cell = { icon: string; titulo: string; tooltipKey: string; textLabel: string; textColor: string };
-
-  const cells: Cell[] = [
-    segScore != null ? {
-      icon: "🛡️",
-      titulo: "Seguridad",
-      tooltipKey: "Seguridad",
-      textLabel: segScore > 70 ? "Zona segura" : segScore > 40 ? "Seguridad moderada" : "Zona de precaución",
-      textColor:  segScore > 70 ? "#1D9E75"    : segScore > 40 ? "#BA7517"             : "#D85A30",
-    } : null,
-    distMetro != null ? {
-      icon: "🚇",
-      titulo: "Transporte",
-      tooltipKey: "Transporte",
-      textLabel: `${distMetro.toFixed(1)} km al metro`,
-      textColor: "#1A1208",
-    } : null,
-    nomada != null ? {
-      icon: "🌍",
-      titulo: "Perfil de zona",
-      tooltipKey: "Perfil de zona",
-      textLabel: nomada > 6 ? "Zona turística" : nomada > 3 ? "Zona mixta" : "Zona residencial",
-      textColor:  nomada > 6 ? "#1D9E75"        : nomada > 3 ? "#BA7517"    : "#6B5B45",
-    } : null,
-    liqScore != null ? {
-      icon: "📈",
-      titulo: "Mercado",
-      tooltipKey: "Mercado",
-      textLabel: liqScore > 70 ? "Mercado activo" : liqScore > 40 ? "Mercado moderado" : "Mercado lento",
-      textColor:  liqScore > 70 ? "#1D9E75"        : liqScore > 40 ? "#BA7517"           : "#D85A30",
-    } : null,
-  ].filter((c): c is Cell => c != null);
-
-  if (cells.length === 0) return null;
+  const tiles: { label: string; score: number; sub: string }[] = [];
+  if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
+  if (transit != null) tiles.push({ label: "Transporte público", score: transit, sub: transitSub(transit) });
+  if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  if (tiles.length === 0) return null;
 
   return (
     <div className="space-y-2.5">
-      <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>El vecindario</h3>
-      <div className="grid grid-cols-2 gap-2">
-        {cells.map(({ icon, titulo, tooltipKey, textLabel, textColor }) => (
-          <div
-            key={titulo}
-            className="relative flex flex-col gap-2 rounded-lg p-3"
-            style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", overflow: "visible" }}
-          >
-            {/* Header row: icon + title + ⓘ */}
-            <div className="flex items-center justify-between gap-1">
-              <div className="flex items-center gap-1.5 min-w-0">
-                <span style={{ fontSize: 13 }}>{icon}</span>
-                <span className="text-xs font-semibold truncate" style={{ color: "#6B5B45" }}>{titulo}</span>
+      <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>Entorno</h3>
+      <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
+        {tiles.map((t) => (
+          <ScoreBar key={t.label} label={t.label} score={t.score} sub={t.sub} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+
+// ─── Agendar visita — popup estilo Zillow (día con flechas + hora desplegable) ──
+
+const DOW_LARGO = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+const DOW = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"];
+const MON = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"];
+const DIAS_VENTANA = 5; // días visibles por página
+
+type DiaInfo = { date: Date; label: string; sub: string; largo: string };
+const dateKey = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+function dayInfo(d: Date): DiaInfo {
+  const t0 = new Date(); t0.setHours(0, 0, 0, 0);
+  const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
+  const diff = Math.round((d0.getTime() - t0.getTime()) / 86400000);
+  const label = diff === 0 ? "Hoy" : diff === 1 ? "Mañana" : DOW[d.getDay()];
+  const largo = diff === 0 ? "Hoy" : diff === 1 ? "Mañana" : DOW_LARGO[d.getDay()];
+  return { date: d, label, sub: `${d.getDate()} ${MON[d.getMonth()]}`, largo };
+}
+function proximosDias(n: number): DiaInfo[] {
+  const dias: DiaInfo[] = [];
+  for (let i = 0; i < n; i++) {
+    const d = new Date();
+    d.setDate(d.getDate() + i);
+    dias.push(dayInfo(d));
+  }
+  return dias;
+}
+
+function horasVisita(): string[] {
+  const out: string[] = [];
+  for (let h = 8; h <= 18; h++) {
+    for (const m of [0, 30]) {
+      if (h === 18 && m === 30) break;
+      const ampm = h < 12 ? "AM" : "PM";
+      const hh = h <= 12 ? h : h - 12;
+      out.push(`${hh}:${String(m).padStart(2, "0")} ${ampm}`);
+    }
+  }
+  return out;
+}
+
+function ScheduleVisitModal({
+  agente, listingId, listingUrl, onClose,
+}: { agente?: ApiListingAgente | null; listingId?: number | null; listingUrl?: string | null; onClose: () => void }) {
+  // Slots reales del agente de zona (horario propio menos reservados). Si no hay
+  // agente/horario configurado, cae al horario genérico (fallback).
+  const [slotMap, setSlotMap] = useState<Record<string, string[]> | null>(null);
+  useEffect(() => {
+    if (listingId == null) return;
+    apiFetch<{ configured: boolean; slots: Record<string, string[]> }>(API_ENDPOINTS.listingSlots(listingId))
+      .then((r) => { if (r.configured && Object.keys(r.slots).length) setSlotMap(r.slots); })
+      .catch(() => {});
+  }, [listingId]);
+
+  const [page, setPage] = useState(0);
+  const [diaIdx, setDiaIdx] = useState(0);
+  const [hora, setHora] = useState("");
+  const [nombre, setNombre] = useState(() => auth.get()?.name ?? "");
+  const [telefono, setTelefono] = useState("");
+  const [enviando, setEnviando] = useState(false);
+  const [enviado, setEnviado] = useState<string | null>(null);  // recap "cuando" tras confirmar
+
+  const realMode = !!slotMap;
+  const dias = useMemo<DiaInfo[]>(
+    () => (slotMap ? Object.keys(slotMap).sort().map((iso) => dayInfo(new Date(iso + "T12:00:00"))) : proximosDias(30)),
+    [slotMap],
+  );
+  const diaSel = dias[Math.min(diaIdx, dias.length - 1)];
+  const horas = realMode ? (diaSel ? slotMap![dateKey(diaSel.date)] ?? [] : []) : horasVisita();
+
+  const maxPage = Math.max(0, Math.ceil(dias.length / DIAS_VENTANA) - 1);
+  const visibles = dias.slice(page * DIAS_VENTANA, page * DIAS_VENTANA + DIAS_VENTANA);
+  const puedeEnviar = !!hora && nombre.trim().length > 1 && telefono.replace(/\D/g, "").length >= 7;
+
+  async function confirmar() {
+    if (!puedeEnviar || enviando || !diaSel) return;
+    const dia = diaSel;
+    const cuando = `${dia.largo} ${dia.sub} a las ${hora}`;
+    const [hm, ampm] = hora.split(" ");
+    const [hh, mm] = hm.split(":").map(Number);
+    const fecha = new Date(dia.date);
+    fecha.setHours(ampm === "PM" && hh !== 12 ? hh + 12 : hh, mm, 0, 0);
+
+    // Persistir la solicitud para la agenda del realtor.
+    setEnviando(true);
+    try {
+      if (listingUrl) {
+        await apiFetch(API_ENDPOINTS.visitas, {
+          method: "POST",
+          body: JSON.stringify({
+            listing_url: listingUrl,
+            nombre: nombre.trim(),
+            telefono: telefono.trim(),
+            fecha_visita: fecha.toISOString(),
+            mensaje: cuando,
+            // Sin agente de zona → el backend enruta al buzón interno por email.
+            sin_agente: !agente,
+          }),
+        });
+      }
+      // Solo se guarda la solicitud (nombre, contacto, listing, fecha). El agente
+      // la ve en su agenda y contacta al interesado. Sin WhatsApp automático.
+      // Pantalla de confirmación con recap → el usuario cierra con "Listo".
+      setEnviado(cuando);
+    } catch {
+      toast.error("No pudimos registrar la visita. Intenta de nuevo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-[2px]" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Agendar visita"
+        className="relative w-full max-w-md overflow-hidden rounded-2xl"
+        style={{ background: "#FFFFFF", boxShadow: "0 25px 60px rgba(0,0,0,0.25)" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Confirmación — recap tras enviar; cubre el formulario hasta "Listo". */}
+        {enviado && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white px-8 py-10 text-center">
+            <div className="grid h-14 w-14 place-items-center rounded-full" style={{ background: "#E1F5EE" }}>
+              <Check className="h-7 w-7" style={{ color: "#1D9E75" }} />
+            </div>
+            <h3 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+              ¡Visita solicitada!
+            </h3>
+            <p className="text-sm font-medium capitalize" style={{ color: "#1A1208" }}>{enviado}</p>
+            {agente && <p className="text-[13px]" style={{ color: "#6B5B45" }}>Con {agente.nombre}</p>}
+            <p className="mt-1 text-[13px]" style={{ color: "#6B5B45" }}>Te contactaremos pronto para confirmar.</p>
+            <button
+              onClick={onClose}
+              className="mt-4 rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
+              style={{ background: "#1D9E75" }}
+            >
+              Listo
+            </button>
+          </div>
+        )}
+        {/* Header con acento */}
+        <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}>
+          <div className="flex items-start justify-between">
+            <div className="flex items-center gap-2.5 text-white">
+              <Calendar className="h-5 w-5" />
+              <h3 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif" }}>
+                Agendar una visita
+              </h3>
+            </div>
+            <button onClick={onClose} aria-label="Cerrar" className="grid h-7 w-7 place-items-center rounded-lg text-white/80 transition hover:bg-white/15 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          {agente && (
+            <p className="mt-1.5 text-[13px] text-white/85">Con {agente.nombre}</p>
+          )}
+        </div>
+
+        <div className="space-y-5 px-6 py-5">
+          {/* Día — flechas laterales + ventana de días */}
+          <div>
+            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Elige un día</div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                aria-label="Días anteriores"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-30"
+                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1D9E75" }}
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </button>
+              <div className="grid flex-1 grid-cols-5 gap-1.5">
+                {visibles.map((d) => {
+                  const abs = dias.indexOf(d);
+                  const sel = abs === diaIdx;
+                  return (
+                    <button
+                      key={abs}
+                      onClick={() => { setDiaIdx(abs); setHora(""); }}
+                      className="flex flex-col items-center rounded-xl py-2 text-center transition"
+                      style={sel
+                        ? { background: "#1D9E75", color: "#FFFFFF", boxShadow: "0 2px 8px rgba(29,158,117,0.3)" }
+                        : { background: "#F5F0E8", color: "#6B5B45" }}
+                    >
+                      <span className="text-[10px] font-semibold uppercase tracking-wide">{d.label}</span>
+                      <span className="text-[13px] font-bold leading-tight">{d.date.getDate()}</span>
+                      <span className="text-[9px] opacity-75">{MON[d.date.getMonth()]}</span>
+                    </button>
+                  );
+                })}
               </div>
-              <BarrioInfoTooltip
-                tooltipKey={tooltipKey}
-                open={openTip === tooltipKey}
-                onToggle={() => setOpenTip(openTip === tooltipKey ? null : tooltipKey)}
+              <button
+                onClick={() => setPage((p) => Math.min(maxPage, p + 1))}
+                disabled={page === maxPage}
+                aria-label="Días siguientes"
+                className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-30"
+                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1D9E75" }}
+              >
+                <ChevronRight className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+
+          {/* Hora — lista desplegable */}
+          <div>
+            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Elige una hora</div>
+            <div className="relative">
+              <select
+                value={hora}
+                onChange={(e) => setHora(e.target.value)}
+                className="w-full appearance-none rounded-xl px-4 py-3 pr-10 text-sm font-medium transition focus:outline-none"
+                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: hora ? "#1A1208" : "#9B8B75" }}
+              >
+                <option value="" disabled>Selecciona una hora</option>
+                {horas.map((h) => (
+                  <option key={h} value={h} style={{ color: "#1A1208" }}>{h}</option>
+                ))}
+              </select>
+              <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B8B75]" />
+            </div>
+          </div>
+
+          {/* Contacto del solicitante — para que el agente devuelva la llamada */}
+          <div className="grid grid-cols-2 gap-2">
+            <div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Tu nombre</div>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Nombre"
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1A1208" }}
               />
             </div>
-            {/* Value */}
-            <div className="text-sm font-bold leading-tight" style={{ color: textColor }}>
-              {textLabel}
+            <div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Tu teléfono</div>
+              <input
+                value={telefono}
+                onChange={(e) => setTelefono(e.target.value)}
+                inputMode="tel"
+                placeholder="300 000 0000"
+                className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none"
+                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1A1208" }}
+              />
             </div>
           </div>
-        ))}
+
+          <button
+            onClick={confirmar}
+            disabled={!puedeEnviar || enviando}
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+            style={{ background: "#1D9E75" }}
+          >
+            <Calendar className="h-4 w-4" />
+            {enviando ? "Enviando…" : "Solicitar visita"}
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
-// ─── ZonaCard ─────────────────────────────────────────────────────────────────
+// ─── Tarjetas de contacto del realtor (columna 2) ───────────────────────────────
 
-function ZonaCard({ listing }: { listing: ApiListingDetail }) {
-  const isPro = useIsPro();
-  const barrio = listing.barrio_nombre ?? "Zona";
+function waLink(agente: ApiListingAgente, listingId: number): string {
+  const tel = agente.telefono.replace(/\D/g, "");
+  const num = tel.startsWith("57") ? tel : `57${tel}`;
+  const text = encodeURIComponent(`Hola ${agente.nombre}, me interesa este inmueble (ID: ${listingId}).`);
+  return `https://wa.me/+${num}?text=${text}`;
+}
 
-  if (!isPro) {
-    return (
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-        <div className="px-4 py-3" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-          <h3 className="text-sm font-semibold text-[#1A1208]">{listing.barrio_display ?? barrio}</h3>
+/** Realtor de comuna — patrocinio principal ($1k), tarjeta prominente. El de
+ *  barrio (secundario) aparece discreto como un botón al lado, estilo agendar. */
+function RealtorPrimaryCard({
+  listingId, agente, secondary, onSchedule,
+}: { listingId: number; agente: ApiListingAgente; secondary?: ApiListingAgente | null; onSchedule: () => void }) {
+  const esComuna = agente.zona_nivel === "comuna";
+  return (
+    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #1D9E75", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#E1F5EE", border: "2px solid #1D9E75" }}>
+          {agente.foto_url
+            ? <img src={agente.foto_url} alt={agente.nombre} className="h-full w-full object-cover" />
+            : <User className="h-7 w-7" style={{ color: "#1D9E75" }} />}
         </div>
-        <div className="px-4 py-4 space-y-3">
-          <p className="text-sm leading-snug" style={{ color: "#6B5B45" }}>
-            Ver análisis completo del barrio con MLS Pro.
-          </p>
+        <div className="min-w-0">
+          <div className="truncate text-base font-bold" style={{ color: "#1A1208" }}>{agente.nombre}</div>
+          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#085041" }}>
+            <Shield className="h-3 w-3" /> Agente de la {esComuna ? "comuna" : "zona"}
+          </div>
+        </div>
+      </div>
+      <div className="space-y-2 px-4 pb-4">
+        <a
+          href={waLink(agente, listingId)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          style={{ background: "#1D9E75" }}
+        >
+          <Phone className="h-4 w-4" /> Contactar
+        </a>
+        <button
+          onClick={onSchedule}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+          style={{ border: "1px solid #1D9E75", color: "#085041", background: "#E1F5EE" }}
+        >
+          <Calendar className="h-4 w-4" /> Agendar visita
+        </button>
+        {/* Realtor 2 (barrio) — discreto, un botón al lado como los de arriba */}
+        {secondary && (
           <a
-            href="/planes"
-            className="block w-full rounded-lg py-2 text-center text-xs font-semibold transition hover:opacity-90"
-            style={{ background: "#1D9E75", color: "#FFFFFF" }}
+            href={waLink(secondary, listingId)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex w-full items-center justify-center gap-1.5 pt-1 text-[11px] transition hover:opacity-70"
+            style={{ color: "#9B8B75" }}
           >
-            Ver planes →
+            <User className="h-3 w-3" />
+            <span className="truncate">También: {secondary.nombre}, agente del barrio</span>
           </a>
-        </div>
-      </div>
-    );
-  }
-
-  const score   = listing.score_largo ?? listing.score_corto;
-  const nomada  = listing.indice_nomada;
-  const arrP50  = listing.arriendo_p50_barrio;
-  const varAnual = listing.var_anual_pct;
-  if (score == null && nomada == null && arrP50 == null && varAnual == null) return null;
-
-  const cells = [
-    score    != null ? { label: "Score zona",      value: `${score}/100`,                          color: "#1A1208" as const } : null,
-    nomada   != null ? { label: "Índice nómada",   value: nomada.toFixed(1),                       color: "#1A1208" as const } : null,
-    { label: "Canon típico", value: arrP50 != null ? formatCOP(arrP50) : "Pocos datos en la zona", suffix: arrP50 != null ? "/mes" : undefined, color: (arrP50 != null ? "#1A1208" : "#9B8B75") as string },
-    varAnual != null ? { label: "Valorización",    value: `${varAnual >= 0 ? "+" : ""}${varAnual.toFixed(1)}%`, color: (varAnual >= 0 ? "#1D9E75" : "#D85A30") as string } : null,
-  ].filter(Boolean) as { label: string; value: string; suffix?: string; color: string }[];
-
-  return (
-    <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-      <div className="px-4 py-3" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-        <h3 className="text-sm font-semibold text-[#1A1208]">{listing.barrio_nombre ?? "Zona"}</h3>
-      </div>
-      <div className="grid grid-cols-2">
-        {cells.map(({ label, value, suffix, color }, i) => (
-          <div
-            key={label}
-            className="px-4 py-3 text-center"
-            style={{
-              borderRight:  i % 2 === 0 ? "0.5px solid #F5F0E8" : "none",
-              borderBottom: i < cells.length - 2 ? "0.5px solid #F5F0E8" : "none",
-            }}
-          >
-            <div className="text-[10px] uppercase tracking-wider text-[#6B5B45]">{label}</div>
-            <div className="mt-0.5 text-sm font-bold" style={{ color }}>
-              {value}
-              {suffix && <span className="text-[9px] font-normal text-[#9B8B75]">{suffix}</span>}
-            </div>
-          </div>
-        ))}
+        )}
       </div>
     </div>
   );
 }
 
-// ─── SobreBarrio — párrafo editorial PRO ─────────────────────────────────────
-
-function SobreBarrio({ listing, target }: { listing: ApiListingDetail; target: string | null }) {
-  const isPro = useIsPro();
-  const barrioId = listing.barrio_id;
-
-  const { data } = useQuery<BarrioFetch>({
-    queryKey: ["barrio-full", barrioId ?? 0],
-    queryFn: () => apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId!)),
-    enabled: isPro && !!barrioId,
-    staleTime: 300_000,
-  });
-
-  if (!barrioId) return null;
-
-  const barrio     = listing.barrio_nombre ?? "El barrio";
-  const nomada     = listing.indice_nomada ?? data?.conectividad?.indice_nomada ?? null;
-  const distMetro  = data?.conectividad?.dist_metro_km ?? null;
-  const segScore   = listing.seguridad_score ?? data?.seguridad?.score ?? null;
-  const varAnual   = listing.var_anual_pct;
-  const liqScore   = data?.liquidez?.score ?? null;
-
-  const perfilZona = nomada == null ? "residencial"
-    : nomada > 6 ? "turística y vibrante"
-    : nomada >= 3 ? "mixta con vida comercial"
-    : "residencial consolidada";
-
-  const distMetroText = distMetro == null ? ""
-    : distMetro < 0.5 ? "a pasos del metro"
-    : distMetro < 1   ? `a ${distMetro.toFixed(1)}km del metro`
-    : distMetro < 2   ? "con acceso moderado al metro"
-    : "alejada del sistema metro";
-
-  const seguridadText = segScore == null ? ""
-    : segScore > 70 ? "reconocida por su tranquilidad"
-    : segScore > 40 ? "con niveles de seguridad moderados"
-    : "con aspectos de seguridad a considerar";
-
-  const valorizacionText = varAnual == null ? ""
-    : varAnual > 8 ? `una valorización destacada del +${varAnual.toFixed(1)}% anual`
-    : varAnual >= 4 ? `valorización estable del +${varAnual.toFixed(1)}% anual`
-    : "valorización moderada";
-
-  const mercadoText = liqScore == null ? "mercado local"
-    : liqScore > 70 ? "mercado muy activo"
-    : liqScore >= 40 ? "mercado moderado"
-    : "mercado tranquilo";
-
-  let recomendacion = "";
-  if (target === "buyer" || target === "renter") {
-    recomendacion = `Ideal para quienes buscan una zona ${perfilZona} con buena conectividad.`;
-  } else if (target === "investor") {
-    const yieldPct = listing.yield_bruto_pct;
-    recomendacion = yieldPct != null
-      ? `Con potencial de rentabilidad del ${yieldPct.toFixed(1)}% en renta larga.`
-      : "Con potencial de inversión en valorización y renta.";
-  } else if (target === "landlord") {
-    const mejorModalidad = nomada != null && nomada > 6 ? "Airbnb" : nomada != null && nomada >= 3 ? "nómadas digitales" : "renta larga";
-    recomendacion = `Recomendamos ${mejorModalidad} para maximizar el retorno.`;
-  }
-
-  const zonaParts = [perfilZona, distMetroText, seguridadText].filter(Boolean);
-  const conParts = [valorizacionText, mercadoText].filter(Boolean);
-  const parrafo = [
-    `${barrio} es una zona ${zonaParts.join(", ")}`,
-    conParts.length ? `con ${conParts.join(" y ")}` : null,
-    recomendacion || null,
-  ].filter(Boolean).join(", ").replace(", con ", ", con ").replace(/,\s*([A-ZÁÉÍÓÚ])/, ". $1") + ".";
-
+/** Fallback sin patrocinio: contacto genérico del equipo. */
+function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule: () => void }) {
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
-        Sobre {barrio}
-      </h3>
-      <p className="text-sm leading-relaxed" style={{ color: "#1A1208" }}>
-        {parrafo}
-      </p>
+    <div className="overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full" style={{ background: "#E1F5EE" }}>
+          <User className="h-6 w-6" style={{ color: "#1D9E75" }} />
+        </div>
+        <div className="min-w-0">
+          <div className="text-sm font-semibold" style={{ color: "#1A1208" }}>Equipo Medellín Social</div>
+          <div className="text-[11px]" style={{ color: "#6B5B45" }}>Contacto</div>
+        </div>
+      </div>
+      <div className="space-y-2 px-4 pb-4">
+        <a
+          href={waUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
+          style={{ background: "#1D9E75" }}
+        >
+          <Phone className="h-4 w-4" /> Contactar
+        </a>
+        <button
+          onClick={onSchedule}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+          style={{ border: "1px solid #1D9E75", color: "#085041", background: "#E1F5EE" }}
+        >
+          <Calendar className="h-4 w-4" /> Agendar visita
+        </button>
+      </div>
     </div>
   );
 }
 
-// ─── PriceJustice ──────────────────────────────────────────────────────────────
-
-function PriceJustice({ listing }: { listing: ApiListingDetail }) {
-  const p50   = listing.arriendo_p50_barrio;
-  const precio = listing.precio_cop;
-  const barrio = listing.barrio_nombre ?? "este barrio";
-
-  if (!p50 || !precio) return null;
-
-  const pct = ((precio - p50) / p50) * 100;
-  const [texto, color] = pct < -10
-    ? [`${Math.abs(pct).toFixed(0)}% por debajo del canon típico`, "#1D9E75"]
-    : pct > 10
-      ? [`${pct.toFixed(0)}% por encima del canon típico`, "#D85A30"]
-      : ["Dentro del rango típico del barrio", "#BA7517"];
-
+/** Columna 2 completa: comuna (principal) + barrio (secundario), o fallback. */
+function RealtorColumn({
+  listingId, agentes, waUrl, onSchedule,
+}: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void }) {
+  const comuna = agentes?.comuna ?? null;
+  const barrio = agentes?.barrio ?? null;
+  if (!comuna && !barrio) return <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} />;
+  // Comuna = principal; barrio = botón discreto al lado. Sin comuna, barrio sube a principal.
+  const principal = comuna ?? barrio!;
+  const secundario = comuna ? barrio : null;
   return (
-    <div className="space-y-2">
-      <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>
-        ¿Es este precio justo para {barrio}?
-      </h3>
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-        <div className="flex items-center justify-between px-4 py-2.5 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-          <span style={{ color: "#6B5B45" }}>Canon típico del barrio</span>
-          <span className="font-semibold">{formatCOP(p50)}/mes</span>
-        </div>
-        <div className="px-4 py-3">
-          <span className="text-sm font-semibold" style={{ color }}>{texto}</span>
-        </div>
-      </div>
-    </div>
+    <RealtorPrimaryCard listingId={listingId} agente={principal} secondary={secundario} onSchedule={onSchedule} />
   );
 }
 
@@ -794,14 +841,22 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
   const { target } = useTarget();
-  const isBuyer    = target === "buyer";
   const isInvestor = target === "investor";
   const isLandlord = target === "landlord";
-  const isRenter   = target === "renter";
   const isPro = useIsPro();
   const { addListing, removeListing, isSelected: isInComparador, canAdd: canAddToComparador } = useComparadorStore();
   const closedRef = useRef(false);
   const [showAlertModal, setShowAlertModal] = useState(false);
+  const [showScheduleModal, setShowScheduleModal] = useState(false);
+
+  const { data: agentes } = useQuery<ApiListingAgentes>({
+    queryKey: ["listing-agente", listingId],
+    queryFn: () => apiFetch<ApiListingAgentes>(API_ENDPOINTS.listingAgente(listingId!)),
+    enabled: listingId != null,
+    staleTime: 300_000,
+  });
+  // Realtor para el modal de agenda: comuna (principal) o barrio si no hay comuna.
+  const agenteContacto = agentes?.comuna ?? agentes?.barrio ?? null;
 
   const { data: listing, isLoading } = useQuery<ApiListingDetail>({
     queryKey: ["listing-drawer", listingId],
@@ -885,8 +940,48 @@ export function ListingDrawer({ listingId, onClose }: Props) {
 
   // ─── Reusable fragments ────────────────────────────────────────────────────
 
+  const tourSrc = toEmbedSrc(listing?.tour_url) ?? toEmbedSrc(listing?.video_url);
+  const tourSection = tourSrc ? (
+    <div className="space-y-2">
+      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>
+        Tour 3D / Video
+      </h3>
+      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", aspectRatio: "16 / 9" }}>
+        <iframe
+          src={tourSrc}
+          title="Tour 3D"
+          className="h-full w-full"
+          style={{ border: 0 }}
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          allow="fullscreen; xr-spatial-tracking; gyroscope; accelerometer"
+          allowFullScreen
+        />
+      </div>
+    </div>
+  ) : null;
+
+  const esDestacado = listing?.fuente_display === "propio_pro" || listing?.fuente_display === "agente_verificado";
+  // Sello de due diligence: solo aplica a publicaciones propias (modelo unificado).
+  const esPropio = listing?.fuente === "propio";
   const badgesRow = listing ? (
     <div className="flex flex-wrap items-center gap-1.5">
+      {esPropio && (
+        listing.verificado ? (
+          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#085041", color: "#FFFFFF" }}>
+            ✓ Verificado
+          </span>
+        ) : (
+          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#F5F0E8", color: "#8A7A64", border: "1px solid #E8E0D0" }}>
+            Sin verificar
+          </span>
+        )
+      )}
+      {esDestacado && (
+        <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#FF2D95", color: "#FFFFFF" }}>
+          ★ Destacado
+        </span>
+      )}
       {listing.tier === "agencia_premium" && (
         <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#ffc928", color: "#1A1208" }}>
           ✦ Premium
@@ -909,29 +1004,63 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     </div>
   ) : null;
 
-  const metricsChips = listing && (listing.area_m2 != null || listing.habitaciones != null || listing.banos != null || listing.estrato_real != null) ? (
-    <div className="flex flex-wrap gap-2">
-      {listing.area_m2        != null && <MetricChip icon={<Maximize2 className="h-3.5 w-3.5" />} label={`${listing.area_m2}m²`} />}
-      {listing.habitaciones   != null && <MetricChip icon={<Bed       className="h-3.5 w-3.5" />} label={`${listing.habitaciones} hab`} />}
-      {listing.banos          != null && <MetricChip icon={<Bath      className="h-3.5 w-3.5" />} label={`${listing.banos} baños`} />}
-      {listing.estrato_real   != null && <MetricChip icon={<Shield    className="h-3.5 w-3.5" />} label={`Est. ${listing.estrato_real}`} />}
+  // Specs inline — van a la derecha del precio (mismo nivel), estilo Zillow.
+  const specsInline = listing && (listing.area_m2 != null || listing.habitaciones != null || listing.banos != null) ? (
+    <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#1A1208" }}>
+      {listing.area_m2 != null && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.area_m2}m²</span>}
+      {listing.habitaciones != null && <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.habitaciones} hab</span>}
+      {listing.banos != null && <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.banos} baños</span>}
     </div>
   ) : null;
 
+  // Tabla de datos estilo Zillow (2 columnas). Cada celda solo si hay dato.
+  const precioM2Label = (v: number) => (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M/m²` : `$${Math.round(v / 1000)}k/m²`);
+  const facts: { icon: React.ReactNode; text: string }[] = [];
+  if (listing?.tipo_inmueble) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.tipo_inmueble.replace(/_/g, " ") });
+  if (listing?.antiguedad) facts.push({ icon: <Clock className="h-4 w-4" />, text: cleanAntiguedad(listing.antiguedad) ?? "" });
+  if (listing?.precio_m2) facts.push({ icon: <BarChart2 className="h-4 w-4" />, text: `${precioM2Label(listing.precio_m2)}` });
+  if (listing?.parqueaderos != null && listing.parqueaderos > 0) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `${listing.parqueaderos} parqueadero${listing.parqueaderos === 1 ? "" : "s"}` });
+  if (listing?.estrato_real != null) facts.push({ icon: <Shield className="h-4 w-4" />, text: `Estrato ${listing.estrato_real}` });
+  if (listing?.piso != null) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `Piso ${listing.piso}` });
+  if (listing?.estado_inmueble) facts.push({ icon: <Check className="h-4 w-4" />, text: listing.estado_inmueble.toLowerCase() });
+  const factsTable = facts.length > 0 ? (
+    <div className="grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+      {facts.map((f, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-2 px-4 py-3 text-sm capitalize"
+          style={{
+            color: "#1A1208",
+            borderRight: i % 2 === 0 ? "0.5px solid #F5F0E8" : "none",
+            borderBottom: i < facts.length - (facts.length % 2 === 0 ? 2 : 1) ? "0.5px solid #F5F0E8" : "none",
+          }}
+        >
+          <span className="shrink-0 text-[#1D9E75]">{f.icon}</span>
+          <span className="font-medium">{f.text}</span>
+        </div>
+      ))}
+    </div>
+  ) : null;
+
+  // Línea de actividad estilo Zillow: días · vistas · guardados · (velocidad venta = realtor).
+  const activityParts: string[] = [];
+  if (listing?.dias_en_mercado != null && listing.dias_en_mercado >= 0)
+    activityParts.push(listing.dias_en_mercado === 0 ? "Publicado hoy" : `${listing.dias_en_mercado} días en el mercado`);
+  if (listing?.vistas) activityParts.push(`${listing.vistas} vistas`);
+  if (listing?.favoritos_count) activityParts.push(`${listing.favoritos_count} guardados`);
+  // Solo afirmamos "se vende más rápido" cuando el barrio es realmente líquido
+  // (score ≥ 65, por encima del promedio); si no, no hacemos la afirmación.
+  if (isRealtor && listing?.liquidez_score != null && listing.liquidez_score >= 65)
+    activityParts.push(`se vende más rápido que ${Math.round(listing.liquidez_score)}% de la zona`);
+  const activityLine = activityParts.length > 0 ? (
+    <div className="text-xs" style={{ color: "#6B5B45" }}>{activityParts.join("  ·  ")}</div>
+  ) : null;
+
+  // Contactar/agendar viven en la columna de realtores. ctaButtons = acciones secundarias.
   const ctaButtons = listing ? (
     <div className="space-y-2.5">
       <div className="flex gap-2">
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex flex-1 items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
-        >
-          <Phone className="h-4 w-4" />
-          Contactar agente
-        </a>
-        {isPro && (
+        {isRealtor && (
           <button
             onClick={() => {
               const inComp = isInComparador(listing.id);
@@ -989,6 +1118,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           <Share2 className="h-4 w-4 text-[#6B5B45]" />
         </button>
       </div>
+      <p className="text-[10px] leading-relaxed" style={{ color: "#9A8B76" }}>
+        Información publicada por fuentes externas y propietarios. Medellín Social no
+        garantiza la exactitud de precios, disponibilidad ni detalles — verifica con el
+        agente antes de decidir.
+      </p>
       {isPro && listing.barrio_id && (
         <button
           onClick={() => setShowAlertModal(true)}
@@ -999,7 +1133,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           Alertarme cuando baje de precio
         </button>
       )}
-      {isPro && listing.tipo_operacion === "venta" && (
+      {isRealtor && listing.tipo_operacion === "venta" && (
         <button
           onClick={() => {
             onClose();
@@ -1009,7 +1143,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           style={{ border: "0.5px solid #1D9E75", background: "transparent", color: "#085041" }}
         >
           <BarChart2 className="h-3.5 w-3.5" />
-          Simular esta propiedad →
+          Simular esta propiedad
         </button>
       )}
     </div>
@@ -1018,27 +1152,6 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // Analysis sections (left col + mobile)
   const analysisContent = listing ? (
     <>
-      {/* Activity */}
-      {(listing.dias_en_mercado != null || listing.vistas) && (
-        <div
-          className="flex flex-wrap items-center gap-4 rounded-xl px-4 py-3 text-xs"
-          style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}
-        >
-          {listing.dias_en_mercado != null && (
-            <div className="flex items-center gap-1.5 text-[#6B5B45]">
-              <Clock className="h-3.5 w-3.5" />
-              <span>{diasLabel(listing.dias_en_mercado) ?? `${listing.dias_en_mercado}d en mercado`}</span>
-            </div>
-          )}
-          {!!listing.vistas && (
-            <div className="flex items-center gap-1.5 text-[#6B5B45]">
-              <Eye className="h-3.5 w-3.5" />
-              <span>{listing.vistas} {listing.vistas === 1 ? "persona vio esto" : "personas vieron esto"}</span>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* Qué tiene — amenidades */}
       {listing.amenidades && listing.amenidades.length > 0 && (
         <Amenidades items={listing.amenidades} />
@@ -1048,156 +1161,67 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {listing.descripcion && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
-          <CollapsibleDescription text={listing.descripcion} />
+          <CollapsibleDescription text={cleanDescripcion(listing.descripcion)} />
         </div>
-      )}
-
-      {/* Facts & Features — cada fila condicional; sección oculta si nada */}
-      {(listing.tipo_inmueble || listing.estado_inmueble || listing.antiguedad
-        || (listing.parqueaderos != null && listing.parqueaderos > 0) || listing.piso != null) && (
-        <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-[#1A1208]">Detalles</h3>
-          <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-            {listing.tipo_inmueble && (
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-[#6B5B45]"><Building2 className="h-3.5 w-3.5" /> Tipo</span>
-                <span className="font-medium capitalize" style={{ color: "#1A1208" }}>{listing.tipo_inmueble.replace(/_/g, " ")}</span>
-              </div>
-            )}
-            {listing.estado_inmueble && (
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-[#6B5B45]">🏗 Estado</span>
-                <span className="font-medium capitalize" style={{ color: "#1A1208" }}>{listing.estado_inmueble.toLowerCase()}</span>
-              </div>
-            )}
-            {listing.antiguedad && (
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-[#6B5B45]">🗓 Antigüedad</span>
-                <span className="font-medium" style={{ color: "#1A1208" }}>{cleanAntiguedad(listing.antiguedad)}</span>
-              </div>
-            )}
-            {listing.parqueaderos != null && listing.parqueaderos > 0 && (
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-[#6B5B45]">🚗 Parqueaderos</span>
-                <span className="font-medium" style={{ color: "#1A1208" }}>{listing.parqueaderos}</span>
-              </div>
-            )}
-            {listing.piso != null && (
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span className="flex items-center gap-2 text-[#6B5B45]">🏢 Piso</span>
-                <span className="font-medium" style={{ color: "#1A1208" }}>{listing.piso}</span>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* El vecindario — inteligencia de barrio, solo realtor */}
-      {isRealtor && listing.barrio_id && <BarrioReport barrioId={listing.barrio_id} listingSegScore={listing.seguridad_score} />}
-
-      {/* ── BUYER: análisis para quien quiere vivir (mercado → solo realtor) ───── */}
-      {isRealtor && isBuyer && (
-        <>
-          {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
-          <PriceRange listing={listing} />
-          {isPro && listing.var_anual_pct != null && (
-            <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-              <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                <span style={{ color: "#6B5B45" }}>📈 Valorización anual</span>
-                <span className="font-semibold" style={{ color: listing.var_anual_pct >= 0 ? "#1D9E75" : "#E24B4A" }}>
-                  {listing.var_anual_pct >= 0 ? "+" : ""}{listing.var_anual_pct.toFixed(1)}%
-                </span>
-              </div>
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── INVESTOR: análisis completo de rentabilidad (mercado → solo realtor) ── */}
-      {isRealtor && isInvestor && (
-        <>
-          {listing.pct_bajo_mediana != null && <PriceBadge listing={listing} />}
-          <PriceRange listing={listing} />
-          <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
-            <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
-            {listing.arriendo_p50_barrio
-              ? <span className="font-semibold">{formatCOP(listing.arriendo_p50_barrio)}/mes</span>
-              : <span className="text-xs italic" style={{ color: "#9B8B75" }}>Pocos inmuebles para calcular una media</span>
-            }
-          </div>
-          <YieldMultiModal listing={listing} />
-          {isPro && (listing.var_anual_pct != null || listing.score_corto != null) && (
-            <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-              {listing.var_anual_pct != null && (
-                <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span style={{ color: "#6B5B45" }}>📈 Valorización anual</span>
-                  <span className="font-semibold" style={{ color: listing.var_anual_pct >= 0 ? "#1D9E75" : "#E24B4A" }}>
-                    {listing.var_anual_pct >= 0 ? "+" : ""}{listing.var_anual_pct.toFixed(1)}%
-                  </span>
-                </div>
-              )}
-              {listing.score_corto != null && (
-                <div className="flex items-center justify-between px-4 py-2.5 text-sm">
-                  <span style={{ color: "#6B5B45" }}>🏆 Score inversión</span>
-                  <span className="font-medium">{listing.score_corto}/100</span>
-                </div>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {/* ── LANDLORD: yield sin badge de compra (mercado → solo realtor) ────────── */}
-      {isRealtor && isLandlord && (
-        <>
-          <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
-            <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
-            {listing.arriendo_p50_barrio
-              ? <span className="font-semibold">{formatCOP(listing.arriendo_p50_barrio)}/mes</span>
-              : <span className="text-xs italic" style={{ color: "#9B8B75" }}>Pocos inmuebles para calcular una media</span>
-            }
-          </div>
-          <YieldMultiModal listing={listing} />
-        </>
-      )}
-
-      {/* ── RENTER: canon típico + comparativo de precio (mercado → solo realtor) ─ */}
-      {isRealtor && isRenter && (
-        <>
-          <div className="flex items-center justify-between rounded-xl px-4 py-3 text-sm" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
-            <span style={{ color: "#6B5B45" }}>Canon mediana barrio</span>
-            {listing.arriendo_p50_barrio
-              ? <span className="font-semibold">{formatCOP(listing.arriendo_p50_barrio)}/mes</span>
-              : <span className="text-xs italic" style={{ color: "#9B8B75" }}>Pocos inmuebles para calcular una media</span>
-            }
-          </div>
-          <PriceJustice listing={listing} />
-        </>
       )}
 
       {/* Historial de precio — todos los targets */}
       {(() => {
         const historia = listing.precio_historia ?? [];
+        const MESES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+        const fmtFecha = (d: Date) => `${d.getDate()} ${MESES[d.getMonth()]} ${d.getFullYear()}`;
 
-        if (historia.length === 0) return null;
+        // Sin historial (≈97% de los inmuebles): mostramos precio actual + fecha/año
+        // y avisamos que estamos recopilando el histórico completo.
+        if (historia.length === 0) {
+          const fechaListado =
+            listing.dias_en_mercado != null && listing.dias_en_mercado >= 0
+              ? new Date(Date.now() - listing.dias_en_mercado * 86400000)
+              : listing.fecha_scraping
+                ? new Date(`${listing.fecha_scraping}T00:00:00`)
+                : null;
+          return (
+            <div className="space-y-3">
+              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
+              <div className="flex items-baseline justify-between border-b pb-3" style={{ borderColor: "#EAE3D6" }}>
+                <div>
+                  <div className="text-[13px]" style={{ color: "#1A1208" }}>Publicado en venta</div>
+                  {fechaListado && <div className="text-[11px]" style={{ color: "#9B8B75" }}>{fmtFecha(fechaListado)}</div>}
+                </div>
+                <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>
+                  {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
+                </div>
+              </div>
+              <p className="text-[11px] leading-relaxed" style={{ color: "#9B8B75" }}>
+                Aún no hay cambios de precio registrados para este inmueble. Registramos cada variación desde su publicación.
+              </p>
+            </div>
+          );
+        }
 
         if (historia.length <= 2) {
           return (
-            <div className="space-y-2">
-              <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>Historial de precio</h3>
-              <div className="divide-y overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+            <div className="space-y-3">
+              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
+              <div className="space-y-2.5">
                 {historia.map((h, i) => {
                   const daysAgo = Math.floor((Date.now() - new Date(h.fecha).getTime()) / 86400000);
-                  const cuandoLabel = daysAgo === 0 ? "hoy" : daysAgo === 1 ? "hace 1 día" : `hace ${daysAgo} días`;
+                  const cuandoLabel = daysAgo === 0 ? "Hoy" : daysAgo === 1 ? "Hace 1 día" : `Hace ${daysAgo} días`;
                   const sube = (h.delta_pct ?? 0) > 0;
+                  const color = sube ? "#B4462F" : "#1D9E75";
                   return (
-                    <div key={i} className="flex items-start justify-between px-4 py-2.5 text-xs gap-3">
-                      <span style={{ color: sube ? "#D85A30" : "#1D9E75", fontWeight: 600 }}>
-                        {sube ? "↑ Subió" : "↓ Bajó"} {h.delta_pct != null ? `${Math.abs(h.delta_pct).toFixed(1)}%` : ""}
-                      </span>
-                      <div className="text-right" style={{ color: "#6B5B45" }}>
-                        <div>{formatCOP(h.precio)}</div>
-                        <div className="text-[10px]">{cuandoLabel}</div>
+                    <div key={i} className="flex items-baseline justify-between border-b pb-2.5 last:border-0" style={{ borderColor: "#EAE3D6" }}>
+                      <div>
+                        <div className="text-[13px]" style={{ color: "#1A1208" }}>{sube ? "Subió de precio" : "Bajó de precio"}</div>
+                        <div className="text-[11px]" style={{ color: "#9B8B75" }}>{cuandoLabel}</div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-[14px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(h.precio)}</div>
+                        {h.delta_pct != null && (
+                          <div className="text-[11px] font-medium tabular-nums" style={{ color }}>
+                            {sube ? "+" : "−"}{Math.abs(h.delta_pct).toFixed(1)}%
+                          </div>
+                        )}
                       </div>
                     </div>
                   );
@@ -1207,7 +1231,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           );
         }
 
-        // 3+ cambios → gráfica de línea
+        // 3+ cambios → gráfica de área estilo Zillow
         const sorted = [...historia].sort((a, b) => a.fecha.localeCompare(b.fecha));
         const chartData = [
           ...sorted.map(h => ({
@@ -1219,50 +1243,71 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         const currentPrecioM = +((listing.precio_cop ?? 0) / 1_000_000).toFixed(2);
 
         return (
-          <div className="space-y-2">
-            <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>Historial de precio</h3>
-            <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-              <div className="px-2 pt-3 pb-2" style={{ height: 148 }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={chartData} margin={{ top: 4, right: 12, left: 0, bottom: 0 }}>
-                    <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: "#9B8B75" }} tickLine={false} axisLine={false} />
-                    <YAxis hide domain={["auto", "auto"]} />
-                    <RechartsTooltip
-                      formatter={(val: unknown) => [`$${val}M COP`, "Precio"]}
-                      contentStyle={{ background: "#1A1208", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
-                      labelStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}
-                    />
-                    <Line
-                      type="monotone" dataKey="precio"
-                      stroke="#1D9E75" strokeWidth={2}
-                      dot={{ r: 3, fill: "#1D9E75", strokeWidth: 0 }}
-                      activeDot={{ r: 5, fill: "#1D9E75" }}
-                    />
-                    <ReferenceDot
-                      x="Hoy" y={currentPrecioM}
-                      r={5} fill="#D85A30" stroke="#fff" strokeWidth={2}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              </div>
+          <div className="space-y-3">
+            <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
+            <div style={{ height: 150 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <AreaChart data={chartData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor="#1D9E75" stopOpacity={0.16} />
+                      <stop offset="100%" stopColor="#1D9E75" stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: "#9B8B75" }} tickLine={false} axisLine={false} dy={4} />
+                  <YAxis hide domain={["auto", "auto"]} />
+                  <RechartsTooltip
+                    formatter={(val: unknown) => [`$${val}M COP`, "Precio"]}
+                    contentStyle={{ background: "#1A1208", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, padding: "6px 10px" }}
+                    labelStyle={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}
+                  />
+                  <Area
+                    type="monotone" dataKey="precio"
+                    stroke="#1D9E75" strokeWidth={2} fill="url(#priceFill)"
+                    dot={{ r: 2.5, fill: "#1D9E75", strokeWidth: 0 }}
+                    activeDot={{ r: 4, fill: "#1D9E75" }}
+                  />
+                  <ReferenceDot x="Hoy" y={currentPrecioM} r={4} fill="#1A1208" stroke="#fff" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
             </div>
           </div>
         );
       })()}
 
+      {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
+      {listing.barrio_id && <GettingAround barrioId={listing.barrio_id} />}
+
+      {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
+      <ValorEstimado listing={listing} />
+
+      {/* ── INVESTOR: rentabilidad (mercado → solo realtor) ── */}
+      {isRealtor && isInvestor && (
+        <>
+          <YieldMultiModal listing={listing} />
+          {isPro && listing.score_corto != null && (
+            <div className="flex items-center justify-between border-b py-3 text-[13px]" style={{ borderColor: "#EAE3D6" }}>
+              <span style={{ color: "#6B5B45" }}>Score de inversión</span>
+              <span className="font-semibold tabular-nums" style={{ color: "#1A1208" }}>{Math.round(listing.score_corto / 10)}/10</span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── LANDLORD: yield sin badge de compra (mercado → solo realtor) ────────── */}
+      {isRealtor && isLandlord && <YieldMultiModal listing={listing} />}
+
+
       {/* CTA único para usuarios free */}
       {!isPro && (
         <a
           href="/planes"
-          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+          className="flex w-full items-center justify-center rounded-xl py-3 text-[13px] font-semibold transition hover:opacity-90"
           style={{ background: "#1A1208", color: "#FFFFFF" }}
         >
-          🔓 Desbloquea el análisis completo con MLS Pro →
+          Desbloquea el análisis completo con MLS Pro
         </a>
       )}
-
-      {/* Sobre este barrio — editorial, solo realtor */}
-      {isRealtor && <SobreBarrio listing={listing} target={target} />}
 
       {/* Mini mapa */}
       {heroMapUrl && (
@@ -1404,11 +1449,18 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                             </div>
                           )}
                         </div>
-                        {isRealtor && (isInvestor || isBuyer) && <ValorEstimado listing={listing} />}
-                        {metricsChips}
-                        {ctaButtons}
+                        {specsInline}
+                        {factsTable}
+                        {activityLine}
+                        <RealtorColumn
+                          listingId={listing.id}
+                          agentes={agentes}
+                          waUrl={waUrl}
+                          onSchedule={() => setShowScheduleModal(true)}
+                        />
                         {analysisContent}
                         {similaresSection}
+                        {ctaButtons}
                       </>
                     )}
                   </div>
@@ -1418,102 +1470,66 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           )}
         </AnimatePresence>
         {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
+        {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
       </>
     );
   }
 
   // ── Desktop: 2-column Zillow-style modal ────────────────────────────────────
 
-  // Right column: contact card + zone card
+  // Columna 2 — SOLO realtores de la zona: comuna (principal) + barrio (secundario).
   const rightColContent = listing ? (
-    <div className="flex flex-col gap-4 px-4 py-5">
-      {/* Contact card */}
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
-        {/* Price */}
-        <div className="px-4 pt-4 pb-3">
-          <div
-            className="text-[1.6rem] font-bold leading-tight"
-            style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}
-          >
-            {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
-          </div>
-          {listing.precio_cop && (
-            <div className="mt-0.5 text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>
-          )}
-          <div className="mt-2">{badgesRow}</div>
-          {isPro && listing.pct_bajo_mediana != null && (
-            <div className="mt-3"><PriceBadge listing={listing} /></div>
-          )}
-          {isRealtor && (isInvestor || isBuyer) && listing.precio_m2_p25 && listing.precio_m2_p75 && (
-            <div className="mt-3"><ValorEstimado listing={listing} /></div>
-          )}
-        </div>
-
-        {/* Filas de métricas */}
-        <div style={{ borderTop: "0.5px solid #F5F0E8" }}>
-          {listing.area_m2 != null && (
-            <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-              <span className="flex items-center gap-2 text-[#6B5B45]"><Maximize2 className="h-3.5 w-3.5" /> Área</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{listing.area_m2} m²</span>
-            </div>
-          )}
-          {listing.habitaciones != null && (
-            <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-              <span className="flex items-center gap-2 text-[#6B5B45]"><Bed className="h-3.5 w-3.5" /> Habitaciones</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{listing.habitaciones}</span>
-            </div>
-          )}
-          {listing.banos != null && (
-            <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-              <span className="flex items-center gap-2 text-[#6B5B45]"><Bath className="h-3.5 w-3.5" /> Baños</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{listing.banos}</span>
-            </div>
-          )}
-          {listing.estrato_real != null && (
-            <div className="flex items-center justify-between px-4 py-2 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-              <span className="flex items-center gap-2 text-[#6B5B45]"><Shield className="h-3.5 w-3.5" /> Estrato</span>
-              <span className="font-medium" style={{ color: "#1A1208" }}>{listing.estrato_real}</span>
-            </div>
-          )}
-        </div>
-
-        {/* CTAs */}
-        <div className="px-4 py-4" style={{ borderTop: "0.5px solid #F5F0E8" }}>
-          {ctaButtons}
-        </div>
-      </div>
-
-      {/* Zone card — inteligencia de zona, solo realtor */}
-      {isRealtor && <ZonaCard listing={listing} />}
+    <div className="px-4 py-5">
+      <RealtorColumn
+        listingId={listing.id}
+        agentes={agentes}
+        waUrl={waUrl}
+        onSchedule={() => setShowScheduleModal(true)}
+      />
     </div>
   ) : null;
 
-  // Left column
+  // Left column (galería va full-width arriba, fuera de las columnas)
   const leftColContent = (
     <div>
-      <PhotoGallery fotos={listing?.fotos} titulo={listing?.tipo_inmueble ?? undefined} height={320} />
       {isLoading && loadingSpinner}
       {listing && (
         <div className="space-y-5 px-5 py-5">
-          {/* Header: badges + location */}
-          <div className="space-y-2">
-            {badgesRow}
-            {(listing.barrio_nombre || listing.municipio) && (
-              <div className="flex items-center gap-1 text-sm text-[#6B5B45]">
-                <MapPin className="h-4 w-4 shrink-0" />
-                <span className="font-medium">
-                  {[
-                    listing.barrio_display ?? listing.barrio_nombre,
-                    listing.comuna_nombre,
-                    listing.municipio_display ?? listing.municipio,
-                  ].filter(Boolean).join(" · ")}
-                </span>
+          {/* Header: precio (izq) + specs (der) al mismo nivel */}
+          <div>
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <div className="font-display text-3xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+                  {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
+                </div>
+                {listing.precio_cop && (
+                  <div className="text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>
+                )}
               </div>
-            )}
+              {specsInline && <div className="shrink-0 pt-1.5">{specsInline}</div>}
+            </div>
+            <div className="mt-2 space-y-2">
+              {badgesRow}
+              {(listing.barrio_nombre || listing.municipio) && (
+                <div className="flex items-center gap-1 text-sm text-[#6B5B45]">
+                  <MapPin className="h-4 w-4 shrink-0" />
+                  <span className="font-medium">
+                    {[
+                      listing.barrio_display ?? listing.barrio_nombre,
+                      listing.comuna_nombre,
+                      listing.municipio_display ?? listing.municipio,
+                    ].filter(Boolean).join(" · ")}
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-          {metricsChips}
+          {factsTable}
+          {tourSection}
+          {activityLine}
           {analysisContent}
           {similaresSection}
+          {ctaButtons}
         </div>
       )}
     </div>
@@ -1567,15 +1583,18 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 </button>
               </div>
 
-              {/* 2-column body */}
-              <div className="flex flex-1 overflow-hidden">
-                {/* Left col — scrollable */}
-                <div className="flex-1 overflow-y-auto" style={{ borderRight: "0.5px solid #E8E0D0" }}>
-                  {leftColContent}
-                </div>
-                {/* Right col — sticky contact + zone */}
-                <div className="overflow-y-auto" style={{ width: "37%" }}>
-                  {rightColContent}
+              {/* Body: galería full-width arriba, luego 2 columnas (Zillow) */}
+              <div className="flex-1 overflow-y-auto">
+                <PhotoGallery fotos={listing?.fotos} titulo={listing?.tipo_inmueble ?? undefined} height={420} />
+                <div className="flex items-start">
+                  {/* Columna 1 — información */}
+                  <div className="flex-1" style={{ borderRight: "0.5px solid #E8E0D0" }}>
+                    {leftColContent}
+                  </div>
+                  {/* Columna 2 — contacto realtor + agendar visita (sticky) */}
+                  <div className="shrink-0 self-stretch" style={{ width: "37%" }}>
+                    <div className="sticky top-0">{rightColContent}</div>
+                  </div>
                 </div>
               </div>
             </motion.div>
@@ -1583,6 +1602,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         )}
       </AnimatePresence>
       {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
+      {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
     </>
   );
 }

@@ -202,7 +202,28 @@ async def dashboard(admin: dict = Depends(require_admin)):
     )
     actividad_por_dia = [{"fecha": str(r["fecha"]), "acciones": int(r["acciones"])} for r in act_rows]
 
+    # Negocio: realtors, listings, suscripciones.
+    ag_rows = await pool.fetch("SELECT estado::text AS e, COUNT(*) AS n FROM agent GROUP BY estado")
+    realtors = {"pendiente": 0, "activo": 0, "rechazado": 0, "inactivo": 0}
+    for r in ag_rows:
+        realtors[r["e"]] = int(r["n"])
+    lst_rows = await pool.fetch("SELECT estado::text AS e, COUNT(*) AS n FROM listing GROUP BY estado")
+    listings = {}
+    for r in lst_rows:
+        listings[r["e"]] = int(r["n"])
+    sub_rows = await pool.fetch("SELECT plan, COUNT(*) AS n FROM usuarios WHERE plan IS NOT NULL AND plan <> 'free' GROUP BY plan")
+    suscripciones = {r["plan"]: int(r["n"]) for r in sub_rows}
+    sponsorships_activos = await pool.fetchval(
+        "SELECT COUNT(*) FROM sponsorship WHERE estado = 'activa' AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin"
+    ) or 0
+
     return {
+        "negocio": {
+            "realtors": realtors,
+            "listings": listings,
+            "suscripciones": suscripciones,
+            "sponsorships_activos": int(sponsorships_activos),
+        },
         "usuarios": {
             "total": int(total_usuarios),
             "activos_7dias": int(activos_7 or 0),
@@ -260,10 +281,7 @@ async def list_usuarios(
 
     if perfil_riesgo:
         params.append(perfil_riesgo)
-        try:
-            where_parts.append(f"p.perfil_riesgo = ${len(params)}")
-        except Exception:
-            where_parts.append(f"p.riesgo = ${len(params)}")
+        where_parts.append(f"p.perfil_riesgo = ${len(params)}")
 
     order_map = {
         "created_at": "u.created_at",
@@ -289,12 +307,14 @@ async def list_usuarios(
             u.id,
             u.nombre,
             u.email,
+            u.plan,
+            u.activo,
             u.created_at,
             u.last_login,
             EXTRACT(DAY FROM NOW() - u.created_at)::int AS dias_desde_registro,
             p.presupuesto,
             p.objetivo,
-            COALESCE(p.perfil_riesgo, p.riesgo) AS perfil_riesgo,
+            p.perfil_riesgo AS perfil_riesgo,
             COUNT(DISTINCT h.id) AS total_acciones,
             COUNT(DISTINCT CASE WHEN h.tipo = 'vista_barrio' THEN h.id END) AS barrios_visitados,
             COUNT(DISTINCT CASE WHEN h.tipo = 'simulacion' THEN h.id END) AS simulaciones,
@@ -306,8 +326,8 @@ async def list_usuarios(
         LEFT JOIN historial h ON h.usuario_id = u.id
         LEFT JOIN favoritos f ON f.usuario_id = u.id
         WHERE {where_clause}
-        GROUP BY u.id, u.nombre, u.email, u.created_at, u.last_login,
-                 p.presupuesto, p.objetivo, p.perfil_riesgo, p.riesgo
+        GROUP BY u.id, u.nombre, u.email, u.plan, u.activo, u.created_at, u.last_login,
+                 p.presupuesto, p.objetivo, p.perfil_riesgo
         ORDER BY {order_col} DESC NULLS LAST
         LIMIT ${len(params_paged) - 1} OFFSET ${len(params_paged)}
         """,
@@ -321,6 +341,8 @@ async def list_usuarios(
             "id": r["id"],
             "nombre": r["nombre"],
             "email": r["email"],
+            "plan": r["plan"],
+            "activo": r["activo"],
             "created_at": r["created_at"].isoformat() if r["created_at"] else None,
             "last_login": r["last_login"].isoformat() if r["last_login"] else None,
             "dias_desde_registro": r["dias_desde_registro"],
@@ -520,6 +542,39 @@ async def detalle_usuario(usuario_id: int, admin: dict = Depends(require_admin))
         "barrios_top5": barrios_top5,
         "actividad_por_dia": actividad_por_dia,
     }
+
+
+# ── Editar usuario: plan (dar/quitar acceso Pro/Agente) + activo ──────────────
+
+class UsuarioPatch(BaseModel):
+    plan: Optional[str] = None     # free | pro | agente
+    activo: Optional[bool] = None
+
+
+@router.patch("/usuarios/{usuario_id}")
+async def editar_usuario(usuario_id: int, body: UsuarioPatch, admin: dict = Depends(require_admin)):
+    if body.plan is not None and body.plan not in ("free", "pro", "agente"):
+        raise HTTPException(status_code=400, detail="plan inválido (free|pro|agente)")
+    sets: list[str] = []
+    params: list = []
+    if body.plan is not None:
+        params.append(body.plan)
+        sets.append(f"plan = ${len(params)}")
+    if body.activo is not None:
+        params.append(body.activo)
+        sets.append(f"activo = ${len(params)}")
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    pool = get_pool()
+    params.append(usuario_id)
+    row = await pool.fetchrow(
+        f"UPDATE usuarios SET {', '.join(sets)} WHERE id = ${len(params)} "
+        "RETURNING id, email, plan, activo",
+        *params,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    return {"id": row["id"], "email": row["email"], "plan": row["plan"], "activo": row["activo"]}
 
 
 # ── Endpoint 4: Feed actividad ────────────────────────────────────────────────

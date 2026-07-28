@@ -68,13 +68,12 @@ else
 fi
 
 # ── 2. Backend (FastAPI + uvicorn) ────────────────────────────────────────────
-# Resolve uvicorn: prefer system PATH, luego ~/.local/bin (pip install --user)
-UVICORN=$(command -v uvicorn 2>/dev/null \
-  || echo "$HOME/.local/bin/uvicorn")
-
+# `python -m uvicorn`: usa el env del python activo (miniconda, fastapi>=0.110).
+# El binario de ~/.local/bin apunta al python del sistema con fastapi 0.109,
+# que rompe Optional[List[UploadFile]] (uploads de /publicar).
 echo "Iniciando backend  → http://localhost:$API_PORT"
 : > "$BACKEND_LOG"
-"$UVICORN" api.main:app --host 0.0.0.0 --port "$API_PORT" \
+python -m uvicorn api.main:app --host 0.0.0.0 --port "$API_PORT" \
   > "$BACKEND_LOG" 2>&1 &
 BACKEND_PID=$!
 

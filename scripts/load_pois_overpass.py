@@ -134,6 +134,15 @@ POI_RULES = [
         "subtipo": "amenity=bar",
         "queries": ['nwr["amenity"="bar"]({bbox})'],
     },
+    # ── colegios: school (primaria/secundaria) + kindergarten (preescolar) ──
+    {
+        "tipo": "colegio",
+        "subtipo": "amenity=school",
+        "queries": [
+            'nwr["amenity"="school"]({bbox})',
+            'nwr["amenity"="kindergarten"]({bbox})',
+        ],
+    },
 ]
 
 

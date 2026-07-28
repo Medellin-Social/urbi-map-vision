@@ -126,6 +126,16 @@ def validate_urls() -> None:
     )
 
 
+def mirror_media() -> None:
+    # Espeja portadas nuevas a R2 (incremental: solo listings sin fila en el
+    # mirror). Backfill completo se corre una vez a mano con --all.
+    # Si S3_BUCKET no está seteado, el script corre en modo stub (no sube).
+    _run(
+        [sys.executable, "mirror_listings_media.py", "--limit", "5000"],
+        cwd=SCRIPTS_DIR,
+    )
+
+
 with DAG(
     dag_id="scrape_listings",
     default_args=default_args,
@@ -173,9 +183,16 @@ with DAG(
         execution_timeout=timedelta(hours=1),
     )
 
+    t6 = PythonOperator(
+        task_id="mirror_media_r2",
+        python_callable=mirror_media,
+        execution_timeout=timedelta(hours=2),
+    )
+
     # fincaraiz: scrape → load → dedup → analytics
     # metrocuadrado: scrape → analytics (dedupa al insertar)
-    # analytics espera ambos; validación de URLs al final
+    # analytics espera ambos; validación de URLs y espejo de portadas al final
     t1 >> t2 >> t2b >> t4
     t3 >> t4
     t4 >> t5
+    t4 >> t6

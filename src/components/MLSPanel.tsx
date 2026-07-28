@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ArrowLeft, ExternalLink, Plus, Check } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown } from "lucide-react";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
@@ -11,7 +11,8 @@ import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { useTrm } from "@/hooks/useTrm";
-import { useIsPro } from "@/components/LockedField";
+import { useIsPro, useIsAgente } from "@/components/LockedField";
+import { useLang } from "@/lib/i18n";
 import { toast } from "sonner";
 
 type Props = {
@@ -94,6 +95,34 @@ function tierColor(l: ApiListing): string {
   return TIPO_INMUEBLE_COLOR[l.tipo_inmueble ?? ""] ?? "#9B8B75";
 }
 
+// Listing con visibilidad pagada (owner Pro o agente verificado) → destacado.
+const DESTACADO_COLOR = "#FF2D95";
+function esDestacado(l: ApiListing): boolean {
+  return l.fuente_display === "propio_pro" || l.fuente_display === "agente_verificado";
+}
+
+// Orden que elige el usuario. "destacados" = orden del server (pro-first); el resto
+// reordena por el campo elegido. Los destacados siguen fijos arriba (ver split).
+type SortKey = "destacados" | "precio_asc" | "precio_desc" | "nuevo" | "area_desc";
+const SORT_OPTIONS: { key: SortKey; es: string; en: string }[] = [
+  { key: "destacados",  es: "Destacados",     en: "Featured" },
+  { key: "precio_desc", es: "Precio ↑",       en: "Price ↑" },
+  { key: "precio_asc",  es: "Precio ↓",       en: "Price ↓" },
+  { key: "nuevo",       es: "Más nuevo",      en: "Newest" },
+  { key: "area_desc",   es: "Área ↓",         en: "Area ↓" },
+];
+export function sortListings(list: ApiListing[], key: SortKey): ApiListing[] {
+  if (key === "destacados") return list;  // conserva orden del server
+  const arr = [...list];
+  const num = (v: number | null | undefined, fallback: number) => (v == null ? fallback : v);
+  switch (key) {
+    case "precio_asc":  return arr.sort((a, b) => num(a.precio_cop, Infinity) - num(b.precio_cop, Infinity));
+    case "precio_desc": return arr.sort((a, b) => num(b.precio_cop, -Infinity) - num(a.precio_cop, -Infinity));
+    case "nuevo":       return arr.sort((a, b) => num(a.dias_en_mercado, Infinity) - num(b.dias_en_mercado, Infinity));
+    case "area_desc":   return arr.sort((a, b) => num(b.area_m2, -Infinity) - num(a.area_m2, -Infinity));
+  }
+}
+
 function diasLabel(dias: number | null | undefined): string | null {
   if (dias == null || dias < 0) return null;
   if (dias === 0) return "Publicado hoy";
@@ -122,6 +151,7 @@ function ListingCard({
   onSimular: () => void;
 }) {
   const isPro = useIsPro();
+  const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
@@ -159,7 +189,7 @@ function ListingCard({
       >
         <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F5F0E8' }}>
           {listing.foto_principal ? (
-            <img src={listing.foto_principal} alt="" className="h-full w-full object-cover" loading="lazy" />
+            <img src={listing.foto_principal} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
           ) : (
             <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #085041 100%)' }}>
               <span style={{ color: '#fff', opacity: 0.5, fontSize: 11, fontWeight: 700 }}>Medellín Social</span>
@@ -207,6 +237,7 @@ function ListingCard({
             alt=""
             className="h-full w-full object-cover"
             loading="lazy"
+            decoding="async"
           />
         ) : (
           <div
@@ -236,8 +267,8 @@ function ListingCard({
         >
           {tipo}
         </span>
-        {/* Comparador "+" button */}
-        {isPro && (
+        {/* Comparador "+" button — solo realtors */}
+        {isRealtor && (
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -265,6 +296,11 @@ function ListingCard({
       </div>
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
+        {esDestacado(listing) && (
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: DESTACADO_COLOR, color: '#FFFFFF' }}>
+            ★ Destacado
+          </span>
+        )}
         {listing.tier === "agencia_premium" && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#ffc928', color: '#1A1208' }}>
             ✦ Premium
@@ -434,6 +470,8 @@ export function MLSPanel({
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
   const { target, setTarget } = useTarget();
+  const { lang } = useLang();
+  const [sortBy, setSortBy] = useState<SortKey>("destacados");
 
   // Reset internal filters when target or barrio changes
   useEffect(() => {
@@ -442,6 +480,13 @@ export function MLSPanel({
 
   const cardRefs = useRef<Record<number, HTMLDivElement | null>>({});
   const listContainerRef = useRef<HTMLDivElement>(null);
+
+  // Render progresivo: pinta un lote y crece al scrollear (evita renderizar 500
+  // cards de golpe → primer paint ~10 cards en vez de segundos).
+  const RENDER_STEP = 30;
+  const [visibleCount, setVisibleCount] = useState(RENDER_STEP);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => { setVisibleCount(RENDER_STEP); listContainerRef.current?.scrollTo({ top: 0 }); }, [listings, sortBy, activeBarrioName]);
 
 
   const nVenta = useMemo(
@@ -524,6 +569,44 @@ export function MLSPanel({
 
   const panelVars = { '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties;
 
+  // Destacados (visibilidad pagada) arriba en su propia sección; el resto abajo.
+  // filtered ya viene ordenado pro-first del API; el split solo agrega los encabezados.
+  const ordenados = sortListings(filtered, sortBy);
+  const destacados = ordenados.filter(esDestacado);
+  const resto = ordenados.filter((l) => !esDestacado(l));
+  // Solo renderiza los primeros `visibleCount` del resto; crece al scrollear.
+  const restoVisible = resto.slice(0, Math.max(0, visibleCount - destacados.length));
+  const hayMas = restoVisible.length < resto.length;
+
+  // IntersectionObserver: al acercarse al final, muestra el siguiente lote.
+  useEffect(() => {
+    const s = sentinelRef.current, root = listContainerRef.current;
+    if (!s || !root || !hayMas) return;
+    const io = new IntersectionObserver(
+      (es) => { if (es[0].isIntersecting) setVisibleCount((c) => c + RENDER_STEP); },
+      { root, rootMargin: "600px" },
+    );
+    io.observe(s);
+    return () => io.disconnect();
+  }, [hayMas, restoVisible.length]);
+  const renderCard = (l: ApiListing) => (
+    <ListingCard
+      key={`${l.fuente ?? "x"}-${l.id}`}
+      listing={l}
+      highlighted={highlightedListingId === l.id}
+      onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}
+      cardRef={(el) => { cardRefs.current[l.id] = el; }}
+      isFav={isFav(l.url)}
+      onToggleFav={() => {
+        if (!auth.get()) return;
+        toggleFav(l.url, l.barrio_id);
+      }}
+      onSimular={() => {
+        navigate({ to: "/simulador", search: { barrio: l.barrio_id ?? undefined, precio: l.precio_cop ?? undefined } });
+      }}
+    />
+  );
+
   const body = (
     <>
         {/* Header — desktop clears the navbar+filterbar (104px); mobile list sits below them */}
@@ -567,27 +650,7 @@ export function MLSPanel({
             </div>
           )}
 
-          {activeComuna && comunaBarrios && comunaBarrios.length > 0 && (
-            <select
-              value={isAtBarrioLevel ? String(barrio.id) : ""}
-              onChange={(e) => {
-                const v = e.target.value;
-                if (!v) onBackToComuna?.();
-                else onSelectBarrioInComune?.(Number(v));
-              }}
-              className="mt-2 w-full cursor-pointer rounded-md border border-border bg-surface-elevated px-2.5 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-            >
-              <option value="">Todos los barrios</option>
-              {comunaBarrios
-                .slice()
-                .sort((a, b) => a.nombre.localeCompare(b.nombre))
-                .map(b => (
-                  <option key={b.barrio_id} value={b.barrio_id}>
-                    {toTitleCase(b.nombre)}
-                  </option>
-                ))}
-            </select>
-          )}
+          {/* El filtro barrio-de-comuna se movió a la barra de filtros (ZonaCascader). */}
           {!isLoading && !premiumIsLoading && effectiveRadio != null && effectiveRadio > 0 && (
             <p className="mt-0.5 text-[10px] text-muted-foreground/70">
               {premiumFilterActive && premiumInCurrent === 0
@@ -629,11 +692,33 @@ export function MLSPanel({
 
         </div>
 
+        {/* Contador de resultados + orden */}
+        {!isLoading && (
+          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+            <span className="text-xs font-medium text-muted-foreground">
+              {filtered.length} {lang === "en" ? (filtered.length === 1 ? "property" : "properties") : (filtered.length === 1 ? "propiedad" : "propiedades")}
+            </span>
+            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <ArrowUpDown className="h-3.5 w-3.5" />
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortKey)}
+                className="cursor-pointer rounded-md border border-border bg-surface-elevated px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
+
         {/* Lista */}
         <div ref={listContainerRef} className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
           {isLoading && (
-            <div className="flex items-center justify-center py-12 text-muted-foreground text-sm">
-              Cargando listings…
+            <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
+              <span>Cargando inmuebles…</span>
             </div>
           )}
           {!isLoading && filtered.length === 0 && (
@@ -643,30 +728,39 @@ export function MLSPanel({
               <div className="text-xs mt-1">Intenta con otros filtros</div>
             </div>
           )}
-          {filtered.map((l) => (
-            <ListingCard
-              key={`${l.fuente ?? "x"}-${l.id}`}
-              listing={l}
-              highlighted={highlightedListingId === l.id}
-              onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}
-              cardRef={(el) => { cardRefs.current[l.id] = el; }}
-              isFav={isFav(l.url)}
-              onToggleFav={() => {
-                if (!auth.get()) return;
-                toggleFav(l.url, l.barrio_id);
-              }}
-              onSimular={() => {
-                const p = new URLSearchParams();
-                if (l.barrio_id) p.set("barrio", String(l.barrio_id));
-                if (l.precio_cop) p.set("precio", String(l.precio_cop));
-                if (l.area_m2)   p.set("area",   String(l.area_m2));
-                if (l.url)       p.set("uid",     l.url);
-                if (l.fuente)    p.set("fuente",  l.fuente);
-                if (l.url)       p.set("url_listing", l.url);
-                navigate({ to: "/simulador", search: { barrio: l.barrio_id ?? undefined, precio: l.precio_cop ?? undefined } });
-              }}
-            />
-          ))}
+          {destacados.length > 0 && (
+            <>
+              <div className="flex items-center gap-2 px-1 pt-1 pb-0.5">
+                <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: DESTACADO_COLOR }}>
+                  ★ {lang === "en" ? "Featured in this area" : "Destacados en esta zona"}
+                </span>
+                <span className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+              </div>
+              {destacados.map(renderCard)}
+              {resto.length > 0 && (
+                <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+                  <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {lang === "en" ? "All properties" : "Todas las propiedades"}
+                  </span>
+                  <span className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+                </div>
+              )}
+            </>
+          )}
+          {restoVisible.map(renderCard)}
+          {/* Sentinel para render progresivo — dispara el siguiente lote */}
+          {hayMas && (
+            <div ref={sentinelRef} className="flex justify-center py-4">
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
+            </div>
+          )}
+          {!isLoading && !hayMas && filtered.length > 0 && (
+            <p className="px-3 py-4 text-center text-[10px] leading-relaxed text-muted-foreground">
+              {lang === "en"
+                ? "Listings come from third-party sources and owners. Medellín Social does not guarantee the accuracy of prices, availability or details — verify with the agent before deciding."
+                : "Los inmuebles provienen de fuentes externas y propietarios. Medellín Social no garantiza la exactitud de precios, disponibilidad ni detalles — verifica con el agente antes de decidir."}
+            </p>
+          )}
         </div>
     </>
   );

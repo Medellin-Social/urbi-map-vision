@@ -11,7 +11,7 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.routers.admin import require_admin
 from api.services.asignador_service import (
-    AsignadorError, asignar_intake, tomar_del_pool,
+    AsignadorError, asignar_intake, sweep_asignados_vencidos, tomar_del_pool,
 )
 
 router = APIRouter()
@@ -55,6 +55,7 @@ async def ver_pool(
     pool=Depends(get_pool),
 ):
     """Intakes en el pool abierto, filtrables por zona del agente."""
+    await sweep_asignados_vencidos(pool)
     async with pool.acquire() as conn:
         if barrio_id:
             rows = await conn.fetch(

@@ -100,6 +100,7 @@ function MapPageInner() {
   // Listings currently rendered as map dots via viewport loading (FIX 1) — used
   // to resolve a map-point click into the listing for the mini-popup/drawer.
   const [viewportListings, setViewportListings] = useState<ApiListing[]>([]);
+  const [viewportLoading, setViewportLoading] = useState(false);
 
   const [globalSearch, setGlobalSearch] = useState(false);
 
@@ -151,9 +152,11 @@ function MapPageInner() {
   const mlsRadio = mlsData?.radio_usado_metros ?? null;
   const mlsBarriosIncluidos = mlsData?.barrios_incluidos ?? null;
 
-  // Global Valle search — only fires when user clicks "Buscar en el Valle"
+  // Global Valle search ("Toda la ciudad"). Solo la LISTA lo consume (el mapa usa
+  // clusters aparte). La lista pinta 30 y crece por scroll → 200 alcanza de sobra
+  // y el payload baja ~2.5x (carga más rápido en red real).
   const { data: globalData, isLoading: globalIsLoading } = useListings(
-    null, 500, 0, mlsTipoOp, false, apiFilters,
+    null, 200, 0, mlsTipoOp, false, apiFilters,
     undefined, undefined, globalSearch,
   );
 
@@ -194,12 +197,15 @@ function MapPageInner() {
   }, [activeComunaCd]);
 
   // Camera-derived commune filter forwarded to MapView's viewport fetch.
-  const cdComunaQuery = mlsBarrio == null && !activeMunicipio ? (activeComunaCd ?? undefined) : undefined;
+  // Con "Toda la ciudad" (globalSearch) no se filtra por comuna: se ve toda la ciudad.
+  const cdComunaQuery = globalSearch
+    ? undefined
+    : (mlsBarrio == null && !activeMunicipio ? (activeComunaCd ?? undefined) : undefined);
 
   // FIX 1d: single source of truth — the panel mirrors exactly the viewport the
   // map shows (clusters mode returns a capped list, points mode the points).
   const mergedListings = globalSearch ? (globalData?.listings ?? []) : viewportListings;
-  const mergedLoading  = globalSearch ? globalIsLoading : (mlsBarrio ? mlsIsLoading : false);
+  const mergedLoading  = globalSearch ? globalIsLoading : (mlsBarrio ? mlsIsLoading : viewportLoading);
   const mlsTotal = mergedListings.length;
 
   // Panel zone label — real barrio > active commune > active municipality > Medellín default
@@ -376,6 +382,29 @@ function MapPageInner() {
     setMlsBarrio(null);
   }
 
+  // Cascader Zona (filter bar): null = toda la ciudad; cd = activar comuna + volar.
+  function handleComunaSelect(cd: number | null, nombre: string | null) {
+    if (cd == null) {
+      setActiveComuna(null);
+      setActiveComunaCd(null);
+      setActiveMunicipio(null);
+      setMlsBarrio(null);
+      setActiveBarrioInComune(null);
+      setGlobalSearch(true);
+      setMapView("listings");
+      return;
+    }
+    handleViewLevelChange("barrios", nombre, null, cd);
+    setGlobalSearch(false);
+    // Volar al centroide de la comuna (promedio de sus barrios).
+    const barriosDeComuna = allBarrioOptions.filter((o) => o.cd_comuna === cd);
+    if (barriosDeComuna.length > 0) {
+      const lat = barriosDeComuna.reduce((s, o) => s + o.lat, 0) / barriosDeComuna.length;
+      const lng = barriosDeComuna.reduce((s, o) => s + o.lng, 0) / barriosDeComuna.length;
+      flyToListingRef.current?.(lat, lng);
+    }
+  }
+
   function handleSelectBarrioInComune(barrioId: number) {
     const item = comunaBarriosList.find(b => b.barrio_id === barrioId);
     if (!item) return;
@@ -436,6 +465,8 @@ function MapPageInner() {
 
   // Camera auto-select (FIX 1c): barrio under map center at high zoom → scope panel+dots.
   function handleAutoSelectBarrio(barrioId: number | null) {
+    // "Toda la ciudad" (globalSearch) manda: la cámara no re-scopea a un barrio.
+    if (globalSearch) return;
     if (barrioId == null) { setMlsBarrio(null); return; }
     const b = (barriosRaw ?? []).find((x) => x.barrio_id === barrioId);
     if (b) setMlsBarrio(barrioToNeighborhood(b));
@@ -443,6 +474,8 @@ function MapPageInner() {
 
   // Camera-derived commune/municipio (zoom < TIER) → scope viewport + breadcrumb.
   function handleAutoSelectComuna(cd: number | null, municipio: string | null, nombre: string | null) {
+    // Con "Toda la ciudad" activo, ignorar el scoping por cámara (persistir ciudad).
+    if (globalSearch) return;
     setMlsBarrio(null);
     setActiveComunaCd(cd);
     setActiveMunicipio(municipio);
@@ -471,6 +504,7 @@ function MapPageInner() {
           mlsMunicipio={activeMunicipio}
           mlsFilters={mlsFilters}
           onViewportListingsChange={setViewportListings}
+          onViewportLoadingChange={setViewportLoading}
           onAutoSelectBarrio={handleAutoSelectBarrio}
           onAutoSelectComuna={handleAutoSelectComuna}
           highlightedListingId={highlightedListingId}
@@ -515,6 +549,8 @@ function MapPageInner() {
         onBarrioClear={() => { setMlsBarrio(null); setMapView("zonas"); setGlobalSearch(false); }}
         onSearchAll={() => { setGlobalSearch(true); setMapView("listings"); }}
         hasActiveScope={!!mlsBarrio || !!activePanelName}
+        activeComunaCd={activeComunaCd}
+        onComunaSelect={handleComunaSelect}
       />
       <ProfileChipMobile />
 

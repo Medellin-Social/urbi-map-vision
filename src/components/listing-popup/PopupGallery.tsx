@@ -9,7 +9,7 @@ import {
 } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
 
-const PHOTO_H = 190;
+const PHOTO_H = 150;
 
 function BuildingPlaceholder() {
   return (
@@ -69,6 +69,7 @@ export function PopupGallery({ fotos, fallbackFoto, loading, alt }: Props) {
                 className="w-full object-cover"
                 style={{ height: PHOTO_H }}
                 loading={i === 0 ? "eager" : "lazy"}
+                decoding="async"
               />
             </CarouselItem>
           ))}
@@ -85,7 +86,14 @@ export function PopupGallery({ fotos, fallbackFoto, loading, alt }: Props) {
   const single = gallery[0] ?? fallbackFoto;
   if (single) {
     return (
-      <img src={single} alt={alt} className="w-full object-cover" style={{ height: PHOTO_H }} loading="eager" />
+      <img
+        src={single}
+        alt={alt}
+        className="w-full object-cover"
+        style={{ height: PHOTO_H }}
+        loading="eager"
+        decoding="async"
+      />
     );
   }
   if (loading) return <Skeleton className="w-full rounded-none" style={{ height: PHOTO_H }} />;

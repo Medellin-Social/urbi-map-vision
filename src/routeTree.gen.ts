@@ -21,6 +21,7 @@ import { Route as PublicarRouteImport } from './routes/publicar'
 import { Route as PlanesRouteImport } from './routes/planes'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
+import { Route as MisPropiedadesRouteImport } from './routes/mis-propiedades'
 import { Route as MapRouteImport } from './routes/map'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
@@ -31,6 +32,7 @@ import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
 import { Route as AfiliadoRouteImport } from './routes/afiliado'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PanelX9k2IndexRouteImport } from './routes/panel-x9k2/index'
 import { Route as SuscripcionExitoRouteImport } from './routes/suscripcion/exito'
 import { Route as SuscripcionCanceladaRouteImport } from './routes/suscripcion/cancelada'
 import { Route as RealtorDashboardRouteImport } from './routes/realtor/dashboard'
@@ -38,7 +40,6 @@ import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
-import { Route as AdminAgentesRouteImport } from './routes/admin/agentes'
 
 const VenderRoute = VenderRouteImport.update({
   id: '/vender',
@@ -100,6 +101,11 @@ const OnboardingRoute = OnboardingRouteImport.update({
   path: '/onboarding',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MisPropiedadesRoute = MisPropiedadesRouteImport.update({
+  id: '/mis-propiedades',
+  path: '/mis-propiedades',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
@@ -150,6 +156,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PanelX9k2IndexRoute = PanelX9k2IndexRouteImport.update({
+  id: '/panel-x9k2/',
+  path: '/panel-x9k2/',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const SuscripcionExitoRoute = SuscripcionExitoRouteImport.update({
   id: '/suscripcion/exito',
   path: '/suscripcion/exito',
@@ -186,11 +197,6 @@ const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
   path: '/eventos/$barrio_slug',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AdminAgentesRoute = AdminAgentesRouteImport.update({
-  id: '/admin/agentes',
-  path: '/admin/agentes',
-  getParentRoute: () => rootRouteImport,
-} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -203,6 +209,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
@@ -215,7 +222,6 @@ export interface FileRoutesByFullPath {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
-  '/admin/agentes': typeof AdminAgentesRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -223,6 +229,7 @@ export interface FileRoutesByFullPath {
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/panel-x9k2/': typeof PanelX9k2IndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -235,6 +242,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
@@ -247,7 +255,6 @@ export interface FileRoutesByTo {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
-  '/admin/agentes': typeof AdminAgentesRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -255,6 +262,7 @@ export interface FileRoutesByTo {
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/panel-x9k2': typeof PanelX9k2IndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -268,6 +276,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
@@ -280,7 +289,6 @@ export interface FileRoutesById {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
-  '/admin/agentes': typeof AdminAgentesRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -288,6 +296,7 @@ export interface FileRoutesById {
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
+  '/panel-x9k2/': typeof PanelX9k2IndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -302,6 +311,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mis-propiedades'
     | '/onboarding'
     | '/perfil'
     | '/planes'
@@ -314,7 +324,6 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
-    | '/admin/agentes'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -322,6 +331,7 @@ export interface FileRouteTypes {
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
+    | '/panel-x9k2/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -334,6 +344,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mis-propiedades'
     | '/onboarding'
     | '/perfil'
     | '/planes'
@@ -346,7 +357,6 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
-    | '/admin/agentes'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -354,6 +364,7 @@ export interface FileRouteTypes {
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
+    | '/panel-x9k2'
   id:
     | '__root__'
     | '/'
@@ -366,6 +377,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mis-propiedades'
     | '/onboarding'
     | '/perfil'
     | '/planes'
@@ -378,7 +390,6 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
-    | '/admin/agentes'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -386,6 +397,7 @@ export interface FileRouteTypes {
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
+    | '/panel-x9k2/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -399,6 +411,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
+  MisPropiedadesRoute: typeof MisPropiedadesRoute
   OnboardingRoute: typeof OnboardingRoute
   PerfilRoute: typeof PerfilRoute
   PlanesRoute: typeof PlanesRoute
@@ -411,7 +424,6 @@ export interface RootRouteChildren {
   StoresRoute: typeof StoresRoute
   SuscribirseRoute: typeof SuscribirseRoute
   VenderRoute: typeof VenderRoute
-  AdminAgentesRoute: typeof AdminAgentesRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
@@ -419,6 +431,7 @@ export interface RootRouteChildren {
   RealtorDashboardRoute: typeof RealtorDashboardRoute
   SuscripcionCanceladaRoute: typeof SuscripcionCanceladaRoute
   SuscripcionExitoRoute: typeof SuscripcionExitoRoute
+  PanelX9k2IndexRoute: typeof PanelX9k2IndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -507,6 +520,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof OnboardingRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/mis-propiedades': {
+      id: '/mis-propiedades'
+      path: '/mis-propiedades'
+      fullPath: '/mis-propiedades'
+      preLoaderRoute: typeof MisPropiedadesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/map': {
       id: '/map'
       path: '/map'
@@ -577,6 +597,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/panel-x9k2/': {
+      id: '/panel-x9k2/'
+      path: '/panel-x9k2'
+      fullPath: '/panel-x9k2/'
+      preLoaderRoute: typeof PanelX9k2IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/suscripcion/exito': {
       id: '/suscripcion/exito'
       path: '/suscripcion/exito'
@@ -626,13 +653,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosBarrio_slugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/admin/agentes': {
-      id: '/admin/agentes'
-      path: '/admin/agentes'
-      fullPath: '/admin/agentes'
-      preLoaderRoute: typeof AdminAgentesRouteImport
-      parentRoute: typeof rootRouteImport
-    }
   }
 }
 
@@ -647,6 +667,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,
+  MisPropiedadesRoute: MisPropiedadesRoute,
   OnboardingRoute: OnboardingRoute,
   PerfilRoute: PerfilRoute,
   PlanesRoute: PlanesRoute,
@@ -659,7 +680,6 @@ const rootRouteChildren: RootRouteChildren = {
   StoresRoute: StoresRoute,
   SuscribirseRoute: SuscribirseRoute,
   VenderRoute: VenderRoute,
-  AdminAgentesRoute: AdminAgentesRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
@@ -667,6 +687,7 @@ const rootRouteChildren: RootRouteChildren = {
   RealtorDashboardRoute: RealtorDashboardRoute,
   SuscripcionCanceladaRoute: SuscripcionCanceladaRoute,
   SuscripcionExitoRoute: SuscripcionExitoRoute,
+  PanelX9k2IndexRoute: PanelX9k2IndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

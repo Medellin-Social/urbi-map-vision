@@ -1,15 +1,22 @@
-"""S3 document upload helper.
+"""S3 / Cloudflare R2 upload helper.
 
-Env vars required:
+Env vars:
   AWS_ACCESS_KEY_ID
   AWS_SECRET_ACCESS_KEY
-  AWS_REGION          — default: us-east-1
+  AWS_REGION          — default: us-east-1 (R2 ignora la región, usa "auto")
   S3_BUCKET           — bucket name
-  S3_PUBLIC_URL       — base URL for public files (e.g. https://cdn.medellin.social)
-                        Falls back to https://{bucket}.s3.amazonaws.com
+  S3_ENDPOINT_URL     — endpoint S3-compat. Para R2:
+                        https://<account_id>.r2.cloudflarestorage.com
+                        Vacío → AWS S3 normal.
+  S3_PUBLIC_URL       — base URL pública/CDN (e.g. https://cdn.medellin.social
+                        o https://<hash>.r2.dev). Falls back a
+                        https://{bucket}.s3.amazonaws.com
+
+R2 no soporta ACL por objeto (el acceso público se configura a nivel bucket),
+por eso NO se envía ACL="public-read"; en S3 el acceso se da con bucket policy.
 
 If S3_BUCKET is unset, uploads are skipped and a placeholder URL is returned
-so the feature doesn't break in dev without AWS credentials.
+so the feature doesn't break in dev without credentials.
 """
 from __future__ import annotations
 
@@ -22,13 +29,24 @@ from pathlib import PurePosixPath
 import boto3
 from botocore.exceptions import BotoCoreError, ClientError
 
-_BUCKET     = os.getenv("S3_BUCKET", "")
-_REGION     = os.getenv("AWS_REGION", "us-east-1")
-_PUBLIC_URL = os.getenv("S3_PUBLIC_URL", "")
+# Acepta los nombres S3_* (originales) y los AWS_* que usa el .env de R2.
+_BUCKET       = os.getenv("S3_BUCKET")       or os.getenv("AWS_BUCKET", "")
+_REGION       = os.getenv("AWS_REGION")      or os.getenv("AWS_DEFAULT_REGION", "auto")
+_ENDPOINT_URL = os.getenv("S3_ENDPOINT_URL") or os.getenv("AWS_ENDPOINT", "")
+_PUBLIC_URL   = os.getenv("S3_PUBLIC_URL")   or os.getenv("AWS_URL", "")
 
 
 def _client():
-    return boto3.client("s3", region_name=_REGION)
+    return boto3.client(
+        "s3",
+        region_name=_REGION,
+        endpoint_url=_ENDPOINT_URL or None,   # R2 usa endpoint propio; S3 = None
+    )
+
+
+def _public_url(key: str) -> str:
+    base = _PUBLIC_URL or f"https://{_BUCKET}.s3.amazonaws.com"
+    return f"{base}/{key}"
 
 
 def _upload_sync(file_bytes: bytes, key: str, content_type: str) -> str:
@@ -42,10 +60,8 @@ def _upload_sync(file_bytes: bytes, key: str, content_type: str) -> str:
         Key=key,
         Body=file_bytes,
         ContentType=content_type,
-        ACL="public-read",
     )
-    base = _PUBLIC_URL or f"https://{_BUCKET}.s3.amazonaws.com"
-    return f"{base}/{key}"
+    return _public_url(key)
 
 
 async def upload_file(
@@ -58,3 +74,33 @@ async def upload_file(
     key = f"{folder}/{uuid.uuid4().hex}{ext}"
     loop = asyncio.get_event_loop()
     return await loop.run_in_executor(None, _upload_sync, file_bytes, key, content_type)
+
+
+def _exists(key: str) -> bool:
+    """True si el objeto ya está en el bucket. R2/S3 HeadObject → 404 si no."""
+    if not _BUCKET:
+        return False
+    try:
+        _client().head_object(Bucket=_BUCKET, Key=key)
+        return True
+    except ClientError as e:
+        if e.response.get("Error", {}).get("Code") in ("404", "NoSuchKey", "NotFound"):
+            return False
+        raise
+
+
+def upload_if_absent(file_bytes: bytes, key: str, content_type: str = "image/webp") -> str:
+    """Sube solo si la key no existe (dedup content-addressable).
+
+    Uso: key = f"listings/{media_uid}/{sha256}.webp". Misma foto = mismo hash =
+    misma key → HeadObject dice que ya está → no re-sube. Devuelve la URL pública
+    igual exista o no. Síncrono: pensado para el script/DAG de espejo, no FastAPI.
+    """
+    if not _BUCKET:
+        print(f"[S3 STUB] would upload {key} ({len(file_bytes)} bytes)")
+        return _public_url(key)
+    if not _exists(key):
+        _client().put_object(
+            Bucket=_BUCKET, Key=key, Body=file_bytes, ContentType=content_type,
+        )
+    return _public_url(key)

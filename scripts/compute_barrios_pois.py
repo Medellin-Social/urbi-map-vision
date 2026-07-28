@@ -160,6 +160,25 @@ cnt_hosp AS (
         ON p.tipo = 'hospital'
         AND ST_DWithin(c.centro, p.geometry::geography, 3000)
     GROUP BY c.barrio_id
+),
+cnt_colegio AS (
+    SELECT c.barrio_id,
+        COUNT(p.id)::int AS cnt
+    FROM centroids c
+    LEFT JOIN raw.pois p
+        ON p.tipo = 'colegio'
+        AND ST_DWithin(c.centro, p.geometry::geography, 1000)
+    GROUP BY c.barrio_id
+),
+dist_colegio AS (
+    SELECT c.barrio_id,
+        ROUND((MIN(ST_Distance(c.centro, p.geometry::geography)) / 1000)::numeric, 3) AS dist_km
+    FROM centroids c
+    LEFT JOIN LATERAL (
+        SELECT geometry FROM raw.pois WHERE tipo = 'colegio'
+        ORDER BY geometry <-> c.centro::geometry LIMIT 1
+    ) p ON true
+    GROUP BY c.barrio_id
 )
 INSERT INTO analytics.barrios_pois_distancia (
     barrio_id, nombre_barrio, municipio,
@@ -167,6 +186,8 @@ INSERT INTO analytics.barrios_pois_distancia (
     n_cafes_500m, n_coworking_1km, n_gimnasios_1km,
     n_restaurantes_500m, n_bares_500m,
     n_yoga_1km, n_universidades_2km, n_hospitales_3km,
+    n_colegios_1km, dist_colegio_km,
+    walk_score, transit_score,
     indice_nomada, calculado_en
 )
 SELECT
@@ -185,6 +206,22 @@ SELECT
     COALESCE(yoga.cnt, 0),
     COALESCE(univ.cnt, 0),
     COALESCE(hosp.cnt, 0),
+    COALESCE(col.cnt, 0),
+    dcol.dist_km,
+    -- Walk score 0-100: densidad de servicios caminables. Tope por categoría
+    -- (rendimientos decrecientes, estilo Walk Score) para que discrimine y no sature.
+    LEAST(100, (
+        LEAST(20, COALESCE(cafe.cnt, 0) * 4)
+        + LEAST(20, COALESCE(rest.cnt, 0) * 2)
+        + LEAST(10, COALESCE(bar.cnt, 0)  * 2)
+        + LEAST(15, COALESCE(gym.cnt, 0)  * 3)
+        + LEAST(15, COALESCE(col.cnt, 0)  * 2)
+        + CASE WHEN dp.dist_km  IS NOT NULL AND dp.dist_km  < 1.0 THEN 10 ELSE 0 END
+        + CASE WHEN dml.dist_km IS NOT NULL AND dml.dist_km < 1.5 THEN 10 ELSE 0 END
+    ))::int,
+    -- Transit score 0-100: cercanía al metro (0km=100, ~2.5km=0).
+    CASE WHEN dm.dist_km IS NULL THEN NULL
+         ELSE GREATEST(0, LEAST(100, ROUND(100 - dm.dist_km * 40)))::int END,
     ROUND((
         COALESCE(cafe.cnt, 0) * 2.0
         + COALESCE(gym.cnt, 0)  * 1.5
@@ -207,6 +244,8 @@ LEFT JOIN cnt_bar     bar  ON bar.barrio_id  = c.barrio_id
 LEFT JOIN cnt_yoga    yoga ON yoga.barrio_id = c.barrio_id
 LEFT JOIN cnt_univ    univ ON univ.barrio_id = c.barrio_id
 LEFT JOIN cnt_hosp    hosp ON hosp.barrio_id = c.barrio_id
+LEFT JOIN cnt_colegio col  ON col.barrio_id  = c.barrio_id
+LEFT JOIN dist_colegio dcol ON dcol.barrio_id = c.barrio_id
 ON CONFLICT (barrio_id) DO UPDATE SET
     nombre_barrio       = EXCLUDED.nombre_barrio,
     municipio           = EXCLUDED.municipio,
@@ -222,8 +261,21 @@ ON CONFLICT (barrio_id) DO UPDATE SET
     n_yoga_1km          = EXCLUDED.n_yoga_1km,
     n_universidades_2km = EXCLUDED.n_universidades_2km,
     n_hospitales_3km    = EXCLUDED.n_hospitales_3km,
+    n_colegios_1km      = EXCLUDED.n_colegios_1km,
+    dist_colegio_km     = EXCLUDED.dist_colegio_km,
+    walk_score          = EXCLUDED.walk_score,
+    transit_score       = EXCLUDED.transit_score,
     indice_nomada       = EXCLUDED.indice_nomada,
     calculado_en        = EXCLUDED.calculado_en
+"""
+
+# Columnas nuevas (colegios + scores). IF NOT EXISTS → idempotente.
+ALTER_SQL = """
+ALTER TABLE analytics.barrios_pois_distancia
+    ADD COLUMN IF NOT EXISTS n_colegios_1km  integer,
+    ADD COLUMN IF NOT EXISTS dist_colegio_km numeric(8,3),
+    ADD COLUMN IF NOT EXISTS walk_score      integer,
+    ADD COLUMN IF NOT EXISTS transit_score   integer
 """
 
 VERIFY_SQL = """
@@ -266,6 +318,7 @@ def main():
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
 
+    cur.execute(ALTER_SQL)  # columnas nuevas (colegios + scores), idempotente
     scope = args.municipio or "todos los municipios"
     print(f"Calculando barrios_pois_distancia para {scope}...")
     cur.execute(sql)

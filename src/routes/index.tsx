@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState, useRef, useEffect } from 'react'
-import { LandingMapHeader } from '@/components/LandingMapHeader'
+import { useState } from 'react'
+import { MapView } from '@/components/MapView'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useBarrio } from '@/components/comunidad/BarrioContext'
 import { useDeals } from '@/hooks/useDeals'
@@ -111,15 +111,6 @@ function HomeContent() {
   const [email,  setEmail]  = useState('')
   const [suscrito, setSuscrito] = useState(false)
 
-  const mapFlyToRef = useRef<((lat: number, lon: number, zoom?: number) => void) | null>(null)
-  const didMountRef = useRef(false)
-
-  useEffect(() => {
-    if (!didMountRef.current) { didMountRef.current = true; return }
-    if (!barrio.lat || !barrio.lon) return
-    mapFlyToRef.current?.(barrio.lat, barrio.lon, barrio.zoom)
-  }, [barrio.slug])
-
   const isTodos  = barrio.slug === 'todos'
   const noBarrio = !barrio.barrio_id && !isTodos
 
@@ -131,9 +122,9 @@ function HomeContent() {
 
   return (
     <>
-      {/* ── HERO ──────────────────────────────────────── */}
-      <section style={{ position: 'relative', overflow: 'hidden' }}>
-        <LandingMapHeader flyToRef={mapFlyToRef} hideOverlay />
+      {/* ── HERO — mapa /map (comunas → barrios, sin listings) ─────────── */}
+      <section style={{ position: 'relative', overflow: 'hidden', height: '72vh', minHeight: 420 }}>
+        <MapView mapView="zonas" selectedId={null} onSelect={() => {}} />
       </section>
 
       {/* ── NO BARRIO ─────────────────────────────────── */}

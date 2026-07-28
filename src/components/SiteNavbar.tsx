@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
-import { Building2, ArrowRight } from "lucide-react";
+import { Building2, ArrowRight, Home } from "lucide-react";
 import { LanguageToggle } from "@/lib/i18n";
+import { auth } from "@/lib/auth";
 
 const NAV_LINKS = [
   { label: "Invertir",   href: "/map" },
@@ -10,6 +11,7 @@ const NAV_LINKS = [
 ] as const;
 
 export function SiteNavbar({ transparent = false }: { transparent?: boolean }) {
+  const logged = !!auth.get();
   return (
     <header
       className={`fixed inset-x-0 top-0 z-50 ${
@@ -56,23 +58,38 @@ export function SiteNavbar({ transparent = false }: { transparent?: boolean }) {
 
         <div className="flex items-center gap-2">
           <LanguageToggle />
-          <Link
-            to="/login"
-            className={`hidden rounded-md px-3 py-1.5 text-xs font-medium transition sm:inline-flex ${
-              transparent
-                ? "text-white/70 hover:text-white"
-                : "text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            Iniciar sesión
-          </Link>
-          <Link
-            to="/register"
-            onClick={() => localStorage.setItem("registro_origen", "comunidad")}
-            className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
-          >
-            Comenzar <ArrowRight className="h-3.5 w-3.5" />
-          </Link>
+          {logged ? (
+            <Link
+              to="/mis-propiedades"
+              className={`inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                transparent
+                  ? "text-white/80 hover:text-white"
+                  : "text-muted-foreground hover:bg-surface hover:text-foreground"
+              }`}
+            >
+              <Home className="h-3.5 w-3.5" /> Mis propiedades
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className={`hidden rounded-md px-3 py-1.5 text-xs font-medium transition sm:inline-flex ${
+                  transparent
+                    ? "text-white/70 hover:text-white"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Iniciar sesión
+              </Link>
+              <Link
+                to="/register"
+                onClick={() => localStorage.setItem("registro_origen", "comunidad")}
+                className="inline-flex items-center gap-1.5 rounded-md bg-primary px-3.5 py-1.5 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan"
+              >
+                Comenzar <ArrowRight className="h-3.5 w-3.5" />
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

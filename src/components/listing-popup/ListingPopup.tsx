@@ -1,17 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bath, Bed, ChevronRight, ExternalLink, Eye, Heart, MapPin, Maximize2, X } from "lucide-react";
+import { Bath, Bed, ChevronRight, MapPin, Maximize2, X } from "lucide-react";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { formatCOP } from "@/lib/format";
 import type { ApiListing, ApiListingDetail } from "@/lib/adapters";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useIsAgente } from "@/components/LockedField";
 import { PopupGallery } from "./PopupGallery";
-import { PopupPriceHistory } from "./PopupPriceHistory";
-import { PopupMarketIntel } from "./PopupMarketIntel";
 
-const POPUP_WIDTH = 360;
+const POPUP_WIDTH = 300;
 
 const copShort = (n: number) => formatCOP(Math.round(n)).replace(" COP", "");
 
@@ -20,31 +16,6 @@ const copShort = (n: number) => formatCOP(Math.round(n)).replace(" COP", "");
 function titleCase(s?: string | null): string | null {
   if (!s) return null;
   return s.toLowerCase().replace(/(^|\s)\p{L}/gu, (c) => c.toUpperCase());
-}
-
-function Descripcion({ text }: { text: string }) {
-  const [expanded, setExpanded] = useState(false);
-  return (
-    <section className="space-y-1" aria-label="Descripción">
-      <h3 className="text-xs font-semibold" style={{ color: "#1A1208" }}>Descripción</h3>
-      <p
-        className={`whitespace-pre-line text-[11px] leading-relaxed ${expanded ? "" : "line-clamp-4"}`}
-        style={{ color: "#6B5B45" }}
-      >
-        {text}
-      </p>
-      {text.length > 220 && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="text-[11px] font-semibold"
-          style={{ color: "#1D9E75" }}
-        >
-          {expanded ? "Ver menos" : "Ver más"}
-        </button>
-      )}
-    </section>
-  );
 }
 
 type Props = {
@@ -63,12 +34,8 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
     staleTime: 60_000,
   });
 
-  // Regla de negocio: inmueble = público; inteligencia de barrio/mercado = solo realtor.
-  // Flag local (plan === 'agente') OR señal del backend: buena_oferta/pct_bajo_mediana
-  // solo llegan non-null cuando is_agente() pasó server-side (cubre el caso
-  // "aprobado en tabla agentes" que el flag local no ve).
-  const isRealtor =
-    useIsAgente() || detail?.buena_oferta != null || detail?.pct_bajo_mediana != null;
+  // Popup = solo datos del inmueble (igual para todos). La inteligencia de
+  // mercado/barrio del realtor vive en el dashboard, no aquí.
 
   // Esc closes; focus moves into the popup and returns to the trigger on unmount.
   useEffect(() => {
@@ -94,11 +61,15 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
     };
   }, [onClose]);
 
-  // Center over the visible map area (viewport minus right panel on desktop),
-  // same convention as ListingMiniPopup.
+  // Desktop: tarjeta flotante centrada sobre el mapa visible. Móvil: bottom
+  // sheet anclado abajo (más intuitivo, refiere claro al pin tocado).
+  const isMobile = typeof window !== "undefined" && window.innerWidth < 768;
   const panelWidth = window.innerWidth >= 768 ? 380 : 0;
   const width = Math.min(POPUP_WIDTH, window.innerWidth - 24);
   const left = Math.max(12, (window.innerWidth - panelWidth - width) / 2);
+  const posStyle: React.CSSProperties = isMobile
+    ? { left: 8, right: 8, bottom: 12, width: "auto", maxHeight: "72vh" }
+    : { left, top: 72, width, maxHeight: "calc(100vh - 120px)" };
 
   // Header fields: prefer detail (proper *_display casing), fall back to pin.
   const d = detail;
@@ -113,25 +84,18 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
   const municipio = d?.municipio_display ?? titleCase(listing.municipio);
   const ubicacion = [barrio, municipio].filter(Boolean).join(", ");
   const tipoInmueble = titleCase(d?.tipo_inmueble ?? listing.tipo_inmueble);
-  const fuente = d?.fuente_display ?? listing.fuente_display ?? listing.fuente;
-  const url = d?.url ?? listing.url;
 
-  // Características — each chip only when present (~15% coverage for most).
-  const caracteristicas: string[] = [];
-  if (tipoInmueble) caracteristicas.push(tipoInmueble);
-  const estrato = d?.estrato_real ?? listing.estrato_real;
-  if (estrato != null) caracteristicas.push(`Estrato ${estrato}`);
-  if (d?.antiguedad) caracteristicas.push(d.antiguedad);
-  if (d?.parqueaderos != null) caracteristicas.push(`${d.parqueaderos} parqueadero${d.parqueaderos === 1 ? "" : "s"}`);
-  if (d?.piso != null) caracteristicas.push(`Piso ${d.piso}`);
-  if (d?.estado_inmueble) caracteristicas.push(d.estado_inmueble);
-
-  const descripcion = d?.descripcion?.trim();
+  // Proyecto con precio variable → "Desde $X" (rango de cluster)
+  const desdePrecio =
+    d?.precio_variable && d?.precio_min_cluster && d.precio_min_cluster > 0 &&
+    d.precio_min_cluster !== d.precio_max_cluster
+      ? d.precio_min_cluster
+      : null;
 
   return (
     <>
-      {/* Transparent backdrop */}
-      <div className="fixed inset-0 z-40" onClick={onClose} />
+      {/* Backdrop — atenuado en móvil (señala el sheet), transparente en desktop */}
+      <div className={`fixed inset-0 z-40 ${isMobile ? "bg-black/30" : ""}`} onClick={onClose} />
 
       <div
         ref={containerRef}
@@ -139,17 +103,19 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         aria-modal="true"
         aria-label={`Detalle de listing en ${ubicacion || "el mapa"}`}
         tabIndex={-1}
-        className="fixed z-50 flex flex-col overflow-hidden rounded-xl shadow-2xl outline-none"
+        className="fixed z-50 flex flex-col overflow-hidden shadow-2xl outline-none rounded-2xl"
         style={{
-          left,
-          top: 72,
-          width,
-          maxHeight: "calc(100vh - 120px)",
+          ...posStyle,
           background: "#FAF7F2",
           border: "0.5px solid #E8E0D0",
         }}
         onClick={(e) => e.stopPropagation()}
       >
+        {isMobile && (
+          <div className="flex shrink-0 justify-center pt-2 pb-1">
+            <div className="h-1 w-9 rounded-full" style={{ background: "#C8B8A2" }} />
+          </div>
+        )}
         {/* 1. Gallery — pin photo instantly, fotos[] from the detail when loaded */}
         <div className="relative shrink-0">
           <PopupGallery
@@ -177,6 +143,19 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
               {tipoOp === "arriendo" ? "Arriendo" : "Venta"}
             </span>
           )}
+          {/* Sello de verificación — solo publicaciones propias (modelo unificado). */}
+          {listing.fuente === "propio" && (
+            <span
+              className="absolute left-2 top-9 z-10 rounded px-2 py-0.5 text-[10px] font-bold"
+              style={
+                listing.verificado
+                  ? { background: "#085041", color: "#FFFFFF" }
+                  : { background: "rgba(0,0,0,0.55)", color: "#FFFFFF" }
+              }
+            >
+              {listing.verificado ? "✓ Verificado" : "Sin verificar"}
+            </span>
+          )}
         </div>
 
         {/* Scrollable body */}
@@ -185,9 +164,9 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
           <div>
             <div className="flex items-baseline gap-2">
               <span className="text-xl font-bold leading-tight" style={{ color: "#1A1208" }}>
-                {precioCop ? formatCOP(precioCop) : "—"}
+                {desdePrecio ? `Desde ${formatCOP(desdePrecio)}` : precioCop ? formatCOP(precioCop) : "—"}
               </span>
-              {precioUsd != null && precioUsd > 0 && (
+              {!desdePrecio && precioUsd != null && precioUsd > 0 && (
                 <span className="text-[11px]" style={{ color: "#9B8B75" }}>
                   ≈ US${Math.round(precioUsd).toLocaleString("en-US")}
                 </span>
@@ -216,100 +195,21 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
                 <MapPin className="h-3 w-3 shrink-0" />{ubicacion}
               </div>
             )}
-
-            {/* Engagement — only when non-zero */}
-            {((d?.vistas ?? 0) > 0 || (d?.favoritos_count ?? 0) > 0) && (
-              <div className="mt-1 flex items-center gap-3 text-[11px]" style={{ color: "#9B8B75" }}>
-                {(d?.vistas ?? 0) > 0 && (
-                  <span className="flex items-center gap-1"><Eye className="h-3 w-3 shrink-0" />{d!.vistas} vistas</span>
-                )}
-                {(d?.favoritos_count ?? 0) > 0 && (
-                  <span className="flex items-center gap-1"><Heart className="h-3 w-3 shrink-0" />{d!.favoritos_count} guardados</span>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* 5. Características */}
-          {caracteristicas.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {caracteristicas.map((c) => (
-                <span
-                  key={c}
-                  className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                  style={{ background: "#FFFFFF", border: "0.5px solid #E8E0D0", color: "#6B5B45" }}
-                >
-                  {c}
-                </span>
-              ))}
-            </div>
-          )}
-
-          {/* 5b. "Lo que destaca" — top amenidades como chips (estilo What's special) */}
-          {(d?.amenidades?.length ?? 0) > 0 && (
-            <section className="space-y-1" aria-label="Lo que destaca">
-              <h3 className="text-xs font-semibold" style={{ color: "#1A1208" }}>Lo que destaca</h3>
-              <div className="flex flex-wrap gap-1.5">
-                {d!.amenidades!.slice(0, 5).map((a) => (
-                  <span
-                    key={a}
-                    className="rounded-full px-2 py-0.5 text-[10px] font-medium"
-                    style={{ background: "#E1F5EE", color: "#085041" }}
-                  >
-                    {a}
-                  </span>
-                ))}
-              </div>
-            </section>
-          )}
-
-          {/* 6. Descripción — skeleton while loading, absent if the source has none */}
-          {descripcion ? (
-            <Descripcion text={descripcion} />
-          ) : isLoading ? (
-            <div className="space-y-1.5">
-              <Skeleton className="h-3 w-24" />
-              <Skeleton className="h-3 w-full" />
-              <Skeleton className="h-3 w-4/5" />
-            </div>
-          ) : null}
-
-          {/* 7. Price history — ~3% coverage; section absent otherwise */}
-          {d && <PopupPriceHistory historia={d.precio_historia} precioActual={d.precio_cop} />}
-
-          {/* 8. Inteligencia de mercado — SOLO realtor (público no ve nada de barrio/scoring) */}
-          {isRealtor && (
-            d ? (
-              <PopupMarketIntel detail={d} />
-            ) : isLoading ? (
-              <div className="space-y-1.5">
-                <Skeleton className="h-3 w-20" />
-                <Skeleton className="h-16 w-full rounded-lg" />
-              </div>
-            ) : null
-          )}
+          {/* Características, engagement, amenidades, descripción y atribución viven
+              en Popup2 (drawer). Popup1 = resumen mínimo: precio + specs + ubicación. */}
         </div>
 
-        {/* 9. CTAs — fixed at the bottom, outside the scroll */}
-        <div className="flex shrink-0 gap-2 border-t p-3" style={{ borderColor: "#E8E0D0" }}>
-          {url && (
-            <a
-              href={url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition hover:opacity-80"
-              style={{ color: "#1D9E75", border: "1px solid #1D9E75" }}
-            >
-              Ver en {fuente ?? "la fuente"} <ExternalLink className="h-3.5 w-3.5" />
-            </a>
-          )}
+        {/* 9. CTA único — Popup1 es muestra; el detalle + link a la fuente van en Popup2 */}
+        <div className="shrink-0 border-t p-3" style={{ borderColor: "#E8E0D0" }}>
           <button
             type="button"
             onClick={() => onViewMore(listing.id)}
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
+            className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
             style={{ background: "#1D9E75" }}
           >
-            Ver más <ChevronRight className="h-3.5 w-3.5" />
+            Ver detalle del inmueble <ChevronRight className="h-4 w-4" />
           </button>
         </div>
       </div>

@@ -204,6 +204,19 @@ export type ApiBarrio = {
   } | null;
 };
 
+export type ApiListingAgente = {
+  nombre: string;
+  telefono: string;
+  foto_url?: string | null;
+  email?: string | null;
+  zona_nivel: string; // 'barrio' | 'comuna'
+};
+
+export type ApiListingAgentes = {
+  comuna?: ApiListingAgente | null; // patrocinio caro → tarjeta principal
+  barrio?: ApiListingAgente | null; // patrocinio barato → tarjeta secundaria
+};
+
 export type SimilarListing = {
   id: number;
   url: string;
@@ -249,6 +262,8 @@ export type ApiListing = {
   tier?: string | null;
   estrato_real?: number | null;
   amoblado?: boolean | null;
+  // Modelo unificado: due diligence del asesor. Publica primero (false), sello al verificar.
+  verificado?: boolean | null;
   // URL availability — present after validate_listings_urls.py has run
   disponible_actualmente?: boolean | null;
   fecha_ultima_verificacion?: string | null;
@@ -266,6 +281,8 @@ export type ApiListing = {
 export type ApiListingDetail = ApiListing & {
   estrato_real?: number | null;
   descripcion?: string | null;
+  tour_url?: string | null;   // tour 3D/360 (Matterport, Kuula…)
+  video_url?: string | null;  // video (YouTube, Vimeo)
   arriendo_p50_barrio?: number | null;
   yield_estimado?: number | null;
   // Free-tier descriptive fields
@@ -291,6 +308,13 @@ export type ApiListingDetail = ApiListing & {
   precio_m2_p75?: number | null;
   arr_p25?: number | null;
   arr_p75?: number | null;
+  // Zillow-style extras
+  n_duplicados?: number | null;
+  precio_variable?: boolean | null;
+  precio_min_cluster?: number | null;
+  precio_max_cluster?: number | null;
+  tiempo_estimado_venta?: string | null; // barrio intel — gated server-side
+  avaluo_m2_catastro?: number | null;    // avalúo catastral/m² (comuna) — gated
 };
 
 export type ApiListingsResponse = {

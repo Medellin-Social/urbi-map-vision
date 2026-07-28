@@ -12,6 +12,7 @@ intake pasa por asignar_intake() o tomar_del_pool(); nunca por el router.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any, Dict, Optional
 
 from api.services.agent_service import ESTADOS_ASIGNABLES
@@ -23,6 +24,30 @@ logger = logging.getLogger(__name__)
 
 class AsignadorError(ValueError):
     """Error de dominio en la asignación."""
+
+
+# Horas que un intake puede quedarse en 'asignado' sin que el realtor lo acepte
+# antes de volver al pool (equivalente a "si no contesta la llamada, va a
+# moderación" de Zillow: el proceso nunca se atasca en un humano).
+ASIGNADO_TIMEOUT_HORAS = int(os.getenv("ASIGNADO_TIMEOUT_HORAS", "48"))
+
+
+async def sweep_asignados_vencidos(pool: Any) -> int:
+    """Devuelve al pool los intakes asignados que nadie aceptó a tiempo.
+
+    ponytail: sweep al leer (asignados/pool), sin cron; mover a un DAG de
+    Airflow si el volumen lo amerita.
+    """
+    async with pool.acquire() as conn:
+        result = await conn.execute(
+            "UPDATE intake SET estado = 'en_pool', agent_id = NULL, updated_at = NOW() "
+            "WHERE estado = 'asignado' AND updated_at < NOW() - make_interval(hours => $1)",
+            ASIGNADO_TIMEOUT_HORAS,
+        )
+    n = int(result.split()[-1]) if result else 0
+    if n:
+        logger.info("sweep: %d intake(s) asignados vencidos devueltos al pool", n)
+    return n
 
 
 def _val(x: Any) -> Any:
@@ -43,12 +68,50 @@ async def _owner_activo_de_agency(agency_id: str, pool: Any) -> Optional[str]:
             JOIN agent a ON a.id = am.agent_id
             WHERE am.agency_id = $1::uuid
               AND am.rol = 'owner'
-              AND a.estado = ANY($2::text[])
+              AND a.estado::text = ANY($2::text[])
             LIMIT 1
             """,
             agency_id, list(ESTADOS_ASIGNABLES),
         )
     return row["agent_id"] if row else None
+
+
+async def _notificar_lead_asignado(agent_id: str, intake_id: str, pool: Any) -> None:
+    """Email al realtor: te llegó un lead nuevo. Best-effort — jamás tumba la
+    asignación (el timeout de 48h es la red de seguridad si el aviso no llega)."""
+    try:
+        from api.utils.email import send_email  # import tardío: evita ciclo utils↔services
+
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT a.email, a.nombre,
+                       i.tipo_inmueble::text AS tipo, i.operacion::text AS operacion,
+                       i.precio_esperado, COALESCE(i.barrio, b.nombre, 'tu zona') AS barrio
+                FROM agent a, intake i
+                LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+                WHERE a.id = $1::uuid AND i.id = $2::uuid
+                """,
+                agent_id, intake_id,
+            )
+        if not row or not row["email"]:
+            return
+        app_url = os.getenv("APP_URL", "https://medellin.social")
+        precio = f"${float(row['precio_esperado'] or 0):,.0f} COP"
+        await send_email(
+            row["email"],
+            f"Nuevo inmueble asignado en {row['barrio']} — acéptalo antes de {ASIGNADO_TIMEOUT_HORAS} h",
+            f"""
+            <h3 style="color:#1D9E75">Te llegó un inmueble nuevo</h3>
+            <p>Hola {row['nombre']}, un propietario publicó en tu zona patrocinada:</p>
+            <p><strong>{(row['tipo'] or '').capitalize()} en {row['operacion'] or ''}</strong> · {row['barrio']} · {precio}</p>
+            <p>Tienes <strong>{ASIGNADO_TIMEOUT_HORAS} horas</strong> para aceptarlo; después vuelve al pool abierto.</p>
+            <p><a href="{app_url}/realtor/dashboard" style="color:#085041;font-weight:600">Abrir mi inbox →</a></p>
+            """,
+        )
+        logger.info("Lead %s: notificación enviada a %s", intake_id, row["email"])
+    except Exception:
+        logger.exception("Lead %s: notificación al agente %s falló", intake_id, agent_id)
 
 
 async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
@@ -84,6 +147,7 @@ async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
                 )
             intake.agent_id = owner_agent
             intake.estado = "asignado"
+            await _notificar_lead_asignado(owner_agent, intake.id, pool)
             return {"resultado": "asignado", "estado": "asignado",
                     "agent_id": owner_agent, "agency_id": agency_id, "reparto": reparto}
         # Agency paga por la zona pero su owner no es asignable → cuesta plata.

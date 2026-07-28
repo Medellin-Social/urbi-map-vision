@@ -63,6 +63,7 @@ export function PhotoGallery({ fotos, titulo, height = 224 }: Props) {
           alt={titulo ?? "Foto del inmueble"}
           className="h-full w-full object-cover transition-opacity duration-300 cursor-zoom-in"
           onClick={() => setLightbox(true)}
+          decoding="async"
         />
         {photos.length > 1 && (
           <>

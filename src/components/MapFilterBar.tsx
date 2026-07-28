@@ -71,7 +71,126 @@ type MapFilterBarProps = {
   onBarrioClear?: () => void;
   onSearchAll?: () => void;
   hasActiveScope?: boolean;
+  // Cascader Comuna → Barrio (entre buscador y precio)
+  activeComunaCd?: number | null;
+  onComunaSelect?: (cd: number | null, nombre: string | null) => void;
 };
+
+function titleCase(s: string): string {
+  return s.toLowerCase().replace(/(^|\s|-)\p{L}/gu, (c) => c.toUpperCase());
+}
+
+type ComunaGroup = { cd: number; nombre: string; barrios: BarrioOption[] };
+function groupComunas(allBarrios?: BarrioOption[]): ComunaGroup[] {
+  const m = new Map<number, ComunaGroup>();
+  for (const b of allBarrios ?? []) {
+    if (b.cd_comuna == null || !b.comuna) continue;
+    let g = m.get(b.cd_comuna);
+    if (!g) { g = { cd: b.cd_comuna, nombre: b.comuna, barrios: [] }; m.set(b.cd_comuna, g); }
+    g.barrios.push(b);
+  }
+  return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
+}
+
+/** Filtro cascada: Todo (todas las comunas) → comuna → barrio de esa comuna. */
+function ZonaCascader({ allBarrios, activeComunaCd, onComunaSelect, onBarrioNavigate }: {
+  allBarrios?: BarrioOption[];
+  activeComunaCd?: number | null;
+  onComunaSelect?: (cd: number | null, nombre: string | null) => void;
+  onBarrioNavigate?: (opt: BarrioOption) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [rect, setRect] = useState<DOMRect | null>(null);
+  const ref = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const h = (e: MouseEvent) => {
+      if (!ref.current?.contains(e.target as Node) &&
+          !(e.target as Element)?.closest?.("[data-zona-dropdown]")) setOpen(false);
+    };
+    document.addEventListener("mousedown", h);
+    return () => document.removeEventListener("mousedown", h);
+  }, [open]);
+
+  const comunas = useMemo(() => groupComunas(allBarrios), [allBarrios]);
+
+  const active = comunas.find((c) => c.cd === activeComunaCd) ?? null;
+  const label = active ? titleCase(active.nombre) : "Toda la ciudad";
+
+  const openIt = () => { setRect(ref.current?.getBoundingClientRect() ?? null); setOpen((o) => !o); };
+
+  const itemStyle = (sel = false): React.CSSProperties => ({
+    display: "block", width: "100%", textAlign: "left", background: sel ? "#E1F5EE" : "none",
+    border: "none", cursor: "pointer", padding: "8px 12px", fontSize: 13,
+    color: sel ? "#085041" : C.ink, borderRadius: 8, fontWeight: sel ? 600 : 400,
+  });
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <button
+        ref={ref}
+        onClick={openIt}
+        style={{
+          display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 11px",
+          border: `1px solid ${active ? C.teal : C.border}`, borderRadius: 8,
+          background: active ? "#E1F5EE" : C.white, color: active ? C.tealDeep : C.ink,
+          fontSize: 12, fontWeight: active ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
+        }}
+      >
+        {label}
+        <ChevronDown size={13} style={{ opacity: 0.7 }} />
+      </button>
+      {open && rect && (
+        <div
+          data-zona-dropdown
+          style={{
+            position: "fixed", top: rect.bottom + 6, left: rect.left, zIndex: 200,
+            width: 240, maxHeight: 340, overflowY: "auto",
+            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(26,18,8,0.16)", padding: 6,
+          }}
+        >
+          {!active ? (
+            <>
+              <button style={itemStyle(activeComunaCd == null)} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
+                Toda la ciudad
+              </button>
+              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Comunas</div>
+              {comunas.map((c) => (
+                <button key={c.cd} style={itemStyle()} onClick={() => onComunaSelect?.(c.cd, c.nombre)}>
+                  {titleCase(c.nombre)}
+                </button>
+              ))}
+            </>
+          ) : (
+            <>
+              <button
+                onClick={() => onComunaSelect?.(null, null)}
+                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: "6px 12px", fontSize: 12, fontWeight: 600, color: C.teal }}
+              >
+                ‹ Comunas
+              </button>
+              {/* "Toda la ciudad" siempre a 1 click, aun con comuna activa */}
+              <button style={itemStyle()} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
+                Toda la ciudad
+              </button>
+              <button style={itemStyle(true)} onClick={() => setOpen(false)}>
+                Toda {titleCase(active.nombre)}
+              </button>
+              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Barrios</div>
+              {active.barrios.slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((b) => (
+                <button key={b.id} style={itemStyle()} onClick={() => { onBarrioNavigate?.(b); setOpen(false); }}>
+                  {titleCase(b.nombre)}
+                </button>
+              ))}
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 const C = {
   white:    "#FFFFFF",
@@ -164,11 +283,17 @@ function FilterPill({
 
 // ─── Label helpers ────────────────────────────────────────────────────────────
 
-// Price label by VALUE (not by operation): < $1M in K, >= $1M in millions with
-// one decimal, trailing ".0" trimmed. Border $1,000,000 → "$1M" (never "$1000K").
-function fmtCOP(v: number): string {
+// ARRIENDO: por valor — < $1M en K (700K), >= $1M en millones (1.5M).
+function fmtCOPRent(v: number): string {
   if (v < 1_000_000) return `$${Math.round(v / 1_000)}K`;
   return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
+
+// VENTA: siempre en millones (nunca K); billones como B. <10M con 1 decimal.
+function fmtCOPBuy(v: number): string {
+  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  if (v < 10_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+  return `$${Math.round(v / 1_000_000)}M`;
 }
 
 // USD label (own thresholds): <$1k exact, <$1M in k, >=$1M in M.
@@ -178,16 +303,18 @@ function fmtUSD(v: number): string {
   return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
-// Values are always COP internally; in locale EN we only convert the LABEL to USD.
-function fmtPrice(cop: number, lang: string, trm: number): string {
-  return lang === "en" ? fmtUSD(cop / trm) : fmtCOP(cop);
+// Values are always COP internally; EN convierte el LABEL a USD. ES usa el
+// formato según operación: venta → millones, arriendo → K/M por valor.
+function fmtPrice(cop: number, lang: string, trm: number, isRent: boolean): string {
+  if (lang === "en") return fmtUSD(cop / trm);
+  return isRent ? fmtCOPRent(cop) : fmtCOPBuy(cop);
 }
 
 function precioLabel(f: SharedFilters, isRent: boolean, lang: string, trm: number): string {
   if (f.precioMin !== null && f.precioMax !== null)
-    return `${fmtPrice(f.precioMin, lang, trm)} – ${fmtPrice(f.precioMax, lang, trm)}`;
-  if (f.precioMax !== null) return `Hasta ${fmtPrice(f.precioMax, lang, trm)}`;
-  if (f.precioMin !== null) return `Desde ${fmtPrice(f.precioMin, lang, trm)}`;
+    return `${fmtPrice(f.precioMin, lang, trm, isRent)} – ${fmtPrice(f.precioMax, lang, trm, isRent)}`;
+  if (f.precioMax !== null) return `Hasta ${fmtPrice(f.precioMax, lang, trm, isRent)}`;
+  if (f.precioMin !== null) return `Desde ${fmtPrice(f.precioMin, lang, trm, isRent)}`;
   return isRent ? "Precio/mes" : "Precio";
 }
 
@@ -336,7 +463,7 @@ function PrecioPanel({
   const fmt  = (v: number) => {
     if (v <= TOTAL_MIN) return "Mín";
     if (v >= TOTAL_MAX) return "Máx";
-    return fmtPrice(v, lang, trm);
+    return fmtPrice(v, lang, trm, isRent);
   };
 
   const thumbStyle: React.CSSProperties = {
@@ -745,6 +872,7 @@ function AmenidadesPanel({
 
 export function MapFilterBar({
   activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
+  activeComunaCd, onComunaSelect,
 }: MapFilterBarProps) {
   const isPro = useIsPro();
   const { lang } = useLang();
@@ -899,6 +1027,14 @@ export function MapFilterBar({
         )}
       </div>
 
+      {/* Zona: cascader Comuna → Barrio (entre buscador y precio) */}
+      <ZonaCascader
+        allBarrios={allBarrios}
+        activeComunaCd={activeComunaCd}
+        onComunaSelect={onComunaSelect}
+        onBarrioNavigate={onBarrioNavigate}
+      />
+
       {/* Separador visual */}
       <div style={{ width: 1, height: 20, background: C.border, flexShrink: 0, margin: "0 2px" }} />
 
@@ -996,6 +1132,46 @@ export function MapFilterBar({
           <button onClick={() => setMobileOpen(false)} style={{ background: "none", border: "none", cursor: "pointer", color: C.muted }}>
             <X size={20} />
           </button>
+        </div>
+
+        {/* Zona: Toda la ciudad → comuna → barrio (selects nativos) */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelSm}>Zona</span>
+          <div style={{ display: "flex", gap: 8 }}>
+            <select
+              value={activeComunaCd ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (!v) onComunaSelect?.(null, null);
+                else {
+                  const c = groupComunas(allBarrios).find((g) => String(g.cd) === v);
+                  if (c) onComunaSelect?.(c.cd, c.nombre);
+                }
+              }}
+              style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: "#fff" }}
+            >
+              <option value="">Toda la ciudad</option>
+              {groupComunas(allBarrios).map((c) => (
+                <option key={c.cd} value={c.cd}>{titleCase(c.nombre)}</option>
+              ))}
+            </select>
+            {activeComunaCd != null && (
+              <select
+                value=""
+                onChange={(e) => {
+                  const b = groupComunas(allBarrios).find((g) => g.cd === activeComunaCd)
+                    ?.barrios.find((x) => String(x.id) === e.target.value);
+                  if (b) { onBarrioNavigate?.(b); setMobileOpen(false); }
+                }}
+                style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 10px", fontSize: 13, color: C.ink, background: "#fff" }}
+              >
+                <option value="">Toda la comuna</option>
+                {(groupComunas(allBarrios).find((g) => g.cd === activeComunaCd)?.barrios ?? [])
+                  .slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
+                  .map((b) => <option key={b.id} value={b.id}>{titleCase(b.nombre)}</option>)}
+              </select>
+            )}
+          </div>
         </div>
 
         {/* Precio */}

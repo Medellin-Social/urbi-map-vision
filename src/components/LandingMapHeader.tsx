@@ -5,20 +5,31 @@ import { Link } from "@tanstack/react-router";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ArrowDown, X } from "lucide-react";
 import { BarrioChoiceModal } from "@/components/BarrioChoiceModal";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
 
-// Urbi palette thresholds [70, 50, 30] — mirrors mapColors.ts
+// Comuna geometry served from static files (mirrors MapView.MUNICIPIO_STATIC)
+const COMUNA_STATIC = [
+  "/data/comunas_medellin.geojson",
+  "/data/comunas_bello.geojson",
+  "/data/comunas_envigado.geojson",
+  "/data/comunas_itagui.geojson",
+  "/data/comunas_la_estrella.geojson",
+  "/data/comunas_sabaneta.geojson",
+];
+
+// Paleta Medellín Social sobre papel #FAF7F2 — verde→teal→ámbar→coral (bueno→bajo)
 function scoreToColor(score: number | null | undefined): string {
-  if (score == null) return "#1D9E75";
-  if (score >= 70) return "#10b981";
-  if (score >= 50) return "#2BBAA5";
-  if (score >= 30) return "#f59e0b";
-  return "#ef4444";
+  if (score == null) return "#CFCabb";        // sin datos → gris papel apagado
+  if (score >= 70) return "#085041";           // tealDeep — top
+  if (score >= 50) return "#1D9E75";           // teal marca
+  if (score >= 30) return "#E8A33D";           // ámbar cálido
+  return "#D85A30";                            // coral marca (no rojo chillón)
 }
 
-type BarrioStat = {
-  nombre: string;
-  municipio: string;
-  score_corto: number | null;
+type ComunaMetric = {
+  score_promedio: number | null;
+  has_data: boolean;
 };
 
 type ClickedBarrio = { nombre: string; municipio: string };
@@ -62,6 +73,8 @@ export function LandingMapHeader({
       style: "mapbox://styles/mapbox/streets-v12",
       center: [-75.5812, 6.2442],
       zoom: 12,
+      minZoom: 10.5,          // no zoom-out más allá del Valle de Aburrá
+      maxBounds: [[-75.72, 6.05], [-75.42, 6.45]],
       pitch: 55,
       bearing: -30,
       interactive: true,
@@ -80,58 +93,62 @@ export function LandingMapHeader({
       });
       map.setTerrain({ source: "mapbox-dem", exaggeration: 0.8 });
 
-      // Hide all symbol layers (icons + labels) — keep only geometry (fill, line, background)
+      // Base map limpio estilo /map: fondo papel, agua/edificios apagados,
+      // calles y POIs ocultos para que manden las comunas.
       map.getStyle().layers.forEach((layer) => {
-        if (layer.type === "symbol") {
-          map.setLayoutProperty(layer.id, "visibility", "none");
+        const lid = layer.id.toLowerCase();
+        const srcLayer = (layer as Record<string, unknown>)["source-layer"] as string | undefined;
+        const isStreet =
+          lid.includes("road") || lid.includes("street") || lid.includes("bridge") ||
+          lid.includes("tunnel") || lid.includes("transit") || lid.includes("path") ||
+          lid.includes("pedestrian") || lid.includes("ferry") || lid.includes("motorway");
+
+        if (layer.type === "symbol" || isStreet) {
+          map.setLayoutProperty(layer.id, "visibility", "none");     // etiquetas + calles fuera
+        } else if (layer.type === "background") {
+          map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
+        } else if (layer.type === "fill" && srcLayer === "water") {
+          map.setPaintProperty(layer.id, "fill-color", "#C8DFE8");
+        } else if (layer.type === "line" && srcLayer === "waterway") {
+          map.setPaintProperty(layer.id, "line-color", "#C8DFE8");
+        } else if (layer.type === "fill" && srcLayer === "building") {
+          map.setPaintProperty(layer.id, "fill-color", "#EDE8E0");
+          map.setPaintProperty(layer.id, "fill-opacity", 0.4);
+        } else if (layer.type === "fill" && srcLayer === "landuse") {
+          map.setPaintProperty(layer.id, "fill-opacity", 0.3);
         }
       });
 
       try {
-        const [valleRes, medellinRes, statsRes] = await Promise.all([
-          fetch("/data/barrios_valle_aburra.geojson"),
-          fetch("/data/barrios_medellin.geojson"),
-          fetch("/data/barrios_stats.json"),
+        const [staticFCs, metrics] = await Promise.all([
+          Promise.all(
+            COMUNA_STATIC.map((f) =>
+              fetch(f).then((r) => r.json()).catch(() => ({ type: "FeatureCollection", features: [] })),
+            ),
+          ) as Promise<GeoJSON.FeatureCollection[]>,
+          apiFetch<{ metrics: Record<string, ComunaMetric> }>(API_ENDPOINTS.comunasGeoJSON)
+            .then((r) => r.metrics)
+            .catch(() => ({} as Record<string, ComunaMetric>)),
         ]);
 
-        const [valleFC, medellinFC, stats]: [
-          GeoJSON.FeatureCollection,
-          GeoJSON.FeatureCollection,
-          BarrioStat[],
-        ] = await Promise.all([valleRes.json(), medellinRes.json(), statsRes.json()]);
-
-        // Lookup: "NOMBRE__MUNICIPIO" → color_hex
-        const colorMap = new Map<string, string>();
-        for (const s of stats) {
-          colorMap.set(
-            `${s.nombre.toUpperCase()}__${s.municipio.toUpperCase()}`,
-            scoreToColor(s.score_corto),
-          );
-        }
-
-        // Merge both GeoJSONs, deduplicate by nombre+municipio
-        const seen = new Set<string>();
+        // Merge comuna geometries, color by score_promedio from API metrics
         const features: GeoJSON.Feature[] = [];
-
-        for (const f of [...(valleFC.features ?? []), ...(medellinFC.features ?? [])]) {
-          const nombre = (f.properties?.nombre ?? "").toString().toUpperCase();
-          const municipio = (f.properties?.municipio ?? "").toString().toUpperCase();
-          const dedupeKey = `${nombre}__${municipio}`;
-          if (seen.has(dedupeKey)) continue;
-          seen.add(dedupeKey);
-
-          const color = colorMap.get(dedupeKey) ?? "#1D9E75";
-          const hasData = colorMap.has(dedupeKey) ? 1 : 0;
-
-          features.push({
-            ...f,
-            properties: { ...f.properties, color_hex: color, has_data: hasData },
-          });
+        for (const fc of staticFCs) {
+          for (const f of fc.features ?? []) {
+            const cd = f.properties?.cd_comuna;
+            const m = cd != null ? metrics[String(cd)] : undefined;
+            const color = scoreToColor(m?.score_promedio);
+            const hasData = m?.has_data ? 1 : 0;
+            features.push({
+              ...f,
+              properties: { ...f.properties, color_hex: color, has_data: hasData },
+            });
+          }
         }
 
         const geojson: GeoJSON.FeatureCollection = { type: "FeatureCollection", features };
 
-        map.addSource("barrios-landing", {
+        map.addSource("comunas-landing", {
           type: "geojson",
           data: geojson,
           generateId: true,
@@ -142,9 +159,9 @@ export function LandingMapHeader({
 
         // Fill
         map.addLayer({
-          id: "barrios-landing-fill",
+          id: "comunas-landing-fill",
           type: "fill",
-          source: "barrios-landing",
+          source: "comunas-landing",
           paint: {
             "fill-color": ["get", "color_hex"],
             "fill-opacity": [
@@ -158,9 +175,9 @@ export function LandingMapHeader({
 
         // Outline
         map.addLayer({
-          id: "barrios-landing-outline",
+          id: "comunas-landing-outline",
           type: "line",
-          source: "barrios-landing",
+          source: "comunas-landing",
           paint: {
             "line-color": [
               "case",
@@ -186,19 +203,19 @@ export function LandingMapHeader({
     });
 
     // Hover
-    map.on("mousemove", "barrios-landing-fill", (e) => {
+    map.on("mousemove", "comunas-landing-fill", (e) => {
       if (!e.features?.length) return;
       const f = e.features[0];
 
       if (hoveredIdRef.current !== undefined) {
         map.setFeatureState(
-          { source: "barrios-landing", id: hoveredIdRef.current },
+          { source: "comunas-landing", id: hoveredIdRef.current },
           { hover: false },
         );
       }
       hoveredIdRef.current = f.id as number | string;
       map.setFeatureState(
-        { source: "barrios-landing", id: hoveredIdRef.current },
+        { source: "comunas-landing", id: hoveredIdRef.current },
         { hover: true },
       );
 
@@ -217,10 +234,10 @@ export function LandingMapHeader({
       map.getCanvas().style.cursor = "pointer";
     });
 
-    map.on("mouseleave", "barrios-landing-fill", () => {
+    map.on("mouseleave", "comunas-landing-fill", () => {
       if (hoveredIdRef.current !== undefined) {
         map.setFeatureState(
-          { source: "barrios-landing", id: hoveredIdRef.current },
+          { source: "comunas-landing", id: hoveredIdRef.current },
           { hover: false },
         );
       }
@@ -229,7 +246,7 @@ export function LandingMapHeader({
       map.getCanvas().style.cursor = "";
     });
 
-    map.on("click", "barrios-landing-fill", (e) => {
+    map.on("click", "comunas-landing-fill", (e) => {
       if (!e.features?.length) return;
       const f = e.features[0];
       setClicked({

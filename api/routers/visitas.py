@@ -1,0 +1,98 @@
+"""Solicitudes de visita a un listing — POST público desde el drawer del mapa."""
+from __future__ import annotations
+
+import asyncio
+import logging
+import os
+import smtplib
+from datetime import datetime
+from email.message import EmailMessage
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel, Field
+
+from api.db import get_pool
+from api.dependencies import get_optional_user
+
+router = APIRouter()
+log = logging.getLogger(__name__)
+
+# Buzón interno para visitas de inmuebles SIN agente patrocinador de la zona.
+RENTAL_INQUIRIES_TO = os.getenv("RENTAL_INQUIRIES_TO", "rentalinquiries@medellinsocial.com")
+
+
+def _send_visita_email(req: "VisitaRequest", fecha: Optional[datetime]) -> None:
+    """Envía la solicitud al buzón interno vía SMTP. Si SMTP no está configurado,
+    solo loguea (la fila ya quedó en DB, así que no se pierde nada). Nunca lanza."""
+    host = os.getenv("SMTP_HOST")
+    if not host:
+        log.warning("SMTP no configurado; visita sin agente NO enviada por email: %s", req.listing_url)
+        return
+    remitente = os.getenv("SMTP_FROM") or os.getenv("SMTP_USER") or "noreply@medellinsocial.com"
+    cuando = fecha.strftime("%Y-%m-%d %H:%M") if fecha else "sin fecha propuesta"
+    msg = EmailMessage()
+    msg["Subject"] = f"Nueva solicitud de visita — {req.listing_url}"
+    msg["From"] = remitente
+    msg["To"] = RENTAL_INQUIRIES_TO
+    msg.set_content(
+        f"Nueva solicitud de visita (inmueble sin agente de zona).\n\n"
+        f"Inmueble: {req.listing_url}\n"
+        f"Nombre:   {req.nombre or '—'}\n"
+        f"Teléfono: {req.telefono or '—'}\n"
+        f"Fecha:    {cuando}\n"
+        f"Mensaje:  {req.mensaje or '—'}\n"
+    )
+    try:
+        port = int(os.getenv("SMTP_PORT", "587"))
+        with smtplib.SMTP(host, port, timeout=10) as srv:
+            srv.starttls()
+            user, pw = os.getenv("SMTP_USER"), os.getenv("SMTP_PASS")
+            if user and pw:
+                srv.login(user, pw)
+            srv.send_message(msg)
+        log.info("Visita sin agente enviada a %s (%s)", RENTAL_INQUIRIES_TO, req.listing_url)
+    except Exception:  # noqa: BLE001 — email es best-effort; la fila ya está en DB
+        log.exception("Falló envío de email de visita para %s", req.listing_url)
+
+
+class VisitaRequest(BaseModel):
+    listing_url: str = Field(min_length=1, max_length=600)
+    nombre: Optional[str] = Field(None, max_length=120)
+    telefono: Optional[str] = Field(None, max_length=30)
+    fecha_visita: Optional[str] = None  # ISO datetime
+    mensaje: Optional[str] = Field(None, max_length=1000)
+    # True cuando el inmueble no tiene agente patrocinador de zona → va al buzón interno.
+    sin_agente: bool = False
+
+
+@router.post("", status_code=201)
+async def crear_visita(
+    req: VisitaRequest,
+    user: Optional[dict] = Depends(get_optional_user),
+    pool=Depends(get_pool),
+):
+    fecha = None
+    if req.fecha_visita:
+        try:
+            fecha = datetime.fromisoformat(req.fecha_visita.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            INSERT INTO visita_solicitud (listing_url, usuario_id, nombre, telefono, fecha_visita, mensaje)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            RETURNING id
+            """,
+            req.listing_url,
+            user["id"] if user else None,
+            req.nombre or (user or {}).get("nombre"),
+            req.telefono,
+            fecha,
+            req.mensaje,
+        )
+    # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
+    if req.sin_agente:
+        await asyncio.to_thread(_send_visita_email, req, fecha)
+    return {"id": str(row["id"]), "estado": "pendiente"}

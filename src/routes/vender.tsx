@@ -1228,7 +1228,7 @@ function CTAFinalSection() {
           </Link>
           <Link
             to="/conectar-agente"
-            search={{ listing_id: 0 }}
+            search={{ listing_id: "" }}
             style={{
               display: "inline-block",
               border: "2px solid rgba(255,255,255,0.5)",

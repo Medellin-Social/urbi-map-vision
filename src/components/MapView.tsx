@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useIsMobile } from "@/hooks/use-mobile";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
@@ -58,6 +59,7 @@ type Props = {
     amenidades: string[] | null;
   };
   onViewportListingsChange?: (listings: ApiListing[]) => void;
+  onViewportLoadingChange?: (loading: boolean) => void;
   onAutoSelectBarrio?: (barrioId: number | null) => void;
   onAutoSelectComuna?: (cd: number | null, municipio: string | null, nombre: string | null) => void;
   highlightedListingId?: number | null;
@@ -223,6 +225,7 @@ export function MapView({
   mlsMunicipio,
   mlsFilters,
   onViewportListingsChange,
+  onViewportLoadingChange,
   onAutoSelectBarrio,
   onAutoSelectComuna,
   highlightedListingId,
@@ -236,6 +239,8 @@ export function MapView({
   const mapRef = useRef<MapboxMap | null>(null);
   const mapLoadedRef = useRef(false);
   const [mapLoaded, setMapLoaded] = useState(false);
+  const isMobile = useIsMobile();
+  const [legendOpen, setLegendOpen] = useState(false);
   const staticFeaturesRef = useRef<GeoJSON.Feature[] | null>(null);
   const barriosRef = useRef<ApiBarrio[]>([]);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
@@ -245,6 +250,7 @@ export function MapView({
   const lastAutoComunaRef = useRef<string | null>(null);  // camera-auto-selected comuna/muni key
   const flattenSkipRef = useRef(false);  // skip listings-toggle pitch easeTo when a zone fit drives it
   const lastViewportQueryRef = useRef("");  // dedup identical viewport fetches
+  const pulseRafRef = useRef<number | null>(null);  // animación de pulso de markers Pro
   const tokenError = !MAPBOX_TOKEN || MAPBOX_TOKEN.includes("REPLACE_ME");
   const isMobileRef = useRef(typeof window !== "undefined" && window.innerWidth < 768);
 
@@ -265,6 +271,8 @@ export function MapView({
   useEffect(() => { onListingDoubleClickFromMapRef.current = onListingDoubleClickFromMap; }, [onListingDoubleClickFromMap]);
   const onViewportListingsChangeRef = useRef(onViewportListingsChange);
   useEffect(() => { onViewportListingsChangeRef.current = onViewportListingsChange; }, [onViewportListingsChange]);
+  const onViewportLoadingChangeRef = useRef(onViewportLoadingChange);
+  useEffect(() => { onViewportLoadingChangeRef.current = onViewportLoadingChange; }, [onViewportLoadingChange]);
   const onAutoSelectBarrioRef = useRef(onAutoSelectBarrio);
   useEffect(() => { onAutoSelectBarrioRef.current = onAutoSelectBarrio; }, [onAutoSelectBarrio]);
   const onAutoSelectComunaRef = useRef(onAutoSelectComuna);
@@ -608,24 +616,59 @@ export function MapView({
         paint: { "text-color": "#ffffff" },
       });
 
+      // Halo de pulso DEBAJO de los markers Pro/agente — animado por rAF (ver abajo).
+      // Radio y opacidad se sobreescriben cada frame; estos valores son solo el estado inicial.
+      map.addLayer({
+        id: "listings-mls-pulse",
+        type: "circle",
+        source: "listings-mls",
+        filter: ["all",
+          ["!", ["has", "count"]],
+          ["match", ["get", "fuente_display"], ["propio_pro", "agente_verificado"], true, false],
+        ],
+        layout: { visibility: "none" },
+        paint: {
+          "circle-radius": 12,
+          "circle-color": [
+            "case",
+            ["==", ["get", "fuente_display"], "agente_verificado"], "#ffc928",
+            "#FF2D95",
+          ],
+          "circle-opacity": 0.4,
+          "circle-stroke-width": 0,
+        },
+      });
+
       map.addLayer({
         id: "listings-mls-unclustered",
         type: "circle",
         source: "listings-mls",
         filter: ["!", ["has", "count"]],
-        layout: { visibility: "none" },
+        layout: {
+          visibility: "none",
+          // z-order: los de pago (Pro/agente) SIEMPRE encima → nunca tapados por otros.
+          "circle-sort-key": [
+            "case",
+            ["==", ["get", "fuente_display"], "agente_verificado"], 2,
+            ["==", ["get", "fuente_display"], "propio_pro"],        2,
+            0,
+          ],
+        },
         paint: {
           "circle-radius": [
             "case",
             ["boolean", ["feature-state", "highlighted"], false], 12,
+            // Pro / agente verificado → marker más grande (más visible)
+            ["==", ["get", "fuente_display"], "agente_verificado"], 11,
+            ["==", ["get", "fuente_display"], "propio_pro"],        11,
             8,
           ],
           "circle-color": [
             "case",
             // Agente verificado → amarillo
             ["==", ["get", "fuente_display"], "agente_verificado"], "#ffc928",
-            // Propietario Pro → morado
-            ["==", ["get", "fuente_display"], "propio_pro"],        "#7F77DD",
+            // Propietario Pro → fucsia (llamativo, distinto de todo; rojo = "sobreprecio")
+            ["==", ["get", "fuente_display"], "propio_pro"],        "#FF2D95",
             // Propietario Free → gris cálido
             ["==", ["get", "fuente_display"], "propio"],            "#9B8B75",
             // FC/MC → color por tipo de inmueble
@@ -719,10 +762,24 @@ export function MapView({
         "space-color": "#FAF7F2",
         "star-intensity": 0,
       });
+
+      // Pulso de markers Pro/agente: halo que crece y se desvanece en loop (~1.4s).
+      // Solo animamos cuando la capa está visible (tier de puntos) para no gastar frames.
+      const PULSE_MS = 1400;
+      const animatePulse = (ts: number) => {
+        pulseRafRef.current = requestAnimationFrame(animatePulse);
+        if (!map.getLayer("listings-mls-pulse")) return;
+        if (map.getLayoutProperty("listings-mls-pulse", "visibility") === "none") return;
+        const t = (ts % PULSE_MS) / PULSE_MS;            // 0 → 1
+        map.setPaintProperty("listings-mls-pulse", "circle-radius", 10 + 22 * t);
+        map.setPaintProperty("listings-mls-pulse", "circle-opacity", 0.45 * (1 - t));
+      };
+      pulseRafRef.current = requestAnimationFrame(animatePulse);
     });
 
     return () => {
       ro.disconnect();
+      if (pulseRafRef.current !== null) cancelAnimationFrame(pulseRafRef.current);
       mapLoadedRef.current = false;
       map.remove();
       mapRef.current = null;
@@ -777,7 +834,7 @@ export function MapView({
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
-    const mlsLayers = ["listings-mls-clusters", "listings-mls-cluster-count", "listings-mls-unclustered"] as const;
+    const mlsLayers = ["listings-mls-clusters", "listings-mls-cluster-count", "listings-mls-pulse", "listings-mls-unclustered"] as const;
 
     if (mapView === "listings") {
       // Polygons stay as context — the polygon-tier effect (FIX 1c) toggles
@@ -856,6 +913,7 @@ export function MapView({
         : params.toString();
       if (dedupKey === lastViewportQueryRef.current) return;
       lastViewportQueryRef.current = dedupKey;
+      onViewportLoadingChangeRef.current?.(true);
       try {
         const res = await apiFetch<ViewportResponse>(`${API_ENDPOINTS.allListings}/viewport?${params}`);
         if (cancelled) return;
@@ -892,6 +950,10 @@ export function MapView({
           } as unknown as GeoJSON.FeatureCollection);
         }
       } catch { /* transient fetch error — keep current dots */ }
+      // Always clear: guarding on !cancelled could leave the spinner stuck true if
+      // a superseded fetch is followed by a dedup early-return. A newer inflight
+      // fetch re-sets true anyway.
+      finally { onViewportLoadingChangeRef.current?.(false); }
     };
 
     const onMove = () => {
@@ -1094,28 +1156,67 @@ export function MapView({
     { color: "#9B8B75", label: "Bodega" },
   ];
 
+  const legendPanel = (
+    <div style={{
+      background: "#FFFFFF", border: "1px solid #EAE3D6",
+      borderRadius: 14, padding: "12px 14px", width: 200,
+      boxShadow: "0 8px 24px rgba(26,18,8,0.12)",
+    }}>
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9B8B75" }}>
+          Tipo de inmueble
+        </span>
+        <button
+          onClick={() => setLegendOpen(false)}
+          aria-label="Cerrar leyenda"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#9B8B75", display: "flex", padding: 0, lineHeight: 1, fontSize: 15 }}
+        >
+          ×
+        </button>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 10px" }}>
+        {LEGEND_ITEMS.map(({ color, label }) => (
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#1A1208" }}>
+            <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0, boxShadow: `0 0 0 2px ${color}22` }} />
+            {label}
+          </div>
+        ))}
+      </div>
+      <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid #F0EADF", display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#1A1208" }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ffc928", display: "inline-block", flexShrink: 0, boxShadow: "0 0 0 2px #ffc92833" }} />
+        Premium
+      </div>
+    </div>
+  );
+
   return (
     <>
       <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />
 
-      {/* Leyenda tipos de inmueble — solo en vista de listings */}
+      {/* Leyenda tipos de inmueble — pill que despliega la card (desktop + móvil) */}
       {mapView === "listings" && (
-        <div style={{
-          position: "absolute", bottom: 40, left: 16, zIndex: 10,
-          background: "rgba(250,247,242,0.95)", border: "1px solid #E8E0D0",
-          borderRadius: 8, padding: "8px 12px",
-          display: "flex", flexWrap: "wrap", gap: "5px 10px", maxWidth: 260,
-        }}>
-          {LEGEND_ITEMS.map(({ color, label }) => (
-            <div key={label} style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#1A1208" }}>
-              <span style={{ width: 8, height: 8, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0 }} />
-              {label}
-            </div>
-          ))}
-          <div style={{ display: "flex", alignItems: "center", gap: 4, fontSize: 12, color: "#1A1208" }}>
-            <span style={{ fontSize: 10, fontWeight: 700, color: "#ffc928", lineHeight: 1 }}>★</span>
-            Premium
-          </div>
+        <div style={{ position: "absolute", bottom: 40, left: 16, zIndex: 10 }}>
+          {legendOpen ? (
+            legendPanel
+          ) : (
+            <button
+              onClick={() => setLegendOpen(true)}
+              aria-label="Ver leyenda de tipos"
+              style={{
+                display: "flex", alignItems: "center", gap: 7,
+                background: "#FFFFFF", border: "1px solid #EAE3D6",
+                borderRadius: 999, padding: "7px 13px", fontSize: 12, fontWeight: 500, color: "#1A1208",
+                boxShadow: "0 4px 14px rgba(26,18,8,0.1)", cursor: "pointer",
+              }}
+            >
+              <span style={{ display: "inline-flex", gap: 3 }}>
+                {["#1D9E75", "#D85A30", "#378ADD"].map((c) => (
+                  <span key={c} style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />
+                ))}
+              </span>
+              Tipos
+            </button>
+          )}
         </div>
       )}
 

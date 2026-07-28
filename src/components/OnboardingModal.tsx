@@ -117,7 +117,7 @@ export function OnboardingModal() {
                   } else if (perfil === "vendedor") {
                     navigate({ to: "/vender" });
                   } else if (perfil === "agente") {
-                    navigate({ to: "/conectar-agente", search: { listing_id: 0 } });
+                    navigate({ to: "/conectar-agente", search: { listing_id: "" } });
                   }
                 }}
                 onClose={dismiss}

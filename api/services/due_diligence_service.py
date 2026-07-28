@@ -56,6 +56,22 @@ async def verificar_item(
         )
 
 
+async def checklist_verificado(intake_id: str, pool: Any) -> bool:
+    """True si TODOS los items quedaron 'verificado' (ninguno pendiente/rechazado).
+
+    Condición para levantar listing.verificado — un item rechazado completa el
+    checklist pero NO otorga el sello.
+    """
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT COUNT(*) AS total, "
+            "COUNT(*) FILTER (WHERE estado = 'verificado') AS ok "
+            "FROM due_diligence_item WHERE intake_id = $1",
+            intake_id,
+        )
+    return row["total"] > 0 and row["total"] == row["ok"]
+
+
 async def checklist_completo(intake_id: str, pool: Any) -> bool:
     """True si no queda ningún item 'pendiente' para el intake."""
     async with pool.acquire() as conn:

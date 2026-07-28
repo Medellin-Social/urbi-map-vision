@@ -154,6 +154,11 @@ class Conectividad(BaseModel):
     n_gimnasios_1km: Optional[int] = None
     n_yoga_1km: Optional[int] = None
     indice_nomada: Optional[float] = None
+    # Colegios cercanos + scores estilo Zillow (walk/transit)
+    n_colegios_1km: Optional[int] = None
+    dist_colegio_km: Optional[float] = None
+    walk_score: Optional[int] = None
+    transit_score: Optional[int] = None
 
 
 class Verde(BaseModel):
@@ -264,7 +269,11 @@ _BARRIO_MAP_SQL = """
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
         poi.n_yoga_1km,
-        poi.indice_nomada
+        poi.indice_nomada,
+        poi.n_colegios_1km,
+        poi.dist_colegio_km,
+        poi.walk_score,
+        poi.transit_score
     FROM raw.barrios b
     LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
@@ -319,6 +328,10 @@ _BARRIO_SQL = """
         poi.n_gimnasios_1km,
         poi.n_yoga_1km,
         poi.indice_nomada,
+        poi.n_colegios_1km,
+        poi.dist_colegio_km,
+        poi.walk_score,
+        poi.transit_score,
         -- verde
         vd.indice_verde_pct,
         vd.categoria_verde,
@@ -512,6 +525,10 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             n_gimnasios_1km=_i(row, "n_gimnasios_1km"),
             n_yoga_1km=_i(row, "n_yoga_1km"),
             indice_nomada=_f(row, "indice_nomada"),
+            n_colegios_1km=_i(row, "n_colegios_1km"),
+            dist_colegio_km=_f(row, "dist_colegio_km"),
+            walk_score=_i(row, "walk_score"),
+            transit_score=_i(row, "transit_score"),
         ),
         verde=Verde(
             indice_verde_pct=_f(row, "indice_verde_pct"),

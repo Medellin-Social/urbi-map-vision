@@ -203,6 +203,38 @@ WITH todas_fuentes AS (
         antiguedad::text, amenidades
     FROM public.listings_propios
     WHERE estado = 'activo' AND precio_cop > 0
+    UNION ALL
+    -- Modelo unificado: publicaciones directas (owner/agente) en tabla listing.
+    -- Entran al mapa en 'publicado' aunque verificado=false (publica primero).
+    SELECT
+        l.id::text || '_ls'                                      AS listing_uid,
+        'propio'                                                  AS fuente,
+        CASE WHEN l.destacado THEN 'agente_premium'
+             ELSE 'standard' END                                  AS tier,
+        l.operacion::text, l.tipo_inmueble::text,
+        l.precio::bigint                                          AS precio_cop,
+        NULL::bigint                                              AS precio_usd,
+        COALESCE(l.area_m2, 0)::numeric                          AS area_m2,
+        l.habitaciones, l.banos::numeric                         AS banos,
+        l.barrio                                                  AS barrio_raw,
+        -- Resolver barrio_id espacialmente desde geom (antes NULL → sin georef →
+        -- el listing propio nunca aparecía en el mapa). Fallback al más cercano.
+        (SELECT b.id FROM raw.barrios b
+          WHERE l.geom IS NOT NULL AND ST_Contains(b.geometry, l.geom)
+          LIMIT 1)                                                AS barrio_id,
+        l.direccion_aprox                                         AS direccion_raw,
+        ST_Y(l.geom)::double precision, ST_X(l.geom)::double precision,
+        l.geom,
+        l.id::text                                                AS url,
+        (SELECT array_agg(m.url ORDER BY m.orden) FROM listing_media m
+         WHERE m.listing_id = l.id)                              AS fotos,
+        COALESCE(l.published_at, l.created_at)                   AS fecha_scraping,
+        md5(l.id::text || '_ls')                                 AS dedup_hash,
+        l.estrato                                                 AS estrato_real,
+        l.amoblado,
+        l.antiguedad_anios::text, l.amenidades
+    FROM listing l
+    WHERE l.estado = 'publicado' AND l.precio > 0
 ),
 con_geo AS (
     SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
@@ -293,9 +325,21 @@ async def refresh_listings_cache(pool: Any) -> None:
                 "WHERE table_schema='staging' AND table_name='stg_listings_unificado')"
             )
             if stg_exists:
+                # verificado: flag del modelo unificado (listing). Solo las filas
+                # '_ls' lo llevan; el resto de fuentes queda FALSE. ADD COLUMN
+                # idempotente sobrevive a un recreate de la tabla por dbt/migración.
+                await conn.execute(
+                    "ALTER TABLE staging.stg_listings_unificado "
+                    "ADD COLUMN IF NOT EXISTS verificado BOOLEAN DEFAULT FALSE"
+                )
                 async with conn.transaction():
                     await conn.execute(_TRUNCATE_STG_LISTINGS)
                     await conn.execute(_REFRESH_STG_LISTINGS)
+                    # Propagar verificado a las filas de publicación directa (_ls).
+                    await conn.execute(
+                        "UPDATE staging.stg_listings_unificado s SET verificado = l.verificado "
+                        "FROM listing l WHERE s.listing_uid = l.id::text || '_ls'"
+                    )
                 # Index on url for the /viewport JOIN (g.url = l.url) — was a 54k-row
                 # seq scan. TRUNCATE preserves it; IF NOT EXISTS makes it a no-op after
                 # the first run and survives any dbt recreate of the table.

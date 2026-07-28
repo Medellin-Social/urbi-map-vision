@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import time
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
@@ -95,6 +95,7 @@ class ListingFull(BaseModel):
     fecha_ultima_verificacion: Optional[datetime] = None
     estrato_real: Optional[int] = None
     amoblado: Optional[bool] = None
+    verificado: Optional[bool] = None
     tier: Optional[str] = None
     favoritos_count: Optional[int] = None
     foto_principal: Optional[str] = None
@@ -118,6 +119,8 @@ class ListingDetail(ListingFull):
     arriendo_p50_barrio: Optional[int] = None
     yield_estimado: Optional[float] = None
     vistas: Optional[int] = None
+    tour_url: Optional[str] = None   # tour 3D / 360 (Matterport, Kuula, …)
+    video_url: Optional[str] = None
     precio_historia: Optional[list[PrecioHistorialItem]] = None
     # Free-tier descriptive fields
     fotos: Optional[list[str]] = None
@@ -140,6 +143,14 @@ class ListingDetail(ListingFull):
     precio_m2_p75: Optional[int] = None
     arr_p25: Optional[int] = None
     arr_p75: Optional[int] = None
+    # Zillow-style extras
+    fecha_scraping: Optional[str] = None      # "Actualizado: ..."
+    n_duplicados: Optional[int] = None        # "Publicado en N portales"
+    precio_variable: Optional[bool] = None    # proyecto "Desde $X"
+    precio_min_cluster: Optional[int] = None
+    precio_max_cluster: Optional[int] = None
+    tiempo_estimado_venta: Optional[str] = None  # barrio intel — gated
+    avaluo_m2_catastro: Optional[int] = None     # avalúo catastral/m² (comuna) — gated
 
 
 class ListingsAllResponse(BaseModel):
@@ -169,7 +180,8 @@ WITH lraw AS (
                ELSE NULL
            END AS pm2,
            fotos[1] AS foto_principal,
-           amoblado
+           amoblado,
+           COALESCE(verificado, FALSE) AS verificado
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
@@ -247,11 +259,13 @@ SELECT
     ctx.pct_wifi,
     g.estrato_real,
     l.amoblado,
+    l.verificado,
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
-    l.foto_principal
+    COALESCE(mm.portada_r2, l.foto_principal) AS foto_principal
 FROM lraw l
 JOIN raw.barrios b                    ON b.id = l.barrio_id
 JOIN analytics.listings_georef g      ON g.url = l.url
+LEFT JOIN raw.listing_media_mirror mm ON mm.url = l.url AND mm.activa
 LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
                AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc     ON bc.barrio_id = b.id
@@ -262,9 +276,11 @@ LEFT JOIN (
     FROM raw.favoritos_listings GROUP BY url
 ) _fav ON _fav.url = l.url
 LEFT JOIN (
-    SELECT lp.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listings_propios lp
-    JOIN public.usuarios u ON u.id = lp.user_id
+    -- Modelo unificado (migr 0053): staging.url = listing.id::text → owner → usuario.
+    SELECT lo.id::text AS lp_url, u.plan AS owner_plan
+    FROM public.listing lo
+    JOIN public.owner o ON o.id = lo.owner_id
+    JOIN public.usuarios u ON u.id = o.usuario_id
 ) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
@@ -290,10 +306,50 @@ ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
          WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
          ELSE 2 END,
+    -- Pro / agente verificado primero dentro de cada zona (visibilidad pagada).
+    CASE WHEN l.tier = 'agente_premium'
+              OR (l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente'))
+         THEN 0 ELSE 1 END,
     CASE WHEN l.fuente = 'medellinliving' THEN 0 ELSE 1 END,
-    l.pm2 ASC NULLS LAST
+    -- Orden por PRECIO TOTAL, no precio/m²: un lote enorme (768k/m² pero 40B
+    -- totales) no debe aparecer entre los "más baratos".
+    l.precio ASC NULLS LAST
 """.format(usd=int(_USD))
 _LISTINGS_SQL = _LISTINGS_SQL_TMPL.format(amenidades_filter="")
+
+# ── Fast path "toda la ciudad" ────────────────────────────────────────────────
+# Sin filtro de zona, el query base joinea ~54K filas antes del ORDER BY+LIMIT
+# (≈1.5s). Aquí aplicamos los filtros de columnas de stg + pre-orden por
+# (prioridad pagada, precio/m²) y LIMIT 700 candidatos ANTES de los joins pesados,
+# así solo se joinean ~700 filas (≈0.15s). Seguro: solo ~9 listings prioritarios
+# (propio/agente_premium), el top-500 real siempre cabe en 700 candidatos.
+# Solo aplica cuando NO hay filtros del lado del join (estrato/antiguedad/amenidades).
+_ALLCITY_CTE_CLOSE = (
+    "      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)\n)"
+)
+_ALLCITY_CTE_REPLACEMENT = """      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
+      AND ($3::text    IS NULL OR tipo_operacion = $3)
+      AND ($4::text    IS NULL OR LOWER(tipo_inmueble) LIKE '%' || LOWER($4) || '%')
+      AND ($5::bigint  IS NULL OR precio_cop >= $5)
+      AND ($6::bigint  IS NULL OR precio_cop <= $6)
+      AND ($7::float8  IS NULL OR area_m2 >= $7)
+      AND ($10::float8 IS NULL OR area_m2 <= $10)
+      AND ($8::int     IS NULL OR (CASE WHEN $8 >= 4 THEN NULLIF(habitaciones, -1) >= $8 ELSE NULLIF(habitaciones, -1) = $8 END))
+      AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN banos >= $11 ELSE banos = $11 END))
+      AND ($15::boolean IS NULL OR amoblado = $15)
+      -- Los INNER JOIN (georef, barrios) del query base filtran; requerirlos aquí
+      -- para que los 700 candidatos coincidan con el set efectivo del slow path.
+      AND EXISTS (SELECT 1 FROM analytics.listings_georef _g WHERE _g.url = staging.stg_listings_unificado.url)
+      AND EXISTS (SELECT 1 FROM raw.barrios _b WHERE _b.id = staging.stg_listings_unificado.barrio_id)
+    ORDER BY CASE WHEN tier = 'agente_premium' OR fuente = 'propio' THEN 0 ELSE 1 END,
+             CASE WHEN fuente = 'medellinliving' THEN 0 ELSE 1 END,
+             precio_cop ASC NULLS LAST
+    LIMIT 700
+)"""
+assert _ALLCITY_CTE_CLOSE in _LISTINGS_SQL_TMPL, "CTE close string drifted — revisar _LISTINGS_SQL_TMPL"
+_LISTINGS_ALLCITY_SQL = _LISTINGS_SQL_TMPL.replace(
+    _ALLCITY_CTE_CLOSE, _ALLCITY_CTE_REPLACEMENT, 1
+).format(amenidades_filter="")
 
 _COUNT_SQL_TMPL = """
 WITH lraw AS (
@@ -353,6 +409,7 @@ _MARKET_INTEL_FIELDS = (
     "precio_m2_p25", "precio_m2_p75", "arr_p25", "arr_p75",
     "arriendo_p50_barrio", "yield_estimado", "yield_bruto_pct",
     "indice_nomada", "barrio_score", "barrio_yield",
+    "tiempo_estimado_venta", "avaluo_m2_catastro",
 )
 
 
@@ -568,9 +625,17 @@ async def get_all_listings(
         else:
             fetch_limit = limit
             fetch_offset = offset
+        # Fast path "toda la ciudad": sin zona ni filtros del lado del join, y
+        # página 0 → limita candidatos antes de los joins pesados (~10x más rápido).
+        allcity_fast = (
+            municipio is None and barrio_ids is None and cd_comuna is None
+            and estrato_real is None and antiguedad is None and not amenidades
+            and not only_premium and not perfil_dict and fetch_offset == 0
+        )
+        listings_sql = _LISTINGS_ALLCITY_SQL if allcity_fast else _eff_listings_sql
         total, rows = await asyncio.gather(
             pool.fetchval(_eff_count_sql, *args),
-            pool.fetch(_eff_listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+            pool.fetch(listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
         )
         total = total or 0
 
@@ -621,6 +686,9 @@ WITH listing AS (
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop, area_m2, NULLIF(habitaciones, -1) AS habitaciones, banos,
            direccion_raw, barrio_id, url, fotos, amenidades,
+           amoblado, COALESCE(verificado, FALSE) AS verificado,
+           fecha_scraping, n_duplicados,
+           precio_variable, precio_min_cluster, precio_max_cluster,
            NULL::date AS fecha_publicacion,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
@@ -728,11 +796,22 @@ SELECT
          THEN (lm.raw_data->>'nroGarajes')::int END AS parqueaderos,
     CASE WHEN lm.raw_data->>'nroPiso' ~ '^\d+$'
          THEN (lm.raw_data->>'nroPiso')::int END    AS piso,
-    COALESCE(l.fotos, lp.fotos)        AS fotos,
+    COALESCE(mm.fotos_r2, l.fotos, lp.fotos) AS fotos,
     pr.m2_p25::int  AS precio_m2_p25,
     pr.m2_p75::int  AS precio_m2_p75,
     pr.arr_p25::int AS arr_p25,
-    pr.arr_p75::int AS arr_p75
+    pr.arr_p75::int AS arr_p75,
+    l.amoblado,
+    l.verificado,
+    l.fecha_scraping::date::text       AS fecha_scraping,
+    l.n_duplicados::int                AS n_duplicados,
+    l.precio_variable,
+    l.precio_min_cluster::bigint       AS precio_min_cluster,
+    l.precio_max_cluster::bigint       AS precio_max_cluster,
+    liq.tiempo_estimado_venta,
+    cat.avaluo_m2_catastro::bigint     AS avaluo_m2_catastro,
+    _lp_owner.tour_url,
+    _lp_owner.video_url
 FROM listing l
 JOIN raw.barrios b ON b.id = l.barrio_id
 JOIN analytics.listings_georef g ON g.url = l.url
@@ -741,6 +820,16 @@ LEFT JOIN analytics.barrios_medianas m
     AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
+LEFT JOIN analytics.barrios_liquidez liq ON liq.barrio_id = l.barrio_id
+-- Espejo R2: galería redimensionada (webp) — prioridad sobre el CDN original.
+LEFT JOIN raw.listing_media_mirror mm ON mm.url = l.url AND mm.activa
+-- Avalúo catastral (Medellín) — agregado por comuna en listings_vs_catastro.
+LEFT JOIN (
+    SELECT cd_comuna, MAX(avaluo_m2_catastro) AS avaluo_m2_catastro
+    FROM analytics.listings_vs_catastro
+    WHERE avaluo_m2_catastro > 0
+    GROUP BY cd_comuna
+) cat ON cat.cd_comuna = bc.cd_comuna
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_premium lp ON lp.url = l.url
@@ -755,9 +844,10 @@ LEFT JOIN (
     GROUP BY entity_id
 ) _vistas ON _vistas.entity_id = l.url
 LEFT JOIN (
-    SELECT lp2.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listings_propios lp2
-    JOIN public.usuarios u ON u.id = lp2.user_id
+    SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url
+    FROM public.listing lo
+    JOIN public.owner o ON o.id = lo.owner_id
+    JOIN public.usuarios u ON u.id = o.usuario_id
 ) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
 CROSS JOIN p_range pr
 LIMIT 1
@@ -953,9 +1043,10 @@ JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 {dm_join}
 LEFT JOIN (
-    SELECT lp.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listings_propios lp
-    JOIN public.usuarios u ON u.id = lp.user_id
+    SELECT lo.id::text AS lp_url, u.plan AS owner_plan
+    FROM public.listing lo
+    JOIN public.owner o ON o.id = lo.owner_id
+    JOIN public.usuarios u ON u.id = o.usuario_id
 ) _lp ON _lp.lp_url = l.url AND l.fuente = 'propio'
 WHERE ($1::float8 IS NULL OR g.lon >= $1)
   AND ($2::float8 IS NULL OR g.lat >= $2)
@@ -1073,6 +1164,65 @@ async def get_listing_by_id(
     return ListingDetail(**row_d)
 
 
+# Realtores de contacto = agentes de las agencias que patrocinan la zona del
+# inmueble. Devolvemos AMBOS niveles: el de comuna es el patrocinio caro ($1k) →
+# tarjeta principal; el de barrio ($200) → tarjeta secundaria menos llamativa.
+# Dentro de cada nivel, preferimos owner de la agencia sobre agente. Público;
+# cada nivel es null si esa zona no está patrocinada.
+class ListingAgente(BaseModel):
+    nombre: str
+    telefono: str
+    foto_url: Optional[str] = None
+    email: Optional[str] = None
+    zona_nivel: str  # 'barrio' | 'comuna'
+
+
+class ListingAgentes(BaseModel):
+    comuna: Optional[ListingAgente] = None
+    barrio: Optional[ListingAgente] = None
+
+
+_LISTING_AGENTE_SQL = """
+WITH lz AS (
+    SELECT l.barrio_id, bc.cd_comuna
+    FROM staging.stg_listings_unificado l
+    LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
+    LIMIT 1
+),
+ranked AS (
+    SELECT a.nombre, a.telefono, a.foto_url, a.email, s.zona_nivel::text AS zona_nivel,
+           ROW_NUMBER() OVER (
+               PARTITION BY s.zona_nivel
+               ORDER BY CASE WHEN am.rol::text = 'owner' THEN 0 ELSE 1 END, s.fecha_inicio
+           ) AS rn
+    FROM sponsorship s
+    JOIN agency_member am ON am.agency_id = s.agency_id
+    JOIN agent a ON a.id = am.agent_id AND a.estado = 'activo'
+    JOIN lz ON (
+        (s.zona_nivel = 'barrio' AND s.zona_codigo = lz.barrio_id::text)
+        OR (s.zona_nivel = 'comuna' AND s.zona_codigo = lz.cd_comuna::text)
+    )
+    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+)
+SELECT nombre, telefono, foto_url, email, zona_nivel FROM ranked WHERE rn = 1
+"""
+
+
+@router.get("/{listing_id}/agente", response_model=ListingAgentes)
+async def get_listing_agente(listing_id: int):
+    pool = get_pool()
+    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
+    out = ListingAgentes()
+    for r in rows:
+        ag = ListingAgente(**dict(r))
+        if ag.zona_nivel == "comuna":
+            out.comuna = ag
+        else:
+            out.barrio = ag
+    return out
+
+
 class SimilarListing(BaseModel):
     id: int
     url: str
@@ -1156,6 +1306,92 @@ async def get_similares(listing_id: int):
     pool = get_pool()
     rows = await pool.fetch(_SIMILARES_SQL, listing_id)
     return [SimilarListing(**dict(r)) for r in rows]
+
+
+# ── Slots de visita disponibles (horario del agente de zona, sin Google) ──────
+_LISTING_AGENT_ID_SQL = """
+WITH lz AS (
+    SELECT l.barrio_id, bc.cd_comuna
+    FROM staging.stg_listings_unificado l
+    LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1 LIMIT 1
+)
+SELECT a.id AS agent_id
+FROM sponsorship s
+JOIN agency_member am ON am.agency_id = s.agency_id
+JOIN agent a ON a.id = am.agent_id AND a.estado = 'activo'
+JOIN lz ON ((s.zona_nivel = 'barrio' AND s.zona_codigo = lz.barrio_id::text)
+         OR (s.zona_nivel = 'comuna' AND s.zona_codigo = lz.cd_comuna::text))
+WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+ORDER BY CASE WHEN s.zona_nivel = 'comuna' THEN 0 ELSE 1 END,
+         CASE WHEN am.rol::text = 'owner' THEN 0 ELSE 1 END, s.fecha_inicio
+LIMIT 1
+"""
+
+_AGENT_BOOKED_SQL = """
+SELECT v.fecha_visita
+FROM visita_solicitud v
+LEFT JOIN staging.stg_listings_unificado s ON s.url = v.listing_url
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = s.barrio_id
+WHERE v.fecha_visita IS NOT NULL AND v.estado IN ('pendiente', 'confirmada')
+  AND EXISTS (
+    SELECT 1 FROM sponsorship sp
+    JOIN agency_member am ON am.agency_id = sp.agency_id AND am.agent_id = $1
+    WHERE sp.estado = 'activa' AND CURRENT_DATE BETWEEN sp.fecha_inicio AND sp.fecha_fin
+      AND ((sp.zona_nivel = 'barrio' AND sp.zona_codigo = s.barrio_id::text)
+        OR (sp.zona_nivel = 'comuna' AND sp.zona_codigo = bc.cd_comuna::text)))
+"""
+
+_BOGOTA = timezone(timedelta(hours=-5))  # Colombia, sin DST
+
+
+def _fmt_hora(h: int, m: int) -> str:
+    ampm = "AM" if h < 12 else "PM"
+    hh = h % 12 or 12
+    return f"{hh}:{m:02d} {ampm}"
+
+
+@router.get("/{listing_id}/slots")
+async def get_slots(listing_id: int):
+    """Slots de visita para el agente de zona del listing: su horario semanal menos
+    los ya reservados. Sin agente/sin horario → slots vacío (el front usa fallback)."""
+    pool = get_pool()
+    agent_id = await pool.fetchval(_LISTING_AGENT_ID_SQL, listing_id)
+    if not agent_id:
+        return {"has_agent": False, "configured": False, "slots": {}}
+    franjas = await pool.fetch(
+        "SELECT dia_semana, hora_inicio, hora_fin FROM agent_disponibilidad WHERE agent_id = $1",
+        agent_id,
+    )
+    if not franjas:
+        return {"has_agent": True, "configured": False, "slots": {}}
+
+    booked = set()
+    for r in await pool.fetch(_AGENT_BOOKED_SQL, agent_id):
+        b = r["fecha_visita"].astimezone(_BOGOTA)
+        booked.add((b.date(), b.hour, b.minute))
+
+    by_dow: dict[int, list] = {}
+    for f in franjas:
+        by_dow.setdefault(f["dia_semana"], []).append((f["hora_inicio"], f["hora_fin"]))
+
+    now = datetime.now(_BOGOTA)
+    slots: dict[str, list[str]] = {}
+    for i in range(14):
+        d = (now + timedelta(days=i)).date()
+        for (ini, fin) in by_dow.get(d.weekday(), []):
+            h, m = ini.hour, ini.minute
+            horas: list[str] = []
+            while (h, m) < (fin.hour, fin.minute):
+                dt = datetime(d.year, d.month, d.day, h, m, tzinfo=_BOGOTA)
+                if dt > now + timedelta(hours=2) and (d, h, m) not in booked:
+                    horas.append(_fmt_hora(h, m))
+                m += 30
+                if m >= 60:
+                    m, h = 0, h + 1
+            if horas:
+                slots.setdefault(d.isoformat(), []).extend(horas)
+    return {"has_agent": True, "configured": True, "slots": slots}
 
 
 class VistaPayload(BaseModel):

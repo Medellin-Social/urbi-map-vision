@@ -35,6 +35,17 @@ PALABRAS_NEGATIVAS = [
     "accidente", "choque", "volcó", "cayó",
     "derrumbe", "incendio", "emergencia",
     "desastre", "tragedia", "víctima", "víctimas",
+    # Política (todo tema político fuera)
+    "presidente", "presidenta", "expresidente",
+    "política", "político", "políticos",
+    "elección", "elecciones", "electoral", "votación", "urnas",
+    "senador", "senadora", "senado", "congreso", "congresista",
+    "ministro", "ministra", "ministerio",
+    "alcalde", "alcaldesa", "gobernador", "gobernadora",
+    "candidato", "candidata", "candidatura",
+    "gobierno", "oposición", "referendo", "plebiscito",
+    "diputado", "concejal", "decreto", "reforma",
+    "petro", "uribe", "duque", "maduro", "trump", "biden",
     # Política negativa
     "escándalo", "corrupción", "investigado",
     "demanda", "destitución", "sanción",

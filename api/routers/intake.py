@@ -13,7 +13,7 @@ from api.dependencies import get_current_user
 from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
 from api.services.due_diligence_service import (
-    checklist_completo, generar_checklist, verificar_item,
+    checklist_completo, checklist_verificado, generar_checklist, verificar_item,
 )
 from api.services.intake_service import (
     IntakeError, aceptar_intake, crear_intake, get_or_create_owner,
@@ -185,12 +185,37 @@ async def aceptar_intake_endpoint(
         if agency_id is None:
             raise HTTPException(status_code=409, detail="El agente no pertenece a ninguna agency")
 
-    try:
-        listing_id = await aceptar_intake(
-            intake_id, SimpleNamespace(**dict(row)), str(agent.id), str(agency_id), pool,
-        )
-    except IntakeError as e:
-        raise HTTPException(status_code=409, detail=str(e))
+    if row["listing_id"]:
+        # Flujo "publica primero" (0053): el owner ya publicó y el intake nació
+        # enlazado a ese listing. Aceptar = adoptarlo (agent/agency), no crear
+        # un borrador duplicado.
+        if str(row["estado"]) != "asignado":
+            raise HTTPException(
+                status_code=409,
+                detail=f"Intake no está listo para aceptar (estado={row['estado']})",
+            )
+        async with pool.acquire() as conn:
+            async with conn.transaction():
+                result = await conn.execute(
+                    "UPDATE intake SET estado = 'aceptado', updated_at = NOW() "
+                    "WHERE id = $1 AND estado = 'asignado'",
+                    intake_id,
+                )
+                if result.split()[-1] == "0":
+                    raise HTTPException(status_code=409, detail="Otro proceso ya movió este intake")
+                await conn.execute(
+                    "UPDATE listing SET agent_id = $1, agency_id = $2, updated_at = NOW() "
+                    "WHERE id = $3",
+                    agent.id, agency_id, row["listing_id"],
+                )
+        listing_id = str(row["listing_id"])
+    else:
+        try:
+            listing_id = await aceptar_intake(
+                intake_id, SimpleNamespace(**dict(row)), str(agent.id), str(agency_id), pool,
+            )
+        except IntakeError as e:
+            raise HTTPException(status_code=409, detail=str(e))
 
     # El checklist DD nace al aceptar (la verificación empieza cuando el realtor
     # toma el caso). Guard de idempotencia: generar_checklist duplicaría.
@@ -275,7 +300,21 @@ async def verificar_item_endpoint(
         raise HTTPException(status_code=400, detail=str(e))
 
     completo = await checklist_completo(str(row["intake_id"]), pool)
-    return {"id": item_id, "estado": req.estado, "checklist_completo": completo}
+
+    # Sello "Verificada": todos los items verificados → el listing del intake
+    # levanta verificado=true (aparece con sello en el mapa).
+    verificado = False
+    if completo and await checklist_verificado(str(row["intake_id"]), pool):
+        async with pool.acquire() as conn:
+            result = await conn.execute(
+                "UPDATE listing l SET verificado = TRUE, updated_at = NOW() "
+                "FROM intake i WHERE i.id = $1 AND l.id = i.listing_id AND l.verificado = FALSE",
+                str(row["intake_id"]),
+            )
+        verificado = result.split()[-1] != "0"
+
+    return {"id": item_id, "estado": req.estado, "checklist_completo": completo,
+            "listing_verificado": verificado}
 
 
 @router.get("/cuestionario")

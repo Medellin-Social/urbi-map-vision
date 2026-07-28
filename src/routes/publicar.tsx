@@ -16,7 +16,7 @@ export const Route = createFileRoute("/publicar")({
       { title: "Publicar propiedad · Medellín Social" },
       {
         name: "description",
-        content: "Publica tu propiedad en el MLS de Medellín Social en 4 pasos.",
+        content: "Publica tu propiedad en el MLS de Medellín Social en 5 pasos.",
       },
     ],
   }),
@@ -80,7 +80,19 @@ type FormData = {
   lat: number | null;
   lon: number | null;
   descripcion: string;
-  // Paso 4
+  tour_url: string;
+  video_url: string;
+  // Paso legal (declaraciones — "si"|"no"|"")
+  en_propiedad_horizontal: string;
+  al_dia_administracion: string;
+  al_dia_predial: string;
+  tiene_hipoteca: string;
+  tiene_escritura: string;
+  servicios_al_dia: string;
+  estado_civil: string;
+  es_persona_juridica: string;
+  notas_owner: string;
+  // Paso contacto
   nombre_contacto: string;
   telefono: string;
   email_contacto: string;
@@ -98,13 +110,16 @@ const INITIAL_FORM: FormData = {
   amoblado: "", mascotas: "consultar", permite_airbnb: "no_se",
   amenidades_int: [], amenidades_ext: [],
   barrio_id: "", barrio_nombre: "", municipio: "", comuna: "",
-  direccion: "", lat: null, lon: null, descripcion: "",
+  direccion: "", lat: null, lon: null, descripcion: "", tour_url: "", video_url: "",
+  en_propiedad_horizontal: "", al_dia_administracion: "", al_dia_predial: "",
+  tiene_hipoteca: "", tiene_escritura: "", servicios_al_dia: "",
+  estado_civil: "", es_persona_juridica: "", notas_owner: "",
   nombre_contacto: "", telefono: "", email_contacto: "",
   horario_contacto: "", acepta_terminos: false,
   acepta_propietario: false, acepta_comision: false,
 };
 
-const STEPS = ["Información básica", "Características", "Ubicación y fotos", "Contacto"];
+const STEPS = ["Información básica", "Características", "Ubicación y fotos", "Información legal", "Contacto"];
 
 // ── Option lists ───────────────────────────────────────────────────────────────
 
@@ -836,6 +851,252 @@ function Step3({
           {data.descripcion.length}/50 caracteres mínimo
         </p>
       </Field>
+
+      <Field label="Tour 3D / 360° (opcional)">
+        <input
+          type="url"
+          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors"
+          style={{ borderColor: K.line, color: K.ink }}
+          value={data.tour_url}
+          onChange={(e) => setData({ tour_url: e.target.value })}
+          placeholder="https://my.matterport.com/show/?m=…  ·  kuula.co/share/…"
+        />
+        <p style={{ fontSize: 11, color: K.muted }}>
+          Pega el link de tu tour Matterport, Kuula, CloudPano, iStaging o Ricoh360.
+        </p>
+      </Field>
+
+      <Field label="Video (opcional)">
+        <input
+          type="url"
+          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors"
+          style={{ borderColor: K.line, color: K.ink }}
+          value={data.video_url}
+          onChange={(e) => setData({ video_url: e.target.value })}
+          placeholder="https://youtube.com/watch?v=…  ·  vimeo.com/…"
+        />
+      </Field>
+    </div>
+  );
+}
+
+// ── Step Legal ───────────────────────────────────────────────────────────────
+// Espejo de api/schemas/intake_cuestionario.py. Venta = set legal completo;
+// arriendo = liviano. Las respuestas van a listing.declaraciones (autoreporte,
+// no verificado). El realtor asignado las verifica en due diligence.
+
+const SI_NO = [{ v: "si", l: "Sí" }, { v: "no", l: "No" }];
+
+function BoolQuestion({
+  label, required, value, onSelect,
+}: {
+  label: string; required?: boolean; value: string; onSelect: (v: string) => void;
+}) {
+  return (
+    <Field label={label} required={required}>
+      <Chips options={SI_NO} value={value} onSelect={onSelect} />
+    </Field>
+  );
+}
+
+function StepLegal({
+  data, setData,
+}: {
+  data: FormData; setData: (p: Partial<FormData>) => void;
+}) {
+  const esVenta = data.tipo_operacion === "venta" || data.tipo_operacion === "venta_arriendo";
+  const esPH = data.en_propiedad_horizontal === "si";
+
+  return (
+    <div style={{ display: "grid", gap: 20 }}>
+      <div
+        style={{
+          background: K.surface,
+          border: `1px solid ${K.line}`,
+          borderRadius: 12,
+          padding: "14px 16px",
+        }}
+      >
+        <p style={{ fontSize: 13, color: K.ink, lineHeight: 1.6 }}>
+          Esta información es <strong>obligatoria</strong> y ayuda a que un asesor
+          verifique tu propiedad más rápido. Es un autoreporte: no se publica
+          públicamente, la revisa el asesor asignado.
+        </p>
+      </div>
+
+      {esVenta ? (
+        <>
+          <BoolQuestion
+            label="¿Es propiedad horizontal (edificio/condominio)?"
+            required
+            value={data.en_propiedad_horizontal}
+            onSelect={(v) => setData({ en_propiedad_horizontal: v })}
+          />
+          {esPH && (
+            <BoolQuestion
+              label="¿Al día con la administración?"
+              required
+              value={data.al_dia_administracion}
+              onSelect={(v) => setData({ al_dia_administracion: v })}
+            />
+          )}
+          <BoolQuestion
+            label="¿Al día con el impuesto predial?"
+            required
+            value={data.al_dia_predial}
+            onSelect={(v) => setData({ al_dia_predial: v })}
+          />
+          <BoolQuestion
+            label="¿Tiene hipoteca?"
+            required
+            value={data.tiene_hipoteca}
+            onSelect={(v) => setData({ tiene_hipoteca: v })}
+          />
+          <BoolQuestion
+            label="¿Tiene escritura pública?"
+            required
+            value={data.tiene_escritura}
+            onSelect={(v) => setData({ tiene_escritura: v })}
+          />
+          <BoolQuestion
+            label="¿Servicios al día (agua, luz, gas)?"
+            required
+            value={data.servicios_al_dia}
+            onSelect={(v) => setData({ servicios_al_dia: v })}
+          />
+          <Field label="Estado civil del propietario">
+            <Select value={data.estado_civil} onChange={(e) => setData({ estado_civil: e.target.value })}>
+              <option value="">Seleccionar</option>
+              {["Soltero/a", "Casado/a", "Unión libre", "Divorciado/a", "Viudo/a"].map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </Select>
+          </Field>
+          <BoolQuestion
+            label="¿Es persona jurídica / empresa?"
+            value={data.es_persona_juridica}
+            onSelect={(v) => setData({ es_persona_juridica: v })}
+          />
+        </>
+      ) : (
+        <BoolQuestion
+          label="¿Servicios al día (agua, luz, gas)?"
+          value={data.servicios_al_dia}
+          onSelect={(v) => setData({ servicios_al_dia: v })}
+        />
+      )}
+
+      <Field label="Notas adicionales">
+        <textarea
+          className={inputCls}
+          style={{ ...inputStyle, minHeight: 80, resize: "vertical" }}
+          value={data.notas_owner}
+          onChange={(e) => setData({ notas_owner: e.target.value })}
+          placeholder="Cualquier detalle relevante para el asesor (opcional)"
+        />
+      </Field>
+    </div>
+  );
+}
+
+// ── Verificación de teléfono (OTP) — requisito para publicar sin ser agente ────
+
+function OtpTelefono({ telefono }: { telefono: string }) {
+  const [fase, setFase] = useState<"idle" | "enviado" | "ok">("idle");
+  const [codigo, setCodigo] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  const authHeaders = (): Record<string, string> => {
+    const t = getToken();
+    return t
+      ? { Authorization: `Bearer ${t}`, "Content-Type": "application/json" }
+      : { "Content-Type": "application/json" };
+  };
+
+  const enviar = async () => {
+    if (!telefono.trim()) { setErr("Escribe tu teléfono primero"); return; }
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(API_ENDPOINTS.listingsPropiosOtpEnviar, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ telefono }),
+      });
+      if (!r.ok) throw new Error();
+      setFase("enviado");
+    } catch {
+      setErr("No se pudo enviar el código. Intenta de nuevo.");
+    } finally { setBusy(false); }
+  };
+
+  const confirmar = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await fetch(API_ENDPOINTS.listingsPropiosOtpConfirmar, {
+        method: "POST", headers: authHeaders(), body: JSON.stringify({ codigo }),
+      });
+      if (!r.ok) {
+        const b = await r.json().catch(() => ({}));
+        throw new Error((b as { detail?: string }).detail ?? "Código inválido");
+      }
+      setFase("ok");
+    } catch (e) {
+      setErr(e instanceof Error && e.message ? e.message : "Código inválido o vencido");
+    } finally { setBusy(false); }
+  };
+
+  if (fase === "ok") {
+    return (
+      <p style={{ fontSize: 13, color: K.teal, fontWeight: 600, marginTop: -8 }}>
+        ✓ Teléfono verificado
+      </p>
+    );
+  }
+
+  return (
+    <div style={{ marginTop: -8, display: "grid", gap: 8 }}>
+      {fase === "idle" ? (
+        <button
+          type="button"
+          onClick={enviar}
+          disabled={busy}
+          style={{
+            justifySelf: "start", padding: "8px 14px", borderRadius: 8, fontSize: 13,
+            fontWeight: 600, border: `1px solid ${K.teal}`, color: K.tealDeep,
+            background: "transparent", cursor: "pointer", opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? "Enviando…" : "Verificar teléfono"}
+        </button>
+      ) : (
+        <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+          <Input
+            inputMode="numeric"
+            value={codigo}
+            onChange={(e) => setCodigo(e.target.value)}
+            placeholder="Código de 6 dígitos"
+            style={{ maxWidth: 180 }}
+          />
+          <button
+            type="button"
+            onClick={confirmar}
+            disabled={busy || codigo.length < 4}
+            style={{
+              padding: "8px 14px", borderRadius: 8, fontSize: 13, fontWeight: 600,
+              border: "none", color: "#fff", background: K.teal, cursor: "pointer",
+              opacity: busy || codigo.length < 4 ? 0.6 : 1,
+            }}
+          >
+            {busy ? "Verificando…" : "Confirmar"}
+          </button>
+          <button type="button" onClick={enviar} disabled={busy} style={{ fontSize: 12, color: K.muted, background: "none", border: "none", cursor: "pointer" }}>
+            Reenviar
+          </button>
+        </div>
+      )}
+      {fase === "enviado" && !err && (
+        <p style={{ fontSize: 12, color: K.muted }}>Te enviamos el código a tu correo. Vence en 10 minutos.</p>
+      )}
+      {err && <p style={{ fontSize: 12, color: K.coral }}>{err}</p>}
     </div>
   );
 }
@@ -866,6 +1127,7 @@ function Step4({
           placeholder="+57 300 000 0000"
         />
       </Field>
+      {!esAgente && <OtpTelefono telefono={data.telefono} />}
       <Field label="Email de contacto">
         <Input
           type="email"
@@ -982,7 +1244,7 @@ function Step4({
 
 // ── Success screens ────────────────────────────────────────────────────────────
 
-function SuccessAgente({ listingId }: { listingId: number }) {
+function SuccessAgente({ listingId }: { listingId: string }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 24px", maxWidth: 480, margin: "0 auto" }}>
       <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
@@ -1018,15 +1280,17 @@ function SuccessAgente({ listingId }: { listingId: number }) {
   );
 }
 
-function SuccessPropietario({ listingId }: { listingId: number }) {
+function SuccessPropietario({ listingId }: { listingId: string }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 24px", maxWidth: 480, margin: "0 auto" }}>
       <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>
       <h2 style={{ fontFamily: K.serif, color: K.ink, fontSize: "1.5rem", fontWeight: 800, marginBottom: 12 }}>
-        Tu propiedad está en revisión
+        Tu propiedad ya está en el mapa
       </h2>
       <p style={{ color: K.muted, fontSize: 14, lineHeight: 1.7, marginBottom: 20 }}>
-        La revisaremos en las próximas 24 horas y te notificaremos por email cuando esté activa.
+        Aparece como <strong>sin verificar</strong>. Un agente de tu zona la revisará
+        y le pondrá el sello de verificada en <strong>máximo 72 horas</strong>;
+        te avisaremos por email.
       </p>
       <div
         style={{
@@ -1057,6 +1321,12 @@ function SuccessPropietario({ listingId }: { listingId: number }) {
           Conectar con agente →
         </Link>
       </div>
+      <Link
+        to="/mis-propiedades"
+        style={{ display: "inline-block", color: K.teal, fontSize: 13, fontWeight: 700, textDecoration: "none" }}
+      >
+        Ver mis propiedades →
+      </Link>
     </div>
   );
 }
@@ -1095,7 +1365,7 @@ function NotLoggedIn() {
         </Link>
         <Link
           to="/conectar-agente"
-          search={{ listing_id: 0 }}
+          search={{ listing_id: "" }}
           style={{
             display: "block",
             background: K.tealDeep,
@@ -1190,6 +1460,19 @@ function validateStep(step: number, data: FormData): string | null {
     if (data.descripcion.length < 50) return "La descripción debe tener al menos 50 caracteres";
   }
   if (step === 3) {
+    // Declaraciones legales obligatorias (espejo del cuestionario backend).
+    const esVenta = data.tipo_operacion === "venta" || data.tipo_operacion === "venta_arriendo";
+    if (esVenta) {
+      if (!data.en_propiedad_horizontal) return "Indica si es propiedad horizontal";
+      if (data.en_propiedad_horizontal === "si" && !data.al_dia_administracion)
+        return "Indica si está al día con la administración";
+      if (!data.al_dia_predial) return "Indica si está al día con el predial";
+      if (!data.tiene_hipoteca) return "Indica si tiene hipoteca";
+      if (!data.tiene_escritura) return "Indica si tiene escritura pública";
+      if (!data.servicios_al_dia) return "Indica si los servicios están al día";
+    }
+  }
+  if (step === 4) {
     if (!data.nombre_contacto.trim()) return "Ingresa tu nombre";
     if (!data.telefono.trim()) return "Ingresa tu teléfono";
     if (!data.acepta_terminos) return "Debes aceptar los términos y condiciones";
@@ -1210,7 +1493,7 @@ function PublicarPage() {
   const [photos, setPhotos]   = useState<PhotoEntry[]>([]);
   const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [done, setDone]       = useState<{ id: number; es_agente: boolean } | null>(null);
+  const [done, setDone]       = useState<{ id: string; es_agente: boolean } | null>(null);
   const [esAgente, setEsAgente] = useState(false);
 
   const setData = (p: Partial<FormData>) => setFormRaw((f) => ({ ...f, ...p }));
@@ -1280,6 +1563,8 @@ function PublicarPage() {
       if (form.lat != null) fd.append("lat", String(form.lat));
       if (form.lon != null) fd.append("lon", String(form.lon));
       if (form.descripcion) fd.append("descripcion", form.descripcion);
+      if (form.tour_url)  fd.append("tour_url",  form.tour_url.trim());
+      if (form.video_url) fd.append("video_url", form.video_url.trim());
       if (form.nombre_contacto) fd.append("nombre_contacto", form.nombre_contacto);
       if (form.telefono)        fd.append("telefono",        form.telefono);
       if (form.email_contacto)  fd.append("email_contacto",  form.email_contacto);
@@ -1287,6 +1572,21 @@ function PublicarPage() {
       fd.append("acepta_terminos",    String(form.acepta_terminos));
       fd.append("acepta_propietario", String(form.acepta_propietario));
       if (form.acepta_comision) fd.append("acepta_comision", "true");
+
+      // Declaraciones legales → JSON (booleans; strings/null para el resto).
+      const b = (v: string) => (v === "si" ? true : v === "no" ? false : null);
+      const declaraciones: Record<string, unknown> = {
+        al_dia_predial:          b(form.al_dia_predial),
+        tiene_hipoteca:          b(form.tiene_hipoteca),
+        tiene_escritura:         b(form.tiene_escritura),
+        servicios_al_dia:        b(form.servicios_al_dia),
+        en_propiedad_horizontal: b(form.en_propiedad_horizontal),
+        al_dia_administracion:   b(form.al_dia_administracion),
+        es_persona_juridica:     b(form.es_persona_juridica),
+        estado_civil:            form.estado_civil || null,
+        notas_owner:             form.notas_owner || null,
+      };
+      fd.append("declaraciones", JSON.stringify(declaraciones));
 
       for (const p of photos) {
         fd.append("fotos", p.file);
@@ -1307,10 +1607,15 @@ function PublicarPage() {
         throw new Error((body as { detail?: string }).detail ?? `Error ${res.status}`);
       }
 
-      const result = await res.json() as { id: number; es_agente: boolean };
+      const result = await res.json() as { id: string; es_agente: boolean };
       setDone(result);
     } catch (e) {
-      setError(e instanceof Error ? e.message : "Error al publicar. Intenta de nuevo.");
+      const msg = e instanceof Error ? e.message : "Error al publicar. Intenta de nuevo.";
+      setError(
+        msg === "telefono_no_verificado"
+          ? "Verifica tu teléfono en el paso de contacto antes de publicar."
+          : msg,
+      );
     } finally {
       setLoading(false);
     }
@@ -1454,7 +1759,8 @@ function PublicarPage() {
                   setPhotos={setPhotos}
                 />
               )}
-              {step === 3 && (
+              {step === 3 && <StepLegal {...stepProps} />}
+              {step === 4 && (
                 <Step4 {...stepProps} esAgente={esAgente} />
               )}
             </motion.div>

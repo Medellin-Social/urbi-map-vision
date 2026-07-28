@@ -5,7 +5,7 @@
 const API_BASE_URL =
   (import.meta.env.VITE_API_URL as string | undefined) ??
   (import.meta.env.DEV
-    ? "http://localhost:8001/api/v1"
+    ? "http://localhost:8011/api/v1"   // API local corre en 8011 (8001 lo secuestra Cursor)
     : "https://medellinsocial-api.up.railway.app/api/v1");
 
 export const API_ENDPOINTS = {
@@ -29,6 +29,9 @@ export const API_ENDPOINTS = {
   listing: (id: number) => `${API_BASE_URL}/listings/${id}`,
   listingVista: (id: number) => `${API_BASE_URL}/listings/${id}/vista`,
   listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
+  listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
+  listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
+  visitas: `${API_BASE_URL}/visitas`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,
@@ -37,6 +40,9 @@ export const API_ENDPOINTS = {
   configMapa: `${API_BASE_URL}/usuario/configuracion_mapa`,
 
   // Admin
+  adminDashboard: `${API_BASE_URL}/admin/dashboard`,
+  adminUsuarios: `${API_BASE_URL}/admin/usuarios`,
+  adminUsuarioEditar: (id: number) => `${API_BASE_URL}/admin/usuarios/${id}`,
   adminLeads: `${API_BASE_URL}/admin/leads`,
   adminLead: (id: number) => `${API_BASE_URL}/admin/leads/${id}`,
 
@@ -67,6 +73,13 @@ export const API_ENDPOINTS = {
   adminAgenteAprobar: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/aprobar`,
   adminAgenteRechazar: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/rechazar`,
   adminAgenteSuspender: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/suspender`,
+  adminAgenteZonas: (id: string) => `${API_BASE_URL}/admin/agentes/${id}/zonas`,
+  adminSponsorshipDelete: (id: string) => `${API_BASE_URL}/admin/sponsorship/${id}`,
+  adminZonasCatalogo: `${API_BASE_URL}/admin/zonas-catalogo`,
+  // Compra de zonas (realtor self-serve)
+  zonasDisponibles: `${API_BASE_URL}/zonas/disponibles`,
+  zonasCheckout: `${API_BASE_URL}/zonas/checkout`,
+  zonasConfirmarSimulado: `${API_BASE_URL}/zonas/confirmar-simulado`,
 
   // Listings propios
   listingsPropiosAgente: (id: number) => `${API_BASE_URL}/listings-propios/agente/${id}`,
@@ -75,6 +88,8 @@ export const API_ENDPOINTS = {
   listingsPropiosMis: `${API_BASE_URL}/listings-propios/mis-listings`,
   listingsPropiosById: (id: number) => `${API_BASE_URL}/listings-propios/${id}`,
   listingsPropiosBarriosForm: `${API_BASE_URL}/listings-propios/barrios-form`,
+  listingsPropiosOtpEnviar: `${API_BASE_URL}/listings-propios/verificar-telefono/enviar`,
+  listingsPropiosOtpConfirmar: `${API_BASE_URL}/listings-propios/verificar-telefono/confirmar`,
   listingsPropiosAgentes: `${API_BASE_URL}/listings-propios/agentes-para-contactar`,
   listingsPropiosSolicitudes: `${API_BASE_URL}/listings-propios/solicitudes`,
   listingsPropiosSolicitudesPendientes: `${API_BASE_URL}/listings-propios/solicitudes/pendientes`,
