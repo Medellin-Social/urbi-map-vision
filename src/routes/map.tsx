@@ -206,7 +206,10 @@ function MapPageInner() {
   // map shows (clusters mode returns a capped list, points mode the points).
   const mergedListings = globalSearch ? (globalData?.listings ?? []) : viewportListings;
   const mergedLoading  = globalSearch ? globalIsLoading : (mlsBarrio ? mlsIsLoading : viewportLoading);
-  const mlsTotal = mergedListings.length;
+  // Conteo real del backend (COUNT(*)), no el length de la página capada (200/500) — evita
+  // mostrar "200" como si fuera el total cuando hay más resultados sin cargar.
+  const realTotal = globalSearch ? globalData?.total : (mlsBarrio ? mlsData?.total : undefined);
+  const mlsTotal = realTotal ?? mergedListings.length;
 
   // Panel zone label — real barrio > active commune > active municipality > Medellín default
   const activePanelName = activeComuna ?? activeMunicipio;
@@ -597,6 +600,7 @@ function MapPageInner() {
         <MLSPanel
           barrio={panelBarrio}
           listings={mergedListings}
+          total={realTotal}
           isLoading={mergedLoading}
           onBack={handleBackToZonas}
           onListingSelect={handleListingSelect}

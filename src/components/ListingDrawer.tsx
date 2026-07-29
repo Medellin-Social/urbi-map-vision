@@ -26,8 +26,17 @@ import { toEmbedSrc } from "@/lib/embed";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { useTrm } from "@/hooks/useTrm";
+import { useLang } from "@/lib/i18n";
+import { useUnit, formatArea } from "@/hooks/useUnit";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
+
+function fmtUSD(cop: number, trm: number): string {
+  const v = cop / trm;
+  if (v < 1_000) return `$${Math.round(v)}`;
+  if (v < 1_000_000) return `$${(v / 1_000).toFixed(1).replace(/\.0$/, "")}k`;
+  return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
+}
 
 const TIPO_INMUEBLE_COLOR: Record<string, string> = {
   apartamento:   "#1D9E75",
@@ -837,6 +846,8 @@ type Props = {
 
 export function ListingDrawer({ listingId, onClose }: Props) {
   const trm = useTrm();
+  const { lang } = useLang();
+  const { unit } = useUnit();
   const isMobile = useIsMobile();
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
@@ -1007,14 +1018,16 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // Specs inline — van a la derecha del precio (mismo nivel), estilo Zillow.
   const specsInline = listing && (listing.area_m2 != null || listing.habitaciones != null || listing.banos != null) ? (
     <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#1A1208" }}>
-      {listing.area_m2 != null && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.area_m2}m²</span>}
+      {listing.area_m2 != null && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-[#6B5B45]" />{formatArea(listing.area_m2, unit)}</span>}
       {listing.habitaciones != null && <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.habitaciones} hab</span>}
       {listing.banos != null && <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.banos} baños</span>}
     </div>
   ) : null;
 
   // Tabla de datos estilo Zillow (2 columnas). Cada celda solo si hay dato.
-  const precioM2Label = (v: number) => (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M/m²` : `$${Math.round(v / 1000)}k/m²`);
+  const precioM2Label = (v: number) => unit === "sqft"
+    ? `$${Math.round(v / 10.7639 / 1000)}k/ft²`
+    : (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M/m²` : `$${Math.round(v / 1000)}k/m²`);
   const facts: { icon: React.ReactNode; text: string }[] = [];
   if (listing?.tipo_inmueble) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.tipo_inmueble.replace(/_/g, " ") });
   if (listing?.antiguedad) facts.push({ icon: <Clock className="h-4 w-4" />, text: cleanAntiguedad(listing.antiguedad) ?? "" });
@@ -1054,6 +1067,19 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     activityParts.push(`se vende más rápido que ${Math.round(listing.liquidez_score)}% de la zona`);
   const activityLine = activityParts.length > 0 ? (
     <div className="text-xs" style={{ color: "#6B5B45" }}>{activityParts.join("  ·  ")}</div>
+  ) : null;
+
+  // Favorito arriba, junto al precio — grande y visible sin scroll (antes vivía
+  // enterrado al fondo del drawer, en ctaButtons).
+  const favButton = listing ? (
+    <button
+      onClick={() => { if (!auth.get()) return; toggleFav(listing.url ?? "", listing.barrio_id); }}
+      title={isFav(listing.url ?? "") ? "Quitar de favoritos" : "Guardar"}
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition"
+      style={{ border: "0.5px solid #E8E0D0", background: isFav(listing.url ?? "") ? "#FAECE7" : "#FFFFFF" }}
+    >
+      <Heart className="h-5 w-5" style={{ color: isFav(listing.url ?? "") ? "#D85A30" : "#6B5B45" }} fill={isFav(listing.url ?? "") ? "#D85A30" : "none"} />
+    </button>
   ) : null;
 
   // Contactar/agendar viven en la columna de realtores. ctaButtons = acciones secundarias.
@@ -1101,14 +1127,6 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             {SOURCE_LABEL[fuente] ?? "Ver fuente original →"}
           </a>
         )}
-        <button
-          onClick={() => { if (!auth.get()) return; toggleFav(listing.url ?? "", listing.barrio_id); }}
-          title={isFav(listing.url ?? "") ? "Quitar de favoritos" : "Guardar"}
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl transition"
-          style={{ border: "0.5px solid #E8E0D0", background: isFav(listing.url ?? "") ? "#FAECE7" : "#F5F0E8" }}
-        >
-          <Heart className="h-4 w-4" style={{ color: isFav(listing.url ?? "") ? "#D85A30" : "#6B5B45" }} fill={isFav(listing.url ?? "") ? "#D85A30" : "none"} />
-        </button>
         <button
           onClick={handleShare}
           title="Copiar link"
@@ -1362,7 +1380,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             <div className="space-y-0.5 p-2.5">
               <div className="text-sm font-semibold" style={{ color: "#1A1208" }}>{s.precio_cop ? formatCOP(s.precio_cop) : "—"}</div>
               <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#6B5B45" }}>
-                {s.area_m2 != null && <span>{s.area_m2}m²</span>}
+                {s.area_m2 != null && <span>{formatArea(s.area_m2, unit)}</span>}
                 {s.habitaciones != null && <span>· {s.habitaciones} hab</span>}
                 {s.banos != null && <span>· {s.banos} baños</span>}
               </div>
@@ -1430,13 +1448,20 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                         {/* Precio + badges */}
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-3">
-                            <div>
+                            <div data-i18n-skip="true">
                               <div className="font-display text-2xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
-                                {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
+                                {listing.precio_cop ? (lang === "en" ? `${fmtUSD(listing.precio_cop, trm)} USD` : formatCOP(listing.precio_cop)) : "—"}
                               </div>
-                              {listing.precio_cop && <div className="text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>}
+                              {listing.precio_cop && (
+                                <div className="text-xs text-[#6B5B45]">
+                                  {lang === "en" ? formatCOP(listing.precio_cop) : `~${fmtUSD(listing.precio_cop, trm)} USD`}
+                                </div>
+                              )}
                             </div>
-                            {badgesRow}
+                            <div className="flex items-start gap-2">
+                              {badgesRow}
+                              {favButton}
+                            </div>
                           </div>
                           {(listing.barrio_nombre || listing.municipio) && (
                             <div className="flex items-center gap-1 text-xs text-[#6B5B45]">
@@ -1498,15 +1523,20 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           {/* Header: precio (izq) + specs (der) al mismo nivel */}
           <div>
             <div className="flex items-start justify-between gap-3">
-              <div>
+              <div data-i18n-skip="true">
                 <div className="font-display text-3xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
-                  {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
+                  {listing.precio_cop ? (lang === "en" ? `${fmtUSD(listing.precio_cop, trm)} USD` : formatCOP(listing.precio_cop)) : "—"}
                 </div>
                 {listing.precio_cop && (
-                  <div className="text-xs text-[#6B5B45]">~${(listing.precio_cop / trm / 1000).toFixed(0)}k USD</div>
+                  <div className="text-xs text-[#6B5B45]">
+                    {lang === "en" ? formatCOP(listing.precio_cop) : `~${fmtUSD(listing.precio_cop, trm)} USD`}
+                  </div>
                 )}
               </div>
-              {specsInline && <div className="shrink-0 pt-1.5">{specsInline}</div>}
+              <div className="flex shrink-0 items-start gap-3 pt-1.5">
+                {specsInline}
+                {favButton}
+              </div>
             </div>
             <div className="mt-2 space-y-2">
               {badgesRow}

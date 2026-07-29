@@ -5,7 +5,7 @@ function norm(s: string): string {
 }
 import {
   ChevronDown, X, SlidersHorizontal, Search,
-  UtensilsCrossed, Wind, WashingMachine,
+  UtensilsCrossed, Wind, WashingMachine, Snowflake,
   ArrowUpDown, Building2, Users, Dumbbell, Waves, Car, DoorClosed,
   Shield, Camera, Trees, Baby, TrainFront, Sofa,
 } from "lucide-react";
@@ -763,6 +763,7 @@ const AMENIDADES_GROUPS: { id: string; label: string; items: AmenItem[] }[] = [
     items: [
       { key: "amoblado",         label: "Amoblado",          Icon: Sofa },
       { key: "cocina_integral",  label: "Cocina integral",   Icon: UtensilsCrossed },
+      { key: "aire_acondicionado", label: "Aire acondicionado", Icon: Snowflake },
       { key: "balcon",           label: "Balcón / Terraza",  Icon: Wind },
       { key: "lavanderia",       label: "Lavandería",        Icon: WashingMachine },
     ],

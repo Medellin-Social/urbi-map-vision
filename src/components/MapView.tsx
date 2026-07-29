@@ -501,6 +501,10 @@ export function MapView({
 
       map.on("click", "comunas-fill", (e) => {
         if (!e.features?.length) return;
+        // Si el click también cae sobre una burbuja de cluster, cede el paso al handler
+        // de "listings-mls-clusters" (zoom hacia el cluster) — ambos listeners disparan
+        // sobre el mismo click de mapbox, y la burbuja debe ganar sobre el drill-down.
+        if (map.queryRenderedFeatures(e.point, { layers: ["listings-mls-clusters"] }).length) return;
         const f = e.features[0];
         const cd = f.properties?.cd_comuna as number;
         const nombre = (f.properties?.nombre ?? "").toString();
@@ -694,22 +698,12 @@ export function MapView({
         },
       });
 
-      // Click en cluster → seleccionar la comuna/municipio bajo el punto y fitearla
-      // entera (las burbujas tapan los polígonos, así que el click cae aquí). Si no
-      // hay comuna bajo el punto, fallback: acercar hacia el cluster.
+      // Click en burbuja de cluster → siempre acercar zoom hacia ese punto (funciona
+      // igual en desktop y móvil, donde el tap se traduce a "click"). El drill-down a
+      // comuna/municipio queda a cargo del click directo sobre "comunas-fill" (abajo),
+      // que solo se dispara cuando el click no cae sobre una burbuja.
       map.on("click", "listings-mls-clusters", (e) => {
         if (!e.features?.length) return;
-        const cf = map.queryRenderedFeatures(e.point, { layers: ["comunas-fill"] });
-        if (cf.length) {
-          const props = cf[0].properties;
-          const nombre = (props?.nombre ?? "").toString();
-          const cd = props?.cd_comuna as number;
-          const isMunicipio = props?.is_municipio === true;
-          const full = staticFeaturesRef.current?.find((sf) => (sf.properties?.nombre ?? "") === nombre);
-          const bounds = featureBounds((full ?? cf[0]) as mapboxgl.MapboxGeoJSONFeature);
-          switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
-          return;
-        }
         const center = (e.features[0].geometry as GeoJSON.Point).coordinates as [number, number];
         map.easeTo({ center, zoom: Math.min(map.getZoom() + 2, 16) });
       });

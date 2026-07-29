@@ -1612,6 +1612,11 @@ const PHRASES: Array<[string, string]> = [
   // CTAs secundarios del drawer
   ["Simular esta propiedad", "Simulate this property"],
   ["Alertarme cuando baje de precio", "Alert me when the price drops"],
+  ["Comparar", "Compare"],
+  ["Ver fuente original →", "View original source →"],
+  ["Copiar link", "Copy link"],
+  ["Información publicada por fuentes externas y propietarios. Medellín Social no garantiza la exactitud de precios, disponibilidad ni detalles — verifica con el agente antes de decidir.",
+   "Information published by external sources and owners. Medellín Social does not guarantee the accuracy of prices, availability, or details — verify with the agent before deciding."],
   ["Score de inversión", "Investment score"],
   ["Score zona", "Zone score"],
   ["Desbloquea el análisis completo con MLS Pro", "Unlock the full analysis with MLS Pro"],
@@ -1662,8 +1667,22 @@ function translateString(input: string): string {
 /* ---- DOM walker ---- */
 const TRANSLATABLE_ATTRS = ["placeholder", "title", "aria-label", "alt"];
 
+// Opt-out for subtrees whose text is computed per-lang by React itself (e.g. a
+// COP/USD price swap) — the DOM-diff translator would otherwise cache whatever
+// it sees as "the Spanish original" and later restore stale/wrong text on toggle.
+const SKIP_ATTR = "data-i18n-skip";
+function skipFilter(node: Node): number {
+  if (node.nodeType === Node.ELEMENT_NODE && (node as Element).hasAttribute(SKIP_ATTR)) {
+    return NodeFilter.FILTER_REJECT;
+  }
+  return NodeFilter.FILTER_ACCEPT;
+}
+function isSkipped(t: Text): boolean {
+  return t.parentElement?.closest(`[${SKIP_ATTR}]`) != null;
+}
+
 function translateNode(root: Node) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, skipFilter);
   let node: Node | null = walker.currentNode;
   while (node) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -1698,7 +1717,7 @@ function translateNode(root: Node) {
 }
 
 function restoreNode(root: Node) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT);
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, skipFilter);
   let node: Node | null = walker.currentNode;
   while (node) {
     if (node.nodeType === Node.TEXT_NODE) {
@@ -1751,6 +1770,7 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
             m.addedNodes.forEach((n) => translateNode(n));
           } else if (m.type === "characterData") {
             const t = m.target as Text & { __es?: string; __t?: string };
+            if (isSkipped(t)) continue;
             const cur = t.nodeValue ?? "";
             // Fresh React write (not our echo) → re-cache as new ES source.
             if (t.__t !== cur) t.__es = cur;

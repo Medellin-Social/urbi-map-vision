@@ -27,6 +27,7 @@ _AMENIDADES_VARIANTS: dict[str, list[str]] = {
     "lavanderia":             ["Zona de lavanderia"],
     "conjunto_cerrado":       ["Conjunto cerrado"],
     "cocina_integral":        ["Cocina integral"],
+    "aire_acondicionado":     ["Aire acondicionado", "Ventilación aire acondicionado"],
     "salon_comunal":          ["Salón  comunal"],
     "zona_ninos":             ["Zona para niños"],
     "parqueadero_visitantes": ["Parqueadero visitantes"],
@@ -956,6 +957,7 @@ _VIEWPORT_EXTRA_WHERE = """\
 # it stays its own boolean param ($11), split out by the frontend.
 _AMENIDAD_PATTERNS: dict[str, list[str]] = {
     "cocina_integral":        ["cocina integral"],
+    "aire_acondicionado":     ["aire acondicionado", "a/c", "climatiz"],
     "balcon":                 ["balcón", "balcon", "terraza"],
     "lavanderia":             ["lavander"],
     "ascensor":               ["ascensor"],

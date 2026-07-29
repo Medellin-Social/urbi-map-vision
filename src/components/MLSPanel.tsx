@@ -13,11 +13,13 @@ import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { useTrm } from "@/hooks/useTrm";
 import { useIsPro, useIsAgente } from "@/components/LockedField";
 import { useLang } from "@/lib/i18n";
+import { useUnit, formatArea } from "@/hooks/useUnit";
 import { toast } from "sonner";
 
 type Props = {
   barrio: Neighborhood;
   listings: ApiListing[];
+  total?: number;
   isLoading: boolean;
   onBack: () => void;
   onListingSelect: (listing: ApiListing, screenX: number, screenY: number) => void;
@@ -155,6 +157,7 @@ function ListingCard({
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
   const trm = useTrm();
+  const { unit } = useUnit();
   const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
   const precioUsd = listing.precio_cop
     ? `~$${(listing.precio_cop / trm / 1000).toFixed(0)}k USD`
@@ -162,14 +165,16 @@ function ListingCard({
   const _pm2 = listing.precio_m2;
   const m2 =
     _pm2 && _pm2 > 0 && _pm2 < 50_000_000
-      ? `$${(_pm2 / 1_000_000).toFixed(1)}M/m²`
+      ? unit === "sqft"
+        ? `$${(_pm2 / 10.7639 / 1_000).toFixed(0)}k/ft²`
+        : `$${(_pm2 / 1_000_000).toFixed(1)}M/m²`
       : "N/A";
   const tipo = listing.tipo_operacion?.toUpperCase() ?? "—";
   const tipoInmueble = listing.tipo_inmueble ?? "";
   const specs = [
     listing.habitaciones ? `${listing.habitaciones} hab` : null,
     listing.banos ? `${listing.banos} baños` : null,
-    listing.area_m2 ? `${listing.area_m2}m²` : null,
+    listing.area_m2 ? formatArea(listing.area_m2, unit) : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -433,6 +438,7 @@ function toTitleCase(s: string): string {
 export function MLSPanel({
   barrio,
   listings,
+  total,
   isLoading,
   onBack,
   onListingSelect,
@@ -680,7 +686,12 @@ export function MLSPanel({
         {!isLoading && (
           <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
             <span className="text-xs font-medium text-muted-foreground">
-              {filtered.length} {lang === "en" ? (filtered.length === 1 ? "property" : "properties") : (filtered.length === 1 ? "propiedad" : "propiedades")}
+              {(() => {
+                const noLocalFilters = !premiumFilterActive && filters.scoreMin === null && filters.scoreMax === null
+                  && filters.yieldMin === null && filters.yieldMax === null;
+                const count = noLocalFilters && total != null ? total : filtered.length;
+                return `${count} ${lang === "en" ? (count === 1 ? "property" : "properties") : (count === 1 ? "propiedad" : "propiedades")}`;
+              })()}
             </span>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <ArrowUpDown className="h-3.5 w-3.5" />
