@@ -12,6 +12,7 @@ import {
 import { useIsPro } from "@/components/LockedField";
 import { useLang } from "@/lib/i18n";
 import { useTrm } from "@/hooks/useTrm";
+import { useUnit } from "@/hooks/useUnit";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
@@ -363,6 +364,52 @@ function areaLabel(f: SharedFilters): string {
   if (f.areaMax !== null) return `Hasta ${f.areaMax} m²`;
   if (f.areaMin !== null) return `Desde ${f.areaMin} m²`;
   return "Área";
+}
+
+// areaMin/areaMax en SharedFilters siempre están en m² (canónico para la API);
+// estas funciones solo convierten para mostrar/capturar en ft² cuando el toggle está en sqft.
+const M2_PER_FT2 = 10.7639;
+function m2ToDisplay(m2: number | null, unit: "m2" | "sqft"): number | null {
+  if (m2 === null) return null;
+  return unit === "sqft" ? Math.round(m2 * M2_PER_FT2) : m2;
+}
+function displayToM2(v: number | null, unit: "m2" | "sqft"): number | null {
+  if (v === null) return null;
+  return unit === "sqft" ? Math.round(v / M2_PER_FT2) : v;
+}
+
+// Sin esto, cada keystroke re-deriva el texto desde el m² canónico ya redondeado
+// (1000 ft² → 93 m² → 1001 ft²) y el número visible se corre bajo el dedo del usuario.
+// El texto tecleado manda hasta que cambia la unidad o el valor se resetea desde afuera.
+function useAreaFieldText(
+  m2Value: number | null,
+  unit: "m2" | "sqft",
+  onCommit: (m2: number | null) => void,
+) {
+  const lastM2 = useRef(m2Value);
+  const [text, setText] = useState<string>(() => m2ToDisplay(m2Value, unit)?.toString() ?? "");
+
+  useEffect(() => {
+    if (m2Value !== lastM2.current) {
+      lastM2.current = m2Value;
+      setText(m2ToDisplay(m2Value, unit)?.toString() ?? "");
+    }
+  }, [m2Value]);
+
+  useEffect(() => {
+    lastM2.current = m2Value;
+    setText(m2ToDisplay(m2Value, unit)?.toString() ?? "");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unit]);
+
+  const handleChange = (raw: string) => {
+    setText(raw);
+    const m2 = raw ? displayToM2(Number(raw), unit) : null;
+    lastM2.current = m2;
+    onCommit(m2);
+  };
+
+  return { text, handleChange };
 }
 
 function banosLabel(f: SharedFilters): string {
@@ -908,6 +955,10 @@ export function MapFilterBar({
   const isPro = useIsPro();
   const { lang } = useLang();
   const trm = useTrm();
+  const { unit } = useUnit();
+  const areaUnitLabel = unit === "sqft" ? "ft²" : "m²";
+  const areaMinField = useAreaFieldText(filters.areaMin, unit, (m2) => onFiltersChange({ areaMin: m2 }));
+  const areaMaxField = useAreaFieldText(filters.areaMax, unit, (m2) => onFiltersChange({ areaMax: m2 }));
   const [open, setOpen] = useState<DropdownId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -1289,10 +1340,10 @@ export function MapFilterBar({
 
         {/* Área */}
         <div style={{ marginBottom: 20 }}>
-          <span style={labelSm}>Área (m²)</span>
+          <span style={labelSm}>Área ({areaUnitLabel})</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <input type="number" placeholder="Mínima" value={filters.areaMin ?? ""} onChange={(e) => onFiltersChange({ areaMin: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
-            <input type="number" placeholder="Máxima" value={filters.areaMax ?? ""} onChange={(e) => onFiltersChange({ areaMax: e.target.value ? Number(e.target.value) : null })} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
+            <input type="number" placeholder="Mínima" value={areaMinField.text} onChange={(e) => areaMinField.handleChange(e.target.value)} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
+            <input type="number" placeholder="Máxima" value={areaMaxField.text} onChange={(e) => areaMaxField.handleChange(e.target.value)} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
           </div>
         </div>
 
@@ -1442,18 +1493,22 @@ export function MapFilterBar({
                 ✦ Solo Premium
               </button>
 
-              {/* Área m² */}
-              <span style={labelSm}>Área m²</span>
+              {/* Área */}
+              <span style={labelSm}>Área {areaUnitLabel}</span>
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
-                <NumInput
+                <input
+                  type="number"
                   placeholder="Mínimo"
-                  value={filters.areaMin}
-                  onChange={(v) => onFiltersChange({ areaMin: v })}
+                  value={areaMinField.text}
+                  onChange={(e) => areaMinField.handleChange(e.target.value)}
+                  style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", background: C.white, color: C.ink }}
                 />
-                <NumInput
+                <input
+                  type="number"
                   placeholder="Máximo"
-                  value={filters.areaMax}
-                  onChange={(v) => onFiltersChange({ areaMax: v })}
+                  value={areaMaxField.text}
+                  onChange={(e) => areaMaxField.handleChange(e.target.value)}
+                  style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", background: C.white, color: C.ink }}
                 />
               </div>
 

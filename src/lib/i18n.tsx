@@ -1370,6 +1370,7 @@ const PHRASES: Array<[string, string]> = [
   ["EDIFICIO Y CONJUNTO", "BUILDING & COMPLEX"],
   ["SEGURIDAD Y ENTORNO", "SAFETY & SURROUNDINGS"],
   ["Cocina integral", "Full kitchen"],
+  ["Aire acondicionado", "Air conditioning"],
   ["Balcón / Terraza", "Balcony / Terrace"],
   ["Lavandería", "Laundry"],
   ["Ascensor", "Elevator"],
