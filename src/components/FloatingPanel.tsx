@@ -41,6 +41,8 @@ import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { useTarget, TARGET_OPTIONS } from "@/contexts/TargetContext";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useLang } from "@/lib/i18n";
+import { useTrm } from "@/hooks/useTrm";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
 import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
 import type { ApiListing } from "@/lib/adapters";
@@ -1526,6 +1528,13 @@ function ValorizacionSection({ n }: { n: Neighborhood }) {
 
 function ListingCard({ l }: { l: ApiListing }) {
   const mc = l.relevancia_score != null ? matchColor(l.relevancia_score) : null;
+  const { lang } = useLang();
+  const trm = useTrm();
+  const cop = l.precio_cop ?? 0;
+  const usdVal = cop / trm;
+  const usdStr = cop ? `~${usdVal >= 1_000_000 ? `$${(usdVal / 1_000_000).toFixed(1)}M` : `$${Math.round(usdVal / 1_000)}k`} USD` : null;
+  const primary = lang === "en" && usdStr ? usdStr : formatCOP(cop);
+  const secondary = lang === "en" ? formatCOP(cop) : usdStr;
   return (
     <div style={{ borderRadius: 10, border: '1px solid rgb(184 164 138 / 55%)', background: 'rgba(255,255,255,0.6)', padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
@@ -1534,8 +1543,9 @@ function ListingCard({ l }: { l: ApiListing }) {
             {l.tipo_inmueble ?? "—"} · {l.tipo_operacion ?? "—"}
           </div>
           <div style={{ marginTop: 4, fontWeight: 800, fontSize: '1rem', color: '#14201d' }}>
-            {formatCOP(l.precio_cop ?? 0)}
+            {primary}
           </div>
+          {secondary && <div style={{ fontSize: 11, color: '#62736d' }}>{secondary}</div>}
           <div style={{ marginTop: 2, fontSize: 12, color: '#3d5a50' }}>
             {l.area_m2 != null ? `${l.area_m2} m²` : "—"}
             {l.habitaciones != null ? ` · ${l.habitaciones} hab` : ""}

@@ -511,7 +511,7 @@ export function ListingDetailContent({
                 </div>
                 {listing.precio_usd && (
                   <div className="mt-0.5 text-sm" style={{ color: '#6B5B45' }}>
-                    ~${(listing.precio_usd / 1000).toFixed(0)}k USD
+                    ~{listing.precio_usd >= 1_000_000 ? `$${(listing.precio_usd / 1_000_000).toFixed(1)}M` : `$${Math.round(listing.precio_usd / 1_000)}k`} USD
                   </div>
                 )}
               </div>

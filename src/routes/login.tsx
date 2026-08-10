@@ -9,16 +9,18 @@ export const Route = createFileRoute("/login")({
 });
 
 const K = {
-  paper:    "#FAF7F2",
-  surface:  "#F5F0E8",
+  paper:    "#FAF8F5",
+  surface:  "#F2ECE2",
   line:     "#E8E0D0",
-  ink:      "#1A1208",
-  muted:    "#6B5B45",
+  ink:      "#14201d",
+  muted:    "#62736d",
   tertiary: "#9B8B75",
   teal:     "#1D9E75",
   tealDeep: "#085041",
   coral:    "#D85A30",
+  coralLight: "#FAECE7",
   serif:    "'Fraunces', Georgia, serif",
+  manrope:  "'Manrope', system-ui, sans-serif",
   sans:     "'Inter', system-ui, sans-serif",
 } as const;
 
@@ -75,7 +77,7 @@ function LoginPage() {
         <div style={{ display: "flex", justifyContent: "flex-end" }}>
           <Link
             to="/forgot-password"
-            style={{ color: K.teal, fontSize: 13, fontFamily: K.sans, textDecoration: "none" }}
+            style={{ color: K.teal, fontSize: 13, fontFamily: K.manrope, fontWeight: 600, textDecoration: "none" }}
           >
             ¿Olvidaste tu contraseña?
           </Link>
@@ -84,9 +86,9 @@ function LoginPage() {
         <AuthButton disabled={login.isPending}>
           {login.isPending ? "Entrando…" : "Iniciar sesión"}
         </AuthButton>
-        <p style={{ textAlign: "center", fontSize: 14, fontFamily: K.sans, color: K.muted, margin: 0 }}>
+        <p style={{ textAlign: "center", fontSize: 13, fontFamily: K.manrope, color: K.muted, margin: 0 }}>
           ¿No tienes cuenta?{" "}
-          <Link to="/register" style={{ color: K.teal, textDecoration: "none" }}>
+          <Link to="/register" style={{ color: K.teal, fontWeight: 700, textDecoration: "none" }}>
             Regístrate
           </Link>
         </p>
@@ -117,59 +119,60 @@ export function AuthShell({
         .auth-btn:hover:not(:disabled) {
           background: #085041 !important;
         }
+        .auth-input::placeholder {
+          color: #9aada6;
+          font-weight: 400;
+        }
       `}</style>
-      <div style={{ display: "flex", minHeight: "100vh", background: K.paper, fontFamily: K.sans }}>
+      <div style={{ display: "flex", minHeight: "100vh", background: K.paper, fontFamily: K.manrope }}>
         {/* Left editorial column — desktop only */}
         <div
           className="hidden lg:flex"
           style={{
-            width: "50%",
-            background: `linear-gradient(135deg, ${K.tealDeep} 0%, ${K.ink} 100%)`,
+            width: "48%",
+            position: "relative",
             flexDirection: "column",
-            justifyContent: "center",
-            alignItems: "center",
-            padding: "48px 56px",
+            justifyContent: "flex-end",
+            padding: "56px 52px",
+            overflow: "hidden",
           }}
         >
-          <div style={{ maxWidth: 400, textAlign: "center" }}>
-            <div
-              style={{
-                fontFamily: K.serif,
-                fontSize: "2.4rem",
-                fontWeight: 900,
-                color: "#fff",
-                marginBottom: 24,
-                letterSpacing: "-0.5px",
-                lineHeight: 1.1,
-              }}
-            >
-              Medellín Social.
+          {/* Photo */}
+          <img
+            src="https://images.unsplash.com/photo-1611271689035-e01d1e8e87a2?auto=format&fit=crop&w=1200&q=80"
+            alt="Medellín"
+            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+          />
+          {/* Gradient overlay */}
+          <div style={{ position: "absolute", inset: 0, background: "linear-gradient(to top, rgba(8,30,22,.92) 0%, rgba(8,30,22,.55) 55%, rgba(20,32,29,.2) 100%)", zIndex: 1 }} />
+
+          {/* Content */}
+          <div style={{ position: "relative", zIndex: 2, maxWidth: 400 }}>
+            <div style={{ fontFamily: K.manrope, fontSize: ".62rem", fontWeight: 800, color: "rgba(255,255,255,.5)", textTransform: "uppercase", letterSpacing: "1.8px", marginBottom: 20 }}>
+              Medellín Social
             </div>
             {editorial && (
-              <p
-                style={{
-                  fontFamily: K.sans,
-                  fontSize: 16,
-                  color: "rgba(255,255,255,0.72)",
-                  lineHeight: 1.65,
-                  marginBottom: 48,
-                  whiteSpace: "pre-line",
-                }}
-              >
+              <p style={{
+                fontFamily: K.serif,
+                fontSize: "clamp(1.6rem, 2.8vw, 2.2rem)",
+                fontWeight: 900,
+                color: "#fff",
+                lineHeight: 1.15,
+                letterSpacing: "-0.5px",
+                marginBottom: 32,
+                whiteSpace: "pre-line",
+              }}>
                 {editorial}
               </p>
             )}
-            <p
-              style={{
-                fontFamily: K.sans,
-                fontSize: 13,
-                color: "rgba(255,255,255,0.52)",
-                letterSpacing: "0.02em",
-                margin: 0,
-              }}
-            >
-              54,000+ propiedades · 606 barrios · 12,000+ negocios
-            </p>
+            {/* Stats pills */}
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {["54K+ propiedades", "606 barrios", "12K+ negocios"].map(s => (
+                <span key={s} style={{ fontFamily: K.manrope, fontSize: ".68rem", fontWeight: 600, color: "rgba(255,255,255,.7)", background: "rgba(255,255,255,.1)", border: "1px solid rgba(255,255,255,.16)", padding: "4px 11px", borderRadius: 999 }}>
+                  {s}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
@@ -183,6 +186,7 @@ export function AuthShell({
             justifyContent: "center",
             padding: "48px 24px",
             position: "relative",
+            background: K.paper,
           }}
         >
           {/* Language toggle */}
@@ -197,30 +201,20 @@ export function AuthShell({
             </span>
           </div>
 
-          {/* Card */}
-          <div
-            style={{
-              width: "100%",
-              maxWidth: 420,
-              background: "#fff",
-              borderRadius: 12,
-              boxShadow: "0 2px 12px rgba(26,18,8,0.06)",
-              padding: 40,
-            }}
-          >
-            <h1
-              style={{
-                fontFamily: K.serif,
-                fontSize: 28,
-                fontWeight: 900,
-                color: K.ink,
-                margin: "0 0 6px 0",
-                lineHeight: 1.15,
-              }}
-            >
+          {/* Form area — no white card, form sits on paper */}
+          <div style={{ width: "100%", maxWidth: 400 }}>
+            <h1 style={{
+              fontFamily: K.serif,
+              fontSize: "clamp(1.7rem, 3.5vw, 2rem)",
+              fontWeight: 900,
+              color: K.ink,
+              margin: "0 0 8px 0",
+              lineHeight: 1.1,
+              letterSpacing: "-.5px",
+            }}>
               {title}
             </h1>
-            <p style={{ fontFamily: K.sans, fontSize: 14, color: K.muted, margin: "0 0 28px 0", lineHeight: 1.5 }}>
+            <p style={{ fontFamily: K.manrope, fontSize: 14, color: K.muted, margin: "0 0 36px 0", lineHeight: 1.6 }}>
               {subtitle}
             </p>
             {children}
@@ -233,13 +227,14 @@ export function AuthShell({
 
 export const inputStyle: React.CSSProperties = {
   width: "100%",
-  background: "#F5F0E8",
+  background: "#fff",
   border: "1px solid #E8E0D0",
-  borderRadius: 8,
-  padding: "12px 14px",
-  color: "#1A1208",
-  fontFamily: "'Inter', system-ui, sans-serif",
+  borderRadius: 10,
+  padding: "13px 16px",
+  color: "#14201d",
+  fontFamily: "'Manrope', system-ui, sans-serif",
   fontSize: 14,
+  fontWeight: 500,
   outline: "none",
   boxSizing: "border-box",
   transition: "border-color 0.15s, box-shadow 0.15s",
@@ -250,13 +245,13 @@ export function Field({ label, children }: { label: string; children: React.Reac
     <div>
       <div
         style={{
-          fontFamily: "'Inter', system-ui, sans-serif",
-          fontSize: 12,
-          fontWeight: 500,
-          color: "#6B5B45",
+          fontFamily: "'Manrope', system-ui, sans-serif",
+          fontSize: 11,
+          fontWeight: 700,
+          color: "#62736d",
           textTransform: "uppercase",
-          letterSpacing: "0.07em",
-          marginBottom: 6,
+          letterSpacing: "0.09em",
+          marginBottom: 7,
         }}
       >
         {label}
@@ -291,31 +286,26 @@ export function ErrorBanner({ message }: { message: string }) {
 function AuthLangToggle() {
   const { lang, toggle } = useLang();
   return (
-    <button
-      onClick={toggle}
-      title={lang === "es" ? "Switch to English" : "Cambiar a Español"}
-      style={{
-        display: "inline-flex",
-        alignItems: "center",
-        gap: 4,
-        borderRadius: 999,
-        border: `1px solid ${K.line}`,
-        background: "#fff",
-        padding: "4px 10px",
-        fontSize: 11,
-        fontWeight: 600,
-        fontFamily: K.sans,
-        cursor: "pointer",
-        color: K.ink,
-        boxShadow: "0 1px 4px rgba(26,18,8,0.06)",
-        transition: "border-color 0.15s",
-      }}
-    >
-      <span style={{ fontSize: 12 }}>🌐</span>
-      <span style={{ color: lang === "es" ? K.teal : K.tertiary }}>ES</span>
-      <span style={{ color: K.line, margin: "0 1px" }}>|</span>
-      <span style={{ color: lang === "en" ? K.teal : K.tertiary }}>EN</span>
-    </button>
+    <div style={{ display: "inline-flex", gap: 6 }}>
+      {(["es", "en"] as const).map(l => (
+        <button
+          key={l}
+          onClick={lang !== l ? toggle : undefined}
+          title={l === "es" ? "Español (Colombia)" : "English (USA)"}
+          style={{
+            borderRadius: 999,
+            border: `1.5px solid ${lang === l ? K.teal : K.line}`,
+            background: lang === l ? "#E1F5EE" : K.paper,
+            padding: "4px 8px",
+            cursor: lang === l ? "default" : "pointer",
+            fontSize: 18, lineHeight: 1,
+            transition: "border-color 0.15s, background 0.15s",
+          }}
+        >
+          {l === "es" ? "🇨🇴" : "🇺🇸"}
+        </button>
+      ))}
+    </div>
   );
 }
 
@@ -335,15 +325,17 @@ export function AuthButton({
         width: "100%",
         background: "#1D9E75",
         color: "#fff",
-        fontFamily: "'Inter', system-ui, sans-serif",
-        fontSize: 15,
-        fontWeight: 500,
+        fontFamily: "'Manrope', system-ui, sans-serif",
+        fontSize: 14,
+        fontWeight: 800,
+        letterSpacing: ".2px",
         border: "none",
-        borderRadius: 8,
-        padding: "12px",
+        borderRadius: 999,
+        padding: "14px",
         cursor: disabled ? "not-allowed" : "pointer",
         opacity: disabled ? 0.65 : 1,
         transition: "background 0.15s",
+        boxShadow: "0 4px 16px rgba(29,158,117,.25)",
       }}
     >
       {children}

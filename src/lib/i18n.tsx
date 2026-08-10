@@ -1819,20 +1819,27 @@ export function useLang() {
 }
 
 export function LanguageToggle({ className = "" }: { className?: string }) {
-  const { lang, toggle } = useLang();
+  const { lang, setLang } = useLang();
   return (
-    <button
-      onClick={toggle}
-      title={lang === "es" ? "Switch to English" : "Cambiar a Español"}
-      className={
-        "inline-flex items-center gap-1 rounded-full border border-border bg-surface/80 px-2.5 py-1 text-[11px] font-semibold backdrop-blur-md transition hover:border-primary/60 " +
-        className
-      }
-    >
-      <span>🌐</span>
-      <span className={lang === "es" ? "text-primary" : "text-muted-foreground"}>ES</span>
-      <span className="text-muted-foreground">|</span>
-      <span className={lang === "en" ? "text-primary" : "text-muted-foreground"}>EN</span>
-    </button>
+    <div className={"inline-flex gap-1 " + className}>
+      {(["es", "en"] as const).map(l => (
+        <button
+          key={l}
+          onClick={() => setLang(l)}
+          title={l === "es" ? "Español (Colombia)" : "English (USA)"}
+          className="rounded-full border transition"
+          style={{
+            border: `1.5px solid ${lang === l ? "rgba(29,158,117,0.8)" : "rgba(255,255,255,0.35)"}`,
+            background: lang === l ? "rgba(29,158,117,0.22)" : "rgba(255,255,255,0.1)",
+            padding: "3px 8px",
+            cursor: lang === l ? "default" : "pointer",
+            fontSize: 16,
+            lineHeight: 1,
+          }}
+        >
+          {l === "es" ? "🇨🇴" : "🇺🇸"}
+        </button>
+      ))}
+    </div>
   );
 }

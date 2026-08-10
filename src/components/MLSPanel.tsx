@@ -158,10 +158,16 @@ function ListingCard({
   const selected = isSelected(listing.id);
   const trm = useTrm();
   const { unit } = useUnit();
-  const precio = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
-  const precioUsd = listing.precio_cop
-    ? `~$${(listing.precio_cop / trm / 1000).toFixed(0)}k USD`
+  const { lang } = useLang();
+  const precioCOP = listing.precio_cop ? formatCOP(listing.precio_cop) : "—";
+  const precioUSD = listing.precio_cop
+    ? (() => {
+        const u = listing.precio_cop / trm;
+        return `~${u >= 1_000_000 ? `$${(u / 1_000_000).toFixed(1)}M` : `$${Math.round(u / 1_000)}k`} USD`;
+      })()
     : null;
+  const precio    = lang === "en" && precioUSD ? precioUSD : precioCOP;
+  const precioSub = lang === "en" ? precioCOP  : precioUSD;
   const _pm2 = listing.precio_m2;
   const m2 =
     _pm2 && _pm2 > 0 && _pm2 < 50_000_000
@@ -348,7 +354,7 @@ function ListingCard({
       </div>
 
       <div className="text-base font-bold leading-tight text-[#1A1208]">{precio}</div>
-      {precioUsd && <div className="text-[11px] text-[#6B5B45]">{precioUsd}</div>}
+      {precioSub && <div className="text-[11px] text-[#6B5B45]">{precioSub}</div>}
       {specs && <div className="mt-1 text-xs text-[#6B5B45]">{specs}</div>}
       <div className="text-[11px] text-[#6B5B45]">{m2}</div>
 
@@ -410,13 +416,15 @@ function ListingCard({
         )}
 
         <div className="flex items-center gap-1.5">
-          <button
-            onClick={(e) => { e.stopPropagation(); onSimular(); }}
-            className="rounded px-1.5 py-0.5 text-[10px] text-[#9B8B75] border border-[#E8E0D0] hover:text-[#1D9E75] hover:border-[#1D9E75]/40 transition"
-            title="Simular inversión"
-          >
-            Simular
-          </button>
+          {isRealtor && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSimular(); }}
+              className="rounded px-1.5 py-0.5 text-[10px] text-[#9B8B75] border border-[#E8E0D0] hover:text-[#1D9E75] hover:border-[#1D9E75]/40 transition"
+              title="Simular inversión"
+            >
+              Simular
+            </button>
+          )}
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
             className="text-base leading-none transition hover:scale-110"

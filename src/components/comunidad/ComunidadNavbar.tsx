@@ -299,7 +299,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                     cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
                   }}
                 >
-                  {l.toUpperCase()}
+                  {l === 'es' ? '🇨🇴 ES' : '🇺🇸 EN'}
                 </button>
               ))}
             </div>
@@ -406,7 +406,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                       cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
                     }}
                   >
-                    {l.toUpperCase()}
+                    {l === 'es' ? '🇨🇴 ES' : '🇺🇸 EN'}
                   </button>
                 ))}
               </div>

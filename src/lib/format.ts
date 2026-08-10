@@ -1,6 +1,6 @@
 export function formatCOP(n: number): string {
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B COP`;
-  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1)}M COP`;
+  const m = Math.round(n / 1_000_000);
+  if (n >= 1_000_000) return `$${m.toLocaleString("es-CO")}M COP`;
   if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K COP`;
   return `$${n.toLocaleString("es-CO")} COP`;
 }

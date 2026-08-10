@@ -92,20 +92,22 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
         )}
 
         {/* Language pill */}
-        <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+        <div style={{ display: 'flex', gap: 4 }}>
           {(['es', 'en'] as const).map(l => (
             <button
               key={l}
-              onClick={toggle}
+              onClick={() => lang !== l && toggle()}
+              title={l === 'es' ? 'Español (Colombia)' : 'English (USA)'}
               style={{
-                border: 'none',
-                background: lang === l ? K.amarillo : 'transparent',
-                color: lang === l ? K.ink : '#fff',
-                padding: '4px 10px', fontWeight: 700,
-                cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                border: `1.5px solid ${lang === l ? K.amarillo : 'rgba(255,255,255,0.35)'}`,
+                background: lang === l ? 'rgba(255,201,40,0.22)' : 'rgba(255,255,255,0.1)',
+                borderRadius: 999,
+                padding: '3px 8px',
+                cursor: lang === l ? 'default' : 'pointer',
+                fontSize: 16, lineHeight: 1,
               }}
             >
-              {l.toUpperCase()}
+              {l === 'es' ? '🇨🇴' : '🇺🇸'}
             </button>
           ))}
         </div>

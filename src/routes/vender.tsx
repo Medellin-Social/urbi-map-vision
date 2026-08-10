@@ -55,8 +55,7 @@ const K = {
 
 function fmtM(n: number | null | undefined): string {
   if (!n) return "—";
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
-  if (n >= 1_000_000) return `$${Math.round(n / 1_000_000)}M`;
+  if (n >= 1_000_000) return `$${Math.round(n / 1_000_000).toLocaleString("es-CO")}M`;
   return `$${n.toLocaleString("es-CO")}`;
 }
 
@@ -878,9 +877,6 @@ function ProCtaBlock({
           "El canon óptimo para no perder tiempo con el inmueble vacío",
         ];
 
-  const ctaHref = isLogged ? "/planes" : "/planes";
-  const ctaLabel = isLogged ? "Actualizar a MLS Pro →" : "Registrarme y suscribirme →";
-
   return (
     <div
       style={{
@@ -902,7 +898,7 @@ function ProCtaBlock({
             margin: 0,
           }}
         >
-          Con MLS Pro sabemos exactamente
+          Con tu Listing Destacado sabemos exactamente
         </p>
       </div>
 
@@ -929,8 +925,8 @@ function ProCtaBlock({
       </ul>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <Link
-          to="/planes"
+        <a
+          href="/publicar"
           style={{
             display: "inline-block",
             background: K.tealDeep,
@@ -942,10 +938,10 @@ function ProCtaBlock({
             textDecoration: "none",
           }}
         >
-          {ctaLabel}
-        </Link>
+          Publicar listing patrocinado →
+        </a>
         <p style={{ fontSize: 12, color: K.muted, margin: 0 }}>
-          Desde $79,000 COP/mes
+          Pago único · $1,000 USD por listing
         </p>
       </div>
     </div>
@@ -980,7 +976,7 @@ function ProAnalysisBlock({ intencion }: { intencion: "venta" | "arriendo" }) {
       </div>
       <p style={{ fontSize: 13, color: K.muted, margin: 0, lineHeight: 1.6 }}>
         {intencion === "venta"
-          ? "Tenés acceso a los percentiles p25/p50/p75 de precio por m², tiempo histórico de venta por rango de precio y recomendaciones de posicionamiento para compradores internacionales."
+          ? "Ves en qué rango de precios cae tu propiedad dentro del barrio, cuánto tardan en venderse propiedades similares y cómo posicionarla para compradores internacionales."
           : "Tenés acceso al comparador Airbnb vs renta larga vs renta media, el canon óptimo calculado con ocupación real del barrio y el perfil de arrendatario de mayor retorno."}
       </p>
     </div>
@@ -1001,7 +997,7 @@ function ProTeaserInline({
       ? [
           "Tiempo estimado de venta según precio y barrio",
           "Posicionamiento para inversores que pagan en USD",
-          "Percentiles p25/p50/p75 reales por zona",
+          "Rango de precios reales en tu zona: qué se vende barato, al precio típico y caro",
         ]
       : [
           "Comparador Airbnb vs renta larga vs nómadas digitales",
@@ -1031,8 +1027,8 @@ function ProTeaserInline({
           }}
         >
           {intencion === "venta"
-            ? "MLS Pro te dice cuánto vale y cuánto tarda"
-            : "MLS Pro maximiza tu retorno mensual"}
+            ? "Tu Listing Destacado te dice cuánto vale y cuánto tarda"
+            : "Tu Listing Destacado maximiza tu retorno mensual"}
         </p>
       </div>
       <ul style={{ listStyle: "none", padding: 0, margin: "0 0 16px 26px" }}>
@@ -1057,8 +1053,8 @@ function ProTeaserInline({
         ))}
       </ul>
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
-        <Link
-          to="/planes"
+        <a
+          href="/publicar"
           style={{
             display: "inline-block",
             background: K.tealDeep,
@@ -1070,10 +1066,10 @@ function ProTeaserInline({
             textDecoration: "none",
           }}
         >
-          {isLogged ? "Actualizar a MLS Pro →" : "Ver planes Pro →"}
-        </Link>
+          Publicar con destacado →
+        </a>
         <p style={{ fontSize: 11, color: K.muted, margin: 0 }}>
-          Desde $79,000 COP/mes
+          Pago único · $1,000 USD por listing
         </p>
       </div>
     </div>

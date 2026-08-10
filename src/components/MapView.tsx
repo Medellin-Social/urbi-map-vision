@@ -68,6 +68,9 @@ type Props = {
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   activeTab?: MapTab;
+  onBarrioClick?: (id: number, nombre: string, lat: number, lng: number) => void;
+  flyToBarriosRef?: React.MutableRefObject<(() => void) | null>;
+  cooperativeGestures?: boolean;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -101,11 +104,17 @@ function featureBounds(feat: mapboxgl.MapboxGeoJSONFeature): mapboxgl.LngLatBoun
   return bounds;
 }
 
+function featureCentroid(feat: mapboxgl.MapboxGeoJSONFeature): [number, number] {
+  const bounds = featureBounds(feat);
+  const c = bounds.getCenter();
+  return [c.lat, c.lng];
+}
+
 // ── Popup HTML for individual listing ───────────────────────────────────────
 
 function _fmtCOP(n: number): string {
-  if (n >= 1_000_000_000) return `$${(n / 1_000_000_000).toFixed(2)}B`;
-  return `$${(n / 1_000_000).toFixed(0)}M`;
+  const m = Math.round(n / 1_000_000);
+  return `$${m.toLocaleString("es-CO")}M`;
 }
 
 function _fmtM2(n: number): string {
@@ -195,7 +204,7 @@ function buildListingPopupHTML(
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tipoBadge}${inmBadge}</div>
   <div style="color:#9B8B75;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
   ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#1A1208;">${_fmtCOP(precio_cop)} COP</div>` : ""}
-  ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~$${(precio_usd/1000).toFixed(0)}k USD</div>` : ""}
+  ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
   ${specs       ? `<div style="font-size:12px;color:#6B5B45;margin:6px 0;">${specs}</div>` : ""}
   ${precio_m2   ? `<div style="font-size:11px;color:#9B8B75;">Precio/m²: <strong style="color:#1A1208;">${_fmtM2(precio_m2)}</strong></div>` : ""}
   ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Mediana zona: <strong style="color:#1A1208;">${_fmtM2(mediana)}</strong></div>` : ""}
@@ -234,6 +243,9 @@ export function MapView({
   onListingDoubleClickFromMap,
   activeBarrioName,
   activeTab,
+  onBarrioClick,
+  flyToBarriosRef,
+  cooperativeGestures = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -277,6 +289,8 @@ export function MapView({
   useEffect(() => { onAutoSelectBarrioRef.current = onAutoSelectBarrio; }, [onAutoSelectBarrio]);
   const onAutoSelectComunaRef = useRef(onAutoSelectComuna);
   useEffect(() => { onAutoSelectComunaRef.current = onAutoSelectComuna; }, [onAutoSelectComuna]);
+  const onBarrioClickRef = useRef(onBarrioClick);
+  useEffect(() => { onBarrioClickRef.current = onBarrioClick; }, [onBarrioClick]);
 
 
   const riskRef = useRef(risk);
@@ -347,6 +361,41 @@ export function MapView({
     };
   });
 
+  // Exponer flyToBarrios al padre via ref
+  useEffect(() => {
+    if (!flyToBarriosRef) return;
+    flyToBarriosRef.current = () => {
+      const map = mapRef.current;
+      if (!map || !mapLoadedRef.current) return;
+
+      // Poblar source con polígonos de barrio (normalmente solo se hace en mapView=listings)
+      const src = map.getSource("barrios-mls") as mapboxgl.GeoJSONSource | undefined;
+      if (src) {
+        const feats = barriosRef.current
+          .filter((b) => b.geometry && b.barrio_id < _REAL_ID_MAX)
+          .map((b) => ({
+            type: "Feature" as const,
+            id: b.barrio_id,
+            geometry: b.geometry as GeoJSON.Geometry,
+            properties: { barrio_id: b.barrio_id, nombre: b.nombre ?? "", cd_comuna: b.cd_comuna ?? null },
+          }));
+        src.setData({ type: "FeatureCollection", features: feats } as GeoJSON.FeatureCollection);
+      }
+
+      // Mostrar capas de barrio, ocultar fill de comunas
+      const setVis = (id: string, v: "visible" | "none") => {
+        if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", v);
+      };
+      setVis("barrios-mls-fill", "visible");
+      setVis("barrios-mls-line", "visible");
+      setVis("barrios-mls-label", "visible");
+      setVis("comunas-fill", "none");
+      setVis("comunas-label", "none");
+
+      map.flyTo({ center: [-75.5812, 6.2442], zoom: POLYGON_TIER_ZOOM + 0.5, duration: 800 });
+    };
+  });
+
   // ── Inicialización del mapa ──────────────────────────────────────────────────
 
   useEffect(() => {
@@ -366,6 +415,7 @@ export function MapView({
       pitch: isMobile ? 0 : 35,
       bearing: isMobile ? 0 : -10,
       antialias: true,
+      cooperativeGestures,
     });
     mapRef.current = map;
 
@@ -581,6 +631,13 @@ export function MapView({
       map.on("click", "barrios-mls-fill", (e) => {
         if (!e.features?.length) return;
         map.fitBounds(featureBounds(e.features[0]), { padding: 60, maxZoom: 15, duration: 400 });
+        const feat = e.features[0];
+        const barrioId = typeof feat.id === "number" ? feat.id : Number(feat.id);
+        const nombre = (feat.properties?.nombre as string | null) ?? "";
+        if (!isNaN(barrioId) && nombre) {
+          const [lat, lng] = featureCentroid(feat);
+          onBarrioClickRef.current?.(barrioId, nombre, lat, lng);
+        }
       });
 
       // ── CAPA MLS: listings del barrio seleccionado (Vista 2) ─────────────────

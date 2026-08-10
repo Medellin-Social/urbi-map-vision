@@ -107,116 +107,95 @@ function groupMunicipios(allBarrios?: BarrioOption[]): ComunaGroup[] {
   return [...m.values()].sort((a, b) => a.nombre.localeCompare(b.nombre));
 }
 
-/** Filtro cascada: Todo → comunas Medellín / municipios Valle de Aburrá → barrio. */
-function ZonaCascader({ allBarrios, activeComunaCd, activeMunicipio, onComunaSelect, onBarrioNavigate }: {
+/** Dos filtros independientes: [Comunas ▾] [Barrios ▾] */
+function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, onComunaSelect, onBarrioNavigate }: {
   allBarrios?: BarrioOption[];
   activeComunaCd?: number | null;
   activeMunicipio?: string | null;
   onComunaSelect?: (cd: number | null, nombre: string | null, municipio?: string | null) => void;
   onBarrioNavigate?: (opt: BarrioOption) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const ref = useRef<HTMLButtonElement>(null);
+  const comunas       = useMemo(() => groupComunas(allBarrios),    [allBarrios]);
+  const municipioGrps = useMemo(() => groupMunicipios(allBarrios), [allBarrios]);
 
-  useEffect(() => {
-    if (!open) return;
-    const h = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node) &&
-          !(e.target as Element)?.closest?.("[data-zona-dropdown]")) setOpen(false);
-    };
-    document.addEventListener("mousedown", h);
-    return () => document.removeEventListener("mousedown", h);
-  }, [open]);
-
-  const comunas = useMemo(() => groupComunas(allBarrios), [allBarrios]);
-  const municipioGroups = useMemo(() => groupMunicipios(allBarrios), [allBarrios]);
-
-  const active: ComunaGroup | null =
+  const activeGroup: ComunaGroup | null =
     activeComunaCd != null ? (comunas.find((c) => c.cd === activeComunaCd) ?? null) :
-    activeMunicipio ? (municipioGroups.find((m) => m.municipio === activeMunicipio) ?? null) :
+    activeMunicipio ? (municipioGrps.find((m) => m.municipio === activeMunicipio) ?? null) :
     null;
-  const isSelected = !!active || !!activeMunicipio;
-  const label = active ? titleCase(active.nombre) : activeMunicipio ? titleCase(activeMunicipio) : "Toda la ciudad";
 
-  const openIt = () => { setRect(ref.current?.getBoundingClientRect() ?? null); setOpen((o) => !o); };
+  const comunaValue =
+    activeComunaCd != null ? String(activeComunaCd) :
+    activeMunicipio ? `mun:${activeMunicipio}` : "";
 
-  const itemStyle = (sel = false): React.CSSProperties => ({
-    display: "block", width: "100%", textAlign: "left", background: sel ? "#E1F5EE" : "none",
-    border: "none", cursor: "pointer", padding: "8px 12px", fontSize: 13,
-    color: sel ? "#085041" : C.ink, borderRadius: 8, fontWeight: sel ? 600 : 400,
+  const selectStyle = (active: boolean): React.CSSProperties => ({
+    height: 32, padding: "0 24px 0 10px", appearance: "none" as const,
+    border: `1px solid ${active ? C.teal : C.border}`, borderRadius: 8,
+    background: C.white,
+    color: active ? C.tealDeep : C.ink,
+    fontSize: 12, fontWeight: active ? 600 : 500,
+    cursor: "pointer", outline: "none",
+    backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%236B5B45' stroke-width='2.5'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E")`,
+    backgroundRepeat: "no-repeat",
+    backgroundPosition: "right 7px center",
+    minWidth: 0, maxWidth: 160,
   });
 
+  const handleComuna = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const v = e.target.value;
+    if (!v) { onComunaSelect?.(null, null); return; }
+    if (v.startsWith("mun:")) {
+      const mun = v.slice(4);
+      const g = municipioGrps.find((m) => m.municipio === mun);
+      onComunaSelect?.(null, g?.nombre ?? mun, mun);
+    } else {
+      const cd = Number(v);
+      const g = comunas.find((c) => c.cd === cd);
+      onComunaSelect?.(cd, g?.nombre ?? null);
+    }
+  };
+
+  const barriosDeZona = activeGroup
+    ? activeGroup.barrios.slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
+    : [];
+
   return (
-    <div style={{ position: "relative", flexShrink: 0 }}>
-      <button
-        ref={ref}
-        onClick={openIt}
-        style={{
-          display: "flex", alignItems: "center", gap: 5, height: 32, padding: "0 11px",
-          border: `1px solid ${isSelected ? C.teal : C.border}`, borderRadius: 8,
-          background: isSelected ? "#E1F5EE" : C.white, color: isSelected ? C.tealDeep : C.ink,
-          fontSize: 12, fontWeight: isSelected ? 600 : 500, cursor: "pointer", whiteSpace: "nowrap",
-        }}
-      >
-        {label}
-        <ChevronDown size={13} style={{ opacity: 0.7 }} />
-      </button>
-      {open && rect && (
-        <div
-          data-zona-dropdown
-          style={{
-            position: "fixed", top: rect.bottom + 6, left: rect.left, zIndex: 200,
-            width: 240, maxHeight: 340, overflowY: "auto",
-            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
-            boxShadow: "0 12px 32px rgba(26,18,8,0.16)", padding: 6,
-          }}
-        >
-          {!active ? (
-            <>
-              <button style={itemStyle(activeComunaCd == null && !activeMunicipio)} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
-                Toda la ciudad
-              </button>
-              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Comunas Medellín</div>
-              {comunas.map((c) => (
-                <button key={c.cd} style={itemStyle()} onClick={() => onComunaSelect?.(c.cd as number, c.nombre)}>
-                  {titleCase(c.nombre)}
-                </button>
+    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+      {/* Comunas */}
+      <div style={{ position: "relative" }}>
+        <select value={comunaValue} onChange={handleComuna} style={selectStyle(!!comunaValue)}>
+          <option value="">Toda la ciudad</option>
+          <optgroup label="Comunas Medellín">
+            {comunas.map((c) => (
+              <option key={c.cd} value={String(c.cd)}>{titleCase(c.nombre)}</option>
+            ))}
+          </optgroup>
+          {municipioGrps.length > 0 && (
+            <optgroup label="Otros municipios">
+              {municipioGrps.map((g) => (
+                <option key={g.municipio} value={`mun:${g.municipio}`}>{titleCase(g.nombre)}</option>
               ))}
-              {municipioGroups.length > 0 && (
-                <>
-                  <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Otros municipios</div>
-                  {municipioGroups.map((g) => (
-                    <button key={g.municipio} style={itemStyle()} onClick={() => onComunaSelect?.(null, g.nombre, g.municipio)}>
-                      {titleCase(g.nombre)}
-                    </button>
-                  ))}
-                </>
-              )}
-            </>
-          ) : (
-            <>
-              <button
-                onClick={() => onComunaSelect?.(null, null)}
-                style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", cursor: "pointer", padding: "6px 12px", fontSize: 12, fontWeight: 600, color: C.teal }}
-              >
-                ‹ {active.municipio ? "Municipios" : "Comunas"}
-              </button>
-              {/* "Toda la ciudad" siempre a 1 click, aun con comuna activa */}
-              <button style={itemStyle()} onClick={() => { onComunaSelect?.(null, null); setOpen(false); }}>
-                Toda la ciudad
-              </button>
-              <button style={itemStyle(true)} onClick={() => setOpen(false)}>
-                Toda {titleCase(active.nombre)}
-              </button>
-              <div style={{ padding: "6px 12px 4px", fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: C.muted }}>Barrios</div>
-              {active.barrios.slice().sort((a, b) => a.nombre.localeCompare(b.nombre)).map((b) => (
-                <button key={b.id} style={itemStyle()} onClick={() => { onBarrioNavigate?.(b); setOpen(false); }}>
-                  {titleCase(b.nombre)}
-                </button>
-              ))}
-            </>
+            </optgroup>
           )}
+        </select>
+      </div>
+
+      {/* Barrios — solo aparece cuando hay una zona activa */}
+      {activeGroup && barriosDeZona.length > 0 && (
+        <div style={{ position: "relative" }}>
+          <select
+            defaultValue=""
+            onChange={(e) => {
+              const b = barriosDeZona.find((x) => String(x.id) === e.target.value);
+              if (b) onBarrioNavigate?.(b);
+              e.target.value = "";
+            }}
+            style={selectStyle(false)}
+          >
+            <option value="">Todo {titleCase(activeGroup.nombre)}</option>
+            {barriosDeZona.map((b) => (
+              <option key={b.id} value={String(b.id)}>{titleCase(b.nombre)}</option>
+            ))}
+          </select>
         </div>
       )}
     </div>
@@ -244,7 +223,7 @@ const TIPO_OPTIONS = [
   { value: "bodega",        label: "Bodega" },
 ];
 
-type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
+type DropdownId = "precio" | "area" | "habBanos" | "tipo" | "filtros" | "amenidades";
 
 function countActive(f: SharedFilters): number {
   let n = 0;
@@ -320,11 +299,12 @@ function fmtCOPRent(v: number): string {
   return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
 }
 
-// VENTA: siempre en millones (nunca K); billones como B. <10M con 1 decimal.
+// VENTA: siempre en millones. "B" no existe — en Colombia billón = 10^12.
+// ≥1,000M → "$1.500M" (punto de miles para legibilidad).
 function fmtCOPBuy(v: number): string {
-  if (v >= 1_000_000_000) return `$${(v / 1_000_000_000).toFixed(1).replace(/\.0$/, "")}B`;
+  const m = Math.round(v / 1_000_000);
   if (v < 10_000_000) return `$${(v / 1_000_000).toFixed(1).replace(/\.0$/, "")}M`;
-  return `$${Math.round(v / 1_000_000)}M`;
+  return `$${m.toLocaleString("es-CO")}M`;
 }
 
 // USD label (own thresholds): <$1k exact, <$1M in k, >=$1M in M.
@@ -1061,8 +1041,7 @@ export function MapFilterBar({
   // ── Desktop pill row ───────────────────────────────────────────────────────
   const habBanosActive = filters.habitaciones !== null || filters.banos !== null;
   const filtrosCount = [
-    areaActive,
-    isRent  && (filters.estrato?.length ?? 0) > 0,
+    (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
     filters.tipoInmueble !== null,
     filters.soloPromium,
@@ -1111,8 +1090,8 @@ export function MapFilterBar({
         )}
       </div>
 
-      {/* Zona: cascader Comuna → Barrio (entre buscador y precio) */}
-      <ZonaCascader
+      {/* Zona: 2 filtros separados — Comunas | Barrios */}
+      <ZonaDosFiltros
         allBarrios={allBarrios}
         activeComunaCd={activeComunaCd}
         activeMunicipio={activeMunicipio}
@@ -1134,6 +1113,42 @@ export function MapFilterBar({
         />
       </div>
 
+      {/* Área */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <FilterPill
+          label={areaLabel(filters)}
+          active={areaActive}
+          onClear={areaActive ? () => onFiltersChange({ areaMin: null, areaMax: null }) : undefined}
+          onClick={(a) => toggle("area", a)}
+          isOpen={open === "area"}
+        />
+        {open === "area" && (
+          <div style={{
+            position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
+            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
+            boxShadow: "0 12px 32px rgba(26,18,8,0.14)", padding: 16, minWidth: 220,
+          }}>
+            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 10 }}>
+              Área ({areaUnitLabel})
+            </span>
+            <div style={{ display: "flex", gap: 8 }}>
+              <input
+                type="number" placeholder="Mínima"
+                value={areaMinField.text}
+                onChange={(e) => areaMinField.handleChange(e.target.value)}
+                style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
+              />
+              <input
+                type="number" placeholder="Máxima"
+                value={areaMaxField.text}
+                onChange={(e) => areaMaxField.handleChange(e.target.value)}
+                style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
+              />
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* Habitaciones y Baños */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
@@ -1150,7 +1165,7 @@ export function MapFilterBar({
         <FilterPill
           label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null, soloPromium: false }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null, soloPromium: false }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1338,15 +1353,6 @@ export function MapFilterBar({
           </button>
         </div>
 
-        {/* Área */}
-        <div style={{ marginBottom: 20 }}>
-          <span style={labelSm}>Área ({areaUnitLabel})</span>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input type="number" placeholder="Mínima" value={areaMinField.text} onChange={(e) => areaMinField.handleChange(e.target.value)} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
-            <input type="number" placeholder="Máxima" value={areaMaxField.text} onChange={(e) => areaMaxField.handleChange(e.target.value)} style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }} />
-          </div>
-        </div>
-
         {activeTab === "buy" && (
           <>
             {/* Baños */}
@@ -1512,36 +1518,32 @@ export function MapFilterBar({
                 />
               </div>
 
-              {/* Estrato — solo arriendo */}
-              {isRent && (
-                <>
-                  <span style={labelSm}>Estrato</span>
-                  <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
-                    {[1, 2, 3, 4, 5, 6].map((e) => {
-                      const active = (filters.estrato ?? []).includes(e);
-                      return (
-                        <button
-                          key={e}
-                          onClick={() => {
-                            const cur = filters.estrato ?? [];
-                            const next = active ? cur.filter((x) => x !== e) : [...cur, e];
-                            onFiltersChange({ estrato: next.length === 0 ? null : next });
-                          }}
-                          style={{
-                            width: 36, height: 32, borderRadius: 8,
-                            border: `1.5px solid ${active ? C.teal : C.border}`,
-                            background: active ? C.teal : "transparent",
-                            color: active ? "#fff" : C.ink,
-                            fontSize: 12, fontWeight: 700, cursor: "pointer",
-                          }}
-                        >
-                          {e}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </>
-              )}
+              {/* Estrato */}
+              <span style={labelSm}>Estrato</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap" }}>
+                {[1, 2, 3, 4, 5, 6].map((e) => {
+                  const active = (filters.estrato ?? []).includes(e);
+                  return (
+                    <button
+                      key={e}
+                      onClick={() => {
+                        const cur = filters.estrato ?? [];
+                        const next = active ? cur.filter((x) => x !== e) : [...cur, e];
+                        onFiltersChange({ estrato: next.length === 0 ? null : next });
+                      }}
+                      style={{
+                        width: 36, height: 32, borderRadius: 8,
+                        border: `1.5px solid ${active ? C.teal : C.border}`,
+                        background: active ? C.teal : "transparent",
+                        color: active ? "#fff" : C.ink,
+                        fontSize: 12, fontWeight: 700, cursor: "pointer",
+                      }}
+                    >
+                      {e}
+                    </button>
+                  );
+                })}
+              </div>
 
               {/* Tiempo en mercado */}
               <span style={labelSm}>{isRent ? "Tiempo publicado" : "Tiempo en mercado"}</span>

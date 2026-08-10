@@ -20,6 +20,7 @@ import {
   type VisitaSolicitud,
 } from "@/lib/realtorApi";
 import { toast } from "sonner";
+import { GHL, ghlRedirect } from "@/config/ghl";
 import {
   useAceptarAsignado,
   useActualizarVisita,
@@ -1554,9 +1555,15 @@ function ZonasCompraTab() {
 
   const comprar = useMutation({
     mutationFn: async (body: { zona_nivel: string; zona_codigo: string; meses: number }) => {
+      const ghlUrl = body.zona_nivel === "comuna" ? GHL.agente_comuna : GHL.agente_barrio;
+      if (ghlUrl) {
+        ghlRedirect(ghlUrl, { nivel: body.zona_nivel, zona: body.zona_codigo, meses: body.meses });
+        return;
+      }
+      // Fallback: pasarela existente
       const r = await apiFetch<{ checkout_url?: string; modo?: string }>(API_ENDPOINTS.zonasCheckout, { method: "POST", body: JSON.stringify(body) });
-      if (r.checkout_url) { window.location.href = r.checkout_url; return; }  // pasarela real
-      await apiFetch(API_ENDPOINTS.zonasConfirmarSimulado, { method: "POST", body: JSON.stringify(body) });  // dev
+      if (r.checkout_url) { window.location.href = r.checkout_url; return; }
+      await apiFetch(API_ENDPOINTS.zonasConfirmarSimulado, { method: "POST", body: JSON.stringify(body) });
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["realtor", "perfil"] });

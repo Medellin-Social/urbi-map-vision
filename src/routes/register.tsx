@@ -93,9 +93,9 @@ function RegisterPage() {
         <AuthButton disabled={register.isPending}>
           {register.isPending ? "Creando cuenta…" : "Crear cuenta →"}
         </AuthButton>
-        <p style={{ textAlign: "center", fontSize: 14, fontFamily: "'Inter', system-ui, sans-serif", color: "#6B5B45", margin: 0 }}>
+        <p style={{ textAlign: "center", fontSize: 13, fontFamily: "'Manrope', system-ui, sans-serif", color: "#62736d", margin: 0 }}>
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" style={{ color: "#1D9E75", textDecoration: "none" }}>
+          <Link to="/login" style={{ color: "#1D9E75", fontWeight: 700, textDecoration: "none" }}>
             Inicia sesión
           </Link>
         </p>

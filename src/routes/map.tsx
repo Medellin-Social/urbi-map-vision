@@ -246,12 +246,26 @@ function MapPageInner() {
   });
 
   // Read ?listing=X from URL on mount → open modal automatically
+  // Read ?lat=X&lng=Y&zoom=Z → fly to position once map loads
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const lid = params.get("listing");
     if (lid) {
       const id = Number(lid);
       if (!Number.isNaN(id)) setListingDetailId(id);
+    }
+    const lat = Number(params.get("lat"));
+    const lng = Number(params.get("lng"));
+    const zoom = Number(params.get("zoom") ?? "14");
+    if (lat && lng) {
+      const tryFly = (attempts = 0) => {
+        if (flyToListingRef.current) {
+          flyToListingRef.current(lat, lng, zoom);
+        } else if (attempts < 20) {
+          setTimeout(() => tryFly(attempts + 1), 200);
+        }
+      };
+      tryFly();
     }
   }, []);
 

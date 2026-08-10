@@ -126,14 +126,22 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
 
               <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
                 <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Idioma</span>
-                <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", marginLeft: "auto" }}>
+                <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
                   {(["es", "en"] as const).map((l) => (
                     <button
                       key={l}
-                      onClick={toggle}
-                      style={{ border: "none", background: lang === l ? C.teal : "transparent", color: lang === l ? "#fff" : C.muted, padding: "3px 10px", fontWeight: 700, cursor: "pointer", fontSize: 11 }}
+                      onClick={() => lang !== l && toggle()}
+                      title={l === "es" ? "Español (Colombia)" : "English (USA)"}
+                      style={{
+                        border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
+                        background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                        borderRadius: 999,
+                        padding: "3px 8px",
+                        cursor: lang === l ? "default" : "pointer",
+                        fontSize: 18, lineHeight: 1,
+                      }}
                     >
-                      {l.toUpperCase()}
+                      {l === "es" ? "🇨🇴" : "🇺🇸"}
                     </button>
                   ))}
                 </div>
@@ -291,20 +299,22 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       {/* Right controls */}
       <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
         {/* Language */}
-        <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden" }}>
+        <div style={{ display: "flex", gap: 4 }}>
           {(["es", "en"] as const).map((l) => (
             <button
               key={l}
-              onClick={toggle}
+              onClick={() => lang !== l && toggle()}
+              title={l === "es" ? "Español (Colombia)" : "English (USA)"}
               style={{
-                border: "none",
-                background: lang === l ? C.teal : "transparent",
-                color: lang === l ? "#fff" : C.muted,
-                padding: "3px 9px", fontWeight: 700,
-                cursor: "pointer", fontSize: 11,
+                border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
+                background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                borderRadius: 999,
+                padding: "3px 8px",
+                cursor: lang === l ? "default" : "pointer",
+                fontSize: 16, lineHeight: 1,
               }}
             >
-              {l.toUpperCase()}
+              {l === "es" ? "🇨🇴" : "🇺🇸"}
             </button>
           ))}
         </div>

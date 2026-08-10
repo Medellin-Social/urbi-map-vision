@@ -1,8 +1,9 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useState } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { MapView } from '@/components/MapView'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
-import { useBarrio } from '@/components/comunidad/BarrioContext'
+import { useBarrio, BARRIOS } from '@/components/comunidad/BarrioContext'
+import { useIsMobile } from '@/hooks/use-mobile'
 import { useDeals } from '@/hooks/useDeals'
 import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
@@ -18,12 +19,14 @@ export const Route = createFileRoute('/')({
 })
 
 const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
+  paper: '#FAF8F5', surface: '#F2ECE2', line: '#e9e4d8',
   ink: '#14201d', muted: '#62736d',
   teal: '#1D9E75', tealDeep: '#085041',
   coral: '#D85A30', coralLight: '#FAECE7',
   amarillo: '#ffc928', rojo: '#e63148',
   serif: "'Fraunces', Georgia, serif" as const,
+  lora: "'Lora', Georgia, serif" as const,
+  manrope: "'Manrope', system-ui, sans-serif" as const,
 }
 
 const CATEGORIA_LABELS: Record<string, string> = {
@@ -84,6 +87,97 @@ const CATEGORIA_EMOJI: Record<string, string> = {
   yoga: '🧘',
 }
 
+type MapPhase = 'chooser' | 'barrios' | 'barrio_action'
+
+function toSlug(nombre: string): string {
+  return nombre
+    .toLowerCase()
+    .normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/[^a-z0-9-]/g, '')
+}
+
+function barrioSlug(id: number, nombre: string): string {
+  const found = BARRIOS.find((b) => b.barrio_id === id)
+  return found?.slug ?? toSlug(nombre)
+}
+
+type PickedBarrio = { id: number; nombre: string; slug: string; lat: number; lng: number }
+
+function HeroOverlay({ phase, barrio, onChoose, onClose }: {
+  phase: MapPhase
+  barrio: PickedBarrio | null
+  onChoose: (choice: 'barrios' | 'comunidad') => void
+  onClose: () => void
+}) {
+  const btnBase: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 6,
+    padding: '10px 20px', borderRadius: 999, border: 'none',
+    fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
+    transition: 'opacity .15s',
+  }
+
+  if (phase === 'chooser') {
+    return (
+      <div style={{
+        position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+        display: 'flex', gap: 10, zIndex: 10,
+      }}>
+        <button style={{ ...btnBase, background: K.teal, color: '#fff' }}
+          onClick={() => onChoose('barrios')}>
+          🗺 Ver barrios
+        </button>
+        <button style={{ ...btnBase, background: K.ink, color: '#fff' }}
+          onClick={() => onChoose('comunidad')}>
+          🎉 Ver comunidad
+        </button>
+      </div>
+    )
+  }
+
+  if (phase === 'barrios') {
+    return (
+      <div style={{
+        position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+        background: 'rgba(20,32,29,.82)', backdropFilter: 'blur(6px)',
+        color: '#fff', borderRadius: 12, padding: '10px 18px',
+        fontSize: 13, fontWeight: 600, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12,
+      }}>
+        <span>Selecciona un barrio en el mapa</span>
+        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+      </div>
+    )
+  }
+
+  if (phase === 'barrio_action' && barrio) {
+    return (
+      <div style={{
+        position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
+        background: K.paper, borderRadius: 16, padding: '16px 20px',
+        boxShadow: '0 8px 32px rgba(20,32,29,.18)', zIndex: 10, minWidth: 280,
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span style={{ fontWeight: 800, fontSize: 15, color: K.ink }}>{barrio.nombre}</span>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', color: K.muted, cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0 }}>×</button>
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <a href={`/eventos/${barrio.slug}`} style={{ ...btnBase, background: K.coral, color: '#fff', textDecoration: 'none' }}>
+            📅 Ver eventos
+          </a>
+          <a href={`/local-business/${barrio.slug}`} style={{ ...btnBase, background: K.teal, color: '#fff', textDecoration: 'none' }}>
+            🏪 Ver negocios
+          </a>
+          <a href={`/map?lat=${barrio.lat.toFixed(5)}&lng=${barrio.lng.toFixed(5)}&zoom=14`} style={{ ...btnBase, background: K.ink, color: '#fff', textDecoration: 'none' }}>
+            🏠 Ver listings
+          </a>
+        </div>
+      </div>
+    )
+  }
+
+  return null
+}
+
 function SecTitle({ children, link, linkLabel }: { children: string; link?: string; linkLabel?: string }) {
   return (
     <div style={{ marginBottom: 24 }}>
@@ -104,12 +198,41 @@ function SecTitle({ children, link, linkLabel }: { children: string; link?: stri
 
 function HomeContent() {
   const { barrio, lang } = useBarrio()
+  const isMobile = useIsMobile()
   const t = (es: string, en: string) => lang === 'es' ? es : en
   const catLabel = (cat: string) => (lang === 'es' ? CATEGORIA_LABELS : CATEGORIA_LABELS_EN)[cat] ?? cat
 
   const [nombre, setNombre] = useState('')
   const [email,  setEmail]  = useState('')
   const [suscrito, setSuscrito] = useState(false)
+
+  const [mapPhase, setMapPhase] = useState<MapPhase | null>(null)
+  const [pickedBarrio, setPickedBarrio] = useState<PickedBarrio | null>(null)
+  const flyToBarriosRef = useRef<(() => void) | null>(null)
+
+  const handleMapClick = useCallback(() => {
+    if (mapPhase === null) setMapPhase('chooser')
+  }, [mapPhase])
+
+  const handleChoose = useCallback((choice: 'barrios' | 'comunidad') => {
+    if (choice === 'comunidad') {
+      window.location.href = '/eventos/el-poblado'
+      return
+    }
+    setMapPhase('barrios')
+    flyToBarriosRef.current?.()
+  }, [])
+
+  const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number) => {
+    if (mapPhase !== 'barrios') return
+    setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug: barrioSlug(id, nombre), lat, lng })
+    setMapPhase('barrio_action')
+  }, [mapPhase])
+
+  const handleOverlayClose = useCallback(() => {
+    setMapPhase(null)
+    setPickedBarrio(null)
+  }, [])
 
   const isTodos  = barrio.slug === 'todos'
   const noBarrio = !barrio.barrio_id && !isTodos
@@ -123,8 +246,26 @@ function HomeContent() {
   return (
     <>
       {/* ── HERO — mapa /map (comunas → barrios, sin listings) ─────────── */}
-      <section style={{ position: 'relative', overflow: 'hidden', height: '72vh', minHeight: 420 }}>
-        <MapView mapView="zonas" selectedId={null} onSelect={() => {}} />
+      <section
+        style={{ position: 'relative', overflow: 'hidden', height: isMobile ? '50vh' : '72vh', minHeight: isMobile ? 320 : 420, cursor: mapPhase === null ? 'pointer' : 'default' }}
+        onClick={mapPhase === null ? handleMapClick : undefined}
+      >
+        <MapView
+          mapView="zonas"
+          selectedId={null}
+          onSelect={() => {}}
+          onBarrioClick={mapPhase === 'barrios' ? handleBarrioClick : undefined}
+          flyToBarriosRef={flyToBarriosRef}
+          cooperativeGestures={isMobile}
+        />
+        {mapPhase !== null && (
+          <HeroOverlay
+            phase={mapPhase}
+            barrio={pickedBarrio}
+            onChoose={handleChoose}
+            onClose={handleOverlayClose}
+          />
+        )}
       </section>
 
       {/* ── NO BARRIO ─────────────────────────────────── */}
@@ -137,39 +278,45 @@ function HomeContent() {
       )}
 
       {/* ── SECCIÓN 1 — LO ÚLTIMO DEL BARRIO ─────────── */}
-      <section className="section-padding" style={{ padding: '48px 26px 36px', borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: isMobile ? '28px 16px 20px' : '72px 26px 56px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link="/blog" linkLabel={t('Todas las noticias →', 'All news →')}>
             {t('Lo último del barrio', 'Latest from the Barrio')}
           </SecTitle>
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', gap: 16 }} className="noticias-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(260px, 1fr))', gap: isMobile ? 10 : 16 }} className="noticias-grid">
             {noticias.length === 0 ? (
               <p style={{ color: K.muted, gridColumn: '1/-1' }}>
                 {t('Cargando noticias...', 'Loading news...')}
               </p>
-            ) : noticias.map((n, i) => (
+            ) : (isMobile ? noticias.slice(0, 2) : noticias).map((n, i) => (
               <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
-                display: 'block', padding: 16,
-                background: K.surface,
-                borderRadius: 10, border: `0.5px solid ${K.line}`,
+                display: 'block', padding: isMobile ? '12px 12px 10px' : '18px 18px 16px',
+                background: K.paper,
+                borderRadius: isMobile ? 10 : 14,
+                boxShadow: '0 1px 6px rgba(20,32,29,.07), 0 4px 18px rgba(20,32,29,.04)',
                 textDecoration: 'none',
               }}>
                 <span style={{
-                  fontSize: 10, fontWeight: 700, textTransform: 'uppercase',
-                  letterSpacing: '0.08em', color: K.coral,
-                  marginBottom: 8, display: 'block',
+                  display: 'inline-block',
+                  fontFamily: K.manrope,
+                  fontSize: 9, fontWeight: 700, textTransform: 'uppercase',
+                  letterSpacing: '0.07em', color: K.coral,
+                  background: K.coralLight,
+                  padding: '2px 7px', borderRadius: 999,
+                  marginBottom: 7,
                 }}>
                   {n.fuente === 'el_colombiano' ? 'El Colombiano' : (n.fuente ?? 'Medellín')}
                 </span>
                 <h3 style={{
-                  fontFamily: K.serif, fontSize: 16, fontWeight: 600,
-                  color: K.ink, lineHeight: 1.3, marginBottom: 8, margin: '0 0 8px',
+                  fontFamily: K.serif, fontSize: isMobile ? 13 : 16, fontWeight: 600,
+                  color: K.ink, lineHeight: 1.3, margin: '0 0 6px',
+                  display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden',
                 }}>
                   {n.titulo}
                 </h3>
-                {n.fecha_publicacion && (
-                  <span style={{ fontSize: 11, color: K.muted }}>
+                {!isMobile && n.fecha_publicacion && (
+                  <span style={{ fontFamily: K.manrope, fontSize: 11, color: K.muted, letterSpacing: '.2px' }}>
                     {new Date(n.fecha_publicacion).toLocaleDateString(lang === 'es' ? 'es-CO' : 'en-US', { day: 'numeric', month: 'short' })}
                   </span>
                 )}
@@ -180,7 +327,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 2 — HOTSPOTS & DEALS ─────────────── */}
-      <section className="section-padding" style={{ padding: '48px 26px 36px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: '72px 26px 56px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
             {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
@@ -203,47 +350,48 @@ function HomeContent() {
             ) : deals.map((deal, i) => (
               <div key={deal.id ?? i} style={{
                 background: K.paper,
-                border: `0.5px solid ${K.line}`,
-                borderRadius: 10,
+                borderRadius: 14,
                 overflow: 'hidden',
-                position: 'relative',
+                boxShadow: '0 2px 10px rgba(20,32,29,.08)',
               }}>
-                {/* Badge deal */}
+                {/* Foto con overlay */}
                 <div style={{
-                  position: 'absolute', top: 12, left: 12, zIndex: 1,
-                  background: K.coral, color: '#fff',
-                  fontWeight: 900, fontSize: 14,
-                  padding: '4px 10px', borderRadius: 6,
-                }}>
-                  {deal.tipo_deal}
-                </div>
-
-                {/* Foto */}
-                <div style={{
-                  height: 120, background: K.line,
+                  height: 140, overflow: 'hidden', position: 'relative',
+                  background: CATEGORIA_COLORS[deal.categoria ?? ''] ?? K.surface,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 32, overflow: 'hidden', position: 'relative',
                 }}>
-                  <span>{deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}</span>
+                  <span style={{ fontSize: 34, zIndex: 1 }}>
+                    {deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}
+                  </span>
                   {deal.foto_url && (
                     <img
                       src={deal.foto_url}
                       alt={deal.tienda_nombre}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 2 }}
                       onError={e => { e.currentTarget.style.display = 'none' }}
                     />
                   )}
+                  {/* gradient overlay */}
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'linear-gradient(to top, rgba(20,32,29,.72) 0%, rgba(20,32,29,.08) 55%, transparent 100%)' }} />
+                  {/* pills over gradient */}
+                  <div style={{ position: 'absolute', bottom: 9, left: 10, right: 10, zIndex: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
+                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: 'rgba(255,255,255,.82)', background: 'rgba(255,255,255,.14)', padding: '3px 8px', borderRadius: 999 }}>
+                      {catLabel(deal.categoria ?? '')}
+                    </span>
+                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: '#fff', background: K.coral, padding: '3px 9px', borderRadius: 999 }}>
+                      {deal.tipo_deal}
+                    </span>
+                  </div>
                 </div>
 
-                <div style={{ padding: 12 }}>
-                  <p style={{ fontSize: 11, color: K.muted, marginBottom: 4, margin: '0 0 4px' }}>
-                    {catLabel(deal.categoria ?? '')}
-                    {deal.barrio_nombre ? ` · ${deal.barrio_nombre}` : ''}
+                <div style={{ padding: '12px 14px 14px' }}>
+                  <p style={{ fontFamily: K.manrope, fontSize: 11, color: K.muted, margin: '0 0 4px', letterSpacing: '.3px' }}>
+                    {deal.barrio_nombre ?? ''}
                   </p>
-                  <p style={{ fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 4px' }}>
+                  <p style={{ fontFamily: K.manrope, fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 3px' }}>
                     {deal.descripcion}
                   </p>
-                  <p style={{ fontSize: 12, color: K.muted, margin: 0 }}>
+                  <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: 0 }}>
                     {deal.tienda_nombre}
                   </p>
                 </div>
@@ -254,7 +402,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 3 — DIRECTORIO 5 ESTRELLAS ───────── */}
-      <section className="section-padding" style={{ padding: '48px 26px', borderBottom: `1px solid ${K.line}` }}>
+      <section className="section-padding" style={{ padding: '72px 26px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todo →', 'Browse all →')}>
             {t('Directorio 5 Estrellas', '5-Star Directory')}
@@ -282,57 +430,54 @@ function HomeContent() {
               </div>
             ) : directorio.slice(0, 4).map((negocio, i) => (
               <div key={negocio.id ?? i} style={{
-                background: K.surface,
-                border: `0.5px solid ${K.line}`,
-                borderRadius: 10,
+                background: K.paper,
+                borderRadius: 14,
                 overflow: 'hidden',
-                position: 'relative',
+                boxShadow: '0 2px 10px rgba(20,32,29,.08)',
               }}>
-                {/* Badge categoría */}
-                <div style={{
-                  position: 'absolute', top: 12, left: 12, zIndex: 1,
-                  background: K.amarillo, color: K.ink,
-                  fontWeight: 900, fontSize: 11,
-                  padding: '3px 8px', borderRadius: 4,
-                  letterSpacing: '0.5px',
-                }}>
-                  ★ {catLabel(negocio.categoria)}
-                </div>
-
                 {/* Foto o placeholder */}
                 <div style={{
-                  height: 130, overflow: 'hidden',
+                  height: 140, overflow: 'hidden',
                   background: CATEGORIA_COLORS[negocio.categoria] ?? K.surface,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
                   position: 'relative',
                 }}>
-                  <span style={{ fontSize: 40 }}>
+                  <span style={{ fontSize: 40, zIndex: 1 }}>
                     {CATEGORIA_EMOJI[negocio.categoria] ?? '⭐'}
                   </span>
                   {negocio.foto_url && (
                     <img
                       src={negocio.foto_url}
                       alt={negocio.nombre}
-                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }}
+                      style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 2 }}
                       onError={e => { e.currentTarget.style.display = 'none' }}
                     />
                   )}
+                  {/* gradient overlay */}
+                  <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'linear-gradient(to top, rgba(20,32,29,.68) 0%, rgba(20,32,29,.06) 50%, transparent 100%)' }} />
+                  {/* category pill */}
+                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 4 }}>
+                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: K.ink, background: K.amarillo, padding: '3px 9px', borderRadius: 999, letterSpacing: '.4px' }}>
+                      ★ {catLabel(negocio.categoria)}
+                    </span>
+                  </div>
+                  {negocio.barrio_nombre && (
+                    <div style={{ position: 'absolute', bottom: 9, left: 10, zIndex: 4 }}>
+                      <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,.82)', background: 'rgba(255,255,255,.14)', padding: '3px 8px', borderRadius: 999, letterSpacing: '.3px' }}>
+                        {negocio.barrio_nombre}
+                      </span>
+                    </div>
+                  )}
                 </div>
 
-                <div style={{ padding: '12px 14px' }}>
-                  {negocio.barrio_nombre && (
-                    <p style={{ fontSize: 11, color: K.muted, margin: '0 0 4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                      {negocio.barrio_nombre}
-                    </p>
-                  )}
-
-                  <p style={{ fontWeight: 600, fontSize: 15, color: K.ink, margin: '0 0 6px', lineHeight: 1.2 }}>
+                <div style={{ padding: '12px 14px 14px' }}>
+                  <p style={{ fontFamily: K.manrope, fontWeight: 700, fontSize: 15, color: K.ink, margin: '0 0 5px', lineHeight: 1.2 }}>
                     {negocio.nombre}
                   </p>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 10 }}>
-                    <span style={{ color: '#ffc928' }}>★★★★★</span>
-                    <span style={{ fontSize: 13, color: K.muted }}>{negocio.rating_google?.toFixed(1)}</span>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 11 }}>
+                    <span style={{ color: '#ffc928', fontSize: 13 }}>★★★★★</span>
+                    <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>{negocio.rating_google?.toFixed(1)}</span>
                   </div>
 
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -344,13 +489,13 @@ function HomeContent() {
                         }
                         target="_blank" rel="noopener noreferrer"
                         style={{
-                          flex: 1, textAlign: 'center', padding: '6px 0',
-                          background: K.paper, border: `0.5px solid ${K.line}`,
-                          borderRadius: 6, fontSize: 12, color: K.ink,
-                          textDecoration: 'none', fontWeight: 500,
+                          flex: 1, textAlign: 'center', padding: '7px 0',
+                          background: K.surface,
+                          borderRadius: 8, fontFamily: K.manrope, fontSize: 12, color: K.ink,
+                          textDecoration: 'none', fontWeight: 600,
                         }}
                       >
-                        {t('📍 Ver en Maps', '📍 View on Maps')}
+                        📍 {t('Ver en Maps', 'View on Maps')}
                       </a>
                     )}
                     {negocio.whatsapp && (
@@ -358,10 +503,10 @@ function HomeContent() {
                         href={`https://wa.me/${negocio.whatsapp.replace(/\D/g, '')}`}
                         target="_blank" rel="noopener noreferrer"
                         style={{
-                          flex: 1, textAlign: 'center', padding: '6px 0',
-                          background: '#25D366', borderRadius: 6,
-                          fontSize: 12, color: '#fff',
-                          textDecoration: 'none', fontWeight: 500,
+                          flex: 1, textAlign: 'center', padding: '7px 0',
+                          background: '#25D366', borderRadius: 8,
+                          fontFamily: K.manrope, fontSize: 12, color: '#fff',
+                          textDecoration: 'none', fontWeight: 600,
                         }}
                       >
                         💬 WhatsApp
@@ -376,34 +521,45 @@ function HomeContent() {
       </section>
 
       {/* ── REAL ESTATE ───────────────────────────────── */}
-      <section className="section-padding" style={{ padding: '48px 26px' }}>
+      <section className="section-padding" style={{ padding: '72px 26px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div className="real-estate-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: '#fff', border: `1px solid ${K.line}`, borderRadius: 18, overflow: 'hidden', boxShadow: '0 14px 38px rgba(20,32,29,.1)' }}>
-            <div style={{ minHeight: 320, backgroundImage: `url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80'), radial-gradient(120% 120% at 80% 10%, #2a5bdc 0%, #143cc4 45%, #0a8a4f 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
-            <div style={{ padding: 'clamp(20px, 5vw, 44px)', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ display: 'inline-block', background: K.amarillo, color: K.ink, fontWeight: 800, fontSize: '.68rem', letterSpacing: '1.6px', textTransform: 'uppercase', padding: '6px 13px', borderRadius: 6, alignSelf: 'flex-start', marginBottom: 14 }}>
+          <div className="real-estate-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: K.paper, borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 40px rgba(20,32,29,.12)' }}>
+            <div style={{ minHeight: 340, backgroundImage: `url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80'), linear-gradient(145deg, #0D1F1A 0%, #1A2B22 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
+            <div style={{ padding: 'clamp(24px, 5vw, 48px)', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: K.paper }}>
+              <span style={{ display: 'inline-block', fontFamily: K.manrope, background: K.coralLight, color: K.coral, fontWeight: 800, fontSize: '.68rem', letterSpacing: '1.4px', textTransform: 'uppercase', padding: '6px 13px', borderRadius: 999, alignSelf: 'flex-start', marginBottom: 16 }}>
                 {t('Inversión Inmobiliaria', 'Real Estate Investment')}
               </span>
-              <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.9rem', margin: '0 0 12px', letterSpacing: '-.5px', color: K.ink }}>
+              <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.55rem,3.5vw,2rem)', margin: '0 0 10px', letterSpacing: '-.5px', color: K.ink }}>
                 {t('Invierte en Medellín con datos reales.', 'Invest in Medellín with real data.')}
               </h2>
-              <p style={{ color: K.muted, marginBottom: 24, lineHeight: 1.55, fontSize: '1.02rem' }}>
+              <p style={{ fontFamily: K.manrope, color: K.muted, marginBottom: 28, lineHeight: 1.6, fontSize: '.98rem' }}>
                 {t(
                   'Yields, precios justos y oportunidades por barrio. El primer motor de decisión inmobiliaria del Valle de Aburrá.',
                   'Yields, fair prices and opportunities by neighborhood. The first real estate decision engine in the Aburrá Valley.',
                 )}
               </p>
-              <div style={{ display: 'flex', gap: 26, flexWrap: 'wrap', marginBottom: 26 }}>
-                <div>
-                  <small style={{ fontSize: '.78rem', color: K.muted, textTransform: 'uppercase', letterSpacing: '.5px', display: 'block' }}>{t('Arriendos desde', 'Rentals from')}</small>
-                  <strong style={{ fontFamily: K.serif, fontSize: '1.5rem', color: '#143cc4', display: 'block', marginTop: 3 }}>$1.400/mes</strong>
+
+              {/* Financial metrics — Stripe-style */}
+              <div style={{ display: 'flex', gap: 0, marginBottom: 28, borderTop: `1.5px solid ${K.line}`, borderBottom: `1.5px solid ${K.line}`, padding: '20px 0' }}>
+                <div style={{ flex: 1, paddingRight: 22, borderRight: `1.5px solid ${K.line}` }}>
+                  <div style={{ fontFamily: K.manrope, fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: K.muted, marginBottom: 8 }}>
+                    {t('Arriendos desde', 'Rentals from')}
+                  </div>
+                  <div style={{ fontFamily: K.serif, fontSize: 'clamp(2rem, 4.5vw, 2.8rem)', fontWeight: 900, color: K.tealDeep, letterSpacing: '-1.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    $1.400<span style={{ fontSize: '1rem', fontWeight: 500, color: K.muted, letterSpacing: 0 }}>/mes</span>
+                  </div>
                 </div>
-                <div>
-                  <small style={{ fontSize: '.78rem', color: K.muted, textTransform: 'uppercase', letterSpacing: '.5px', display: 'block' }}>{t('Yield promedio', 'Avg. yield')}</small>
-                  <strong style={{ fontFamily: K.serif, fontSize: '1.5rem', color: '#143cc4', display: 'block', marginTop: 3 }}>7.2% EA</strong>
+                <div style={{ flex: 1, paddingLeft: 22 }}>
+                  <div style={{ fontFamily: K.manrope, fontSize: '.68rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1.2px', color: K.muted, marginBottom: 8 }}>
+                    {t('Yield promedio', 'Avg. yield')}
+                  </div>
+                  <div style={{ fontFamily: K.serif, fontSize: 'clamp(2rem, 4.5vw, 2.8rem)', fontWeight: 900, color: K.coral, letterSpacing: '-1.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
+                    7.2%<span style={{ fontSize: '1rem', fontWeight: 500, color: K.muted, letterSpacing: 0 }}> EA</span>
+                  </div>
                 </div>
               </div>
-              <a href="/map" style={{ display: 'inline-block', background: K.ink, color: '#fff', fontWeight: 800, padding: '13px 26px', borderRadius: 999, textDecoration: 'none', fontSize: '.96rem', alignSelf: 'flex-start' }}>
+
+              <a href="/map" style={{ fontFamily: K.manrope, display: 'inline-block', background: K.ink, color: '#fff', fontWeight: 800, padding: '13px 26px', borderRadius: 999, textDecoration: 'none', fontSize: '.92rem', alignSelf: 'flex-start', letterSpacing: '.2px' }}>
                 {t('Ver el mapa de inversión', 'Explore investment map')}
               </a>
             </div>
@@ -412,34 +568,34 @@ function HomeContent() {
       </section>
 
       {/* ── SUSCRIPCIÓN ───────────────────────────────── */}
-      <section id="subscribe" className="section-padding" style={{ padding: '0 16px 60px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(120deg, rgba(214,33,126,.92), rgba(255,122,26,.86) 55%, rgba(255,201,40,.82))', borderRadius: 22, padding: 'clamp(28px, 5vw, 56px) clamp(16px, 4vw, 34px)', textAlign: 'center', color: '#fff', boxShadow: '0 22px 60px rgba(214,33,126,.3)' }}>
-          <span style={{ fontWeight: 800, letterSpacing: 2, textTransform: 'uppercase', fontSize: '.76rem', background: 'rgba(0,0,0,.26)', display: 'inline-block', padding: '7px 16px', borderRadius: 999, marginBottom: 18 }}>
+      <section id="subscribe" className="section-padding" style={{ padding: '0 16px 72px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(145deg, #1A2B24 0%, #14201d 55%, #2A1A10 100%)', borderRadius: 22, padding: 'clamp(32px, 5vw, 60px) clamp(20px, 5vw, 52px)', textAlign: 'center', color: '#fff', boxShadow: '0 16px 48px rgba(20,32,29,.28)' }}>
+          <span style={{ fontFamily: K.manrope, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase', fontSize: '.72rem', background: 'rgba(216,90,48,.22)', border: '1px solid rgba(216,90,48,.4)', color: K.coral, display: 'inline-block', padding: '7px 18px', borderRadius: 999, marginBottom: 20 }}>
             🎉 {t('Miembros Fundadores · Invitación a la Fiesta', 'Founding Members · Launch Party Invite')}
           </span>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.9rem,4.5vw,2.9rem)', margin: '0 0 14px', letterSpacing: '-.5px' }}>
             {t('Sé Parte del Comienzo', 'Be Part of the Beginning')}
           </h2>
-          <p style={{ maxWidth: 620, margin: '0 auto 28px', fontSize: '1.08rem', lineHeight: 1.55 }}>
+          <p style={{ fontFamily: K.manrope, maxWidth: 600, margin: '0 auto 30px', fontSize: '1.02rem', lineHeight: 1.6, color: 'rgba(255,255,255,.76)' }}>
             {t(
               'Medellín Social llega barrio por barrio. Suscríbete gratis y recibe lo mejor de tu barrio antes que nadie.',
               'Medellín Social rolls out barrio by barrio. Subscribe free and get the best of your barrio first.',
             )}
           </p>
           {suscrito ? (
-            <p style={{ fontWeight: 800, fontSize: '1.18rem' }}>
+            <p style={{ fontFamily: K.manrope, fontWeight: 800, fontSize: '1.18rem', color: K.teal }}>
               🎉 {t('¡Estás en la lista fundadora!', "You're on the founding list!")}
             </p>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); setSuscrito(true) }} style={{ display: 'flex', gap: 11, maxWidth: 580, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
-              <input type="text" required value={nombre} onChange={e => setNombre(e.target.value)} placeholder={t('Tu nombre', 'Your name')} style={{ flex: '1 1 160px', width: '100%', padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
-              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder={t('Tu correo', 'Your email')} style={{ flex: '1 1 180px', width: '100%', padding: '14px 18px', border: 'none', borderRadius: 11, fontSize: '1rem', fontFamily: 'inherit' }} />
-              <button type="submit" style={{ width: '100%', background: K.ink, color: '#fff', border: 'none', fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: 'pointer', fontSize: '.96rem', fontFamily: 'inherit' }}>
+            <form onSubmit={e => { e.preventDefault(); setSuscrito(true) }} style={{ display: 'flex', gap: 10, maxWidth: 560, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
+              <input type="text" required value={nombre} onChange={e => setNombre(e.target.value)} placeholder={t('Tu nombre', 'Your name')} style={{ flex: '1 1 160px', padding: '14px 18px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 11, fontSize: '.96rem', fontFamily: K.manrope, background: 'rgba(255,255,255,.07)', color: '#fff', outline: 'none' }} />
+              <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder={t('Tu correo', 'Your email')} style={{ flex: '1 1 180px', padding: '14px 18px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 11, fontSize: '.96rem', fontFamily: K.manrope, background: 'rgba(255,255,255,.07)', color: '#fff', outline: 'none' }} />
+              <button type="submit" style={{ width: '100%', background: K.coral, color: '#fff', border: 'none', fontFamily: K.manrope, fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: 'pointer', fontSize: '.94rem', letterSpacing: '.3px' }}>
                 {t('Quiero mi Invitación 🎟️', 'Get My Invite 🎟️')}
               </button>
             </form>
           )}
-          <p style={{ fontSize: '.82rem', opacity: .92, marginTop: 16 }}>
+          <p style={{ fontFamily: K.manrope, fontSize: '.8rem', opacity: .55, marginTop: 18 }}>
             {t('Gratis para siempre. Sin spam.', 'Free forever. No spam.')}
           </p>
         </div>

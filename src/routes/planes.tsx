@@ -1,10 +1,11 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
-import { Check, Lock, X } from "lucide-react";
+import { useState } from "react";
+import { Check, Lock } from "lucide-react";
 import { auth } from "@/lib/auth";
 import { getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { GHL, ghlRedirect } from "@/config/ghl";
 
 const K = {
   paper:     "#FAF7F2",
@@ -12,41 +13,91 @@ const K = {
   muted:     "#6B5B45",
   teal:      "#1D9E75",
   tealDeep:  "#085041",
+  tealMid:   "#0D6E50",
   tealLight: "#E8F5F0",
   coral:     "#D85A30",
   coralLight:"#FFF0ED",
   line:      "#E8E0D0",
-  amber:     "#F59E0B",
   serif:     "'Fraunces', Georgia, serif" as const,
 };
 
-const FREE_FEATURES = [
-  "Mapa interactivo con 54,000+ propiedades",
-  "Filtros de búsqueda (precio, tipo, área, habitaciones, baños, antigüedad)",
-  "Ver propiedades en venta y arriendo",
-  "Comunas y barrios del Valle de Aburrá",
-  "Eventos y negocios locales",
-  "Publicar tu propiedad en el portal (3% comisión solo si se cierra la venta)",
+const TRM = 3_300;
+
+// ── Features ──────────────────────────────────────────────────────────────────
+
+const FREE_OWNER = [
+  "Mapa con 54,000+ propiedades para estudiar el mercado",
+  "Ver precios reales de venta y arriendo en tu barrio",
+  "Filtros por tipo, precio, área, habitaciones, estrato",
+  "Publicar tu propiedad sin costo",
+  "Recibir contactos de compradores e interesados",
 ];
 
-const FREE_LOCKED_FEATURES = [
-  "Análisis de precio por barrio",
-  "Historial de precios",
-  "Recomendaciones por perfil",
+const LISTING_FEATURES = [
+  "Todo lo anterior incluido",
+  "Rango de precios real del barrio: barato, típico y caro",
+  "Recomendación: vender rápido / precio justo / precio máximo",
+  "Historial de precios del sector",
+  "Cómo posicionar la propiedad para compradores en USD",
+  "Tu propiedad destacada en el mapa del barrio",
+  "Estadísticas: vistas, guardados y contactos de tu listing",
+  "Estimado de liquidez: cuánto tarda en venderse",
 ];
 
-interface Plan {
-  id: string;
-  nombre: string;
-  descripcion: string;
-  precio: number;
-  moneda: string;
-  precio_cop: number;
-  precio_usd: number;
-  features: string[];
-  requiere_verificacion: boolean;
-  pago_disponible: boolean;
-}
+const FREE_AGENT = [
+  "Mapa completo con 54,000+ propiedades del Valle de Aburrá",
+  "Filtros avanzados para encontrar oportunidades",
+  "Ver precios por barrio y comuna",
+  "Publicar propiedades de clientes sin costo",
+  "Comunas y barrios con datos de mercado básicos",
+];
+
+const AGENTE_FEATURES = [
+  "Todo lo anterior incluido",
+  "Aparecer como contacto #1 en todos los listings de tu zona",
+  "1 cupo exclusivo por barrio — quien llega primero se queda",
+  "Perfil verificado con distintivo de agente de zona",
+  "Dashboard: contactos recibidos, vistas y desempeño de zona",
+  "Visibilidad directa a compradores e inversores que buscan en esa zona",
+];
+
+// ── FAQ ───────────────────────────────────────────────────────────────────────
+
+const FAQ_OWNER = [
+  {
+    q: "¿El Listing Destacado es un pago único o mensual?",
+    a: "Pago único por listing. Pagas una vez y tu propiedad queda destacada con análisis completo hasta que se venda o arriende.",
+  },
+  {
+    q: "¿Qué pasa si mi propiedad no se vende?",
+    a: "El listing queda activo mientras quieras. No hay fecha de vencimiento ni cobro adicional.",
+  },
+  {
+    q: "¿Puedo publicar sin el plan Destacado?",
+    a: "Sí. El plan gratuito te permite publicar y recibir contactos. El Listing Destacado agrega el análisis de mercado y la posición destacada en el mapa.",
+  },
+];
+
+const FAQ_AGENT = [
+  {
+    q: "¿Qué significa 1 cupo exclusivo por zona?",
+    a: "Solo puede haber un agente patrocinado por barrio y uno por comuna. Mientras esté activo, apareces como el contacto principal en cada propiedad de esa zona.",
+  },
+  {
+    q: "¿Qué es la verificación de agente?",
+    a: "Revisamos tu cédula, RUT y referencias profesionales en 24-48 horas. Es obligatoria para garantizar la calidad del directorio.",
+  },
+  {
+    q: "¿Puedo cancelar la zona patrocinada?",
+    a: "Sí. Sin permanencia mínima. Si cancelas, la zona queda disponible para otro agente.",
+  },
+  {
+    q: "¿Puedo tener más de una zona?",
+    a: "Sí. Puedes patrocinar varios barrios o comunas a la vez. Cada zona se gestiona y cobra por separado.",
+  },
+];
+
+// ── Types ─────────────────────────────────────────────────────────────────────
 
 interface PlanesModo {
   modo_manual?: boolean;
@@ -58,56 +109,47 @@ interface PlanesModo {
   redirect?: string;
 }
 
-const FAQ_ITEMS = [
-  {
-    q: "¿Puedo cancelar cuando quiera?",
-    a: "Sí. Sin permanencia. Cancelas en cualquier momento desde tu perfil.",
-  },
-  {
-    q: "¿Cómo funciona la comisión del 3%?",
-    a: "Solo se cobra si vendes o arriendas tu propiedad a través de Medellín Social. Publicar es siempre gratis.",
-  },
-  {
-    q: "¿Qué es la verificación de agente?",
-    a: "Revisamos tu cédula, RUT y referencias en 24-48 horas. Solo para el plan Agente.",
-  },
-];
+type Audiencia = "propietario" | "agente";
 
 export const Route = createFileRoute("/planes")({
   component: PlanesPage,
 });
 
+// ── Page ──────────────────────────────────────────────────────────────────────
+
 function PlanesPage() {
   const navigate = useNavigate();
   const user = typeof window !== "undefined" ? auth.get() : null;
 
+  const [audiencia, setAudiencia] = useState<Audiencia>("propietario");
   const [moneda, setMoneda] = useState<"COP" | "USD">("COP");
-  const [planes, setPlanes] = useState<Plan[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [iniciando, setIniciando] = useState<string | null>(null);
+  const [iniciando, setIniciando] = useState(false);
   const [modalInfo, setModalInfo] = useState<PlanesModo | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const planActual = user?.plan ?? "free";
 
-  useEffect(() => {
-    fetch(`${API_ENDPOINTS.suscripcionesPlanes}?moneda=${moneda}`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
-      .then((d) => { if (d.planes) setPlanes(d.planes); })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [moneda]);
+  const fmt = (usd: number) =>
+    moneda === "USD"
+      ? `$${usd.toLocaleString("en-US")} USD`
+      : `$${(usd * TRM).toLocaleString("es-CO")} COP`;
 
-  async function iniciar(planId: string) {
+  async function iniciarAgente() {
+    // GHL link disponible → directo al checkout
+    if (GHL.agente_barrio) {
+      ghlRedirect(GHL.agente_barrio, { moneda, ...(user?.email ? { email: user.email } : {}) });
+      return;
+    }
+    // Fallback: flujo manual/Stripe existente
     if (!user) {
       navigate({ to: "/login", search: { redirect: "/planes" } as never });
       return;
     }
-    setIniciando(planId);
+    setIniciando(true);
     setError(null);
     try {
       const fd = new FormData();
-      fd.append("plan", planId);
+      fd.append("plan", "agente");
       fd.append("moneda", moneda);
       const res = await fetch(API_ENDPOINTS.suscripcionesIniciar, {
         method: "POST",
@@ -116,51 +158,70 @@ function PlanesPage() {
       });
       if (!res.ok) throw new Error(await res.text());
       const data: PlanesModo = await res.json();
-
-      if (data.requiere_verificacion) {
-        navigate({ to: data.redirect as never });
-        return;
-      }
-      if (data.checkout_url) {
-        window.location.href = data.checkout_url;
-        return;
-      }
-      if (data.modo_manual) {
-        setModalInfo(data);
-        return;
-      }
+      if (data.requiere_verificacion) { navigate({ to: data.redirect as never }); return; }
+      if (data.checkout_url) { window.location.href = data.checkout_url; return; }
+      if (data.modo_manual) { setModalInfo(data); return; }
     } catch {
-      setError("Error iniciando suscripción. Intenta de nuevo.");
+      setError("Error iniciando el proceso. Intenta de nuevo.");
     } finally {
-      setIniciando(null);
+      setIniciando(false);
     }
   }
 
+  const faqItems = audiencia === "propietario" ? FAQ_OWNER : FAQ_AGENT;
+
   return (
     <ComunidadLayout>
-      <div style={{ maxWidth: 1000, margin: "0 auto", padding: "48px 20px" }}>
+      {/* Hero */}
+      <div style={{
+        background: `linear-gradient(135deg, ${K.tealDeep} 0%, ${K.tealMid} 50%, ${K.teal} 100%)`,
+        padding: "52px 20px 44px",
+        textAlign: "center",
+      }}>
+        <p style={{ color: "rgba(255,255,255,0.7)", fontSize: 12, fontWeight: 700, letterSpacing: "1px", textTransform: "uppercase", marginBottom: 10 }}>
+          ¿Quién eres?
+        </p>
+        <h1 style={{ fontFamily: K.serif, fontSize: "clamp(1.6rem, 4vw, 2.3rem)", fontWeight: 900, color: "#fff", marginBottom: 20 }}>
+          {audiencia === "propietario" ? "Vende o arrienda mejor" : "Domina tu zona"}
+        </h1>
 
-        {/* Header */}
-        <div style={{ textAlign: "center", marginBottom: 40 }}>
-          <h1 style={{ fontFamily: K.serif, fontSize: "2.2rem", fontWeight: 900, color: K.ink, marginBottom: 12 }}>
-            Elige tu plan
-          </h1>
-          <p style={{ color: K.muted, fontSize: 15, lineHeight: 1.7, maxWidth: 520, margin: "0 auto 28px" }}>
-            Toma mejores decisiones en el mercado inmobiliario del Valle de Aburrá con datos reales.
-          </p>
+        {/* Audience toggle */}
+        <div style={{ display: "inline-flex", background: "rgba(0,0,0,0.25)", borderRadius: 999, padding: 4, marginBottom: 24, gap: 4 }}>
+          {([
+            { key: "propietario", label: "🏠 Soy propietario" },
+            { key: "agente",      label: "🤝 Soy agente inmobiliario" },
+          ] as const).map(({ key, label }) => (
+            <button
+              key={key}
+              onClick={() => setAudiencia(key)}
+              style={{
+                border: "none",
+                background: audiencia === key ? "#fff" : "transparent",
+                color: audiencia === key ? K.tealDeep : "rgba(255,255,255,0.85)",
+                padding: "8px 18px", fontWeight: 700, borderRadius: 999,
+                cursor: "pointer", fontSize: 13, transition: "all 0.15s",
+                fontFamily: "inherit",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
 
-          {/* Currency toggle */}
-          <div style={{ display: "inline-flex", border: `1px solid ${K.line}`, borderRadius: 999, overflow: "hidden" }}>
+        {/* Currency toggle */}
+        <div>
+          <div style={{ display: "inline-flex", border: "1px solid rgba(255,255,255,0.3)", borderRadius: 999, overflow: "hidden" }}>
             {(["COP", "USD"] as const).map((m) => (
               <button
                 key={m}
                 onClick={() => setMoneda(m)}
                 style={{
                   border: "none",
-                  background: moneda === m ? K.teal : "transparent",
-                  color: moneda === m ? "#fff" : K.muted,
-                  padding: "6px 20px", fontWeight: 700,
-                  cursor: "pointer", fontSize: 13, transition: "all 0.15s",
+                  background: moneda === m ? "#fff" : "transparent",
+                  color: moneda === m ? K.tealDeep : "rgba(255,255,255,0.7)",
+                  padding: "5px 16px", fontWeight: 700,
+                  cursor: "pointer", fontSize: 12, transition: "all 0.15s",
+                  fontFamily: "inherit",
                 }}
               >
                 {m === "COP" ? "Pesos COP" : "USD $"}
@@ -168,292 +229,249 @@ function PlanesPage() {
             ))}
           </div>
         </div>
+      </div>
 
-        {error && (
-          <div style={{
-            background: K.coralLight, border: `1px solid ${K.coral}`,
-            borderRadius: 8, padding: "10px 14px", marginBottom: 20,
-            fontSize: 13, color: K.coral, maxWidth: 600, margin: "0 auto 20px",
-          }}>
-            {error}
-          </div>
-        )}
+      <div style={{ background: K.paper, minHeight: "60vh" }}>
+        <div style={{ maxWidth: 840, margin: "0 auto", padding: "48px 20px" }}>
 
-        {/* Plan cards */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 24, alignItems: "start" }}>
-
-          {/* FREE card */}
-          <PlanCard
-            id="free"
-            nombre="Explorador"
-            descripcion="Para conocer el mercado"
-            precio={0}
-            moneda={moneda}
-            features={FREE_FEATURES}
-            lockedFeatures={FREE_LOCKED_FEATURES}
-            planActual={planActual}
-            requiere_verificacion={false}
-            cta={!user ? "Comenzar gratis" : "Tu plan actual"}
-            ctaDisabled={!!user}
-            popular={false}
-            onCTA={() => navigate({ to: "/registro" as never })}
-            iniciando={false}
-          />
-
-          {/* PRO + AGENTE cards */}
-          {loading ? (
-            <div style={{ gridColumn: "span 2", textAlign: "center", padding: 40, color: K.muted }}>Cargando planes…</div>
-          ) : (
-            planes.map((p) => (
-              <PlanCard
-                key={p.id}
-                id={p.id}
-                nombre={p.nombre}
-                descripcion={p.descripcion}
-                precio={moneda === "USD" ? p.precio_usd : p.precio_cop}
-                moneda={moneda}
-                features={p.features}
-                planActual={planActual}
-                requiere_verificacion={p.requiere_verificacion}
-                popular={p.id === "pro"}
-                cta={
-                  planActual === p.id ? "Plan actual" :
-                  planActual === "agente" && p.id === "pro" ? "Incluido en Agente" :
-                  `Suscribirse a ${p.nombre} →`
-                }
-                ctaDisabled={planActual === p.id || (planActual === "agente" && p.id === "pro")}
-                onCTA={() => iniciar(p.id)}
-                iniciando={iniciando === p.id}
-              />
-            ))
+          {error && (
+            <div style={{
+              background: K.coralLight, border: `1px solid ${K.coral}`,
+              borderRadius: 8, padding: "10px 14px",
+              fontSize: 13, color: K.coral, marginBottom: 28, textAlign: "center",
+            }}>
+              {error}
+            </div>
           )}
-        </div>
 
-        {/* Manual payment modal */}
-        {modalInfo && (
-          <div style={{
-            position: "fixed", inset: 0,
-            background: "rgba(0,0,0,0.45)", display: "flex",
-            alignItems: "center", justifyContent: "center", zIndex: 1000,
-          }}
-            onClick={() => setModalInfo(null)}
-          >
-            <div
-              style={{
-                background: "#fff", borderRadius: 16, padding: "32px 28px",
-                maxWidth: 440, width: "90%", textAlign: "center",
-              }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div style={{ fontSize: 40, marginBottom: 12 }}>📞</div>
-              <h3 style={{ fontFamily: K.serif, fontSize: "1.3rem", fontWeight: 800, color: K.ink, marginBottom: 10 }}>
-                Pago manual
-              </h3>
-              <p style={{ fontSize: 14, color: K.muted, lineHeight: 1.7, marginBottom: 20 }}>
-                {modalInfo.mensaje}
-              </p>
-              <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-                {modalInfo.whatsapp && (
-                  <a
-                    href={`https://wa.me/${modalInfo.whatsapp.replace(/\D/g, "")}`}
-                    target="_blank" rel="noopener noreferrer"
-                    style={{
-                      background: "#25D366", color: "#fff",
-                      padding: "11px 20px", borderRadius: 8,
-                      fontWeight: 700, fontSize: 13, textDecoration: "none",
-                    }}
-                  >
-                    Contactar por WhatsApp
-                  </a>
-                )}
-                {modalInfo.admin_email && (
-                  <a
-                    href={`mailto:${modalInfo.admin_email}`}
-                    style={{
-                      background: K.teal, color: "#fff",
-                      padding: "11px 20px", borderRadius: 8,
-                      fontWeight: 700, fontSize: 13, textDecoration: "none",
-                    }}
-                  >
-                    Enviar email
-                  </a>
-                )}
-                <button
-                  onClick={() => setModalInfo(null)}
-                  style={{
-                    background: "none", border: `1px solid ${K.line}`,
-                    padding: "9px 20px", borderRadius: 8,
-                    fontWeight: 600, fontSize: 13, color: K.muted, cursor: "pointer",
-                  }}
-                >
-                  Cerrar
-                </button>
-              </div>
-            </div>
+          {/* Cards */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: 24, alignItems: "start" }}>
+
+            {audiencia === "propietario" ? (
+              <>
+                <PlanCard
+                  id="free"
+                  nombre="Gratis"
+                  tagline="Para conocer el mercado"
+                  precioLabel="$0"
+                  periodicidad="Siempre gratis"
+                  features={FREE_OWNER}
+                  isActive={planActual === "free"}
+                  popular={false}
+                  cta={!user ? "Comenzar gratis" : "Tu plan actual"}
+                  ctaDisabled={!!user && planActual === "free"}
+                  onCTA={() => navigate({ to: "/registro" as never })}
+                  iniciando={false}
+                />
+                <PlanCard
+                  id="listing"
+                  nombre="Listing Destacado"
+                  tagline="Para vender o arrendar al mejor precio"
+                  precioLabel={fmt(1_000)}
+                  periodicidad="pago único · por listing"
+                  features={LISTING_FEATURES}
+                  isActive={false}
+                  popular={true}
+                  badge="MEJOR VALOR"
+                  cta="Publicar con destacado →"
+                  ctaDisabled={false}
+                  onCTA={() => ghlRedirect(GHL.listing, user?.email ? { email: user.email } : {}, "/publicar")}
+                  iniciando={false}
+                />
+              </>
+            ) : (
+              <>
+                <PlanCard
+                  id="free"
+                  nombre="Gratis"
+                  tagline="Para prospectar y publicar clientes"
+                  precioLabel="$0"
+                  periodicidad="Siempre gratis"
+                  features={FREE_AGENT}
+                  isActive={planActual === "free"}
+                  popular={false}
+                  cta={!user ? "Crear cuenta" : "Tu plan actual"}
+                  ctaDisabled={!!user && planActual === "free"}
+                  onCTA={() => navigate({ to: "/registro" as never })}
+                  iniciando={false}
+                />
+                <PlanCard
+                  id="agente"
+                  nombre="Agente de Zona"
+                  tagline="Cupo exclusivo en tu barrio o comuna"
+                  precioLabel={`desde ${fmt(200)}`}
+                  periodicidad="por barrio · mes"
+                  note={`${fmt(1_000)} / comuna · mes`}
+                  features={AGENTE_FEATURES}
+                  isActive={planActual === "agente"}
+                  popular={true}
+                  badge="EXCLUSIVO"
+                  cta={planActual === "agente" ? "Plan activo" : "Solicitar zona →"}
+                  ctaDisabled={planActual === "agente"}
+                  onCTA={iniciarAgente}
+                  iniciando={iniciando}
+                  requiere_verificacion
+                />
+              </>
+            )}
           </div>
-        )}
 
-        {/* FAQ */}
-        <div style={{ marginTop: 56, maxWidth: 600, margin: "56px auto 0" }}>
-          {FAQ_ITEMS.map((item) => (
-            <div
-              key={item.q}
-              style={{
-                borderBottom: `1px solid ${K.line}`,
-                padding: "20px 0",
-              }}
-            >
-              <p style={{ fontWeight: 700, fontSize: 14, color: K.ink, marginBottom: 6 }}>{item.q}</p>
-              <p style={{ fontSize: 13, color: K.muted, lineHeight: 1.7, margin: 0 }}>{item.a}</p>
-            </div>
-          ))}
-          <p style={{ textAlign: "center", marginTop: 24, fontSize: 13, color: K.muted }}>
-            ¿Más preguntas?{" "}
-            <a href="mailto:hola@medellin.social" style={{ color: K.teal }}>hola@medellin.social</a>
-          </p>
+          {/* FAQ */}
+          <div style={{ marginTop: 64, maxWidth: 560, margin: "64px auto 0" }}>
+            <h2 style={{ fontFamily: K.serif, fontSize: "1.3rem", fontWeight: 800, color: K.ink, marginBottom: 20, textAlign: "center" }}>
+              Preguntas frecuentes
+            </h2>
+            {faqItems.map((item) => (
+              <div key={item.q} style={{ borderBottom: `1px solid ${K.line}`, padding: "18px 0" }}>
+                <p style={{ fontWeight: 700, fontSize: 14, color: K.ink, marginBottom: 6 }}>{item.q}</p>
+                <p style={{ fontSize: 13, color: K.muted, lineHeight: 1.7, margin: 0 }}>{item.a}</p>
+              </div>
+            ))}
+            <p style={{ textAlign: "center", marginTop: 20, fontSize: 13, color: K.muted }}>
+              ¿Más preguntas?{" "}
+              <a href="mailto:hola@medellin.social" style={{ color: K.teal }}>hola@medellin.social</a>
+            </p>
+          </div>
         </div>
       </div>
+
+      {/* Manual payment modal */}
+      {modalInfo && (
+        <div
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000 }}
+          onClick={() => setModalInfo(null)}
+        >
+          <div
+            style={{ background: "#fff", borderRadius: 16, padding: "32px 28px", maxWidth: 440, width: "90%", textAlign: "center" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 40, marginBottom: 12 }}>📞</div>
+            <h3 style={{ fontFamily: K.serif, fontSize: "1.3rem", fontWeight: 800, color: K.ink, marginBottom: 10 }}>
+              Solicitud de zona
+            </h3>
+            <p style={{ fontSize: 14, color: K.muted, lineHeight: 1.7, marginBottom: 20 }}>{modalInfo.mensaje}</p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {modalInfo.whatsapp && (
+                <a
+                  href={`https://wa.me/${modalInfo.whatsapp.replace(/\D/g, "")}`}
+                  target="_blank" rel="noopener noreferrer"
+                  style={{ background: "#25D366", color: "#fff", padding: "11px 20px", borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
+                >
+                  Contactar por WhatsApp
+                </a>
+              )}
+              {modalInfo.admin_email && (
+                <a
+                  href={`mailto:${modalInfo.admin_email}`}
+                  style={{ background: K.teal, color: "#fff", padding: "11px 20px", borderRadius: 8, fontWeight: 700, fontSize: 13, textDecoration: "none" }}
+                >
+                  Enviar email
+                </a>
+              )}
+              <button
+                onClick={() => setModalInfo(null)}
+                style={{ background: "none", border: `1px solid ${K.line}`, padding: "9px 20px", borderRadius: 8, fontWeight: 600, fontSize: 13, color: K.muted, cursor: "pointer" }}
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </ComunidadLayout>
   );
 }
 
+// ── PlanCard ──────────────────────────────────────────────────────────────────
+
 function PlanCard({
-  id, nombre, descripcion, precio, moneda, features, lockedFeatures,
-  planActual, popular, cta, ctaDisabled, onCTA, iniciando, requiere_verificacion,
+  id, nombre, tagline, precioLabel, periodicidad, note, features,
+  isActive, popular, badge, cta, ctaDisabled, onCTA, iniciando, requiere_verificacion,
 }: {
   id: string;
   nombre: string;
-  descripcion: string;
-  precio: number;
-  moneda: "COP" | "USD";
+  tagline: string;
+  precioLabel: string;
+  periodicidad: string;
+  note?: string;
   features: string[];
-  lockedFeatures?: string[];
-  planActual: string;
+  isActive: boolean;
   popular: boolean;
+  badge?: string;
   cta: string;
   ctaDisabled: boolean;
   onCTA: () => void;
   iniciando: boolean;
-  requiere_verificacion: boolean;
+  requiere_verificacion?: boolean;
 }) {
-  const isActive = planActual === id;
-  const precioFmt = moneda === "COP"
-    ? `$${precio.toLocaleString("es-CO")}`
-    : `$${precio}`;
-
   return (
     <div style={{
       background: "#fff",
       border: `2px solid ${popular ? K.teal : isActive ? K.tealDeep : K.line}`,
       borderRadius: 16,
       overflow: "hidden",
-      position: "relative",
       boxShadow: popular ? `0 4px 24px ${K.teal}33` : "none",
-      transition: "box-shadow 0.2s",
     }}>
-      {popular && (
+      {badge && (
         <div style={{
-          background: K.teal, color: "#fff",
+          background: popular ? K.teal : K.tealMid, color: "#fff",
           textAlign: "center", padding: "5px 0",
           fontSize: 11, fontWeight: 800, letterSpacing: "0.5px",
         }}>
-          MÁS POPULAR
+          {badge}
         </div>
       )}
 
       <div style={{ padding: "24px 24px 20px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-          <h2 style={{ fontFamily: K.serif, fontSize: "1.3rem", fontWeight: 900, color: K.ink, margin: 0 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 6 }}>
+          <h2 style={{ fontFamily: K.serif, fontSize: "1.25rem", fontWeight: 900, color: K.ink, margin: 0 }}>
             {nombre}
           </h2>
           {isActive && (
-            <span style={{
-              background: K.tealLight, color: K.tealDeep,
-              borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 700,
-            }}>
+            <span style={{ background: K.tealLight, color: K.tealDeep, borderRadius: 999, padding: "3px 10px", fontSize: 10, fontWeight: 700, whiteSpace: "nowrap" }}>
               Tu plan
             </span>
           )}
         </div>
 
-        <p style={{ color: K.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>{descripcion}</p>
+        <p style={{ color: K.muted, fontSize: 13, lineHeight: 1.5, marginBottom: 16 }}>{tagline}</p>
 
-        {/* Price */}
         <div style={{ marginBottom: 20 }}>
-          {id === "free" ? (
-            <>
-              <span style={{ fontFamily: K.serif, fontSize: "2rem", fontWeight: 900, color: K.ink }}>$0</span>
-              <span style={{ fontSize: 13, color: K.muted }}> — Gratis siempre</span>
-            </>
-          ) : (
-            <>
-              <span style={{ fontFamily: K.serif, fontSize: "2rem", fontWeight: 900, color: K.ink }}>{precioFmt}</span>
-              <span style={{ fontSize: 13, color: K.muted }}> {moneda}/mes</span>
-            </>
-          )}
+          <span style={{ fontFamily: K.serif, fontSize: id === "free" ? "2rem" : "1.55rem", fontWeight: 900, color: K.ink }}>
+            {precioLabel}
+          </span>
+          <span style={{ fontSize: 12, color: K.muted, display: "block", marginTop: 2 }}>{periodicidad}</span>
+          {note && <span style={{ fontSize: 11, color: K.muted, marginTop: 4, display: "block" }}>{note}</span>}
         </div>
 
-        {/* CTA */}
-        {id === "free" ? (
-          ctaDisabled ? (
-            <div style={{
-              background: K.paper, border: `1px solid ${K.line}`,
-              borderRadius: 8, padding: "10px 0",
-              textAlign: "center", fontSize: 13, color: K.muted, fontWeight: 600,
-            }}>
-              Tu plan actual
-            </div>
-          ) : (
-            <button
-              onClick={onCTA}
-              style={{
-                width: "100%",
-                background: K.teal, color: "#fff",
-                border: "none", borderRadius: 8,
-                padding: "11px 0", fontWeight: 700, fontSize: 13,
-                cursor: "pointer", transition: "background 0.15s",
-              }}
-            >
-              Comenzar gratis
-            </button>
-          )
-        ) : (
-          <button
-            disabled={ctaDisabled || iniciando}
-            onClick={onCTA}
-            style={{
-              width: "100%",
-              background: ctaDisabled ? K.tealLight : K.teal,
-              color: ctaDisabled ? K.tealDeep : "#fff",
-              border: "none", borderRadius: 8,
-              padding: "11px 0", fontWeight: 700, fontSize: 13,
-              cursor: ctaDisabled ? "not-allowed" : "pointer",
-              transition: "background 0.15s",
-            }}
-          >
-            {iniciando ? "Procesando…" : cta}
-          </button>
-        )}
+        <button
+          disabled={ctaDisabled || iniciando}
+          onClick={onCTA}
+          style={{
+            width: "100%",
+            background: ctaDisabled ? K.tealLight : K.teal,
+            color: ctaDisabled ? K.tealDeep : "#fff",
+            border: "none", borderRadius: 8,
+            padding: "11px 0", fontWeight: 700, fontSize: 13,
+            cursor: ctaDisabled ? "not-allowed" : "pointer",
+            transition: "background 0.15s", fontFamily: "inherit",
+          }}
+        >
+          {iniciando ? "Procesando…" : cta}
+        </button>
 
         {requiere_verificacion && !ctaDisabled && (
-          <p style={{ fontSize: 11, color: K.muted, textAlign: "center", marginTop: 6 }}>
-            <Lock style={{ display: "inline", width: 10, height: 10 }} /> Requiere verificación de agente (24-48h)
+          <p style={{ fontSize: 11, color: K.muted, textAlign: "center", marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
+            <Lock size={10} /> Requiere verificación (24-48 h)
           </p>
         )}
       </div>
 
-      {/* Features */}
       <div style={{ borderTop: `1px solid ${K.line}`, padding: "16px 24px 24px" }}>
         <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
           {features.map((f) => (
             <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: K.ink }}>
               <Check style={{ flexShrink: 0, marginTop: 1 }} size={14} color={K.teal} />
-              {f}
-            </li>
-          ))}
-          {lockedFeatures?.map((f) => (
-            <li key={f} style={{ display: "flex", alignItems: "flex-start", gap: 8, fontSize: 13, color: K.muted }}>
-              <X style={{ flexShrink: 0, marginTop: 1 }} size={14} color={K.muted} />
               {f}
             </li>
           ))}
