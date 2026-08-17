@@ -102,6 +102,66 @@ async def notify_agente_aprobado(email: str, nombre: str, dashboard_url: str) ->
     await send_email(email, "¡Tu cuenta de agente en Medellín Social fue aprobada!", html)
 
 
+async def send_verify_email(to: str, nombre: str, verify_url: str) -> None:
+    nombre_display = nombre or to
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Confirma tu correo electrónico</h3>
+      <p>Hola {nombre_display},</p>
+      <p>Gracias por registrarte en Medellín Social. Haz clic en el botón para confirmar tu correo:</p>
+      <div style="margin-top:24px">
+        <a href="{verify_url}"
+           style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">
+          Confirmar correo
+        </a>
+      </div>
+      <p style="margin-top:20px;font-size:12px;color:#999">
+        Este enlace es válido por 24 horas. Si no creaste esta cuenta, ignora este mensaje.
+      </p>
+    """)
+    await send_email(to, "Confirma tu correo · Medellín Social", html)
+
+
+async def send_reset_password(to: str, nombre: str, reset_url: str) -> None:
+    nombre_display = nombre or to
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Restablecer contraseña</h3>
+      <p>Hola {nombre_display},</p>
+      <p>Recibimos una solicitud para restablecer tu contraseña. Haz clic en el botón:</p>
+      <div style="margin-top:24px">
+        <a href="{reset_url}"
+           style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">
+          Restablecer contraseña
+        </a>
+      </div>
+      <p style="margin-top:20px;font-size:12px;color:#999">
+        Este enlace es válido por 1 hora. Si no solicitaste esto, ignora este mensaje.
+      </p>
+    """)
+    await send_email(to, "Restablecer contraseña · Medellín Social", html)
+
+
+async def send_invite_agencia(to: str, agency_nombre: str, invitado_por, invite_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Te invitan a unirte a {agency_nombre}</h3>
+      <p>Hola,</p>
+      <p><strong>{invitado_por.nombre if hasattr(invitado_por, 'nombre') else 'El equipo'}</strong>
+         te invita a formar parte de <strong>{agency_nombre}</strong> en Medellín Social.</p>
+      <p style="color:#62736d;font-size:13px">
+        Como agente miembro recibirás leads de la agencia y podrás gestionar listings en su nombre.
+      </p>
+      <div style="margin-top:24px">
+        <a href="{invite_url}"
+           style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">
+          Aceptar invitación
+        </a>
+      </div>
+      <p style="margin-top:20px;font-size:12px;color:#999">
+        Este enlace es válido por 7 días. Si no esperabas esta invitación, puedes ignorar este correo.
+      </p>
+    """)
+    await send_email(to, f"Invitación para unirte a {agency_nombre} · Medellín Social", html)
+
+
 async def notify_agente_rechazado(email: str, nombre: str, motivo: str, formulario_url: str) -> None:
     html = _wrap(f"""
       <h3 style="color:#D85A30">Solicitud — información adicional requerida</h3>

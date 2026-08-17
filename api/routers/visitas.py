@@ -79,10 +79,15 @@ async def crear_visita(
         except ValueError:
             raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
     async with pool.acquire() as conn:
+        # Auto-populate agent_id if listing.id::text matches the url (new listing model)
+        agent_id = await conn.fetchval(
+            "SELECT agent_id FROM listing WHERE id::text = $1",
+            req.listing_url,
+        )
         row = await conn.fetchrow(
             """
-            INSERT INTO visita_solicitud (listing_url, usuario_id, nombre, telefono, fecha_visita, mensaje)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO visita_solicitud (listing_url, usuario_id, nombre, telefono, fecha_visita, mensaje, agent_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             RETURNING id
             """,
             req.listing_url,
@@ -91,6 +96,7 @@ async def crear_visita(
             req.telefono,
             fecha,
             req.mensaje,
+            agent_id,
         )
     # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
     if req.sin_agente:

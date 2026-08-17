@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as VenderRouteImport } from './routes/vender'
 import { Route as SuscribirseRouteImport } from './routes/suscribirse'
 import { Route as StoresRouteImport } from './routes/stores'
@@ -36,11 +37,18 @@ import { Route as PanelX9k2IndexRouteImport } from './routes/panel-x9k2/index'
 import { Route as SuscripcionExitoRouteImport } from './routes/suscripcion/exito'
 import { Route as SuscripcionCanceladaRouteImport } from './routes/suscripcion/cancelada'
 import { Route as RealtorDashboardRouteImport } from './routes/realtor/dashboard'
+import { Route as RealtorAgencyDashboardRouteImport } from './routes/realtor/agency-dashboard'
+import { Route as RealtorAcceptInviteRouteImport } from './routes/realtor/accept-invite'
 import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
 
+const VerifyEmailRoute = VerifyEmailRouteImport.update({
+  id: '/verify-email',
+  path: '/verify-email',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const VenderRoute = VenderRouteImport.update({
   id: '/vender',
   path: '/vender',
@@ -176,6 +184,16 @@ const RealtorDashboardRoute = RealtorDashboardRouteImport.update({
   path: '/realtor/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const RealtorAgencyDashboardRoute = RealtorAgencyDashboardRouteImport.update({
+  id: '/realtor/agency-dashboard',
+  path: '/realtor/agency-dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RealtorAcceptInviteRoute = RealtorAcceptInviteRouteImport.update({
+  id: '/realtor/accept-invite',
+  path: '/realtor/accept-invite',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
   id: '/negocios/unirse',
   path: '/negocios/unirse',
@@ -222,10 +240,13 @@ export interface FileRoutesByFullPath {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
+  '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
@@ -255,10 +276,13 @@ export interface FileRoutesByTo {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
+  '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
@@ -289,10 +313,13 @@ export interface FileRoutesById {
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
+  '/verify-email': typeof VerifyEmailRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
+  '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
   '/suscripcion/cancelada': typeof SuscripcionCanceladaRoute
   '/suscripcion/exito': typeof SuscripcionExitoRoute
@@ -324,10 +351,13 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
+    | '/verify-email'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/accept-invite'
+    | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
@@ -357,10 +387,13 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
+    | '/verify-email'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/accept-invite'
+    | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
@@ -390,10 +423,13 @@ export interface FileRouteTypes {
     | '/stores'
     | '/suscribirse'
     | '/vender'
+    | '/verify-email'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
     | '/negocios/unirse'
+    | '/realtor/accept-invite'
+    | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
     | '/suscripcion/cancelada'
     | '/suscripcion/exito'
@@ -424,10 +460,13 @@ export interface RootRouteChildren {
   StoresRoute: typeof StoresRoute
   SuscribirseRoute: typeof SuscribirseRoute
   VenderRoute: typeof VenderRoute
+  VerifyEmailRoute: typeof VerifyEmailRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
   NegociosUnirseRoute: typeof NegociosUnirseRoute
+  RealtorAcceptInviteRoute: typeof RealtorAcceptInviteRoute
+  RealtorAgencyDashboardRoute: typeof RealtorAgencyDashboardRoute
   RealtorDashboardRoute: typeof RealtorDashboardRoute
   SuscripcionCanceladaRoute: typeof SuscripcionCanceladaRoute
   SuscripcionExitoRoute: typeof SuscripcionExitoRoute
@@ -436,6 +475,13 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/verify-email': {
+      id: '/verify-email'
+      path: '/verify-email'
+      fullPath: '/verify-email'
+      preLoaderRoute: typeof VerifyEmailRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/vender': {
       id: '/vender'
       path: '/vender'
@@ -625,6 +671,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RealtorDashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/realtor/agency-dashboard': {
+      id: '/realtor/agency-dashboard'
+      path: '/realtor/agency-dashboard'
+      fullPath: '/realtor/agency-dashboard'
+      preLoaderRoute: typeof RealtorAgencyDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/realtor/accept-invite': {
+      id: '/realtor/accept-invite'
+      path: '/realtor/accept-invite'
+      fullPath: '/realtor/accept-invite'
+      preLoaderRoute: typeof RealtorAcceptInviteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/negocios/unirse': {
       id: '/negocios/unirse'
       path: '/negocios/unirse'
@@ -680,10 +740,13 @@ const rootRouteChildren: RootRouteChildren = {
   StoresRoute: StoresRoute,
   SuscribirseRoute: SuscribirseRoute,
   VenderRoute: VenderRoute,
+  VerifyEmailRoute: VerifyEmailRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
   NegociosUnirseRoute: NegociosUnirseRoute,
+  RealtorAcceptInviteRoute: RealtorAcceptInviteRoute,
+  RealtorAgencyDashboardRoute: RealtorAgencyDashboardRoute,
   RealtorDashboardRoute: RealtorDashboardRoute,
   SuscripcionCanceladaRoute: SuscripcionCanceladaRoute,
   SuscripcionExitoRoute: SuscripcionExitoRoute,

@@ -1,4 +1,5 @@
 import os
+import secrets
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 
@@ -11,6 +12,8 @@ from pydantic import BaseModel, EmailStr
 from api.db import get_pool
 from api.dependencies import JWT_ALGORITHM, JWT_SECRET, get_current_user
 from api.limiter import limiter
+
+_APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
 _bearer = HTTPBearer()
 
@@ -97,6 +100,24 @@ async def register(request: Request, req: RegisterRequest = Body(...)):
         """,
         req.email, password_hash, req.nombre, req.apellido, req.origen,
     )
+
+    # Send verification email (best-effort — don't block registration on SMTP failure)
+    try:
+        from api.utils.email import send_verify_email
+        verify_token = secrets.token_urlsafe(32)
+        expires = datetime.now(timezone.utc) + timedelta(hours=24)
+        await pool.execute(
+            """INSERT INTO email_verification_tokens (usuario_id, token, expires_at)
+               VALUES ($1, $2, $3)
+               ON CONFLICT (usuario_id) DO UPDATE
+                   SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
+            user_id, verify_token, expires,
+        )
+        verify_url = f"{_APP_URL}/verify-email?token={verify_token}"
+        await send_verify_email(to=req.email, nombre=req.nombre or "", verify_url=verify_url)
+    except Exception:
+        pass  # ponytail: silent — user can request resend later
+
     token = _make_token(user_id)
     return AuthResponse(
         token=token,
@@ -221,6 +242,30 @@ async def refresh_token(
     )
 
 
+# ── Email verification ────────────────────────────────────────────────────────
+
+@router.get("/verify-email", status_code=200)
+async def verify_email(token: str):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT usuario_id, expires_at, used FROM email_verification_tokens WHERE token = $1",
+        token,
+    )
+    if row is None or row["used"]:
+        raise HTTPException(status_code=400, detail="Token inválido o ya utilizado")
+    if row["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Token expirado. Regístrate de nuevo o solicita reenvío.")
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE usuarios SET email_verificado = TRUE WHERE id = $1", row["usuario_id"]
+            )
+            await conn.execute(
+                "UPDATE email_verification_tokens SET used = TRUE WHERE token = $1", token
+            )
+    return {"ok": True, "message": "Correo verificado correctamente"}
+
+
 # ── Password reset ─────────────────────────────────────────────────────────────
 
 class ForgotPasswordRequest(BaseModel):
@@ -235,35 +280,32 @@ class ResetPasswordRequest(BaseModel):
 @router.post("/forgot-password", status_code=200)
 @limiter.limit("3/minute")
 async def forgot_password(request: Request, req: ForgotPasswordRequest = Body(...)):
-    """
-    Generates a password-reset token valid for 1 hour.
-    In production this token would be emailed; during beta it is returned
-    directly in the response so the frontend can link straight to the
-    reset form without an SMTP dependency.
-    """
-    import secrets
+    from api.utils.email import send_reset_password
     pool = get_pool()
-    user = await pool.fetchrow("SELECT id FROM usuarios WHERE email = $1", req.email)
+    user = await pool.fetchrow(
+        "SELECT id, nombre FROM usuarios WHERE email = $1", req.email
+    )
+    # Always 200 — avoid email enumeration
     if user is None:
-        # Return 200 regardless to avoid email enumeration
-        return {"message": "Si el correo existe recibirás instrucciones.", "reset_token": None}
+        return {"message": "Si el correo existe recibirás instrucciones."}
 
     token = secrets.token_urlsafe(32)
     expires = datetime.now(timezone.utc) + timedelta(hours=1)
-
     await pool.execute(
-        """
-        INSERT INTO password_reset_tokens (usuario_id, token, expires_at)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (usuario_id) DO UPDATE
-            SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE
-        """,
+        """INSERT INTO password_reset_tokens (usuario_id, token, expires_at)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (usuario_id) DO UPDATE
+               SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
         user["id"], token, expires,
     )
-    return {
-        "message": "Token generado. En producción se enviaría por email.",
-        "reset_token": token,
-    }
+    reset_url = f"{_APP_URL}/reset-password?token={token}"
+    try:
+        await send_reset_password(
+            to=req.email, nombre=user["nombre"] or "", reset_url=reset_url
+        )
+    except Exception:
+        pass  # ponytail: silent — token in DB, user can retry
+    return {"message": "Si el correo existe recibirás instrucciones."}
 
 
 @router.post("/reset-password", status_code=200)

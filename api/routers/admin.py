@@ -4,7 +4,7 @@ import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.db import get_pool
@@ -793,3 +793,25 @@ async def update_lead(
         *params,
     )
     return dict(updated)
+
+
+# ── SMTP Test ──────────────────────────────────────────────────────────────────
+
+class TestEmailRequest(BaseModel):
+    to: Optional[str] = None  # defaults to ADMIN_EMAIL
+
+
+@router.post("/test-email", status_code=200)
+async def test_email(
+    req: TestEmailRequest = Body(default=TestEmailRequest()),
+    admin: dict = Depends(require_admin),
+):
+    """Send a test email to verify SMTP config. Defaults to ADMIN_EMAIL."""
+    from api.utils.email import send_email, ADMIN_EMAIL
+    target = req.to or ADMIN_EMAIL
+    await send_email(
+        target,
+        "Test SMTP · Medellín Social",
+        "<p>SMTP funciona correctamente desde Medellín Social.</p>",
+    )
+    return {"ok": True, "sent_to": target}

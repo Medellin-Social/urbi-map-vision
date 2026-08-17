@@ -17,7 +17,7 @@ from api.db import create_pool, close_pool, get_pool
 from api import parametros
 from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
-from api.routers import admin, admin_agentes, afiliados, alertas, asignador, auth, barrios, business, calculadora, comparador, comunidad, comunas, embajadores, favoritos, historial, intake, listings, listings_propios, moderacion, oportunidades, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
+from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrios, business, calculadora, comparador, comunidad, comunas, embajadores, favoritos, historial, intake, listings, listings_propios, moderacion, oportunidades, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -142,6 +142,7 @@ app.include_router(moderacion.router,       prefix="/api/v1/admin",             
 app.include_router(admin_agentes.router,    prefix="/api/v1/admin",                tags=["realtor-admin-agentes"])
 app.include_router(asignador.router,        prefix="/api/v1",                      tags=["realtor-asignador"])
 app.include_router(realtor.router,          prefix="/api/v1/realtor",              tags=["realtor-dashboard"])
+app.include_router(agency.router,           prefix="/api/v1/agency",               tags=["agency-dashboard"])
 app.include_router(visitas.router,          prefix="/api/v1/visitas",              tags=["visitas"])
 app.include_router(zonas.router,            prefix="/api/v1/zonas",                tags=["zonas"])
 
