@@ -1,0 +1,2017 @@
+// Medellín Social — schema DB generado 2026-08-17 desde information_schema (local)
+// Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io
+
+Table "analytics.barrios_airbnb_real" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_listings_airbnb" bigint
+  "n_entire_home" bigint
+  "n_private_room" bigint
+  "n_superhosts" bigint
+  "ocupacion_p25_pct" numeric
+  "ocupacion_p50_pct" numeric
+  "ocupacion_p75_pct" numeric
+  "adr_p50_usd" numeric
+  "adr_p50_cop" numeric
+  "ingresos_anuales_p50_usd" numeric
+  "ingresos_anuales_p50_cop" numeric
+  "yield_airbnb_real_pct" numeric
+  "rating_promedio" numeric
+  "reviews_promedio" numeric
+  "precio_venta_m2_p50_cop" numeric
+  "area_promedio_m2" numeric
+  "mock_n_listings" int
+  "mock_ocupacion_pct" numeric
+  "mock_adr_cop" numeric
+  "mock_ingresos_anuales_cop" numeric
+  "diff_ocupacion_pct" numeric
+  "diff_adr_cop" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_amenities" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "municipio" text
+  "n_listings" bigint
+  "pct_wifi" numeric
+  "pct_ac" numeric
+  "pct_kitchen" numeric
+  "pct_washer" numeric
+  "score_equipamiento" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_cd" {
+  "barrio_id" int [pk, not null]
+  "cd_comuna" int
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.barrios_contexto" {
+  "barrio_id" int [pk, not null]
+  "yield_bruto_pct" numeric
+  "n_listings_airbnb" int
+  "score_corto" numeric
+  "score_mediano" numeric
+  "score_largo" numeric
+  "liquidez_score" numeric
+  "indice_nomada" numeric
+  "seguridad_score" numeric
+  "var_anual_pct" numeric
+  "pct_wifi" numeric
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.barrios_liquidez" {
+  "barrio_id" int
+  "precio_venta_m2_p50" numeric
+  "n_listings_venta_total" bigint
+  "dias_mercado_p25" numeric
+  "dias_mercado_p50" numeric
+  "pct_frescos" numeric
+  "pct_antiguos" numeric
+  "pct_listings_con_fecha" numeric
+  "n_listings_airbnb" bigint
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "nota_metodologia" text
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_medianas" {
+  "barrio_id" int [not null]
+  "tipo_inmueble" text
+  "m2_mediana" bigint
+  "arr_mediana" bigint
+  "refreshed_at" timestamptz
+  "m2_p25" bigint
+  "m2_p75" bigint
+  "arr_p25" bigint
+  "arr_p75" bigint
+}
+
+Table "analytics.barrios_mercado" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_venta" bigint
+  "precio_venta_promedio" numeric
+  "area_promedio_m2" numeric
+  "precio_venta_m2_p25" numeric
+  "precio_venta_m2_p50" numeric
+  "precio_venta_m2_p75" numeric
+  "n_arriendo" bigint
+  "precio_arriendo_p25" numeric
+  "precio_arriendo_p50" numeric
+  "precio_arriendo_p75" numeric
+  "ratio_precio_arriendo" numeric
+  "yield_bruto" numeric
+  "airbnb_n_listings" int
+  "ocupacion_airbnb_pct" numeric
+  "adr_noche_cop" numeric
+  "yield_airbnb_pct" numeric
+  "pbn_precio_justo" numeric
+  "pmn_neto" numeric
+  "poi_precio_oferta" numeric
+  "pbn_precio_justo_m2" numeric
+  "diferencia_total_pct" numeric
+  "diferencia_m2_pct" numeric
+  "estado_precio" text
+  "score_seguridad" int
+  "categoria_seguridad" text
+  "zona_turistica" bool
+  "nota_seguridad" text
+  "tendencia_seguridad" text
+  "score_seguridad_transito" int
+  "precio_renta_media_p50" numeric
+  "precio_renta_media_usd" numeric
+  "yield_renta_media_pct" numeric
+  "yield_renta_media_airbnb_pct" numeric
+  "n_listings_renta_media_airbnb" bigint
+  "ocupacion_renta_media_airbnb_pct" numeric
+  "adr_renta_media_airbnb_usd" numeric
+  "n_listings_renta_media" bigint
+  "premium_vs_largo_pct" numeric
+  "precio_m2_real_p50" numeric
+  "arriendo_real_p50" numeric
+  "yield_real_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_oportunidades" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "oportunidad_detectada" bool
+  "tipo_oportunidad" text
+  "descripcion_oportunidad" text
+  "score_relevante" numeric
+  "score_largo" int
+  "score_corto" int
+  "score_mediano" numeric
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "estado_precio" text
+  "yield_bruto_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_pois_distancia" {
+  "barrio_id" int [pk, not null]
+  "nombre_barrio" text
+  "municipio" text
+  "dist_metro_km" numeric
+  "dist_parque_km" numeric
+  "dist_mall_km" numeric
+  "n_universidades_2km" int
+  "n_hospitales_3km" int
+  "calculado_en" timestamptz
+  "n_cafes_500m" int
+  "n_coworking_1km" int
+  "n_gimnasios_1km" int
+  "n_restaurantes_500m" int
+  "n_bares_500m" int
+  "indice_nomada" numeric
+  "n_yoga_1km" int
+  "dist_yoga_km" numeric
+  "n_colegios_1km" int
+  "dist_colegio_km" numeric
+  "walk_score" int
+  "transit_score" int
+}
+
+Table "analytics.barrios_renta_media" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_listings_renta_media" bigint
+  "n_flatio" bigint
+  "n_airbnb_mensual" bigint
+  "n_homads" bigint
+  "precio_renta_media_p50" numeric
+  "precio_renta_media_usd" numeric
+  "premium_vs_largo_pct" numeric
+  "arriendo_largo_p50" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_renta_segmentada" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "tipo_renta" text
+  "n_listings" bigint
+  "ocupacion_p50" numeric
+  "adr_p50_usd" numeric
+  "adr_p50_cop" numeric
+  "revenue_anual_p50_usd" numeric
+  "yield_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_score" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "estrato" int
+  "score_total" int
+  "categoria_inversion" text
+  "color_hex" text
+  "score_yield" int
+  "score_precio" int
+  "score_seguridad" int
+  "score_conectividad" int
+  "score_confiabilidad" int
+  "mejor_yield_pct" numeric
+  "mejor_tipo_renta" text
+  "estado_precio" text
+  "categoria_seguridad" text
+  "dist_metro_km" numeric
+  "n_datos_total" bigint
+  "precio_m2_venta" numeric
+  "arriendo_p50" numeric
+  "score_airbnb_ocupacion" numeric
+  "adr_cop" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_score_consolidado" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_corto" int
+  "categoria_corto" text
+  "color_corto" text
+  "pts_yield_airbnb" int
+  "score_mediano" numeric
+  "categoria_mediano" text
+  "color_mediano" text
+  "pts_yield_medio" int
+  "score_largo" int
+  "categoria_largo" text
+  "color_largo" text
+  "pts_yield_largo" int
+  "perfil_recomendado" text
+  "precio_m2_venta_p50" numeric
+  "arriendo_p50" numeric
+  "estado_precio" text
+  "yield_airbnb_pct" numeric
+  "yield_bruto_pct" numeric
+  "yield_renta_media_pct" numeric
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "nota_metodologia" text
+  "indice_verde_pct" numeric
+  "categoria_verde" text
+  "score_verde" int
+  "pct_wifi" numeric
+  "pct_ac" numeric
+  "pct_kitchen" numeric
+  "pct_washer" numeric
+  "score_equipamiento" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_seguridad" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "codigo_comuna" text
+  "zona_turistica" bool
+  "casos_residente_3anios" bigint
+  "casos_residente_por_1000hab" numeric
+  "casos_totales_3anios" bigint
+  "casos_por_1000hab" numeric
+  "score_seguridad_residente" int
+  "ranking_seguridad" bigint
+  "score_seguridad_transito" int
+  "tendencia" text
+  "categoria_seguridad" text
+  "nota_seguridad" text
+}
+
+Table "analytics.barrios_top10_yield" {
+  "ranking" bigint
+  "barrio" text
+  "municipio" text
+  "yield_media_pct" numeric
+  "yield_airbnb_pct" numeric
+  "yield_largo_pct" numeric
+  "premium_vs_largo_pct" numeric
+  "n_listings" bigint
+  "precio_renta_media_usd" numeric
+  "categoria_seguridad" text
+  "zona_turistica" bool
+}
+
+Table "analytics.barrios_trafico_perfil" {
+  "barrio_id" int [pk, not null]
+  "nombre_barrio" text
+  "zona" text
+  "nivel_trafico" text
+  "jam_prom" numeric
+  "speed_ratio_prom" numeric
+  "pico_am_inicio" smallint
+  "pico_am_fin" smallint
+  "pico_pm_inicio" smallint
+  "pico_pm_fin" smallint
+  "n_muestras" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_verde" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "municipio" text
+  "n_parques" bigint
+  "area_barrio_m2" numeric
+  "area_parques_estimada_m2" numeric
+  "indice_verde_pct" numeric
+  "categoria_verde" text
+  "score_verde" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.catastro_comunas_stats" {
+  "comuna" text
+  "total_predios" int
+  "pct_apartamento" numeric
+  "area_mediana_apto_m2" int
+  "avaluo_m2" int
+}
+
+Table "analytics.comparador_renta" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "yield_corta" numeric
+  "occ_corta" numeric
+  "adr_corta" numeric
+  "n_corta" bigint
+  "yield_media" numeric
+  "occ_media" numeric
+  "adr_media" numeric
+  "n_media" bigint
+  "yield_larga" numeric
+  "occ_larga" numeric
+  "adr_larga" numeric
+  "n_larga" bigint
+  "tipos_con_datos" bigint
+  "mejor_opcion" text
+}
+
+Table "analytics.listings_georef" {
+  "url" text [pk, not null]
+  "lat" float8 [not null]
+  "lon" float8 [not null]
+  "url_activa" bool
+  "estrato_real" int
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.listings_vs_catastro" {
+  "listing_uid" text
+  "fuente" text
+  "tier" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio_cop" numeric
+  "precio_m2" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" numeric
+  "barrio_raw" text
+  "barrio_id" int
+  "barrio_comuna" text
+  "lat" float8
+  "lon" float8
+  "geom" USER-DEFINED
+  "url" text
+  "n_duplicados" bigint
+  "precio_variable" bool
+  "fecha_scraping" timestamptz
+  "cd_comuna" int
+  "n_predios_catastro" bigint
+  "avaluo_m2_catastro" numeric
+  "avaluo_m2_catastro_mediana" float8
+  "area_construccion_prom" numeric
+  "catastro_nivel" text
+  "ratio_mercado_catastro" numeric
+  "categoria_precio_catastro" text
+}
+
+Table "analytics.proyecciones_valorizacion" {
+  "estrato_sistema" int
+  "factor_ajuste" numeric
+  "baseline_5anos_pct" numeric
+  "baseline_3anos_pct" numeric
+  "baseline_ultimo_anio_pct" numeric
+  "var_5anos_ajustado" numeric
+  "var_3anos_ajustado" numeric
+  "tendencia_reciente" text
+  "proyeccion_3anos_pct" numeric
+  "proyeccion_5anos_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.resumen_barrios" {
+  "nombre_barrio" text
+  "comuna" text
+  "estrato" smallint
+  "area_km2" numeric
+  "dist_metro_km" numeric
+  "dist_parque_km" numeric
+  "dist_mall_km" numeric
+  "n_universidades_2km" int
+  "n_hospitales_3km" int
+  "precio_venta_m2_promedio" numeric
+  "precio_arriendo_promedio" numeric
+  "n_listings_venta" bigint
+  "n_listings_arriendo" bigint
+  "n_listings_total" bigint
+}
+
+Table "analytics.score_corto_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_corto" int
+  "categoria_corto" text
+  "color_corto" text
+  "yield_score" int
+  "rating_score" int
+  "listings_score" int
+  "ocupacion_score" int
+  "mall_score" int
+  "mejor_yield_airbnb" numeric
+  "n_listings_airbnb" bigint
+  "ocupacion_p50" numeric
+  "rating_location_avg" numeric
+  "dist_mall_km" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.score_largo_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_largo" int
+  "categoria_largo" text
+  "color_largo" text
+  "pbn_largo_score" int
+  "yield_largo_score" int
+  "seg_largo_score" int
+  "metro_largo_score" int
+  "valorizacion_score" int
+  "estado_precio" text
+  "yield_bruto_pct" numeric
+  "score_seguridad_residente" int
+  "dist_metro_km" numeric
+  "tendencia_valorizacion" text
+  "var_anual_5anos_pct" numeric
+  "estrato_barrio" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.score_mediano_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_mediano" numeric
+  "categoria_mediano" text
+  "color_mediano" text
+  "yield_medio_score" int
+  "nomada_score" numeric
+  "pbn_score" int
+  "seg_medio_score" int
+  "pts_verde" int
+  "pts_equip" numeric
+  "yield_nomada" numeric
+  "yield_renta_media_pct" numeric
+  "yield_renta_media_airbnb_pct" numeric
+  "estado_precio" text
+  "indice_nomada" numeric
+  "n_yoga" int
+  "indice_verde_pct" numeric
+  "categoria" text
+  "rating_location_avg" numeric
+  "tendencia" text
+  "calculado_en" timestamptz
+}
+
+Table afiliados {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "ciudad_id" int
+  "codigo_referido" varchar [not null]
+  "comision_pct" numeric
+  "total_referidos" int
+  "total_ganado_usd" numeric
+  "activo" bool
+  "created_at" timestamp
+}
+
+Table agency {
+  "id" uuid [pk, not null]
+  "nombre" text [not null]
+  "nit" text
+  "tipo" USER-DEFINED [not null]
+  "verificada" bool [not null]
+  "plan" text
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+}
+
+Table agency_invite {
+  "id" uuid [pk, not null]
+  "agency_id" uuid [not null]
+  "email" text [not null]
+  "token" uuid [not null]
+  "estado" text [not null]
+  "agent_id" uuid
+  "created_at" timestamptz [not null]
+  "expires_at" timestamptz [not null]
+}
+
+Table agency_member {
+  "agency_id" uuid [pk, not null]
+  "agent_id" uuid [pk, not null]
+  "rol" USER-DEFINED [not null]
+}
+
+Table agent {
+  "id" uuid [pk, not null]
+  "usuario_id" int
+  "email" text [not null]
+  "nombre" text [not null]
+  "telefono" text [not null]
+  "foto_url" text
+  "estado" USER-DEFINED [not null]
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+  "motivo_estado" text
+}
+
+Table agent_disponibilidad {
+  "id" uuid [pk, not null]
+  "agent_id" uuid [not null]
+  "dia_semana" smallint [not null]
+  "hora_inicio" time without time zone [not null]
+  "hora_fin" time without time zone [not null]
+  "created_at" timestamptz [not null]
+}
+
+Table agente_reviews {
+  "id" int [pk, not null]
+  "agente_id" int
+  "usuario_id" int
+  "rating" int [not null]
+  "comentario" text
+  "created_at" timestamp
+}
+
+Table agente_solicitudes {
+  "id" int [pk, not null]
+  "listing_id" int [not null]
+  "agente_id" int [not null]
+  "user_id" int [not null]
+  "estado" varchar
+  "mensaje" text
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table agentes {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "telefono" varchar
+  "whatsapp" varchar
+  "email" varchar
+  "licencia" varchar
+  "bio" text
+  "ciudad_id" int
+  "idiomas" array
+  "plan" varchar
+  "created_at" timestamp
+  "updated_at" timestamp
+  "nombre_completo" text
+  "cedula_numero" text
+  "cedula_foto_frente" text
+  "cedula_foto_reverso" text
+  "foto_perfil" text
+  "fecha_nacimiento" date
+  "rut_documento" text
+  "tarjeta_profesional" text
+  "inmobiliaria_nombre" text
+  "inmobiliaria_nit" text
+  "es_independiente" bool
+  "anos_experiencia" int
+  "transacciones_cerradas" int
+  "especialidad" array
+  "tipo_inmueble" array
+  "precio_rango_min" numeric
+  "precio_rango_max" numeric
+  "zonas_opera" array
+  "telefono_verificado" bool
+  "email_verificado" bool
+  "linkedin" text
+  "instagram" text
+  "sitio_web" text
+  "referencia_1_nombre" text
+  "referencia_1_telefono" text
+  "referencia_1_tipo" text
+  "referencia_2_nombre" text
+  "referencia_2_telefono" text
+  "referencia_2_tipo" text
+  "referencia_3_nombre" text
+  "referencia_3_telefono" text
+  "referencia_3_tipo" text
+  "acepta_terminos" bool
+  "acepta_politica" bool
+  "acepta_suspension" bool
+  "firma_timestamp" timestamptz
+  "estado" text
+  "motivo_rechazo" text
+  "fecha_registro" timestamptz
+  "fecha_aprobacion" timestamptz
+  "aprobado_por" text
+}
+
+Table aplicaciones_afiliado {
+  "id" int [pk, not null]
+  "nombre" varchar [not null]
+  "email" varchar [not null]
+  "telefono" varchar
+  "canal" varchar
+  "estado" varchar
+  "ciudad_id" int
+  "created_at" timestamp
+}
+
+Table aplicaciones_embajador {
+  "id" int [pk, not null]
+  "nombre" varchar [not null]
+  "email" varchar [not null]
+  "telefono" varchar
+  "barrio_id" int
+  "experiencia" text
+  "motivacion" text
+  "estado" varchar
+  "ciudad_id" int
+  "created_at" timestamp
+}
+
+Table callback_request {
+  "id" int [pk, not null]
+  "created_at" timestamptz [not null]
+  "priority_weight" int [not null]
+  "callback_data" json [not null]
+  "callback_type" varchar(20) [not null]
+  "processor_subdir" varchar(2000)
+}
+
+Table ciudades {
+  "id" int [pk, not null]
+  "nombre" varchar [not null]
+  "slug" varchar [not null]
+  "pais" varchar
+  "activa" bool
+  "lat" float8
+  "lon" float8
+  "created_at" timestamp
+}
+
+Table comparaciones_historial {
+  "id" int [pk, not null]
+  "usuario_id" int [not null]
+  "tipo" text [not null]
+  "items" jsonb [not null]
+  "filtro_inversion" text
+  "nombre" text
+  "fecha_creacion" timestamptz [not null]
+}
+
+Table configuracion_mapa {
+  "usuario_id" int [pk, not null]
+  "zoom_default" numeric
+  "centro_lat" numeric
+  "centro_lng" numeric
+  "capas_visibles" array
+  "score_display" varchar
+  "updated_at" timestamp
+}
+
+Table deals {
+  "id" int [pk, not null]
+  "tienda_id" int
+  "tipo_deal" varchar [not null]
+  "descripcion" varchar [not null]
+  "categoria" varchar
+  "barrio_id" int
+  "ciudad_id" int
+  "fecha_inicio" date
+  "fecha_fin" date
+  "activo" bool
+  "destacado" bool
+  "created_at" timestamp
+  "suscripcion_id" int
+  "descripcion_larga" text
+  "foto_url" varchar
+  "vistas" int
+  "clicks" int
+}
+
+Table due_diligence_item {
+  "id" uuid [pk, not null]
+  "intake_id" uuid [not null]
+  "clave" text [not null]
+  "declarado" jsonb
+  "estado" USER-DEFINED [not null]
+  "nota" text
+  "verificado_por" uuid
+  "verificado_at" timestamptz
+  "created_at" timestamptz [not null]
+}
+
+Table email_verification_tokens {
+  "id" int [pk, not null]
+  "usuario_id" int [not null]
+  "token" text [not null]
+  "expires_at" timestamptz [not null]
+  "used" bool [not null]
+  "created_at" timestamptz [not null]
+}
+
+Table embajadores {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "barrio_id" int
+  "ciudad_id" int
+  "codigo" varchar [not null]
+  "bio" text
+  "foto_url" varchar
+  "instagram" varchar
+  "comision_pct" numeric
+  "total_referidos" int
+  "total_ganado_usd" numeric
+  "activo" bool
+  "verificado" bool
+  "created_at" timestamp
+}
+
+Table eventos {
+  "id" int [pk, not null]
+  "titulo" varchar [not null]
+  "descripcion" text
+  "categoria" varchar
+  "barrio_id" int
+  "ciudad_id" int
+  "fecha_inicio" timestamp [not null]
+  "fecha_fin" timestamp
+  "precio" numeric
+  "gratuito" bool
+  "url_externo" varchar
+  "fuente" varchar
+  "fuente_id" varchar
+  "foto_url" varchar
+  "lat" float8
+  "lon" float8
+  "organizador" varchar
+  "max_asistentes" int
+  "activo" bool
+  "destacado" bool
+  "subido_por" int
+  "created_at" timestamp
+  "updated_at" timestamp
+  "tipo_audiencia" varchar
+  "moneda" varchar(10)
+}
+
+Table favoritos {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "barrio_id" int
+  "nota" text
+  "created_at" timestamp
+  "listing_uid" varchar
+  "tipo" varchar
+}
+
+Table historial {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "tipo" varchar [not null]
+  "barrio_id" int
+  "metadata" jsonb
+  "created_at" timestamp
+}
+
+Table intake {
+  "id" uuid [pk, not null]
+  "owner_id" uuid [not null]
+  "estado" USER-DEFINED [not null]
+  "agent_id" uuid
+  "listing_id" uuid
+  "operacion" USER-DEFINED [not null]
+  "tipo_inmueble" USER-DEFINED [not null]
+  "geom" USER-DEFINED [not null]
+  "municipio" text
+  "barrio" text
+  "direccion_aprox" text
+  "zona_nivel" text
+  "zona_codigo" text
+  "precio_esperado" numeric
+  "area_m2" numeric
+  "habitaciones" smallint
+  "banos" smallint
+  "declaraciones" jsonb
+  "notas_owner" text
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+}
+
+Table leads {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "estado" varchar
+  "asignado_a" varchar
+  "notas" text
+  "created_at" timestamp
+}
+
+Table leads_negocio {
+  "id" int [pk, not null]
+  "nombre_negocio" varchar [not null]
+  "email" varchar [not null]
+  "telefono" varchar
+  "categoria" varchar
+  "barrio_id" int
+  "plan_tipo" varchar
+  "mensaje" text
+  "estado" varchar
+  "ciudad_id" int
+  "created_at" timestamp
+}
+
+Table listing {
+  "id" uuid [pk, not null]
+  "slug" text [not null]
+  "agency_id" uuid
+  "agent_id" uuid
+  "estado" USER-DEFINED [not null]
+  "geom" USER-DEFINED [not null]
+  "municipio" text
+  "barrio" text
+  "direccion_aprox" text
+  "mostrar_exacto" bool [not null]
+  "operacion" USER-DEFINED [not null]
+  "precio" numeric [not null]
+  "moneda" text [not null]
+  "administracion" numeric
+  "tipo_inmueble" USER-DEFINED [not null]
+  "area_m2" numeric
+  "habitaciones" smallint
+  "banos" smallint
+  "parqueaderos" smallint
+  "estrato" smallint
+  "antiguedad_anios" smallint
+  "titulo" text
+  "descripcion" text
+  "video_url" text
+  "tour_url" text
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+  "published_at" timestamptz
+  "verificado" bool [not null]
+  "verificado_at" timestamptz
+  "verificado_por" uuid
+  "owner_id" uuid
+  "amoblado" bool
+  "amenidades" array
+  "mascotas" bool
+  "permite_airbnb" bool
+  "area_lote_m2" numeric
+  "nombre_contacto" text
+  "telefono" text
+  "email_contacto" text
+  "horario_contacto" text
+  "destacado" bool [not null]
+  "vistas" int [not null]
+  "declaraciones" jsonb
+}
+
+Table listing_media {
+  "id" uuid [pk, not null]
+  "listing_id" uuid [not null]
+  "url" text [not null]
+  "orden" smallint [not null]
+  "es_portada" bool [not null]
+}
+
+Table listing_moderacion {
+  "id" uuid [pk, not null]
+  "listing_id" uuid [not null]
+  "accion" USER-DEFINED [not null]
+  "motivo" text
+  "moderador_id" text [not null]
+  "created_at" timestamptz [not null]
+}
+
+Table listings_propios {
+  "id" int [pk, not null]
+  "agente_id" int
+  "ciudad_id" int
+  "barrio_id" int
+  "tipo_operacion" varchar [not null]
+  "tipo_inmueble" varchar [not null]
+  "precio_cop" numeric
+  "precio_usd" numeric
+  "area_m2" float8
+  "habitaciones" int
+  "banos" numeric
+  "descripcion" text
+  "amenidades" array
+  "fotos" array
+  "lat" float8
+  "lon" float8
+  "direccion" varchar
+  "estrato" int
+  "amoblado" bool
+  "parqueaderos" int
+  "piso" int
+  "ano_construccion" int
+  "estado" varchar
+  "destacado" bool
+  "vistas" int
+  "created_at" timestamp
+  "updated_at" timestamp
+  "user_id" int
+  "nombre_contacto" varchar
+  "telefono" varchar
+  "email_contacto" varchar
+  "horario_contacto" varchar
+  "area_lote_m2" float8
+  "antiguedad" varchar
+  "mascotas" varchar
+  "permite_airbnb" varchar
+  "administracion_cop" numeric
+  "fuente" varchar
+  "fecha_publicacion" timestamp
+}
+
+Table noticias {
+  "id" int [pk, not null]
+  "fuente" varchar [not null]
+  "titulo" varchar [not null]
+  "url" varchar [not null]
+  "fecha_publicacion" timestamp
+  "activa" bool
+  "created_at" timestamp
+}
+
+Table owner {
+  "id" uuid [pk, not null]
+  "usuario_id" int
+  "nombre" text [not null]
+  "email" text [not null]
+  "telefono" text [not null]
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+  "telefono_verificado" bool [not null]
+  "otp_codigo" text
+  "otp_expira" timestamptz
+}
+
+Table password_reset_tokens {
+  "id" int [pk, not null]
+  "usuario_id" int [not null]
+  "token" text [not null]
+  "expires_at" timestamptz [not null]
+  "used" bool [not null]
+  "created_at" timestamptz [not null]
+}
+
+Table perfil_inversor {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "presupuesto" varchar
+  "presupuesto_min_cop" bigint
+  "presupuesto_max_cop" bigint
+  "objetivo" varchar
+  "perfil_riesgo" varchar
+  "created_at" timestamp
+  "updated_at" timestamp
+  "tipo_usuario" varchar
+  "n_unidades" varchar
+  "tipo_gestion" varchar
+  "target_inquilino" varchar
+  "amoblado" varchar
+  "tipo_pago" varchar
+  "horizonte_inversion" varchar
+  "primera_propiedad" bool
+  "wants_agent" bool
+  "onboarding_completado_at" timestamp
+}
+
+Table planes_negocio {
+  "id" int [pk, not null]
+  "nombre" varchar [not null]
+  "tipo" varchar [not null]
+  "precio_usd" numeric
+  "precio_cop" numeric
+  "descripcion" text
+  "features" jsonb
+  "activo" bool
+  "created_at" timestamp
+}
+
+Table posts_barrio {
+  "id" int [pk, not null]
+  "barrio_id" int
+  "usuario_id" int
+  "tipo" varchar
+  "contenido" text [not null]
+  "fotos" array
+  "likes" int
+  "activo" bool
+  "created_at" timestamp
+}
+
+Table referidos {
+  "id" int [pk, not null]
+  "afiliado_id" int
+  "embajador_id" int
+  "tienda_id" int
+  "suscripcion_id" int
+  "comision_usd" numeric
+  "estado" varchar
+  "created_at" timestamp
+}
+
+Table simulaciones_historial {
+  "id" int [pk, not null]
+  "usuario_id" int [not null]
+  "listing_id" int
+  "barrio_id" int
+  "presupuesto" numeric
+  "tipo_inversion" text
+  "horizonte_anos" int
+  "con_credito" bool
+  "params" jsonb
+  "resultados" jsonb
+  "fecha_creacion" timestamptz [not null]
+}
+
+Table sponsorship {
+  "id" uuid [pk, not null]
+  "agency_id" uuid [not null]
+  "zona_nivel" USER-DEFINED [not null]
+  "zona_codigo" text [not null]
+  "tier" text
+  "precio_mensual" numeric [not null]
+  "fecha_inicio" date [not null]
+  "fecha_fin" date [not null]
+  "estado" USER-DEFINED [not null]
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+}
+
+Table suscripciones_negocio {
+  "id" int [pk, not null]
+  "tienda_id" int
+  "plan_id" int
+  "ciudad_id" int
+  "barrio_id" int
+  "categoria_exclusiva" varchar
+  "estado" varchar
+  "stripe_subscription_id" varchar
+  "stripe_customer_id" varchar
+  "precio_pagado_usd" numeric
+  "fecha_inicio" date
+  "fecha_fin" date
+  "renovacion_automatica" bool
+  "created_at" timestamp
+  "updated_at" timestamp
+}
+
+Table suscripciones_usuario {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "plan" varchar [not null]
+  "estado" varchar
+  "moneda" varchar
+  "precio" numeric
+  "stripe_customer_id" text
+  "stripe_subscription_id" text
+  "stripe_price_id" text
+  "wompi_subscription_id" text
+  "wompi_customer_id" text
+  "wompi_referencia" text
+  "fecha_inicio" timestamptz
+  "fecha_fin" timestamptz
+  "fecha_creacion" timestamptz
+  "updated_at" timestamptz
+  "cancelacion_solicitada" bool
+}
+
+Table tiendas {
+  "id" int [pk, not null]
+  "nombre" varchar [not null]
+  "descripcion" text
+  "categoria" varchar
+  "subcategoria" varchar
+  "barrio_id" int
+  "ciudad_id" int
+  "direccion" varchar
+  "telefono" varchar
+  "whatsapp" varchar
+  "instagram" varchar
+  "website" varchar
+  "google_place_id" varchar
+  "foto_url" varchar
+  "fotos" array
+  "lat" float8
+  "lon" float8
+  "horario" jsonb
+  "precio_rango" varchar
+  "rating_google" float8
+  "activo" bool
+  "verificado" bool
+  "destacado" bool
+  "subido_por" int
+  "created_at" timestamp
+  "updated_at" timestamp
+  "plan" varchar
+  "featured_badge" bool
+  "featured_desde" date
+}
+
+Table token_blacklist {
+  "id" int [pk, not null]
+  "token" text [not null]
+  "usuario_id" int
+  "revoked_at" timestamp
+}
+
+Table trm {
+  "id" smallint [pk, not null]
+  "valor" numeric [not null]
+  "vigencia" date
+  "updated_at" timestamptz
+}
+
+Table user_events {
+  "id" bigint [not null]
+  "usuario_id" int
+  "session_id" varchar [not null]
+  "event_type" varchar [not null]
+  "entity_type" varchar
+  "entity_id" varchar
+  "barrio_id" int
+  "ciudad_id" int
+  "duration_ms" int
+  "metadata" jsonb
+  "created_at" timestamp
+}
+
+Table user_interests {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "top_barrios" array
+  "inversion_preferida" varchar
+  "precio_min_avg" numeric
+  "precio_max_avg" numeric
+  "tipo_inmueble_top" varchar
+  "categorias_eventos_top" array
+  "categorias_tiendas_top" array
+  "total_sesiones" int
+  "total_eventos" int
+  "avg_session_duration_seg" int
+  "dias_activo" int
+  "ultimo_activo" timestamp
+  "engagement_score" int
+  "inversion_intent_score" int
+  "updated_at" timestamp
+}
+
+Table user_sessions {
+  "id" int [pk, not null]
+  "session_id" varchar [not null]
+  "usuario_id" int
+  "ciudad_id" int
+  "device_type" varchar
+  "browser" varchar
+  "os" varchar
+  "ip_hash" varchar
+  "referrer" varchar
+  "utm_source" varchar
+  "utm_medium" varchar
+  "utm_campaign" varchar
+  "started_at" timestamp
+  "ended_at" timestamp
+  "duration_segundos" int
+  "total_eventos" int
+  "paginas_vistas" int
+}
+
+Table usuarios {
+  "id" int [pk, not null]
+  "email" varchar [not null]
+  "password_hash" varchar [not null]
+  "nombre" varchar
+  "apellido" varchar
+  "created_at" timestamp
+  "last_login" timestamp
+  "activo" bool
+  "rol" varchar
+  "newsletter_activo" bool
+  "newsletter_barrio_id" int
+  "newsletter_intereses" array
+  "fecha_suscripcion" timestamp
+  "plan" varchar
+  "perfil_busqueda" varchar
+  "onboarding_completado" bool
+  "origen_registro" varchar
+  "email_verificado" bool [not null]
+}
+
+Table visita_solicitud {
+  "id" uuid [pk, not null]
+  "listing_url" text [not null]
+  "usuario_id" int
+  "nombre" text
+  "telefono" text
+  "fecha_visita" timestamptz
+  "mensaje" text
+  "estado" text [not null]
+  "created_at" timestamptz [not null]
+  "updated_at" timestamptz [not null]
+  "resultado" text
+  "agent_id" uuid
+}
+
+Table "raw.airbnb_barrios" {
+  "id" int [pk, not null]
+  "barrio_id" int
+  "n_listings" int
+  "ocupacion_pct" numeric
+  "adr_cop" numeric
+  "ingresos_anuales_estimados" numeric
+  "fecha_consulta" timestamptz
+  "raw_data" jsonb
+  "n_listings_fuente" text
+}
+
+Table "raw.airbnb_calendar_portal" {
+  "id" int [pk, not null]
+  "listing_id" bigint
+  "year_month" date
+  "vacant_days" int
+  "reserved_days" int
+  "occupancy" numeric
+  "revenue" numeric
+  "rate_avg" numeric
+  "booked_rate_avg" numeric
+  "booking_lead_time_avg" numeric
+  "length_of_stay_avg" numeric
+  "min_nights_avg" numeric
+  "native_revenue" numeric
+  "native_rate_avg" numeric
+  "native_booked_rate_avg" numeric
+  "fecha_carga" timestamptz
+}
+
+Table "raw.airbnb_listings_portal" {
+  "listing_id" bigint [pk, not null]
+  "listing_name" text
+  "listing_type" text
+  "room_type" text
+  "host_id" bigint
+  "host_name" text
+  "superhost" bool
+  "latitude" float8
+  "longitude" float8
+  "guests" int
+  "bedrooms" int
+  "beds" int
+  "baths" numeric
+  "min_nights" int
+  "cancellation_policy" text
+  "professional_management" bool
+  "guest_favorite" bool
+  "num_reviews" int
+  "rating_overall" numeric
+  "rating_accuracy" numeric
+  "rating_checkin" numeric
+  "rating_cleanliness" numeric
+  "rating_communication" numeric
+  "rating_location" numeric
+  "rating_value" numeric
+  "currency" text
+  "cleaning_fee" numeric
+  "ttm_revenue" numeric
+  "ttm_revenue_native" numeric
+  "ttm_avg_rate" numeric
+  "ttm_avg_rate_native" numeric
+  "ttm_occupancy" float8
+  "ttm_revpar" numeric
+  "ttm_revpar_native" numeric
+  "ttm_reserved_days" int
+  "ttm_available_days" int
+  "ttm_total_days" int
+  "ttm_avg_min_nights" numeric
+  "ttm_avg_length_of_stay" numeric
+  "l90d_revenue" numeric
+  "l90d_avg_rate" numeric
+  "l90d_occupancy" float8
+  "l90d_revpar" numeric
+  "l90d_reserved_days" int
+  "barrio_id" int
+  "fecha_descarga" timestamptz
+  "amenities" text
+}
+
+Table "raw.airbnb_mercado_valle" {
+  "id" int [pk, not null]
+  "municipio" varchar [not null]
+  "barrio_raw" varchar
+  "barrio_id" int
+  "n_listings" int
+  "ocupacion_pct" float8
+  "ocupacion_p25" float8
+  "ocupacion_p50" float8
+  "ocupacion_p75" float8
+  "adr_usd" float8
+  "adr_cop" float8
+  "ingresos_anuales_usd" float8
+  "ingresos_anuales_cop" float8
+  "revpar" float8
+  "pct_entire_home" float8
+  "pct_private_room" float8
+  "rating_promedio" float8
+  "reviews_promedio" float8
+  "pct_superhosts" float8
+  "fuente" varchar
+  "fase" varchar
+  "fecha_extraccion" timestamp
+}
+
+Table "raw.barrios" {
+  "id" int [pk, not null]
+  "nombre" text
+  "comuna" text
+  "municipio" text
+  "fuente" text
+  "raw_props" jsonb
+  "geometry" USER-DEFINED
+  "cargado_en" timestamptz
+  "excluir_inversion" bool
+  "uso_suelo_dominante" varchar
+  "uso_suelo_score" int
+  "ciudad_id" int
+}
+
+Table "raw.catastro_medellin" {
+  "id" int [pk, not null]
+  "matricula_anonimizada" varchar
+  "cd_comuna" int
+  "ds_comuna" varchar
+  "nm_ar_lote" numeric
+  "nm_ar_constru" numeric
+  "area_desenglobe" numeric
+  "cd_uso" int
+  "cd_tipo" int
+  "cd_uso_lote" int
+  "cd_tipo_lote" int
+  "ds_uso_tipo" varchar
+  "vl_av_lote" bigint
+  "vl_av_constru" bigint
+  "vl_avaluo_total" bigint
+  "cd_ind_ru_ur" varchar
+  "fecha_carga" timestamp
+}
+
+Table "raw.catastro_medellin_vigente" {
+  "id" int [pk, not null]
+  "matricula_anonimizada" varchar
+  "cd_comuna" int
+  "ds_comuna" varchar
+  "nm_ar_lote" numeric
+  "nm_ar_constru" numeric
+  "area_desenglobe" numeric
+  "cd_uso" int
+  "cd_tipo" int
+  "cd_uso_lote" int
+  "cd_tipo_lote" int
+  "ds_uso_tipo" varchar
+  "vl_av_lote" bigint
+  "vl_av_constru" bigint
+  "vl_avaluo_total" bigint
+  "cd_ind_ru_ur" varchar
+  "cd_vig_pred" varchar
+  "fecha_carga" timestamp
+}
+
+Table "raw.compraventas_orips" {
+  "id" int [pk, not null]
+  "anio" int
+  "fecha_registro" date
+  "municipio" text
+  "tipo_inmueble" text
+  "area_m2" numeric
+  "valor_cop" bigint
+  "oficina_registro" text
+  "fecha_carga" timestamp
+}
+
+Table "raw.comunas" {
+  "id" int [pk, not null]
+  "codigo" text
+  "nombre" text
+  "comuna_full" text
+  "fuente" text
+  "raw_props" jsonb
+  "geometry" USER-DEFINED
+  "cargado_en" timestamptz
+}
+
+Table "raw.criminalidad_comunas" {
+  "id" int [pk, not null]
+  "anio" smallint [not null]
+  "conducta" text [not null]
+  "codigo_comuna" text [not null]
+  "cantidad_casos" int [not null]
+  "cargado_en" timestamptz [not null]
+}
+
+Table "raw.criminalidad_comunas_mes" {
+  "id" int [pk, not null]
+  "anio" smallint [not null]
+  "mes" smallint [not null]
+  "conducta" text [not null]
+  "codigo_comuna" text [not null]
+  "cantidad_casos" int [not null]
+  "cargado_en" timestamptz [not null]
+}
+
+Table "raw.criminalidad_municipios" {
+  "id" int [pk, not null]
+  "municipio" text [not null]
+  "departamento" text
+  "anio" int
+  "conducta" text
+  "cantidad_casos" int
+  "fuente" text
+  "cargado_en" timestamptz
+}
+
+Table "raw.estratos" {
+  "id" int [pk, not null]
+  "estrato" smallint
+  "estrato_min" smallint
+  "estrato_max" smallint
+  "codigo_comuna" text
+  "nombre_comuna" text
+  "fuente" text
+  "modo_carga" text
+  "nota" text
+  "raw_props" jsonb
+  "geometry" USER-DEFINED
+  "cargado_en" timestamptz
+}
+
+Table "raw.estratos_manzana" {
+  "estrato" int
+  "comuna" text
+  "barrio" text
+  "codigo_barrio" text
+  "geometry" USER-DEFINED
+  "fecha_sincronizacion" timestamp
+  "fuente" text
+}
+
+Table "raw.favoritos_listings" {
+  "id" int [pk, not null]
+  "usuario_id" int
+  "url" varchar [not null]
+  "barrio_id" int
+  "created_at" timestamp
+}
+
+Table "raw.ipvn_dane" {
+  "id" int [pk, not null]
+  "anio" smallint [not null]
+  "trimestre" character [not null]
+  "estrato" text [not null]
+  "indice" numeric
+  "variacion_trimestral_pct" numeric
+  "variacion_anual_pct" numeric
+  "tipo_vivienda" text
+  "cargado_en" timestamptz [not null]
+}
+
+Table "raw.ipvu_banrep" {
+  "id" int [pk, not null]
+  "anio" smallint [not null]
+  "trimestre" character [not null]
+  "indice_nominal" numeric
+  "indice_real" numeric
+  "variacion_trimestral_pct" numeric
+  "variacion_anual_pct" numeric
+  "fuente" text
+  "cargado_en" timestamptz [not null]
+}
+
+Table "raw.listing_media_mirror" {
+  "url" text [pk, not null]
+  "media_uid" uuid [not null]
+  "fuente" text
+  "portada_r2" text
+  "fotos_r2" array
+  "content_hashes" array
+  "n_fotos" smallint
+  "activa" bool [not null]
+  "first_seen" timestamptz [not null]
+  "last_seen" timestamptz [not null]
+}
+
+Table "raw.listing_vistas" {
+  "id" int [pk, not null]
+  "listing_url" varchar [not null]
+  "usuario_id" int
+  "ip_hash" varchar(64)
+  "created_at" timestamp
+}
+
+Table "raw.listings_casadolcecasa" {
+  "id" bigint [pk, not null]
+  "codigo" text
+  "fuente" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" int
+  "parqueaderos" smallint
+  "piso" smallint
+  "estrato_real" int
+  "antiguedad" text
+  "direccion_raw" text
+  "barrio_raw" text
+  "municipio_raw" text
+  "lat" numeric
+  "lon" numeric
+  "geom" USER-DEFINED
+  "barrio_id" int
+  "amenidades" array
+  "fotos" array
+  "descripcion" text
+  "url" text
+  "dedup_hash" varchar
+  "activo" bool
+  "raw_data" jsonb
+  "fecha_scraping" timestamptz
+}
+
+Table "raw.listings_fincaraiz" {
+  "id" int [pk, not null]
+  "fuente" text [not null]
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" int
+  "direccion_raw" text
+  "barrio_raw" text
+  "url" text
+  "fecha_scraping" timestamptz
+  "activo" bool
+  "barrio_id" int
+  "raw_data" jsonb
+  "fecha_publicacion" date
+  "dias_en_mercado" int
+  "dedup_hash" varchar
+  "geom" USER-DEFINED
+  "lat" numeric
+  "lon" numeric
+  "municipio_raw" text
+  "estrato_real" int
+  "url_activa" bool
+  "url_validada_at" timestamp
+  "fecha_primera_vez" timestamp
+  "fecha_ultima_vez_activa" timestamp
+  "descripcion" text
+  "amenidades" array
+  "fotos" array
+  "parqueaderos" smallint
+  "piso" smallint
+  "antiguedad" text
+  "administracion" numeric
+}
+
+Table "raw.listings_metrocuadrado" {
+  "id" int [pk, not null]
+  "fuente" text [not null]
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" int
+  "direccion_raw" text
+  "barrio_raw" text
+  "url" text
+  "lat" float8
+  "lon" float8
+  "estrato" int
+  "fecha_scraping" timestamptz
+  "activo" bool
+  "barrio_id" int
+  "raw_data" jsonb
+  "fecha_publicacion" date
+  "dias_en_mercado" int
+  "dedup_hash" varchar
+  "geom" USER-DEFINED
+  "municipio_raw" text
+  "estrato_real" int
+  "url_activa" bool
+  "url_validada_at" timestamp
+  "fecha_primera_vez" timestamp
+  "fecha_ultima_vez_activa" timestamp
+  "fotos" array
+  "descripcion" text
+  "amenidades" array
+  "parqueaderos" smallint
+  "piso" smallint
+  "antiguedad" text
+  "administracion" numeric
+}
+
+Table "raw.listings_precio_historial" {
+  "id" int [pk, not null]
+  "listing_url" text [not null]
+  "fuente" text [not null]
+  "precio_anterior" numeric [not null]
+  "precio_nuevo" numeric [not null]
+  "fecha_cambio" date [not null]
+  "created_at" timestamp [not null]
+}
+
+Table "raw.listings_premium" {
+  "id" int [pk, not null]
+  "fuente" varchar [not null]
+  "titulo" varchar
+  "descripcion" text
+  "precio_cop" bigint
+  "precio_usd" bigint
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" numeric
+  "parqueaderos" int
+  "piso" int
+  "estrato" int
+  "amoblado" bool
+  "amenidades" array
+  "barrio_raw" varchar
+  "barrio_id" int
+  "municipio" varchar
+  "direccion_raw" varchar
+  "lat" numeric
+  "lon" numeric
+  "agente_nombre" varchar
+  "agente_telefono" varchar
+  "agente_email" varchar
+  "agencia" varchar
+  "url" varchar
+  "fotos" array
+  "tipo_operacion" varchar
+  "tipo_inmueble" varchar
+  "fecha_publicacion" date
+  "fecha_scraping" timestamp
+  "dedup_hash" varchar
+  "fuente_tipo" varchar
+  "geom" USER-DEFINED
+}
+
+Table "raw.listings_renta_media" {
+  "id" int [pk, not null]
+  "fuente" text [not null]
+  "precio_mes_cop" numeric
+  "precio_mes_usd" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "barrio_raw" text
+  "barrio_id" int
+  "url" text
+  "fecha_scraping" timestamptz
+  "amoblado" bool
+  "raw_data" jsonb
+  "titulo" varchar
+  "banos" numeric
+  "incluye_servicios" bool
+  "min_noches" int
+  "lat" numeric
+  "lon" numeric
+  "dedup_hash" varchar
+  "descripcion" text
+  "fotos" array
+  "amenidades" array
+}
+
+Table "raw.parametros_sistema" {
+  "nombre" text [pk, not null]
+  "valor" text [not null]
+  "fuente" text
+  "updated_at" timestamptz
+}
+
+Table "raw.pois" {
+  "id" int [pk, not null]
+  "osm_id" text
+  "nombre" text
+  "tipo" text
+  "subtipo" text
+  "raw_tags" jsonb
+  "geometry" USER-DEFINED
+  "cargado_en" timestamptz
+}
+
+Table "raw.pot_usos_medellin" {
+  "areagraluso" text
+  "subcategoria" text
+  "cod_cat_uso" int
+  "cod_subcat_uso" int
+  "geometry" USER-DEFINED
+  "fuente" text
+}
+
+Table "raw.trafico_muestras" {
+  "id" bigint [pk, not null]
+  "punto_tipo" text [not null]
+  "punto_id" text [not null]
+  "nombre" text
+  "zona" text
+  "hora_local" smallint [not null]
+  "dow" smallint [not null]
+  "jam_avg" numeric
+  "jam_max" numeric
+  "speed_ratio" numeric
+  "n_segmentos" int
+  "muestreado_en" timestamptz [not null]
+}
+
+Table "staging.barrios_enriquecidos" {
+  "id" int
+  "barrio" text
+  "comuna_numero" int
+  "comuna_nombre" text
+  "tipo_division" text
+  "municipio" text
+  "estrato_predominante" smallint
+  "estrato_min" smallint
+  "estrato_max" smallint
+  "estrato_fuente" text
+  "area_km2" numeric
+  "geometry" USER-DEFINED
+}
+
+Table "staging.stg_airbnb_amenities" {
+  "listing_id" bigint
+  "barrio_id" int
+  "flag_wifi" bool
+  "flag_ac" bool
+  "flag_kitchen" bool
+  "flag_washer" bool
+  "flag_heating" bool
+  "flag_hot_water" bool
+}
+
+Table "staging.stg_airbnb_segmentado" {
+  "listing_id" bigint
+  "barrio_id" int
+  "room_type" text
+  "bedrooms" int
+  "baths" numeric
+  "ttm_occupancy" float8
+  "ttm_avg_rate_usd" numeric
+  "ttm_avg_rate_cop" numeric
+  "ttm_revenue_usd" numeric
+  "ttm_avg_min_nights" numeric
+  "ttm_avg_length_of_stay" numeric
+  "tipo_renta" text
+  "flag_mensual" bool
+}
+
+Table "staging.stg_listings" {
+  "id" int
+  "fuente" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" int
+  "direccion_raw" text
+  "barrio_raw" text
+  "barrio_id" int
+  "url" text
+  "fecha_scraping" timestamptz
+  "activo" bool
+  "precio_m2" numeric
+  "fecha_publicacion" date
+  "dias_en_mercado" int
+  "precio_venta_real" numeric
+  "precio_arriendo_real" numeric
+}
+
+Table "staging.stg_listings_unificado" {
+  "listing_uid" text
+  "fuente" text
+  "tier" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio_cop" numeric
+  "precio_usd" bigint
+  "precio_min_cluster" numeric
+  "precio_max_cluster" numeric
+  "precio_variable" bool
+  "area_m2" numeric
+  "precio_m2" numeric
+  "habitaciones" int
+  "banos" numeric
+  "barrio_raw" text
+  "barrio_id" int
+  "direccion_raw" text
+  "lat" float8
+  "lon" float8
+  "geom" USER-DEFINED
+  "url" text
+  "fotos" array
+  "fecha_scraping" timestamptz
+  "n_duplicados" bigint
+  "estrato_real" int
+  "amoblado" bool
+  "antiguedad" text
+  "amenidades" array
+  "verificado" bool
+}
+
+Table "staging.stg_listings_v1_deprecated" {
+  "id" int
+  "fuente" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" int
+  "direccion_raw" text
+  "barrio_raw" text
+  "barrio_id" int
+  "url" text
+  "fecha_scraping" timestamptz
+  "activo" bool
+  "precio_m2" numeric
+  "fecha_publicacion" date
+  "dias_en_mercado" int
+  "precio_venta_real" numeric
+  "precio_arriendo_real" numeric
+}
+
+Table "staging.stg_seguridad" {
+  "comuna_id" int
+  "codigo" text
+  "nombre" text
+  "zona_turistica" bool
+  "casos_totales_3anios" bigint
+  "casos_residente_3anios" bigint
+  "casos_por_1000hab" numeric
+  "casos_residente_por_1000hab" numeric
+  "score_seguridad_residente" int
+  "score_seguridad_transito" int
+  "tendencia" text
+}
+
+Table "staging.stg_valorizacion" {
+  "anio" smallint
+  "trimestre" character
+  "periodo" text
+  "fecha_inicio" date
+  "ipvn_medellin" numeric
+  "ipvu_medellin" numeric
+  "var_anual_nueva_pct" numeric
+  "var_anual_usada_pct" numeric
+  "var_promedio_pct" numeric
+  "var_anual_bajo_pct" numeric
+  "var_anual_medio_pct" numeric
+  "var_anual_alto_pct" numeric
+  "tendencia" text
+  "calculado_en" timestamptz
+}
+
+Ref: afiliados."ciudad_id" > ciudades."id"
+Ref: afiliados."usuario_id" > usuarios."id"
+Ref: agency_invite."agency_id" > agency."id"
+Ref: agency_invite."agent_id" > agent."id"
+Ref: agency_member."agency_id" > agency."id"
+Ref: agency_member."agent_id" > agent."id"
+Ref: agent."usuario_id" > usuarios."id"
+Ref: agent_disponibilidad."agent_id" > agent."id"
+Ref: agente_reviews."agente_id" > agentes."id"
+Ref: agente_reviews."usuario_id" > usuarios."id"
+Ref: agente_solicitudes."agente_id" > agentes."id"
+Ref: agente_solicitudes."listing_id" > listings_propios."id"
+Ref: agente_solicitudes."user_id" > usuarios."id"
+Ref: agentes."ciudad_id" > ciudades."id"
+Ref: agentes."usuario_id" > usuarios."id"
+Ref: aplicaciones_afiliado."ciudad_id" > ciudades."id"
+Ref: aplicaciones_embajador."barrio_id" > "raw.barrios"."id"
+Ref: aplicaciones_embajador."ciudad_id" > ciudades."id"
+Ref: comparaciones_historial."usuario_id" > usuarios."id"
+Ref: configuracion_mapa."usuario_id" > usuarios."id"
+Ref: deals."barrio_id" > "raw.barrios"."id"
+Ref: deals."ciudad_id" > ciudades."id"
+Ref: deals."suscripcion_id" > suscripciones_negocio."id"
+Ref: deals."tienda_id" > tiendas."id"
+Ref: due_diligence_item."intake_id" > intake."id"
+Ref: due_diligence_item."verificado_por" > agent."id"
+Ref: email_verification_tokens."usuario_id" > usuarios."id"
+Ref: embajadores."barrio_id" > "raw.barrios"."id"
+Ref: embajadores."ciudad_id" > ciudades."id"
+Ref: embajadores."usuario_id" > usuarios."id"
+Ref: eventos."barrio_id" > "raw.barrios"."id"
+Ref: eventos."ciudad_id" > ciudades."id"
+Ref: eventos."subido_por" > usuarios."id"
+Ref: favoritos."usuario_id" > usuarios."id"
+Ref: historial."usuario_id" > usuarios."id"
+Ref: intake."agent_id" > agent."id"
+Ref: intake."listing_id" > listing."id"
+Ref: intake."owner_id" > owner."id"
+Ref: leads."usuario_id" > usuarios."id"
+Ref: leads_negocio."barrio_id" > "raw.barrios"."id"
+Ref: leads_negocio."ciudad_id" > ciudades."id"
+Ref: listing."agency_id" > agency."id"
+Ref: listing."agent_id" > agent."id"
+Ref: listing."owner_id" > owner."id"
+Ref: listing."verificado_por" > agent."id"
+Ref: listing_media."listing_id" > listing."id"
+Ref: listing_moderacion."listing_id" > listing."id"
+Ref: listings_propios."barrio_id" > "raw.barrios"."id"
+Ref: listings_propios."ciudad_id" > ciudades."id"
+Ref: listings_propios."user_id" > usuarios."id"
+Ref: owner."usuario_id" > usuarios."id"
+Ref: password_reset_tokens."usuario_id" > usuarios."id"
+Ref: perfil_inversor."usuario_id" > usuarios."id"
+Ref: posts_barrio."barrio_id" > "raw.barrios"."id"
+Ref: posts_barrio."usuario_id" > usuarios."id"
+Ref: referidos."afiliado_id" > afiliados."id"
+Ref: referidos."embajador_id" > embajadores."id"
+Ref: referidos."suscripcion_id" > suscripciones_negocio."id"
+Ref: referidos."tienda_id" > tiendas."id"
+Ref: simulaciones_historial."usuario_id" > usuarios."id"
+Ref: sponsorship."agency_id" > agency."id"
+Ref: suscripciones_negocio."barrio_id" > "raw.barrios"."id"
+Ref: suscripciones_negocio."ciudad_id" > ciudades."id"
+Ref: suscripciones_negocio."plan_id" > planes_negocio."id"
+Ref: suscripciones_negocio."tienda_id" > tiendas."id"
+Ref: suscripciones_usuario."usuario_id" > usuarios."id"
+Ref: tiendas."barrio_id" > "raw.barrios"."id"
+Ref: tiendas."ciudad_id" > ciudades."id"
+Ref: tiendas."subido_por" > usuarios."id"
+Ref: token_blacklist."usuario_id" > usuarios."id"
+Ref: user_events."barrio_id" > "raw.barrios"."id"
+Ref: user_events."ciudad_id" > ciudades."id"
+Ref: user_events."usuario_id" > usuarios."id"
+Ref: user_interests."usuario_id" > usuarios."id"
+Ref: user_sessions."ciudad_id" > ciudades."id"
+Ref: user_sessions."usuario_id" > usuarios."id"
+Ref: usuarios."newsletter_barrio_id" > "raw.barrios"."id"
+Ref: visita_solicitud."agent_id" > agent."id"
+Ref: visita_solicitud."usuario_id" > usuarios."id"
+Ref: "raw.airbnb_barrios"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.airbnb_listings_portal"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.airbnb_mercado_valle"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.barrios"."ciudad_id" > ciudades."id"
+Ref: "raw.favoritos_listings"."usuario_id" > usuarios."id"
+Ref: "raw.listing_vistas"."usuario_id" > usuarios."id"
+Ref: "raw.listings_fincaraiz"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.listings_metrocuadrado"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.listings_premium"."barrio_id" > "raw.barrios"."id"
+Ref: "raw.listings_renta_media"."barrio_id" > "raw.barrios"."id"
