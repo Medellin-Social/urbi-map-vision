@@ -34,6 +34,8 @@ Piezas con trabajo real hecho que no llegan al usuario todavía — candidatas n
 - **Punto-en-polígono Metrocuadrado**: ✅ resuelto en local (2026-08-16) — cobertura subió de 37,410 a 77,157/89,014 (87%). **Pero prod no tiene los datos para backfillear**: `raw.listings_metrocuadrado` en prod es un stub vacío (4 columnas, 0 filas, creado por la migración 0063 solo para evitar un 500) — le falta el dataset scrapeado completo (80k+ filas con lat/lon/barrio_id/geom) antes de que este backfill tenga sentido ahí. Es un gap de sincronización de datos, no de código.
 - **Traducción de descripciones**: el 97% de las descripciones de listings no se traducen al inglés (son texto libre scrapeado, el diccionario no cubre párrafos). Decisión de negocio pendiente: MT en el cliente (gratis, más lento) vs. traducir al ingerir (paga, requiere DeepL/OpenAI).
 - **Wompi/Stripe reales**: clients y webhooks listos, checkout de zona y de suscripción funcionan en modo simulado — falta activar con llaves reales.
+- **GHL (GoHighLevel) — pagos**: `src/config/ghl.ts` ya tiene los 3 links de checkout (listing destacado, agente barrio, agente comuna) cableados en `/planes` y en el dashboard realtor — están **vacíos**, solo falta pegar las URLs reales cuando existan en GHL.
+- **GHL — sync de dashboard/agenda del realtor (2026-08-16, sin construir aún)**: decisión del usuario — GHL NO reemplaza nuestro `/realtor/dashboard`/`/realtor/agenda` (siguen siendo la fuente de verdad), pero hay que **empujar** datos hacia GHL para que el realtor los vea también ahí (herramienta que ya usa a diario). Alcance acordado: sincronizar **visitas agendadas** (`visita_solicitud`) y **leads/intake asignados** — ambos igual de urgentes. Sin API key/sub-account de GHL todavía → no se puede construir el cliente real. Ver tarea en la tabla de abajo.
 
 ## 3. Para delegar
 
@@ -48,6 +50,9 @@ Tareas que **no requieren mi criterio de producto** — alguien con acceso a Rai
 | Correr loader de colegios/POIs en prod | Mismo comando que corrió local | Caminabilidad/colegios en prod |
 | UI "comprar zona" en dashboard realtor | Frontend puro, backend ya expone todo en `/zonas/*` | Que un realtor no dependa del admin para expandirse |
 | Push del commit de agencia + pruebas manuales del flujo de invitación con email real | Nada técnico, solo revisar y aprobar | Que el equipo pueda invitarse entre sí |
+| Conseguir API key + location/sub-account ID de GHL | Cuenta GHL activa, generar credencial API (v2) | Arrancar el cliente GHL (pagos reales + sync visitas/leads) |
+| Pegar las 3 URLs de checkout GHL en `src/config/ghl.ts` cuando existan | Los links ya creados del lado de GHL | Que "Listing Destacado" y "Agente de Zona" cobren de verdad |
+| Construir cliente GHL (push visitas + leads asignados, patrón `wompi_client.py`: no-op hasta tener key) | La API key de arriba | Que el realtor vea sus leads/agenda también en GHL |
 
 ## 4. Riesgos / deuda técnica a tener presente
 
