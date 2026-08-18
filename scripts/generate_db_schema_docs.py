@@ -136,46 +136,72 @@ def dbml_type(dtype, maxlen):
     return m.get(dtype, dtype)
 
 
-dbml_lines = []
-dbml_lines.append("// Medellín Social — schema DB generado 2026-08-17 desde information_schema (local)")
-dbml_lines.append("// Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io")
-dbml_lines.append("")
+def gen_dbml(header_comment, table_keys):
+    """DBML for a subset of tables — only enums/refs used within that subset."""
+    table_set = set(table_keys)
+    lines = [header_comment,
+              "// Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io", ""]
 
-for typname, labels in enums.items():
-    dbml_lines.append(f"Enum {typname} {{")
-    for label in labels:
-        dbml_lines.append(f'  "{label}"')
-    dbml_lines.append("}")
-    dbml_lines.append("")
+    used_enums = set()
+    for schema, table in table_keys:
+        for c in columns[(schema, table)]:
+            if c["dtype"] in enums:
+                used_enums.add(c["dtype"])
+    for typname in sorted(used_enums):
+        lines.append(f"Enum {typname} {{")
+        for label in enums[typname]:
+            lines.append(f'  "{label}"')
+        lines.append("}")
+        lines.append("")
 
-for schema, table in all_tables:
-    tname = f'"{schema}.{table}"' if schema != "public" else table
-    dbml_lines.append(f"Table {tname} {{")
-    key = (schema, table)
-    table_pks = pks.get(key, set())
-    for c in columns[key]:
-        flags = []
-        if c["col"] in table_pks:
-            flags.append("pk")
-        if not c["nullable"]:
-            flags.append("not null")
-        flag_str = f" [{', '.join(flags)}]" if flags else ""
-        dtype = dbml_type(c["dtype"], c["maxlen"])
-        dbml_lines.append(f'  "{c["col"]}" {dtype}{flag_str}')
-    dbml_lines.append("}")
-    dbml_lines.append("")
+    for schema, table in table_keys:
+        tname = f'"{schema}.{table}"' if schema != "public" else table
+        lines.append(f"Table {tname} {{")
+        key = (schema, table)
+        table_pks = pks.get(key, set())
+        for c in columns[key]:
+            flags = []
+            if c["col"] in table_pks:
+                flags.append("pk")
+            if not c["nullable"]:
+                flags.append("not null")
+            flag_str = f" [{', '.join(flags)}]" if flags else ""
+            dtype = dbml_type(c["dtype"], c["maxlen"])
+            lines.append(f'  "{c["col"]}" {dtype}{flag_str}')
+        lines.append("}")
+        lines.append("")
 
-for fk in fks:
-    src = f'"{fk["schema"]}.{fk["table"]}"' if fk["schema"] != "public" else fk["table"]
-    dst = f'"{fk["fschema"]}.{fk["ftable"]}"' if fk["fschema"] != "public" else fk["ftable"]
-    dbml_lines.append(f'Ref: {src}."{fk["col"]}" > {dst}."{fk["fcol"]}"')
+    for fk in fks:
+        s, t = fk["schema"], fk["table"]
+        fs, ft = fk["fschema"], fk["ftable"]
+        if (s, t) not in table_set or (fs, ft) not in table_set:
+            continue
+        src = f'"{s}.{t}"' if s != "public" else t
+        dst = f'"{fs}.{ft}"' if fs != "public" else ft
+        lines.append(f'Ref: {src}."{fk["col"]}" > {dst}."{fk["fcol"]}"')
+
+    return "\n".join(lines) + "\n"
+
 
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
-with open(os.path.join(REPO_ROOT, "docs/database/schema.dbml"), "w") as f:
-    f.write("\n".join(dbml_lines) + "\n")
+analytics_tables = [k for k in all_tables if k[0] == "analytics"]
+core_tables = [k for k in all_tables if k[0] != "analytics"]
 
-print("DBML written")
+with open(os.path.join(REPO_ROOT, "docs/database/schema_analytics.dbml"), "w") as f:
+    f.write(gen_dbml(
+        "// Medellín Social — schema ANALYTICS (derivadas/scoring), generado desde information_schema (local)",
+        analytics_tables,
+    ))
+
+with open(os.path.join(REPO_ROOT, "docs/database/schema_core.dbml"), "w") as f:
+    f.write(gen_dbml(
+        "// Medellín Social — schema OPERATIVO (donde se guarda todo: usuarios, realtors/agencias, "
+        "listings, tiendas, comunidad, raw scrapeado, staging), generado desde information_schema (local)",
+        core_tables,
+    ))
+
+print(f"DBML written — analytics: {len(analytics_tables)} tables, core: {len(core_tables)} tables")
 
 # ---------- Mermaid domain groups ----------
 GROUPS = {
@@ -309,9 +335,14 @@ doc.append(
     "(`ab_*`, `dag*`, `task_*`, `xcom`, etc. — ver `project_airflow_stack`).*\n"
 )
 doc.append(
-    "**Para editar visualmente:** pega [`docs/database/schema.dbml`](./database/schema.dbml) "
-    "completo en [drawsql.app](https://drawsql.app) (botón Import) o en "
-    "[dbdiagram.io](https://dbdiagram.io) — ambos leen formato DBML.\n"
+    "**Para editar visualmente:** pega uno de estos DBML completo en "
+    "[drawsql.app](https://drawsql.app) (botón Import) o [dbdiagram.io](https://dbdiagram.io) "
+    "— divididos en 2 porque son dominios distintos (analytics es solo lectura derivada, "
+    "no tiene FKs declaradas hacia el resto):\n"
+    "- [`schema_analytics.dbml`](./database/schema_analytics.dbml) — solo el schema `analytics` "
+    "(scoring/derivadas de barrio)\n"
+    "- [`schema_core.dbml`](./database/schema_core.dbml) — todo lo demás: usuarios, agentes/agencias, "
+    "listings, tiendas/comunidad, raw scrapeado, staging\n"
 )
 doc.append("**Para ver aquí mismo:** los diagramas de abajo son Mermaid — GitHub los renderiza nativo en el `.md`, sin plugins.\n")
 doc.append("## Índice\n")

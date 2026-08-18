@@ -2,7 +2,9 @@
 
 *Generado 2026-08-17 directamente desde `information_schema` de la DB local (refleja el schema real, no solo lo que dicen las migraciones — ver `project_data_gap_prod` en memoria sobre drift local↔prod). Se excluyeron las tablas internas de Airflow que quedaron en este mismo Postgres (`ab_*`, `dag*`, `task_*`, `xcom`, etc. — ver `project_airflow_stack`).*
 
-**Para editar visualmente:** pega [`docs/database/schema.dbml`](./database/schema.dbml) completo en [drawsql.app](https://drawsql.app) (botón Import) o en [dbdiagram.io](https://dbdiagram.io) — ambos leen formato DBML.
+**Para editar visualmente:** pega uno de estos DBML completo en [drawsql.app](https://drawsql.app) (botón Import) o [dbdiagram.io](https://dbdiagram.io) — divididos en 2 porque son dominios distintos (analytics es solo lectura derivada, no tiene FKs declaradas hacia el resto):
+- [`schema_analytics.dbml`](./database/schema_analytics.dbml) — solo el schema `analytics` (scoring/derivadas de barrio)
+- [`schema_core.dbml`](./database/schema_core.dbml) — todo lo demás: usuarios, agentes/agencias, listings, tiendas/comunidad, raw scrapeado, staging
 
 **Para ver aquí mismo:** los diagramas de abajo son Mermaid — GitHub los renderiza nativo en el `.md`, sin plugins.
 

@@ -1,0 +1,516 @@
+// Medellín Social — schema ANALYTICS (derivadas/scoring), generado desde information_schema (local)
+// Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io
+
+Table "analytics.barrios_airbnb_real" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_listings_airbnb" bigint
+  "n_entire_home" bigint
+  "n_private_room" bigint
+  "n_superhosts" bigint
+  "ocupacion_p25_pct" numeric
+  "ocupacion_p50_pct" numeric
+  "ocupacion_p75_pct" numeric
+  "adr_p50_usd" numeric
+  "adr_p50_cop" numeric
+  "ingresos_anuales_p50_usd" numeric
+  "ingresos_anuales_p50_cop" numeric
+  "yield_airbnb_real_pct" numeric
+  "rating_promedio" numeric
+  "reviews_promedio" numeric
+  "precio_venta_m2_p50_cop" numeric
+  "area_promedio_m2" numeric
+  "mock_n_listings" int
+  "mock_ocupacion_pct" numeric
+  "mock_adr_cop" numeric
+  "mock_ingresos_anuales_cop" numeric
+  "diff_ocupacion_pct" numeric
+  "diff_adr_cop" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_amenities" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "municipio" text
+  "n_listings" bigint
+  "pct_wifi" numeric
+  "pct_ac" numeric
+  "pct_kitchen" numeric
+  "pct_washer" numeric
+  "score_equipamiento" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_cd" {
+  "barrio_id" int [pk, not null]
+  "cd_comuna" int
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.barrios_contexto" {
+  "barrio_id" int [pk, not null]
+  "yield_bruto_pct" numeric
+  "n_listings_airbnb" int
+  "score_corto" numeric
+  "score_mediano" numeric
+  "score_largo" numeric
+  "liquidez_score" numeric
+  "indice_nomada" numeric
+  "seguridad_score" numeric
+  "var_anual_pct" numeric
+  "pct_wifi" numeric
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.barrios_liquidez" {
+  "barrio_id" int
+  "precio_venta_m2_p50" numeric
+  "n_listings_venta_total" bigint
+  "dias_mercado_p25" numeric
+  "dias_mercado_p50" numeric
+  "pct_frescos" numeric
+  "pct_antiguos" numeric
+  "pct_listings_con_fecha" numeric
+  "n_listings_airbnb" bigint
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "nota_metodologia" text
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_medianas" {
+  "barrio_id" int [not null]
+  "tipo_inmueble" text
+  "m2_mediana" bigint
+  "arr_mediana" bigint
+  "refreshed_at" timestamptz
+  "m2_p25" bigint
+  "m2_p75" bigint
+  "arr_p25" bigint
+  "arr_p75" bigint
+}
+
+Table "analytics.barrios_mercado" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_venta" bigint
+  "precio_venta_promedio" numeric
+  "area_promedio_m2" numeric
+  "precio_venta_m2_p25" numeric
+  "precio_venta_m2_p50" numeric
+  "precio_venta_m2_p75" numeric
+  "n_arriendo" bigint
+  "precio_arriendo_p25" numeric
+  "precio_arriendo_p50" numeric
+  "precio_arriendo_p75" numeric
+  "ratio_precio_arriendo" numeric
+  "yield_bruto" numeric
+  "airbnb_n_listings" int
+  "ocupacion_airbnb_pct" numeric
+  "adr_noche_cop" numeric
+  "yield_airbnb_pct" numeric
+  "pbn_precio_justo" numeric
+  "pmn_neto" numeric
+  "poi_precio_oferta" numeric
+  "pbn_precio_justo_m2" numeric
+  "diferencia_total_pct" numeric
+  "diferencia_m2_pct" numeric
+  "estado_precio" text
+  "score_seguridad" int
+  "categoria_seguridad" text
+  "zona_turistica" bool
+  "nota_seguridad" text
+  "tendencia_seguridad" text
+  "score_seguridad_transito" int
+  "precio_renta_media_p50" numeric
+  "precio_renta_media_usd" numeric
+  "yield_renta_media_pct" numeric
+  "yield_renta_media_airbnb_pct" numeric
+  "n_listings_renta_media_airbnb" bigint
+  "ocupacion_renta_media_airbnb_pct" numeric
+  "adr_renta_media_airbnb_usd" numeric
+  "n_listings_renta_media" bigint
+  "premium_vs_largo_pct" numeric
+  "precio_m2_real_p50" numeric
+  "arriendo_real_p50" numeric
+  "yield_real_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_oportunidades" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "oportunidad_detectada" bool
+  "tipo_oportunidad" text
+  "descripcion_oportunidad" text
+  "score_relevante" numeric
+  "score_largo" int
+  "score_corto" int
+  "score_mediano" numeric
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "estado_precio" text
+  "yield_bruto_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_pois_distancia" {
+  "barrio_id" int [pk, not null]
+  "nombre_barrio" text
+  "municipio" text
+  "dist_metro_km" numeric
+  "dist_parque_km" numeric
+  "dist_mall_km" numeric
+  "n_universidades_2km" int
+  "n_hospitales_3km" int
+  "calculado_en" timestamptz
+  "n_cafes_500m" int
+  "n_coworking_1km" int
+  "n_gimnasios_1km" int
+  "n_restaurantes_500m" int
+  "n_bares_500m" int
+  "indice_nomada" numeric
+  "n_yoga_1km" int
+  "dist_yoga_km" numeric
+  "n_colegios_1km" int
+  "dist_colegio_km" numeric
+  "walk_score" int
+  "transit_score" int
+}
+
+Table "analytics.barrios_renta_media" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "n_listings_renta_media" bigint
+  "n_flatio" bigint
+  "n_airbnb_mensual" bigint
+  "n_homads" bigint
+  "precio_renta_media_p50" numeric
+  "precio_renta_media_usd" numeric
+  "premium_vs_largo_pct" numeric
+  "arriendo_largo_p50" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_renta_segmentada" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "tipo_renta" text
+  "n_listings" bigint
+  "ocupacion_p50" numeric
+  "adr_p50_usd" numeric
+  "adr_p50_cop" numeric
+  "revenue_anual_p50_usd" numeric
+  "yield_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_score" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "estrato" int
+  "score_total" int
+  "categoria_inversion" text
+  "color_hex" text
+  "score_yield" int
+  "score_precio" int
+  "score_seguridad" int
+  "score_conectividad" int
+  "score_confiabilidad" int
+  "mejor_yield_pct" numeric
+  "mejor_tipo_renta" text
+  "estado_precio" text
+  "categoria_seguridad" text
+  "dist_metro_km" numeric
+  "n_datos_total" bigint
+  "precio_m2_venta" numeric
+  "arriendo_p50" numeric
+  "score_airbnb_ocupacion" numeric
+  "adr_cop" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_score_consolidado" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_corto" int
+  "categoria_corto" text
+  "color_corto" text
+  "pts_yield_airbnb" int
+  "score_mediano" numeric
+  "categoria_mediano" text
+  "color_mediano" text
+  "pts_yield_medio" int
+  "score_largo" int
+  "categoria_largo" text
+  "color_largo" text
+  "pts_yield_largo" int
+  "perfil_recomendado" text
+  "precio_m2_venta_p50" numeric
+  "arriendo_p50" numeric
+  "estado_precio" text
+  "yield_airbnb_pct" numeric
+  "yield_bruto_pct" numeric
+  "yield_renta_media_pct" numeric
+  "liquidez_score" int
+  "categoria_liquidez" text
+  "tiempo_estimado_venta" text
+  "nota_metodologia" text
+  "indice_verde_pct" numeric
+  "categoria_verde" text
+  "score_verde" int
+  "pct_wifi" numeric
+  "pct_ac" numeric
+  "pct_kitchen" numeric
+  "pct_washer" numeric
+  "score_equipamiento" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_seguridad" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "codigo_comuna" text
+  "zona_turistica" bool
+  "casos_residente_3anios" bigint
+  "casos_residente_por_1000hab" numeric
+  "casos_totales_3anios" bigint
+  "casos_por_1000hab" numeric
+  "score_seguridad_residente" int
+  "ranking_seguridad" bigint
+  "score_seguridad_transito" int
+  "tendencia" text
+  "categoria_seguridad" text
+  "nota_seguridad" text
+}
+
+Table "analytics.barrios_top10_yield" {
+  "ranking" bigint
+  "barrio" text
+  "municipio" text
+  "yield_media_pct" numeric
+  "yield_airbnb_pct" numeric
+  "yield_largo_pct" numeric
+  "premium_vs_largo_pct" numeric
+  "n_listings" bigint
+  "precio_renta_media_usd" numeric
+  "categoria_seguridad" text
+  "zona_turistica" bool
+}
+
+Table "analytics.barrios_trafico_perfil" {
+  "barrio_id" int [pk, not null]
+  "nombre_barrio" text
+  "zona" text
+  "nivel_trafico" text
+  "jam_prom" numeric
+  "speed_ratio_prom" numeric
+  "pico_am_inicio" smallint
+  "pico_am_fin" smallint
+  "pico_pm_inicio" smallint
+  "pico_pm_fin" smallint
+  "n_muestras" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.barrios_verde" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "municipio" text
+  "n_parques" bigint
+  "area_barrio_m2" numeric
+  "area_parques_estimada_m2" numeric
+  "indice_verde_pct" numeric
+  "categoria_verde" text
+  "score_verde" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.catastro_comunas_stats" {
+  "comuna" text
+  "total_predios" int
+  "pct_apartamento" numeric
+  "area_mediana_apto_m2" int
+  "avaluo_m2" int
+}
+
+Table "analytics.comparador_renta" {
+  "barrio_id" int
+  "barrio_nombre" text
+  "comuna" text
+  "municipio" text
+  "yield_corta" numeric
+  "occ_corta" numeric
+  "adr_corta" numeric
+  "n_corta" bigint
+  "yield_media" numeric
+  "occ_media" numeric
+  "adr_media" numeric
+  "n_media" bigint
+  "yield_larga" numeric
+  "occ_larga" numeric
+  "adr_larga" numeric
+  "n_larga" bigint
+  "tipos_con_datos" bigint
+  "mejor_opcion" text
+}
+
+Table "analytics.listings_georef" {
+  "url" text [pk, not null]
+  "lat" float8 [not null]
+  "lon" float8 [not null]
+  "url_activa" bool
+  "estrato_real" int
+  "refreshed_at" timestamptz
+}
+
+Table "analytics.listings_vs_catastro" {
+  "listing_uid" text
+  "fuente" text
+  "tier" text
+  "tipo_operacion" text
+  "tipo_inmueble" text
+  "precio_cop" numeric
+  "precio_m2" numeric
+  "area_m2" numeric
+  "habitaciones" int
+  "banos" numeric
+  "barrio_raw" text
+  "barrio_id" int
+  "barrio_comuna" text
+  "lat" float8
+  "lon" float8
+  "geom" geometry
+  "url" text
+  "n_duplicados" bigint
+  "precio_variable" bool
+  "fecha_scraping" timestamptz
+  "cd_comuna" int
+  "n_predios_catastro" bigint
+  "avaluo_m2_catastro" numeric
+  "avaluo_m2_catastro_mediana" float8
+  "area_construccion_prom" numeric
+  "catastro_nivel" text
+  "ratio_mercado_catastro" numeric
+  "categoria_precio_catastro" text
+}
+
+Table "analytics.proyecciones_valorizacion" {
+  "estrato_sistema" int
+  "factor_ajuste" numeric
+  "baseline_5anos_pct" numeric
+  "baseline_3anos_pct" numeric
+  "baseline_ultimo_anio_pct" numeric
+  "var_5anos_ajustado" numeric
+  "var_3anos_ajustado" numeric
+  "tendencia_reciente" text
+  "proyeccion_3anos_pct" numeric
+  "proyeccion_5anos_pct" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.resumen_barrios" {
+  "nombre_barrio" text
+  "comuna" text
+  "estrato" smallint
+  "area_km2" numeric
+  "dist_metro_km" numeric
+  "dist_parque_km" numeric
+  "dist_mall_km" numeric
+  "n_universidades_2km" int
+  "n_hospitales_3km" int
+  "precio_venta_m2_promedio" numeric
+  "precio_arriendo_promedio" numeric
+  "n_listings_venta" bigint
+  "n_listings_arriendo" bigint
+  "n_listings_total" bigint
+}
+
+Table "analytics.score_corto_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_corto" int
+  "categoria_corto" text
+  "color_corto" text
+  "yield_score" int
+  "rating_score" int
+  "listings_score" int
+  "ocupacion_score" int
+  "mall_score" int
+  "mejor_yield_airbnb" numeric
+  "n_listings_airbnb" bigint
+  "ocupacion_p50" numeric
+  "rating_location_avg" numeric
+  "dist_mall_km" numeric
+  "calculado_en" timestamptz
+}
+
+Table "analytics.score_largo_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_largo" int
+  "categoria_largo" text
+  "color_largo" text
+  "pbn_largo_score" int
+  "yield_largo_score" int
+  "seg_largo_score" int
+  "metro_largo_score" int
+  "valorizacion_score" int
+  "estado_precio" text
+  "yield_bruto_pct" numeric
+  "score_seguridad_residente" int
+  "dist_metro_km" numeric
+  "tendencia_valorizacion" text
+  "var_anual_5anos_pct" numeric
+  "estrato_barrio" int
+  "calculado_en" timestamptz
+}
+
+Table "analytics.score_mediano_plazo" {
+  "barrio_id" int
+  "nombre_barrio" text
+  "comuna" text
+  "municipio" text
+  "score_mediano" numeric
+  "categoria_mediano" text
+  "color_mediano" text
+  "yield_medio_score" int
+  "nomada_score" numeric
+  "pbn_score" int
+  "seg_medio_score" int
+  "pts_verde" int
+  "pts_equip" numeric
+  "yield_nomada" numeric
+  "yield_renta_media_pct" numeric
+  "yield_renta_media_airbnb_pct" numeric
+  "estado_precio" text
+  "indice_nomada" numeric
+  "n_yoga" int
+  "indice_verde_pct" numeric
+  "categoria" text
+  "rating_location_avg" numeric
+  "tendencia" text
+  "calculado_en" timestamptz
+}
+
