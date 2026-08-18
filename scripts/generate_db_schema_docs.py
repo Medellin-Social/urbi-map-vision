@@ -34,19 +34,27 @@ conn = psycopg2.connect(DATABASE_URL)
 cur = conn.cursor()
 
 cur.execute("""
-    SELECT table_schema, table_name, column_name, data_type, is_nullable,
+    SELECT table_schema, table_name, column_name, data_type, udt_name, is_nullable,
            column_default, character_maximum_length, ordinal_position
     FROM information_schema.columns
     WHERE table_schema = ANY(%s)
     ORDER BY table_schema, table_name, ordinal_position
 """, (list(SCHEMAS),))
 columns = {}
-for schema, table, col, dtype, nullable, default, maxlen, pos in cur.fetchall():
+for schema, table, col, dtype, udt, nullable, default, maxlen, pos in cur.fetchall():
     if excluded(schema, table):
         continue
+    # data_type is "USER-DEFINED" for enums/PostGIS geometry and "ARRAY" for
+    # array columns — udt_name has the real type in both cases (e.g. "geometry",
+    # "_text" for text[]). Prefer udt_name whenever data_type isn't a plain builtin.
+    real_dtype = dtype
+    if dtype == "USER-DEFINED":
+        real_dtype = udt
+    elif dtype == "ARRAY":
+        real_dtype = (udt[1:] if udt.startswith("_") else udt) + "[]"
     key = (schema, table)
     columns.setdefault(key, []).append(dict(
-        col=col, dtype=dtype, nullable=(nullable == "YES"),
+        col=col, dtype=real_dtype, nullable=(nullable == "YES"),
         default=default, maxlen=maxlen,
     ))
 
@@ -90,6 +98,16 @@ cur.execute("""
     WHERE table_schema = ANY(%s) AND table_type='BASE TABLE'
     GROUP BY 1,2
 """, (list(SCHEMAS),))
+cur.execute("""
+    SELECT t.typname, e.enumlabel
+    FROM pg_type t
+    JOIN pg_enum e ON e.enumtypid = t.oid
+    ORDER BY t.typname, e.enumsortorder
+""")
+enums = {}
+for typname, label in cur.fetchall():
+    enums.setdefault(typname, []).append(label)
+
 all_tables = sorted(k for k in columns.keys())
 
 print(f"Tables kept: {len(all_tables)}")
@@ -99,8 +117,11 @@ print(f"FKs kept: {len(fks)}")
 def dbml_type(dtype, maxlen):
     m = {
         "character varying": f"varchar({maxlen})" if maxlen else "varchar",
+        "character": f"char({maxlen})" if maxlen else "char",
         "timestamp with time zone": "timestamptz",
         "timestamp without time zone": "timestamp",
+        "time with time zone": "timetz",
+        "time without time zone": "time",
         "double precision": "float8",
         "boolean": "bool",
         "integer": "int",
@@ -111,11 +132,7 @@ def dbml_type(dtype, maxlen):
         "json": "json",
         "uuid": "uuid",
         "numeric": "numeric",
-        "ARRAY": "array",
-        "USER-DEFINED": "enum",
     }
-    if dtype.startswith("geometry") or dtype == "USER-DEFINED":
-        return dtype
     return m.get(dtype, dtype)
 
 
@@ -123,6 +140,13 @@ dbml_lines = []
 dbml_lines.append("// Medellín Social — schema DB generado 2026-08-17 desde information_schema (local)")
 dbml_lines.append("// Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io")
 dbml_lines.append("")
+
+for typname, labels in enums.items():
+    dbml_lines.append(f"Enum {typname} {{")
+    for label in labels:
+        dbml_lines.append(f'  "{label}"')
+    dbml_lines.append("}")
+    dbml_lines.append("")
 
 for schema, table in all_tables:
     tname = f'"{schema}.{table}"' if schema != "public" else table

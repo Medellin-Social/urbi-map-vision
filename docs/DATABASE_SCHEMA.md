@@ -34,7 +34,7 @@ erDiagram
         character_varying rol
         boolean newsletter_activo
         integer newsletter_barrio_id
-        ARRAY newsletter_intereses
+        text[] newsletter_intereses
         timestamp_without_time_zone fecha_suscripcion
         character_varying plan
         character_varying perfil_busqueda
@@ -124,13 +124,13 @@ erDiagram
     USER_INTERESTS {
         integer id PK
         integer usuario_id
-        ARRAY top_barrios
+        int4[] top_barrios
         character_varying inversion_preferida
         numeric precio_min_avg
         numeric precio_max_avg
         character_varying tipo_inmueble_top
-        ARRAY categorias_eventos_top
-        ARRAY categorias_tiendas_top
+        text[] categorias_eventos_top
+        text[] categorias_tiendas_top
         integer total_sesiones
         integer total_eventos
         integer avg_session_duration_seg
@@ -187,7 +187,7 @@ erDiagram
         text nombre
         text telefono
         text foto_url
-        USER-DEFINED estado
+        agent_estado estado
         timestamp_with_time_zone created_at
         timestamp_with_time_zone updated_at
         text motivo_estado
@@ -196,7 +196,7 @@ erDiagram
         uuid id PK
         text nombre
         text nit
-        USER-DEFINED tipo
+        agency_tipo tipo
         boolean verificada
         text plan
         timestamp_with_time_zone created_at
@@ -205,7 +205,7 @@ erDiagram
     AGENCY_MEMBER {
         uuid agency_id PK
         uuid agent_id PK
-        USER-DEFINED rol
+        agency_member_rol rol
     }
     AGENCY_INVITE {
         uuid id PK
@@ -220,13 +220,13 @@ erDiagram
     SPONSORSHIP {
         uuid id PK
         uuid agency_id
-        USER-DEFINED zona_nivel
+        sponsorship_zona_nivel zona_nivel
         text zona_codigo
         text tier
         numeric precio_mensual
         date fecha_inicio
         date fecha_fin
-        USER-DEFINED estado
+        sponsorship_estado estado
         timestamp_with_time_zone created_at
         timestamp_with_time_zone updated_at
     }
@@ -247,7 +247,7 @@ erDiagram
         character_varying licencia
         text bio
         integer ciudad_id
-        ARRAY idiomas
+        varchar[] idiomas
         character_varying plan
         timestamp_without_time_zone created_at
         timestamp_without_time_zone updated_at
@@ -264,11 +264,11 @@ erDiagram
         boolean es_independiente
         integer anos_experiencia
         integer transacciones_cerradas
-        ARRAY especialidad
-        ARRAY tipo_inmueble
+        text[] especialidad
+        text[] tipo_inmueble
         numeric precio_rango_min
         numeric precio_rango_max
-        ARRAY zonas_opera
+        int4[] zonas_opera
         boolean telefono_verificado
         boolean email_verificado
         text linkedin
@@ -330,17 +330,17 @@ erDiagram
         text slug
         uuid agency_id
         uuid agent_id
-        USER-DEFINED estado
-        USER-DEFINED geom
+        listing_estado estado
+        geometry geom
         text municipio
         text barrio
         text direccion_aprox
         boolean mostrar_exacto
-        USER-DEFINED operacion
+        listing_operacion operacion
         numeric precio
         text moneda
         numeric administracion
-        USER-DEFINED tipo_inmueble
+        listing_tipo_inmueble tipo_inmueble
         numeric area_m2
         smallint habitaciones
         smallint banos
@@ -359,7 +359,7 @@ erDiagram
         uuid verificado_por
         uuid owner_id
         boolean amoblado
-        ARRAY amenidades
+        text[] amenidades
         boolean mascotas
         boolean permite_airbnb
         numeric area_lote_m2
@@ -381,7 +381,7 @@ erDiagram
     LISTING_MODERACION {
         uuid id PK
         uuid listing_id
-        USER-DEFINED accion
+        moderacion_accion accion
         text motivo
         text moderador_id
         timestamp_with_time_zone created_at
@@ -391,7 +391,7 @@ erDiagram
         uuid intake_id
         text clave
         jsonb declarado
-        USER-DEFINED estado
+        due_diligence_estado estado
         text nota
         uuid verificado_por
         timestamp_with_time_zone verificado_at
@@ -400,12 +400,12 @@ erDiagram
     INTAKE {
         uuid id PK
         uuid owner_id
-        USER-DEFINED estado
+        intake_estado estado
         uuid agent_id
         uuid listing_id
-        USER-DEFINED operacion
-        USER-DEFINED tipo_inmueble
-        USER-DEFINED geom
+        intake_operacion operacion
+        intake_tipo_inmueble tipo_inmueble
+        geometry geom
         text municipio
         text barrio
         text direccion_aprox
@@ -447,8 +447,8 @@ erDiagram
         integer habitaciones
         numeric banos
         text descripcion
-        ARRAY amenidades
-        ARRAY fotos
+        text[] amenidades
+        text[] fotos
         double_precision lat
         double_precision lon
         character_varying direccion
@@ -692,7 +692,7 @@ erDiagram
         character_varying website
         character_varying google_place_id
         character_varying foto_url
-        ARRAY fotos
+        text[] fotos
         double_precision lat
         double_precision lon
         jsonb horario
@@ -723,7 +723,7 @@ erDiagram
         integer usuario_id
         character_varying tipo
         text contenido
-        ARRAY fotos
+        text[] fotos
         integer likes
         boolean activo
         timestamp_without_time_zone created_at
@@ -749,7 +749,7 @@ erDiagram
         numeric zoom_default
         numeric centro_lat
         numeric centro_lng
-        ARRAY capas_visibles
+        text[] capas_visibles
         character_varying score_display
         timestamp_without_time_zone updated_at
     }
@@ -802,7 +802,7 @@ erDiagram
         date fecha_publicacion
         integer dias_en_mercado
         character_varying dedup_hash
-        USER-DEFINED geom
+        geometry geom
         numeric lat
         numeric lon
         text municipio_raw
@@ -812,8 +812,8 @@ erDiagram
         timestamp_without_time_zone fecha_primera_vez
         timestamp_without_time_zone fecha_ultima_vez_activa
         text descripcion
-        ARRAY amenidades
-        ARRAY fotos
+        text[] amenidades
+        text[] fotos
         smallint parqueaderos
         smallint piso
         text antiguedad
@@ -841,16 +841,16 @@ erDiagram
         date fecha_publicacion
         integer dias_en_mercado
         character_varying dedup_hash
-        USER-DEFINED geom
+        geometry geom
         text municipio_raw
         integer estrato_real
         boolean url_activa
         timestamp_without_time_zone url_validada_at
         timestamp_without_time_zone fecha_primera_vez
         timestamp_without_time_zone fecha_ultima_vez_activa
-        ARRAY fotos
+        text[] fotos
         text descripcion
-        ARRAY amenidades
+        text[] amenidades
         smallint parqueaderos
         smallint piso
         text antiguedad
@@ -870,7 +870,7 @@ erDiagram
         integer piso
         integer estrato
         boolean amoblado
-        ARRAY amenidades
+        text[] amenidades
         character_varying barrio_raw
         integer barrio_id
         character_varying municipio
@@ -882,14 +882,14 @@ erDiagram
         character_varying agente_email
         character_varying agencia
         character_varying url
-        ARRAY fotos
+        text[] fotos
         character_varying tipo_operacion
         character_varying tipo_inmueble
         date fecha_publicacion
         timestamp_without_time_zone fecha_scraping
         character_varying dedup_hash
         character_varying fuente_tipo
-        USER-DEFINED geom
+        geometry geom
     }
     RAW_LISTINGS_RENTA_MEDIA {
         integer id PK
@@ -912,8 +912,8 @@ erDiagram
         numeric lon
         character_varying dedup_hash
         text descripcion
-        ARRAY fotos
-        ARRAY amenidades
+        text[] fotos
+        text[] amenidades
     }
     RAW_LISTINGS_CASADOLCECASA {
         bigint id PK
@@ -934,10 +934,10 @@ erDiagram
         text municipio_raw
         numeric lat
         numeric lon
-        USER-DEFINED geom
+        geometry geom
         integer barrio_id
-        ARRAY amenidades
-        ARRAY fotos
+        text[] amenidades
+        text[] fotos
         text descripcion
         text url
         character_varying dedup_hash
@@ -959,8 +959,8 @@ erDiagram
         uuid media_uid
         text fuente
         text portada_r2
-        ARRAY fotos_r2
-        ARRAY content_hashes
+        text[] fotos_r2
+        text[] content_hashes
         smallint n_fotos
         boolean activa
         timestamp_with_time_zone first_seen
@@ -1095,7 +1095,7 @@ erDiagram
         text municipio
         text fuente
         jsonb raw_props
-        USER-DEFINED geometry
+        geometry geometry
         timestamp_with_time_zone cargado_en
         boolean excluir_inversion
         character_varying uso_suelo_dominante
@@ -1109,7 +1109,7 @@ erDiagram
         text comuna_full
         text fuente
         jsonb raw_props
-        USER-DEFINED geometry
+        geometry geometry
         timestamp_with_time_zone cargado_en
     }
     RAW_ESTRATOS {
@@ -1123,7 +1123,7 @@ erDiagram
         text modo_carga
         text nota
         jsonb raw_props
-        USER-DEFINED geometry
+        geometry geometry
         timestamp_with_time_zone cargado_en
     }
     RAW_ESTRATOS_MANZANA {
@@ -1131,7 +1131,7 @@ erDiagram
         text comuna
         text barrio
         text codigo_barrio
-        USER-DEFINED geometry
+        geometry geometry
         timestamp_without_time_zone fecha_sincronizacion
         text fuente
     }
@@ -1241,7 +1241,7 @@ erDiagram
         text tipo
         text subtipo
         jsonb raw_tags
-        USER-DEFINED geometry
+        geometry geometry
         timestamp_with_time_zone cargado_en
     }
     RAW_POT_USOS_MEDELLIN {
@@ -1249,7 +1249,7 @@ erDiagram
         text subcategoria
         integer cod_cat_uso
         integer cod_subcat_uso
-        USER-DEFINED geometry
+        geometry geometry
         text fuente
     }
     RAW_TRAFICO_MUESTRAS {
@@ -1319,15 +1319,15 @@ erDiagram
         text direccion_raw
         double_precision lat
         double_precision lon
-        USER-DEFINED geom
+        geometry geom
         text url
-        ARRAY fotos
+        text[] fotos
         timestamp_with_time_zone fecha_scraping
         bigint n_duplicados
         integer estrato_real
         boolean amoblado
         text antiguedad
-        ARRAY amenidades
+        text[] amenidades
         boolean verificado
     }
     STAGING_STG_LISTINGS_V1_DEPRECATED {
@@ -1407,7 +1407,7 @@ erDiagram
         smallint estrato_max
         text estrato_fuente
         numeric area_km2
-        USER-DEFINED geometry
+        geometry geometry
     }
     STAGING_STG_AIRBNB_AMENITIES {
         bigint listing_id
@@ -1774,7 +1774,7 @@ erDiagram
         text barrio_comuna
         double_precision lat
         double_precision lon
-        USER-DEFINED geom
+        geometry geom
         text url
         bigint n_duplicados
         boolean precio_variable

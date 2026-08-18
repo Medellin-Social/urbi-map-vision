@@ -1,6 +1,95 @@
 // Medellín Social — schema DB generado 2026-08-17 desde information_schema (local)
 // Pega este archivo completo en drawsql.app (Import > DBML) o dbdiagram.io
 
+Enum agency_member_rol {
+  "owner"
+  "agente"
+}
+
+Enum agency_tipo {
+  "independiente"
+  "agencia"
+}
+
+Enum agent_estado {
+  "pendiente"
+  "activo"
+  "rechazado"
+  "inactivo"
+}
+
+Enum due_diligence_estado {
+  "pendiente"
+  "verificado"
+  "rechazado"
+}
+
+Enum intake_estado {
+  "nuevo"
+  "asignado"
+  "en_verificacion"
+  "aceptado"
+  "descartado"
+  "en_pool"
+}
+
+Enum intake_operacion {
+  "venta"
+  "arriendo"
+}
+
+Enum intake_tipo_inmueble {
+  "apartamento"
+  "casa"
+  "local"
+  "oficina"
+  "lote"
+  "finca"
+}
+
+Enum listing_estado {
+  "borrador"
+  "en_revision"
+  "publicado"
+  "rechazado"
+  "pausado"
+  "cerrado"
+}
+
+Enum listing_operacion {
+  "venta"
+  "arriendo"
+}
+
+Enum listing_tipo_inmueble {
+  "apartamento"
+  "casa"
+  "local"
+  "oficina"
+  "lote"
+  "finca"
+  "apartaestudio"
+  "bodega"
+  "otro"
+}
+
+Enum moderacion_accion {
+  "aprobado"
+  "rechazado"
+}
+
+Enum sponsorship_estado {
+  "activa"
+  "vencida"
+  "cancelada"
+}
+
+Enum sponsorship_zona_nivel {
+  "barrio"
+  "comuna"
+  "municipio"
+}
+
 Table "analytics.barrios_airbnb_real" {
   "barrio_id" int
   "barrio_nombre" text
@@ -397,7 +486,7 @@ Table "analytics.listings_vs_catastro" {
   "barrio_comuna" text
   "lat" float8
   "lon" float8
-  "geom" USER-DEFINED
+  "geom" geometry
   "url" text
   "n_duplicados" bigint
   "precio_variable" bool
@@ -530,7 +619,7 @@ Table agency {
   "id" uuid [pk, not null]
   "nombre" text [not null]
   "nit" text
-  "tipo" USER-DEFINED [not null]
+  "tipo" agency_tipo [not null]
   "verificada" bool [not null]
   "plan" text
   "created_at" timestamptz [not null]
@@ -551,7 +640,7 @@ Table agency_invite {
 Table agency_member {
   "agency_id" uuid [pk, not null]
   "agent_id" uuid [pk, not null]
-  "rol" USER-DEFINED [not null]
+  "rol" agency_member_rol [not null]
 }
 
 Table agent {
@@ -561,7 +650,7 @@ Table agent {
   "nombre" text [not null]
   "telefono" text [not null]
   "foto_url" text
-  "estado" USER-DEFINED [not null]
+  "estado" agent_estado [not null]
   "created_at" timestamptz [not null]
   "updated_at" timestamptz [not null]
   "motivo_estado" text
@@ -571,8 +660,8 @@ Table agent_disponibilidad {
   "id" uuid [pk, not null]
   "agent_id" uuid [not null]
   "dia_semana" smallint [not null]
-  "hora_inicio" time without time zone [not null]
-  "hora_fin" time without time zone [not null]
+  "hora_inicio" time [not null]
+  "hora_fin" time [not null]
   "created_at" timestamptz [not null]
 }
 
@@ -605,7 +694,7 @@ Table agentes {
   "licencia" varchar
   "bio" text
   "ciudad_id" int
-  "idiomas" array
+  "idiomas" varchar[]
   "plan" varchar
   "created_at" timestamp
   "updated_at" timestamp
@@ -622,11 +711,11 @@ Table agentes {
   "es_independiente" bool
   "anos_experiencia" int
   "transacciones_cerradas" int
-  "especialidad" array
-  "tipo_inmueble" array
+  "especialidad" text[]
+  "tipo_inmueble" text[]
   "precio_rango_min" numeric
   "precio_rango_max" numeric
-  "zonas_opera" array
+  "zonas_opera" int4[]
   "telefono_verificado" bool
   "email_verificado" bool
   "linkedin" text
@@ -711,7 +800,7 @@ Table configuracion_mapa {
   "zoom_default" numeric
   "centro_lat" numeric
   "centro_lng" numeric
-  "capas_visibles" array
+  "capas_visibles" text[]
   "score_display" varchar
   "updated_at" timestamp
 }
@@ -741,7 +830,7 @@ Table due_diligence_item {
   "intake_id" uuid [not null]
   "clave" text [not null]
   "declarado" jsonb
-  "estado" USER-DEFINED [not null]
+  "estado" due_diligence_estado [not null]
   "nota" text
   "verificado_por" uuid
   "verificado_at" timestamptz
@@ -824,12 +913,12 @@ Table historial {
 Table intake {
   "id" uuid [pk, not null]
   "owner_id" uuid [not null]
-  "estado" USER-DEFINED [not null]
+  "estado" intake_estado [not null]
   "agent_id" uuid
   "listing_id" uuid
-  "operacion" USER-DEFINED [not null]
-  "tipo_inmueble" USER-DEFINED [not null]
-  "geom" USER-DEFINED [not null]
+  "operacion" intake_operacion [not null]
+  "tipo_inmueble" intake_tipo_inmueble [not null]
+  "geom" geometry [not null]
   "municipio" text
   "barrio" text
   "direccion_aprox" text
@@ -873,17 +962,17 @@ Table listing {
   "slug" text [not null]
   "agency_id" uuid
   "agent_id" uuid
-  "estado" USER-DEFINED [not null]
-  "geom" USER-DEFINED [not null]
+  "estado" listing_estado [not null]
+  "geom" geometry [not null]
   "municipio" text
   "barrio" text
   "direccion_aprox" text
   "mostrar_exacto" bool [not null]
-  "operacion" USER-DEFINED [not null]
+  "operacion" listing_operacion [not null]
   "precio" numeric [not null]
   "moneda" text [not null]
   "administracion" numeric
-  "tipo_inmueble" USER-DEFINED [not null]
+  "tipo_inmueble" listing_tipo_inmueble [not null]
   "area_m2" numeric
   "habitaciones" smallint
   "banos" smallint
@@ -902,7 +991,7 @@ Table listing {
   "verificado_por" uuid
   "owner_id" uuid
   "amoblado" bool
-  "amenidades" array
+  "amenidades" text[]
   "mascotas" bool
   "permite_airbnb" bool
   "area_lote_m2" numeric
@@ -926,7 +1015,7 @@ Table listing_media {
 Table listing_moderacion {
   "id" uuid [pk, not null]
   "listing_id" uuid [not null]
-  "accion" USER-DEFINED [not null]
+  "accion" moderacion_accion [not null]
   "motivo" text
   "moderador_id" text [not null]
   "created_at" timestamptz [not null]
@@ -945,8 +1034,8 @@ Table listings_propios {
   "habitaciones" int
   "banos" numeric
   "descripcion" text
-  "amenidades" array
-  "fotos" array
+  "amenidades" text[]
+  "fotos" text[]
   "lat" float8
   "lon" float8
   "direccion" varchar
@@ -1046,7 +1135,7 @@ Table posts_barrio {
   "usuario_id" int
   "tipo" varchar
   "contenido" text [not null]
-  "fotos" array
+  "fotos" text[]
   "likes" int
   "activo" bool
   "created_at" timestamp
@@ -1080,13 +1169,13 @@ Table simulaciones_historial {
 Table sponsorship {
   "id" uuid [pk, not null]
   "agency_id" uuid [not null]
-  "zona_nivel" USER-DEFINED [not null]
+  "zona_nivel" sponsorship_zona_nivel [not null]
   "zona_codigo" text [not null]
   "tier" text
   "precio_mensual" numeric [not null]
   "fecha_inicio" date [not null]
   "fecha_fin" date [not null]
-  "estado" USER-DEFINED [not null]
+  "estado" sponsorship_estado [not null]
   "created_at" timestamptz [not null]
   "updated_at" timestamptz [not null]
 }
@@ -1144,7 +1233,7 @@ Table tiendas {
   "website" varchar
   "google_place_id" varchar
   "foto_url" varchar
-  "fotos" array
+  "fotos" text[]
   "lat" float8
   "lon" float8
   "horario" jsonb
@@ -1192,13 +1281,13 @@ Table user_events {
 Table user_interests {
   "id" int [pk, not null]
   "usuario_id" int
-  "top_barrios" array
+  "top_barrios" int4[]
   "inversion_preferida" varchar
   "precio_min_avg" numeric
   "precio_max_avg" numeric
   "tipo_inmueble_top" varchar
-  "categorias_eventos_top" array
-  "categorias_tiendas_top" array
+  "categorias_eventos_top" text[]
+  "categorias_tiendas_top" text[]
   "total_sesiones" int
   "total_eventos" int
   "avg_session_duration_seg" int
@@ -1241,7 +1330,7 @@ Table usuarios {
   "rol" varchar
   "newsletter_activo" bool
   "newsletter_barrio_id" int
-  "newsletter_intereses" array
+  "newsletter_intereses" text[]
   "fecha_suscripcion" timestamp
   "plan" varchar
   "perfil_busqueda" varchar
@@ -1378,7 +1467,7 @@ Table "raw.barrios" {
   "municipio" text
   "fuente" text
   "raw_props" jsonb
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "cargado_en" timestamptz
   "excluir_inversion" bool
   "uso_suelo_dominante" varchar
@@ -1446,7 +1535,7 @@ Table "raw.comunas" {
   "comuna_full" text
   "fuente" text
   "raw_props" jsonb
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "cargado_en" timestamptz
 }
 
@@ -1491,7 +1580,7 @@ Table "raw.estratos" {
   "modo_carga" text
   "nota" text
   "raw_props" jsonb
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "cargado_en" timestamptz
 }
 
@@ -1500,7 +1589,7 @@ Table "raw.estratos_manzana" {
   "comuna" text
   "barrio" text
   "codigo_barrio" text
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "fecha_sincronizacion" timestamp
   "fuente" text
 }
@@ -1516,7 +1605,7 @@ Table "raw.favoritos_listings" {
 Table "raw.ipvn_dane" {
   "id" int [pk, not null]
   "anio" smallint [not null]
-  "trimestre" character [not null]
+  "trimestre" char(2) [not null]
   "estrato" text [not null]
   "indice" numeric
   "variacion_trimestral_pct" numeric
@@ -1528,7 +1617,7 @@ Table "raw.ipvn_dane" {
 Table "raw.ipvu_banrep" {
   "id" int [pk, not null]
   "anio" smallint [not null]
-  "trimestre" character [not null]
+  "trimestre" char(2) [not null]
   "indice_nominal" numeric
   "indice_real" numeric
   "variacion_trimestral_pct" numeric
@@ -1542,8 +1631,8 @@ Table "raw.listing_media_mirror" {
   "media_uid" uuid [not null]
   "fuente" text
   "portada_r2" text
-  "fotos_r2" array
-  "content_hashes" array
+  "fotos_r2" text[]
+  "content_hashes" text[]
   "n_fotos" smallint
   "activa" bool [not null]
   "first_seen" timestamptz [not null]
@@ -1577,10 +1666,10 @@ Table "raw.listings_casadolcecasa" {
   "municipio_raw" text
   "lat" numeric
   "lon" numeric
-  "geom" USER-DEFINED
+  "geom" geometry
   "barrio_id" int
-  "amenidades" array
-  "fotos" array
+  "amenidades" text[]
+  "fotos" text[]
   "descripcion" text
   "url" text
   "dedup_hash" varchar
@@ -1608,7 +1697,7 @@ Table "raw.listings_fincaraiz" {
   "fecha_publicacion" date
   "dias_en_mercado" int
   "dedup_hash" varchar
-  "geom" USER-DEFINED
+  "geom" geometry
   "lat" numeric
   "lon" numeric
   "municipio_raw" text
@@ -1618,8 +1707,8 @@ Table "raw.listings_fincaraiz" {
   "fecha_primera_vez" timestamp
   "fecha_ultima_vez_activa" timestamp
   "descripcion" text
-  "amenidades" array
-  "fotos" array
+  "amenidades" text[]
+  "fotos" text[]
   "parqueaderos" smallint
   "piso" smallint
   "antiguedad" text
@@ -1648,16 +1737,16 @@ Table "raw.listings_metrocuadrado" {
   "fecha_publicacion" date
   "dias_en_mercado" int
   "dedup_hash" varchar
-  "geom" USER-DEFINED
+  "geom" geometry
   "municipio_raw" text
   "estrato_real" int
   "url_activa" bool
   "url_validada_at" timestamp
   "fecha_primera_vez" timestamp
   "fecha_ultima_vez_activa" timestamp
-  "fotos" array
+  "fotos" text[]
   "descripcion" text
-  "amenidades" array
+  "amenidades" text[]
   "parqueaderos" smallint
   "piso" smallint
   "antiguedad" text
@@ -1688,7 +1777,7 @@ Table "raw.listings_premium" {
   "piso" int
   "estrato" int
   "amoblado" bool
-  "amenidades" array
+  "amenidades" text[]
   "barrio_raw" varchar
   "barrio_id" int
   "municipio" varchar
@@ -1700,14 +1789,14 @@ Table "raw.listings_premium" {
   "agente_email" varchar
   "agencia" varchar
   "url" varchar
-  "fotos" array
+  "fotos" text[]
   "tipo_operacion" varchar
   "tipo_inmueble" varchar
   "fecha_publicacion" date
   "fecha_scraping" timestamp
   "dedup_hash" varchar
   "fuente_tipo" varchar
-  "geom" USER-DEFINED
+  "geom" geometry
 }
 
 Table "raw.listings_renta_media" {
@@ -1731,8 +1820,8 @@ Table "raw.listings_renta_media" {
   "lon" numeric
   "dedup_hash" varchar
   "descripcion" text
-  "fotos" array
-  "amenidades" array
+  "fotos" text[]
+  "amenidades" text[]
 }
 
 Table "raw.parametros_sistema" {
@@ -1749,7 +1838,7 @@ Table "raw.pois" {
   "tipo" text
   "subtipo" text
   "raw_tags" jsonb
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "cargado_en" timestamptz
 }
 
@@ -1758,7 +1847,7 @@ Table "raw.pot_usos_medellin" {
   "subcategoria" text
   "cod_cat_uso" int
   "cod_subcat_uso" int
-  "geometry" USER-DEFINED
+  "geometry" geometry
   "fuente" text
 }
 
@@ -1789,7 +1878,7 @@ Table "staging.barrios_enriquecidos" {
   "estrato_max" smallint
   "estrato_fuente" text
   "area_km2" numeric
-  "geometry" USER-DEFINED
+  "geometry" geometry
 }
 
 Table "staging.stg_airbnb_amenities" {
@@ -1861,15 +1950,15 @@ Table "staging.stg_listings_unificado" {
   "direccion_raw" text
   "lat" float8
   "lon" float8
-  "geom" USER-DEFINED
+  "geom" geometry
   "url" text
-  "fotos" array
+  "fotos" text[]
   "fecha_scraping" timestamptz
   "n_duplicados" bigint
   "estrato_real" int
   "amoblado" bool
   "antiguedad" text
-  "amenidades" array
+  "amenidades" text[]
   "verificado" bool
 }
 
@@ -1911,7 +2000,7 @@ Table "staging.stg_seguridad" {
 
 Table "staging.stg_valorizacion" {
   "anio" smallint
-  "trimestre" character
+  "trimestre" char(2)
   "periodo" text
   "fecha_inicio" date
   "ipvn_medellin" numeric
