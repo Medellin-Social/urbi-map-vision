@@ -40,30 +40,57 @@ No son "features" en general — son los ejes donde este proyecto específico pu
 | **Google Cloud Run + Cloud SQL** | Sí, Cloud SQL Postgres soporta PostGIS | Cloud Run Jobs + Cloud Scheduler — job serverless real, paga solo mientras corre | **Sí, nativo** — es el punto fuerte de Cloud Run | Total (Docker) | Modelo más "paga por segundo real" que existe de los 4; más piezas que configurar (IAM, VPC connector) |
 | **Supabase/Neon** (como reemplazo *solo* de la DB, no del compute) | Sí, PostGIS de fábrica | N/A — no es donde correrías el cron | N/A | — | Opción híbrida: DB gestionada ahí + compute en Railway/Render — desacopla el eje más doloroso (administrar Postgres) sin migrar todo lo demás |
 
-## 4. GHL — diseño bidireccional (decidiste que sí, esto es lo que implica)
+## 4. R2 — qué sí migra y qué no (aclarado 2026-08-18)
 
-Confirmaste: no solo empujar (visitas/leads → GHL), también **leer** bloqueos que el realtor haga directo en GHL, para que `GET /listings/{id}/slots` no ofrezca un horario que el realtor ya tapó allá.
+El usuario preguntó por migrar "toda la BD" a R2. **No es posible ni deseable** — R2 es storage de objetos (archivos), no ejecuta SQL ni PostGIS. 36 archivos del backend (`cache.py`, `listings.py`, `comunidad.py`, `business.py`, `asignador_service.py`, `zona_service.py`) dependen de `ST_Contains`/`ST_DWithin` en vivo — es como se resuelve, por ejemplo, qué agente cobra por una zona. Eso no existe fuera de un motor SQL espacial.
+
+**La matemática de costo tampoco ayuda a esa idea:** la DB completa pesa 1.5GB, de eso `raw` (crudo scrapeado) son 1.5GB y `public` (operativo) son 54MB. Un Postgres de ese tamaño en Railway cuesta ~$1-3/mes — mover a R2 ahorraría centavos, no resuelve un problema de costo real. Si el bill de Railway preocupa, la palanca está en otro lado (tamaño de plan del API/cron), no en el storage de la DB.
+
+**Lo que SÍ tiene sentido migrar a R2** (más adelante, no urgente): `raw.*` son snapshots crudos de scrapers (fincaraiz, metrocuadrado, catastro) — mayormente append-only, se consultan poco después de que `cache.py` los procesa hacia `staging`/`listing`. Candidatos a exportar periódicamente como Parquet a R2 y sacarlos de Postgres, dejando el motor solo con lo operativo+espacial que sí necesita SQL en cada request. Esto es un trigger de §7, no una tarea de hoy — implica reescribir el refresh pipeline para leer de R2 (ej. vía DuckDB) en vez de una tabla local, trabajo real, no trivial.
+
+**Fotos — ya está en R2 y ya estaba bien diseñado, dos tablas:**
+- `listing_media` (listing_id, url, orden, es_portada) — fotos de listings propios/agente, subidas directo.
+- `raw.listing_media_mirror` (url pk, portada_r2, fotos_r2[], activa) — espejo R2 de fotos scrapeadas, keyed por la url del listing origen.
+
+Falta solo el backfill pendiente (`AWS_URL` público + correr `mirror_listings_media.py --all`), no rediseño.
+
+## 5. GHL — diseño bidireccional (decidiste que sí, esto es lo que implica)
+
+Confirmaste: no solo empujar (visitas/leads → GHL), también **leer** bloqueos que el realtor haga directo en GHL, para que `GET /listings/{id}/slots` no ofrezca un horario que el realtor ya tapó allá. **Esto vive en Postgres, no en R2** — necesita cruzarse por SQL contra `agent_disponibilidad` y `visita_solicitud` en la misma query que genera los slots.
+
+```sql
+CREATE TABLE ghl_calendar_block (
+    id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agent_id      UUID NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
+    ghl_event_id  TEXT NOT NULL,           -- id del evento en GHL, para poder actualizar/borrar
+    inicio        TIMESTAMPTZ NOT NULL,
+    fin           TIMESTAMPTZ NOT NULL,
+    tipo          TEXT NOT NULL DEFAULT 'bloqueo',  -- 'bloqueo' | 'cita_reflejada'
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (agent_id, ghl_event_id)
+);
+CREATE INDEX idx_ghl_block_agent_rango ON ghl_calendar_block(agent_id, inicio, fin);
+```
 
 Piezas que faltan construir (nada existe todavía, `GHL_API_KEY` tampoco):
 
 1. **Cliente saliente** (`api/utils/ghl_client.py`, patrón `wompi_client.py`): push de visita nueva → `POST /calendars/events/appointments`; push de intake asignado → contacto/oportunidad.
-2. **Webhook entrante** (`api/routers/ghl_webhook.py` nuevo): GHL notifica `AppointmentCreate`/`AppointmentUpdate`/bloqueos de calendario → endpoint público con verificación de firma → refleja el bloqueo en algo que `GET /slots` consulte.
-3. **Dónde vive el reflejo del bloqueo** — dos caminos:
-   - (a) tabla espejo `ghl_calendar_block` (agent_id, inicio, fin) que el webhook llena y el generador de slots resta — rápido, sin llamar a GHL en cada carga de página.
-   - (b) consultar `Get Calendar Events`/`Get Blocked Slots` de GHL en vivo cada vez que se generan slots — más simple de construir, pero mete latencia de red externa a un endpoint público que hoy es 100% local, y te acerca al rate limit (100/10s) si el mapa tiene tráfico.
-   - **Recomendado: (a)** — es el patrón que ya usas en todo el repo (staging materializado, cache.py) en vez de fan-out a servicios externos en el hot path.
-4. Migración nueva para la tabla espejo + índice por `agent_id`+rango de fecha.
+2. **Webhook entrante** (`api/routers/ghl_webhook.py` nuevo): GHL notifica `AppointmentCreate`/`AppointmentUpdate`/bloqueos de calendario → endpoint público con verificación de firma → hace upsert en `ghl_calendar_block`.
+3. `GET /listings/{id}/slots` resta contra `ghl_calendar_block` además de `visita_solicitud` al generar horarios disponibles.
+
+Por qué tabla espejo y no consultar GHL en vivo en cada carga de slots: es el patrón que ya usas en todo el repo (staging materializado, `cache.py`) en vez de fan-out a servicios externos en el hot path — más rápido y no te acerca al rate limit (100 req/10s) si el mapa tiene tráfico.
 
 Esto es diseño, no está construido — bloqueado por la misma falta de API key de siempre.
 
-## 5. El gap que cruza todo esto: no hay métricas
+## 6. El gap que cruza todo esto: no hay métricas
 
 No hay APM, no hay logs agregados de tráfico, no sabes cuánto cobra Railway hoy en la práctica ni cuántos requests/día recibe el API. **Sin esto, cualquier comparación de "elasticidad" entre plataformas es teórica.** Antes de que la decisión de migrar sea data-driven en vez de especulativa, lo mínimo:
 - Contador de requests/latencia por endpoint (aunque sea logging estructurado a stdout + un dashboard simple).
 - Revisar el dashboard de billing de Railway una vez al mes y anotar el número real.
 - Tamaño de `raw` schema mes a mes (ya sabes correr el query de §DB del doc de progreso).
 
-## 6. Recomendación — triggers, no fecha de migración
+## 7. Recomendación — triggers, no fecha de migración
 
 **No hay nada que migrar hoy.** Railway resuelve la carga actual sin dolor conocido. Razones concretas para revisar esta decisión más adelante:
 
@@ -72,7 +99,7 @@ No hay APM, no hay logs agregados de tráfico, no sabes cuánto cobra Railway ho
 | Administrar backups/upgrades de tu Postgres propio empieza a consumir tiempo real | Considerar Supabase/Neon solo para la DB (manteniendo compute donde esté) |
 | Mueves el pipeline de Airflow (metrocuadrado+R2+tráfico) de tu laptop a la nube | Ahí sí Railway (contenedor fijo) empieza a competir en serio contra Cloud Run Jobs o Fly Machines (job serverless real) |
 | Tráfico del mapa se vuelve alto y variable (picos) | Cloud Run gana por scale-to-zero real; hoy es prematuro |
-| `raw` schema sigue creciendo a este ritmo por 6-12 meses más | Revisar costo por GB — hoy 1.5GB es irrelevante en cualquier plataforma |
+| `raw` schema pasa de unos pocos GB a decenas (crecimiento sostenido de scrapers) | Ahí sí vale la pena exportar `raw.*` a Parquet en R2 y aligerar Postgres (§4) — hoy 1.5GB es irrelevante en cualquier plataforma |
 | Necesitas presencia fuera de Colombia/LatAm | Fly.io por multi-región nativa |
 
 ---
