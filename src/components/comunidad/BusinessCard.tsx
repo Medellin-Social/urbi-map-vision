@@ -247,7 +247,7 @@ export function BusinessCardList({ tienda }: { tienda: TiendaData }) {
         <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
           {tienda.categoria && (
             <div style={{ fontSize: '.68rem', color: K.tealDeep, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              {tienda.categoria}
+              {CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria}
             </div>
           )}
         </div>

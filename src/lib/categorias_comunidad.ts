@@ -108,6 +108,9 @@ export const CATEGORIA_LABELS: Record<string, string> = {
   almuerzo: 'Almuerzo', estetica: 'Estética', panaderia: 'Panadería',
   asiatica: 'Asiática', comida_rapida: 'Rápida', fisioterapia: 'Fisio',
   dermatologia: 'Dermatología',
+  bancos: 'Banco', cerrajeria: 'Cerrajería', electricistas: 'Electricista',
+  jardineria: 'Jardinería', mascotas: 'Mascotas', mudanzas: 'Mudanzas',
+  parqueaderos: 'Parqueadero', remodelaciones: 'Remodelación',
 }
 
 export const CATEGORIA_COLORS: Record<string, string> = {
@@ -116,6 +119,9 @@ export const CATEGORIA_COLORS: Record<string, string> = {
   dentistas: '#e8f4f8', peluquerias: '#fce4ec', yoga: '#e8f5e9',
   fisioterapia: '#fff8e1', dermatologia: '#fce4ec', estetica: '#fce4ec',
   almuerzo: '#fff3e0', panaderia: '#fff8e1', comida_rapida: '#fbe9e7',
+  bancos: '#e8eef7', cerrajeria: '#f5f0e8', electricistas: '#fff8e1',
+  jardineria: '#e8f5e9', mascotas: '#fce4ec', mudanzas: '#f5f0e8',
+  parqueaderos: '#e8eef7', remodelaciones: '#fff3e0',
 }
 
 export const CATEGORIA_EMOJI: Record<string, string> = {
@@ -123,6 +129,8 @@ export const CATEGORIA_EMOJI: Record<string, string> = {
   masajes_spa: '🧖', medicos: '🏥', dentistas: '🦷', peluquerias: '✂️',
   yoga: '🧘', fisioterapia: '🦴', dermatologia: '✨', estetica: '💅',
   almuerzo: '🍱', panaderia: '🥐', comida_rapida: '🍕', asiatica: '🍜',
+  bancos: '🏦', cerrajeria: '🔑', electricistas: '💡', jardineria: '🌱',
+  mascotas: '🐾', mudanzas: '📦', parqueaderos: '🅿️', remodelaciones: '🛠️',
 }
 
 export const CATEGORIAS_EVENTOS: CategoriaEvento[] = [

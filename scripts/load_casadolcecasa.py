@@ -201,8 +201,16 @@ def main():
         return
 
     psycopg2.extras.execute_batch(cur, UPSERT, rows, page_size=50)
+    ids = [r["id"] for r in rows]
+    cur.execute(
+        "UPDATE raw.listings_casadolcecasa SET activo = false "
+        "WHERE id != ALL(%s) AND activo = true",
+        (ids,),
+    )
+    deactivated = cur.rowcount
     conn.commit()
     print(f"  upserted {len(rows)} rows into raw.listings_casadolcecasa")
+    print(f"  deactivated {deactivated} listings no longer on site")
 
 
 if __name__ == "__main__":

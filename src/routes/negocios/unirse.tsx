@@ -60,7 +60,7 @@ const COMPARISON = {
   cols: ['Característica', 'Gratis', 'Hotspot', 'Featured ★'],
   colColors: ['', '', K.coral, K.teal],
   rows: [
-    { feat: 'Precio', free: '$0', hot: 'desde $29 USD', featured: '$99 USD lanzamiento' },
+    { feat: 'Precio', free: '$0', hot: 'desde $29 USD', featured: '$199 USD lanzamiento' },
     { feat: 'Listado básico en directorio', free: '✓', hot: '✓', featured: '✓' },
     { feat: 'Deal / Oferta flash', free: '—', hot: '✓', featured: '✓' },
     { feat: 'Newsletter semanal del barrio', free: '—', hot: '✓', featured: '✓' },
@@ -291,10 +291,10 @@ function NegociosUnirsePage() {
                 <div style={{ width: 22, height: 22, borderRadius: '50%', border: `2px solid ${plan === 'featured' ? K.teal : K.line}`, background: plan === 'featured' ? K.teal : 'transparent', flexShrink: 0 }} />
               </div>
               <div style={{ marginBottom: 20 }}>
-                <span style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '2rem', color: K.amarillo }}>$99 USD</span>
+                <span style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '2rem', color: K.amarillo }}>$199 USD</span>
                 <span style={{ color: plan === 'featured' ? 'rgba(255,255,255,.7)' : K.muted, fontSize: '.88rem' }}> lanzamiento</span>
                 <div style={{ fontSize: '.82rem', color: plan === 'featured' ? 'rgba(255,255,255,.6)' : K.muted, marginTop: 4 }}>
-                  + mensualidad Featured · cancelable
+                  + $200 USD/mes Featured · cancelable
                 </div>
               </div>
               {[
@@ -530,7 +530,7 @@ function NegociosUnirsePage() {
                     <div style={{ gridColumn: '1 / -1' }}>
                       <label style={labelStyle}>Plan que te interesa</label>
                       <select value={plan} onChange={e => setPlan(e.target.value as Plan)} style={{ ...inputStyle, cursor: 'pointer' }}>
-                        <option value="featured">Featured Business — $99 USD lanzamiento (recomendado)</option>
+                        <option value="featured">Featured Business — $199 USD lanzamiento (recomendado)</option>
                         <option value="hotspot">Hotspot / Oferta especial — desde $29 USD</option>
                       </select>
                     </div>

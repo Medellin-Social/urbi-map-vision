@@ -157,7 +157,23 @@ WITH todas_fuentes AS (
            ('Amoblado' = ANY(COALESCE(amenidades, '{}'::text[]))) AS amoblado,
            antiguedad, amenidades
     FROM raw.listings_fincaraiz WHERE activo = true AND precio > 0 AND area_m2 > 0
-    -- ponytail: casadolcecasa omitido (tabla ausente en prod, ~95 listings); re-añadir su UNION ALL si se carga raw.listings_casadolcecasa
+    UNION ALL
+    -- Socio patrocinado: todos sus listings entran como agencia_premium (prioridad
+    -- de sort + badge dorado ya cableados en frontend, tier hasta ahora sin ocupante).
+    SELECT id::text || '_cdc', 'casadolcecasa', 'agencia_premium',
+           tipo_operacion, tipo_inmueble,
+           precio::bigint                            AS precio_cop,
+           NULL::bigint                             AS precio_usd,
+           area_m2, habitaciones, banos::numeric    AS banos,
+           barrio_raw, barrio_id, direccion_raw,
+           lat::double precision, lon::double precision,
+           CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
+                THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
+           url, fotos, fecha_scraping, dedup_hash,
+           estrato_real,
+           NULL::boolean                             AS amoblado,
+           antiguedad, amenidades
+    FROM raw.listings_casadolcecasa WHERE activo = true AND precio > 0 AND area_m2 > 0
     UNION ALL
     SELECT id::text || '_pr', fuente, COALESCE(fuente_tipo,'standard'), tipo_operacion,
            tipo_inmueble, precio_cop, precio_usd, area_m2, habitaciones, banos, barrio_raw,

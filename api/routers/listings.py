@@ -1149,6 +1149,40 @@ async def get_listings_viewport(
     return Response(content=body, media_type="application/json", headers=headers)
 
 
+class SocioListing(BaseModel):
+    id: int
+    url: str
+    tipo_operacion: Optional[str] = None
+    tipo_inmueble: Optional[str] = None
+    precio_cop: Optional[int] = None
+    area_m2: Optional[float] = None
+    habitaciones: Optional[int] = None
+    banos: Optional[int] = None
+    barrio: Optional[str] = None
+    foto_principal: Optional[str] = None
+
+
+_SOCIO_CASADOLCECASA_SQL = """
+SELECT id, url, tipo_operacion, tipo_inmueble,
+       precio::bigint AS precio_cop, area_m2::float8,
+       habitaciones, banos,
+       COALESCE(barrio_raw, municipio_raw) AS barrio,
+       fotos[1] AS foto_principal
+FROM raw.listings_casadolcecasa
+WHERE activo AND precio > 0 AND area_m2 > 0
+ORDER BY fecha_scraping DESC
+LIMIT $1
+"""
+
+
+@router.get("/socio-casadolcecasa", response_model=list[SocioListing])
+async def get_socio_casadolcecasa(limit: int = Query(default=6, ge=1, le=12)):
+    """Listings del socio patrocinado Casa Dolce Casa, para el home."""
+    pool = get_pool()
+    rows = await pool.fetch(_SOCIO_CASADOLCECASA_SQL, limit)
+    return [SocioListing(**dict(r)) for r in rows]
+
+
 @router.get("/{listing_id}", response_model=ListingDetail)
 async def get_listing_by_id(
     listing_id: int,

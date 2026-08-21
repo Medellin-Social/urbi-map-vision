@@ -9,7 +9,7 @@ export const Route = createFileRoute('/embajador')({
   head: () => ({
     meta: [
       { title: 'Sé Embajador de Barrio · Medellín Social' },
-      { name: 'description', content: 'Sé la voz de tu barrio en Medellín. Conecta negocios y gana comisión recurrente.' },
+      { name: 'description', content: 'Sé la voz de tu barrio en Medellín. Conecta negocios y gana comisión recurrente hasta 24 meses.' },
     ],
   }),
 })
@@ -44,7 +44,7 @@ const TOOLS = [
 ]
 
 const PERKS = [
-  { ico: '$', titulo: 'Comisión pagada — ~$135M COP el Año 1', desc: '50% del primer mes + 15% recurrente sobre los clientes que tú inscribas. 5% residual de TODOS los negocios en tu barrio. Mes 12: ~$22M COP/mes.' },
+  { ico: '$', titulo: 'Comisión pagada — ~$270M COP el Año 1', desc: '50% primer mes + 15% recurrente (24 meses, luego 7.5%) sobre clientes que inscribas directo. 5% residual (24 meses, luego 2.5%) del resto de negocios en tu barrio — nunca se suman en la misma cuenta. Mes 12: ~$44M COP/mes.' },
   { ico: '★', titulo: 'Reconocimiento en tu comunidad', desc: 'Te conviertes en la voz reconocida de tu barrio. Los negocios, líderes cívicos y vecinos te conocen por nombre.' },
   { ico: '📚', titulo: 'Capacitación editorial real', desc: 'Experiencia práctica con IA, SEO, AEO, MEO, distribución social y CRM. Habilidades que se acumulan.' },
   { ico: '🤝', titulo: 'Una red que puedes usar', desc: 'Relaciones directas con negocios Featured, cámaras, organizaciones y líderes cívicos — redes que pagan por años.' },
@@ -160,7 +160,7 @@ function EmbajadorPage() {
               padding: '6px 14px', borderRadius: 999, fontWeight: 700, fontSize: '.75rem',
               letterSpacing: '.6px', textTransform: 'uppercase', marginBottom: 18,
             }}>
-              Contratando ahora · 100% comisión · ~$135M COP Año 1
+              Contratando ahora · 100% comisión · ~$270M COP Año 1
             </span>
             <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.2rem,5vw,3.4rem)', color: K.ink, margin: '0 0 18px', lineHeight: 1.05, letterSpacing: '-1px' }}>
               Sé la <span style={{ color: K.teal }}>voz</span> de tu barrio<br />
@@ -186,7 +186,7 @@ function EmbajadorPage() {
               </a>
             </div>
             <p style={{ fontSize: '.85rem', color: K.muted, margin: 0 }}>
-              <strong style={{ color: K.ink }}>100% comisión</strong> · <strong style={{ color: K.ink }}>50% + 15% recurrente</strong> sobre clientes directos · <strong style={{ color: K.ink }}>5% residual</strong> de todos los negocios en tu barrio
+              <strong style={{ color: K.ink }}>100% comisión</strong> · <strong style={{ color: K.ink }}>50% + 15% recurrente</strong> (24 meses) sobre clientes directos · <strong style={{ color: K.ink }}>5% residual</strong> del resto de tu barrio — nunca ambos en la misma cuenta
             </p>
           </div>
 
@@ -218,9 +218,9 @@ function EmbajadorPage() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 16 }}>
               {[
-                { n: '~$2.5M', l: 'Mes 1' },
-                { n: '~$9.5M', l: 'Mes 6' },
-                { n: '~$22M', l: 'Mes 12' },
+                { n: '~$5M', l: 'Mes 1' },
+                { n: '~$19M', l: 'Mes 6' },
+                { n: '~$44M', l: 'Mes 12' },
               ].map(s => (
                 <div key={s.l} style={{ background: K.surface, padding: '10px', borderRadius: 8, textAlign: 'center' }}>
                   <span style={{ display: 'block', fontWeight: 800, color: K.teal, fontSize: '1.1rem' }}>{s.n}</span>
@@ -229,8 +229,8 @@ function EmbajadorPage() {
               ))}
             </div>
             {[
-              { t: '💰 Total Año 1: ~$135M COP', m: 'Comisión pura · Sin base fija · Crece con tu cartera' },
-              { t: '📈 Año 2: $22M+ COP/mes al madurar', m: 'Cartera recurrente de 100+ clientes directos × 15%' },
+              { t: '💰 Total Año 1: ~$270M COP', m: 'Comisión pura · Sin base fija · Crece con tu cartera' },
+              { t: '📈 Año 2: $44M+ COP/mes al madurar', m: 'Cartera recurrente de 100+ clientes directos × 15%' },
               { t: '🎯 Los mejores duplican la cadencia, duplican los ingresos', m: '2 negocios/semana es la meta base, no el techo' },
             ].map(row => (
               <div key={row.t} style={{ padding: '11px 14px', background: K.surface, borderRadius: 8, marginBottom: 8 }}>

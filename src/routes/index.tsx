@@ -7,6 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useDeals } from '@/hooks/useDeals'
 import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
+import { useSocioCasadolcecasa } from '@/hooks/useSocioListings'
+import { formatCOP } from '@/lib/format'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -242,6 +244,7 @@ function HomeContent() {
   const { data: noticias   = [] }                          = useNoticias(4)
   const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter)
   const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter)
+  const { data: socioListings = [] }                        = useSocioCasadolcecasa(6)
 
   return (
     <>
@@ -566,6 +569,72 @@ function HomeContent() {
           </div>
         </div>
       </section>
+
+      {/* ── SOCIO INMOBILIARIO — Casa Dolce Casa ─────── */}
+      {socioListings.length > 0 && (
+        <section className="section-padding" style={{ padding: '72px 26px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+            <SecTitle link="https://casadolcecasa.com.co" linkLabel={t('Ver sitio →', 'View site →')}>
+              {t('Socio Inmobiliario', 'Real Estate Partner')}
+            </SecTitle>
+
+            <div style={{
+              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16,
+              background: K.paper, borderRadius: 14, padding: '18px 22px', marginBottom: 20,
+              boxShadow: '0 2px 10px rgba(20,32,29,.08)',
+            }}>
+              <div style={{
+                fontFamily: K.serif, fontWeight: 900, fontSize: '1.15rem', color: K.tealDeep,
+                background: K.coralLight, padding: '8px 16px', borderRadius: 10, whiteSpace: 'nowrap',
+              }}>
+                Casa Dolce Casa
+              </div>
+              <p style={{ fontFamily: K.manrope, color: K.muted, margin: 0, flex: '1 1 260px', fontSize: '.95rem' }}>
+                {t('"Confianza que construye hogares" — agencia aliada de Medellín Social.', '"Trust that builds homes" — Medellín Social\'s allied agency.')}
+              </p>
+              <a href="https://wa.me/573103144877" target="_blank" rel="noopener noreferrer" style={{
+                fontFamily: K.manrope, fontWeight: 700, fontSize: '.85rem', color: '#fff',
+                background: '#25D366', padding: '10px 18px', borderRadius: 999, textDecoration: 'none', whiteSpace: 'nowrap',
+              }}>
+                💬 WhatsApp
+              </a>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+              {socioListings.map((l) => (
+                <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" style={{
+                  background: K.paper, borderRadius: 14, overflow: 'hidden',
+                  boxShadow: '0 2px 10px rgba(20,32,29,.08)', textDecoration: 'none', display: 'block',
+                }}>
+                  <div style={{ height: 140, overflow: 'hidden', position: 'relative', background: K.line }}>
+                    {l.foto_principal && (
+                      <img src={l.foto_principal} alt={l.tipo_inmueble ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    )}
+                    <span style={{
+                      position: 'absolute', top: 9, left: 9,
+                      fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: K.ink,
+                      background: K.amarillo, padding: '3px 9px', borderRadius: 999, letterSpacing: '.4px',
+                    }}>
+                      ★ PREMIUM
+                    </span>
+                  </div>
+                  <div style={{ padding: '12px 14px 14px' }}>
+                    <p style={{ fontFamily: K.serif, fontWeight: 800, fontSize: 15, color: K.ink, margin: '0 0 4px' }}>
+                      {formatCOP(l.precio_cop ?? 0)}
+                    </p>
+                    <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: 0 }}>
+                      {[l.habitaciones && `${l.habitaciones} hab`, l.banos && `${l.banos} baños`, l.area_m2 && `${l.area_m2}m²`].filter(Boolean).join(' · ')}
+                    </p>
+                    <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: '2px 0 0' }}>
+                      {l.barrio ?? ''}
+                    </p>
+                  </div>
+                </a>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* ── SUSCRIPCIÓN ───────────────────────────────── */}
       <section id="subscribe" className="section-padding" style={{ padding: '0 16px 72px' }}>

@@ -186,6 +186,19 @@ function RealtorNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
               )}
             </button>
           ))}
+          <span className="my-auto h-4 w-px shrink-0 bg-border" aria-hidden />
+          <Link
+            to="/comparador"
+            className="shrink-0 border-b-2 border-transparent pb-2.5 pt-1 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            Comparador
+          </Link>
+          <Link
+            to="/simulador"
+            className="shrink-0 border-b-2 border-transparent pb-2.5 pt-1 text-sm font-medium text-muted-foreground transition hover:text-foreground"
+          >
+            Simulador
+          </Link>
         </div>
       </nav>
     </header>

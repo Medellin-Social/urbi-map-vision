@@ -832,6 +832,7 @@ const PHRASES: Array<[string, string]> = [
   ["En producción esto llegaría a tu email. Válido por 1 hora.", "In production this would be sent to your email. Valid for 1 hour."],
   ["La contraseña debe tener mínimo 6 caracteres.", "Password must have at least 6 characters."],
   ["Error. Token inválido o expirado.", "Error. Invalid or expired token."],
+  ["Token inválido o ya utilizado", "Invalid or already used token"],
   ["Ingresa el token de recuperación.", "Enter the recovery token."],
   ["Ingresa el token y tu nueva contraseña", "Enter the token and your new password"],
   ["Te enviaremos instrucciones para recuperarla", "We'll send you instructions to recover it"],
@@ -1031,7 +1032,6 @@ const PHRASES: Array<[string, string]> = [
   ["Tiendas", "Stores"],
   ["Agentes", "Agents"],
   ["Comenzar", "Get Started"],
-  ["Bueno", "Good"],
 
   // ── MapFilterBar ──────────────────────────────────────────────────────────
   ["Filtros PRO", "PRO filters"],
@@ -1216,12 +1216,24 @@ const PHRASES: Array<[string, string]> = [
   // ── Vender ────────────────────────────────────────────────────────────────
   ["Vende o arrienda con Medellín Social", "Sell or rent with Medellín Social"],
   ["Llega a compradores locales e inversores extranjeros con datos reales del mercado.", "Reach local buyers and international investors with real market data."],
-  ["Sin costo · Activo en <24h · 3% comisión solo si cerrás", "Free · Live in <24h · 3% commission only if you close"],
+  ["Sin costo  ·  Activo en <24h  ·  3% comisión solo si cerrás", "Free  ·  Live in <24h  ·  3% commission only if you close"],
   ["Publicar mi propiedad →", "List my property →"],
   ["Ver análisis de mi barrio", "See my neighborhood analysis"],
   ["El precio correcto.", "The right price."],
   ["El momento justo.", "The right time."],
   ["Tu propiedad.", "Your property."],
+  ["Visible en el MLS", "Visible in the MLS"],
+  ["Tu propiedad aparece en el mapa que usan inversores cada día", "Your property appears on the map investors use every day"],
+  ["Alcance internacional", "International reach"],
+  ["Inversores de LATAM, Europa y Norteamérica buscan aquí", "Investors from LATAM, Europe and North America search here"],
+  ["Sin costo por publicar", "No cost to list"],
+  ["Solo pagás el 3% si cerrás la venta a través de la plataforma", "You only pay 3% if the sale closes through the platform"],
+  ["¿Por qué publicar aquí?", "Why list here?"],
+  ["¿Listo para publicar?", "Ready to publish?"],
+  ["Hablar con un agente", "Talk to an agent"],
+  ["días en mercado", "days on market"],
+  ["prom.", "avg."],
+  ["Gratis, activo en menos de 24 horas", "Free, active in under 24 hours"],
 
   // ── Agentes — index ───────────────────────────────────────────────────────
   ["Encuentra tu experto inmobiliario en el Valle de Aburrá", "Find your real estate expert in the Aburrá Valley"],
@@ -1277,6 +1289,28 @@ const PHRASES: Array<[string, string]> = [
   ["Haz clic para subir", "Click to upload"],
   ["Selecciona", "Select"],
 
+  // ── mis-propiedades.tsx ───────────────────────────────────────────────────
+  ["Mis propiedades", "My properties"],
+  ["Desempeño y estado de tus publicaciones", "Performance and status of your listings"],
+  ["No pudimos cargar tus propiedades.", "We couldn't load your properties."],
+  ["Aún no has publicado ninguna propiedad", "You haven't published any properties yet"],
+  ["Publica la primera →", "Publish your first →"],
+  ["vistas (30d)", "views (30d)"],
+  ["visitas pend.", "pending visits"],
+  ["vistas 30d ·", "views 30d ·"],
+  ["Publicar", "Publish"],
+  ["propiedades", "properties"],
+  ["propiedad", "property"],
+
+  // ── realtor/agency-dashboard.tsx ──────────────────────────────────────────
+  ["Asigna o reasigna listings a agentes del equipo.", "Assign or reassign listings to team agents."],
+  ["Delegar a:", "Delegate to:"],
+  ["Sin acceso", "No access"],
+  ["Visitas pend.", "Pending visits"],
+  ["Agente", "Agent"],
+  ["Listing", "Listing"],
+  ["Rol", "Role"],
+
   // ── Perfil ────────────────────────────────────────────────────────────────
   ["Personaliza tu cuenta, perfil de inversor y experiencia de mapa.", "Customize your account, investor profile and map experience."],
   ["Personalizamos el mapa y las recomendaciones según tu perfil.", "We customize the map and recommendations based on your profile."],
@@ -1327,7 +1361,7 @@ const PHRASES: Array<[string, string]> = [
   ["Inversión extranjera directa", "Foreign direct investment"],
   ["Visitantes internacionales", "International visitors"],
   ["Compradores extranjeros", "International buyers"],
-  ["Llegadas aéreas 2023", "Air arrivals 2023"],
+  ["Llegadas aéreas 2025", "Air arrivals 2025"],
   ["Del mercado nacional", "Of the national market"],
   ["Rango promedio 2025", "Average range 2025"],
   ["Publica tu propiedad en minutos", "List your property in minutes"],
@@ -1335,6 +1369,12 @@ const PHRASES: Array<[string, string]> = [
   ["Apartamentos y casas en venta", "Apartments and houses for sale"],
   ["Inversores locales y extranjeros.", "Local and international investors."],
   ["en tus manos.", "in your hands."],
+  ["¿Listo para encontrar", "Ready to find"],
+  ["¿Qué querés hacer con tu propiedad?", "What do you want to do with your property?"],
+  ["¿En qué barrio está tu propiedad?", "Which neighborhood is your property in?"],
+  ["Vender mi propiedad", "Sell my property"],
+  ["tu propiedad?", "your property?"],
+  ["Vender", "Sell"],
 
   // ── Login / Register ──────────────────────────────────────────────────────
   ["Ingresa tu correo y contraseña.", "Enter your email and password."],
@@ -1342,6 +1382,16 @@ const PHRASES: Array<[string, string]> = [
   ["Explora el mercado inmobiliario y la comunidad del Valle de Aburrá", "Explore the real estate market and community of the Aburrá Valley"],
   ["Únete a la comunidad que\nestá construyendo Medellín.", "Join the community building Medellín."],
   ["Entrando…", "Signing in…"],
+  ["54K+ propiedades", "54K+ properties"],
+  ["606 barrios", "606 neighborhoods"],
+  ["12K+ negocios", "12K+ businesses"],
+
+  // ── verify-email.tsx ──────────────────────────────────────────────────────
+  ["¡Correo verificado!", "Email verified!"],
+  ["Tu cuenta está activa. Ya puedes usar todas las funciones de Medellín Social.", "Your account is active. You can now use all Medellín Social features."],
+  ["Enlace inválido", "Invalid link"],
+  ["Token inválido o faltante", "Invalid or missing token"],
+  ["Error al verificar", "Verification error"],
 
   // ── OnboardingModal ───────────────────────────────────────────────────────
   ["Cuéntanos qué estás buscando para mostrarte lo más relevante", "Tell us what you're looking for so we can show you what's most relevant"],
@@ -1447,6 +1497,23 @@ const PHRASES: Array<[string, string]> = [
   ["Mediana zona", "Zone median"],
   ["Yield zona", "Zone yield"],
   ["Índice nómada", "Nomad index"],
+
+  // ── EventCard.tsx — categorías de evento + precio ─────────────────────────
+  ["Música", "Music"],
+  ["Gastronomía", "Food & Drink"],
+  ["Cultura", "Culture"],
+  ["Deporte", "Sports"],
+  ["Bienestar", "Wellness"],
+  ["Gratis", "Free"],
+
+  // ── BusinessCard.tsx / categorias_comunidad.ts — categorías de negocio ────
+  ["Estética", "Aesthetics"],
+  ["Almuerzo", "Lunch"],
+  ["Panadería", "Bakery"],
+  ["Asiática", "Asian"],
+  ["Rápida", "Fast Food"],
+  ["Fisio", "Physical Therapy"],
+  ["Dermatología", "Dermatology"],
 
   // ── solicitudes.tsx ───────────────────────────────────────────────────────
   ["Esta sección es solo para agentes verificados.", "This section is for verified agents only."],
