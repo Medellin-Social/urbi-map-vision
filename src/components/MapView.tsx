@@ -971,10 +971,16 @@ export function MapView({
       if (f?.pisoMin != null) params.set("piso_min", String(f.pisoMin));
       // Dedup: with a zone active the backend ignores bbox, so panning within the
       // zone returns identical data — skip the refetch (key excludes bbox then).
+      // Zoom only matters as clusters-vs-points mode (backend flips at
+      // POLYGON_TIER_ZOOM) — a raw zoom number here meant a fly-through
+      // animation crossing zoom 11→12→13 fired a fresh fetch at every integer
+      // step even though clusters-mode data is identical the whole way, which
+      // is what made a single comuna click cascade into 4-7 sequential requests.
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
       const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}|${f?.estadoInmueble}|${f?.pisoMin}`;
+      const zoomMode = map.getZoom() >= POLYGON_TIER_ZOOM ? "points" : "clusters";
       const dedupKey = hasGeo
-        ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
+        ? `${zoomMode}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
         : params.toString();
       if (dedupKey === lastViewportQueryRef.current) return;
       lastViewportQueryRef.current = dedupKey;
