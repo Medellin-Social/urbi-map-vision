@@ -28,9 +28,9 @@ async def aplicar_afiliado(body: AplicarAfiliadoIn, pool=Depends(get_pool)):
     try:
         row = await pool.fetchrow(
             """
-            INSERT INTO public.aplicaciones_afiliado
-                (nombre, email, telefono, canal)
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO public.aplicacion_referidor
+                (tipo, nombre, email, telefono, canal)
+            VALUES ('afiliado', $1, $2, $3, $4)
             RETURNING id
             """,
             body.nombre, body.email, body.telefono, body.canal,

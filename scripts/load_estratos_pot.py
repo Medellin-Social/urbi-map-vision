@@ -13,7 +13,7 @@ from sqlalchemy import create_engine, text
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DATABASE_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 
 ESTRATO_PATH = os.path.join(ROOT, "geojson_estrato_socioeconomico_mr",
@@ -65,8 +65,12 @@ def load_estratos(engine):
         index=False,
     )
 
-    # Indexes
+    # PK + indexes — to_postgis(if_exists="replace") recreates the table
+    # from scratch each run, so the surrogate PK has to be re-added here too.
     with engine.begin() as con:
+        con.execute(text(
+            "ALTER TABLE raw.estratos_manzana ADD COLUMN id bigserial PRIMARY KEY"
+        ))
         con.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_estratos_manzana_geom "
             "ON raw.estratos_manzana USING GIST(geometry)"
@@ -121,6 +125,9 @@ def load_pot(engine):
     )
 
     with engine.begin() as con:
+        con.execute(text(
+            "ALTER TABLE raw.pot_usos_medellin ADD COLUMN id bigserial PRIMARY KEY"
+        ))
         con.execute(text(
             "CREATE INDEX IF NOT EXISTS idx_pot_usos_geom "
             "ON raw.pot_usos_medellin USING GIST(geometry)"

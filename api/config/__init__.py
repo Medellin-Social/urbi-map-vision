@@ -1,4 +1,5 @@
 import os
 
-# COP/USD exchange rate — set USD_TO_COP in .env and Railway env vars
+# Fallback estático — solo se usa si public.trm no responde (ver api/routers/trm.py)
 USD_TO_COP = float(os.getenv("USD_TO_COP", "4100"))
+EUR_TO_COP = float(os.getenv("EUR_TO_COP", "4500"))

@@ -28,9 +28,17 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL     = os.getenv("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:5433/urbidata")
-USD_TO_COP = float(os.getenv("USD_TO_COP", "4163"))
+DB_URL     = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+_USD_TO_COP_FALLBACK = float(os.getenv("USD_TO_COP", "4100"))
 MIN_LISTINGS = 1
+
+
+def _fetch_usd_to_cop(conn) -> float:
+    """Lee la tasa vigente de public.trm (fetch_trm.py, semanal) — fallback a .env si falta."""
+    with conn.cursor() as cur:
+        cur.execute("SELECT valor FROM public.trm WHERE moneda = 'USD'")
+        row = cur.fetchone()
+        return float(row[0]) if row else _USD_TO_COP_FALLBACK
 
 
 AGGREGATE_SQL = """
@@ -166,11 +174,13 @@ def main():
 
     conn = psycopg2.connect(DB_URL)
     cur  = conn.cursor(cursor_factory=psycopg2.extras.RealDictCursor)
+    usd_to_cop = _fetch_usd_to_cop(conn)
+    print(f"USD_TO_COP vigente (public.trm): {usd_to_cop}")
 
     # Fix SQL: n_private_home → n_private_room
     sql = AGGREGATE_SQL.replace("ba.n_private_home", "ba.n_private_room")
 
-    cur.execute(sql, {"min_listings": args.min_listings, "usd_to_cop": USD_TO_COP})
+    cur.execute(sql, {"min_listings": args.min_listings, "usd_to_cop": usd_to_cop})
     rows = cur.fetchall()
     print(f"Barrios con datos reales: {len(rows)}")
 

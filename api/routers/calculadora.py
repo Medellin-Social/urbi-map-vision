@@ -37,7 +37,8 @@ _OPEX_LABEL: dict[str, str] = {
 }
 
 # LEFT JOIN barrios_airbnb_real to prefer real observed income over projected ADR×ocupacion.
-# LEFT JOIN LATERAL ipvn_dane for latest DANE appreciation rate (col: variacion_anual_pct, anio/trimestre).
+# LEFT JOIN LATERAL raw.indices_precio_vivienda (fuente='dane') for latest DANE appreciation
+# rate (col: variacion_anual_pct, anio/trimestre) — antes raw.ipvn_dane, fusionada 2026-08-23.
 _SQL = """
     SELECT
         sc.nombre_barrio,
@@ -67,8 +68,9 @@ _SQL = """
     LEFT JOIN analytics.barrios_airbnb_real  bar  ON sc.barrio_id = bar.barrio_id
     LEFT JOIN LATERAL (
         SELECT variacion_anual_pct
-        FROM raw.ipvn_dane
-        WHERE anio = (SELECT MAX(anio) FROM raw.ipvn_dane)
+        FROM raw.indices_precio_vivienda
+        WHERE fuente = 'dane'
+          AND anio = (SELECT MAX(anio) FROM raw.indices_precio_vivienda WHERE fuente = 'dane')
         ORDER BY trimestre DESC
         LIMIT 1
     ) ipvn ON TRUE

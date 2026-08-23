@@ -1,10 +1,15 @@
 """
-Catastro Medellín Vigente — carga raw.catastro_medellin_vigente desde Hoja2.
+Catastro Medellín Vigente — carga Hoja2 dentro de raw.catastro_medellin
+(tabla compartida con Hoja1 desde la fusión 2026-08-23; discriminador: cd_vig_pred='S').
 
 Mismas columnas que Hoja1 + cd_vig_pred (siempre 'S' = vigente).
 Diferencias respecto a Hoja1:
   - nm_ar_lote  : enteros puros (sin coma decimal)
   - nm_ar_constru, area_desenglobe, vl_* : coma decimal (formato europeo)
+
+Nota: Hoja1 y Hoja2 resultaron ser mayormente predios distintos (~1% de
+solapamiento de matricula_anonimizada), no snapshots del mismo universo — se
+fusionaron preservando ambos, no se deduplicó.
 
 Run:
   python scripts/load_catastro_medellin_vigente.py
@@ -20,41 +25,22 @@ import psycopg2.extras
 
 DB_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 
 CSV_PATH = Path(__file__).parent.parent / "PQR_Predios anonimizado(Hoja2).csv"
 
 DDL = """
-CREATE TABLE IF NOT EXISTS raw.catastro_medellin_vigente (
-    id                    SERIAL PRIMARY KEY,
-    matricula_anonimizada VARCHAR,
-    cd_comuna             INTEGER,
-    ds_comuna             VARCHAR,
-    nm_ar_lote            DECIMAL,
-    nm_ar_constru         DECIMAL,
-    area_desenglobe       DECIMAL,
-    cd_uso                INTEGER,
-    cd_tipo               INTEGER,
-    cd_uso_lote           INTEGER,
-    cd_tipo_lote          INTEGER,
-    ds_uso_tipo           VARCHAR,
-    vl_av_lote            BIGINT,
-    vl_av_constru         BIGINT,
-    vl_avaluo_total       BIGINT,
-    cd_ind_ru_ur          VARCHAR,
-    cd_vig_pred           VARCHAR,
-    fecha_carga           TIMESTAMP DEFAULT NOW()
-);
+ALTER TABLE raw.catastro_medellin ADD COLUMN IF NOT EXISTS cd_vig_pred VARCHAR;
 
-CREATE INDEX IF NOT EXISTS idx_catvig_comuna
-    ON raw.catastro_medellin_vigente(cd_comuna);
-CREATE INDEX IF NOT EXISTS idx_catvig_uso
-    ON raw.catastro_medellin_vigente(ds_uso_tipo);
-CREATE INDEX IF NOT EXISTS idx_catvig_avaluo
-    ON raw.catastro_medellin_vigente(vl_avaluo_total);
-CREATE INDEX IF NOT EXISTS idx_catvig_vig
-    ON raw.catastro_medellin_vigente(cd_vig_pred);
+CREATE INDEX IF NOT EXISTS idx_catastro_medellin_comuna
+    ON raw.catastro_medellin(cd_comuna);
+CREATE INDEX IF NOT EXISTS idx_catastro_medellin_uso
+    ON raw.catastro_medellin(ds_uso_tipo);
+CREATE INDEX IF NOT EXISTS idx_catastro_medellin_avaluo
+    ON raw.catastro_medellin(vl_avaluo_total);
+CREATE INDEX IF NOT EXISTS idx_catastro_medellin_vig
+    ON raw.catastro_medellin(cd_vig_pred);
 """
 
 VERIFY_SQL = """
@@ -65,7 +51,8 @@ SELECT
     ROUND(AVG(nm_ar_constru), 0)                      AS area_prom_m2,
     SUM(CASE WHEN cd_ind_ru_ur = 'U' THEN 1 ELSE 0 END) AS urbanos,
     SUM(CASE WHEN cd_ind_ru_ur = 'R' THEN 1 ELSE 0 END) AS rurales
-FROM raw.catastro_medellin_vigente
+FROM raw.catastro_medellin
+WHERE cd_vig_pred = 'S'
 GROUP BY ds_comuna
 ORDER BY predios DESC;
 """
@@ -100,7 +87,7 @@ DB_COLS = [
 ]
 
 INSERT_SQL = f"""
-    INSERT INTO raw.catastro_medellin_vigente
+    INSERT INTO raw.catastro_medellin
         ({', '.join(DB_COLS)})
     VALUES %s
 """
@@ -141,10 +128,10 @@ def main():
     cur = conn.cursor()
 
     # ── Paso 1: DDL ───────────────────────────────────────────────────────────
-    print("── Paso 1: Creando tabla e índices ──────────────────────────────")
+    print("── Paso 1: Columna cd_vig_pred + índices en raw.catastro_medellin ──")
     cur.execute(DDL)
     conn.commit()
-    print("✓ raw.catastro_medellin_vigente lista\n")
+    print("✓ raw.catastro_medellin lista\n")
 
     # ── Paso 2: Carga en chunks ───────────────────────────────────────────────
     print("── Paso 2: Cargando CSV ─────────────────────────────────────────")

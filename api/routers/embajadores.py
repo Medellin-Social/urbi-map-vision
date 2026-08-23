@@ -30,9 +30,9 @@ async def aplicar_embajador(body: AplicarEmbajadorIn, pool=Depends(get_pool)):
     try:
         row = await pool.fetchrow(
             """
-            INSERT INTO public.aplicaciones_embajador
-                (nombre, email, telefono, barrio_id, experiencia, motivacion)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO public.aplicacion_referidor
+                (tipo, nombre, email, telefono, barrio_id, experiencia, motivacion)
+            VALUES ('embajador', $1, $2, $3, $4, $5, $6)
             RETURNING id
             """,
             body.nombre, body.email, body.telefono,
