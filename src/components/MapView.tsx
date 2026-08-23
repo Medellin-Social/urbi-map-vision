@@ -256,6 +256,11 @@ export function MapView({
   const isMobile = useIsMobile();
   const [legendOpen, setLegendOpen] = useState(false);
   const staticFeaturesRef = useRef<GeoJSON.Feature[] | null>(null);
+  // In-flight guard: mapLoaded + comunasMetrics can both change on initial
+  // load, firing the effect below twice before the first fetch resolves and
+  // sets staticFeaturesRef — without this, every comunas_*.geojson (up to
+  // ~1.1MB each) was fetched twice.
+  const staticFeaturesPromiseRef = useRef<Promise<GeoJSON.Feature[]> | null>(null);
   const barriosRef = useRef<ApiBarrio[]>([]);
   const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
@@ -868,20 +873,24 @@ export function MapView({
       return;
     }
 
-    // Primera carga — fetch archivos GeoJSON estáticos oficiales
-    const staticFiles = [
-      "/data/comunas_medellin.geojson",
-      ...Object.values(MUNICIPIO_STATIC),
-    ];
-    Promise.all(
-      staticFiles.map((f) =>
-        fetch(f).then((r) => r.json()).catch(() => ({ type: "FeatureCollection", features: [] }))
-      )
-    ).then((results: { features: GeoJSON.Feature[] }[]) => {
-      const features = results.flatMap((fc) => (fc.features ?? []) as GeoJSON.Feature[]);
-      staticFeaturesRef.current = features;
-      enrichAndRender(features);
-    });
+    // Primera carga — fetch archivos GeoJSON estáticos oficiales. Reuse an
+    // in-flight fetch instead of starting a second one (see promise ref above).
+    if (!staticFeaturesPromiseRef.current) {
+      const staticFiles = [
+        "/data/comunas_medellin.geojson",
+        ...Object.values(MUNICIPIO_STATIC),
+      ];
+      staticFeaturesPromiseRef.current = Promise.all(
+        staticFiles.map((f) =>
+          fetch(f).then((r) => r.json()).catch(() => ({ type: "FeatureCollection", features: [] }))
+        )
+      ).then((results: { features: GeoJSON.Feature[] }[]) => {
+        const features = results.flatMap((fc) => (fc.features ?? []) as GeoJSON.Feature[]);
+        staticFeaturesRef.current = features;
+        return features;
+      });
+    }
+    staticFeaturesPromiseRef.current.then(enrichAndRender);
   }, [comunasMetrics, mapLoaded]);
 
   // ── Vista 1 ↔ Vista 2: toggle capas (solo depende de mapView) ──────────────

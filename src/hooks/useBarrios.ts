@@ -65,36 +65,32 @@ async function _fetchMunicipioFeatures(municipio: string): Promise<StaticFeature
 const _geoMap = new Map<string, ApiBarrio["geometry"]>();
 const _comunaMap = new Map<string, number | null>();
 const _nombreComunaMap = new Map<string, string>(); // barrio key → nombre_comuna from GeoJSON
-let _geoPromise: Promise<Map<string, ApiBarrio["geometry"]>> | null = null;
-
-function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
-  if (!_geoPromise) {
-    _geoPromise = (async () => {
-      const all = await Promise.all(ALL_MUNICIPIOS.map(_fetchMunicipioFeatures));
-      for (const features of all) {
-        for (const f of features) {
-          const key = geoKey(f.properties.nombre, f.properties.municipio);
-          _geoMap.set(key, f.geometry);
-          _comunaMap.set(key, f.properties.cd_comuna ?? null);
-          if (f.properties.nombre_comuna) _nombreComunaMap.set(key, f.properties.nombre_comuna);
-        }
-      }
-      return _geoMap;
-    })();
-  }
-  return _geoPromise;
-}
-
 let _featuresPromise: Promise<StaticFeature[]> | null = null;
 
-async function loadStaticFeatures(): Promise<StaticFeature[]> {
+// Single fetch of the 6 barrios_*.geojson files, shared by both consumers below.
+// Was two independent module-level caches each re-fetching all 6 files (~13MB
+// doubled to ~26MB on every map load) — geometry/comuna maps are now derived
+// from this one result instead of re-fetching.
+function loadStaticFeatures(): Promise<StaticFeature[]> {
   if (!_featuresPromise) {
     _featuresPromise = (async () => {
       const all = await Promise.all(ALL_MUNICIPIOS.map(_fetchMunicipioFeatures));
-      return all.flat();
+      const flat = all.flat();
+      for (const f of flat) {
+        const key = geoKey(f.properties.nombre, f.properties.municipio);
+        _geoMap.set(key, f.geometry);
+        _comunaMap.set(key, f.properties.cd_comuna ?? null);
+        if (f.properties.nombre_comuna) _nombreComunaMap.set(key, f.properties.nombre_comuna);
+      }
+      return flat;
     })();
   }
   return _featuresPromise;
+}
+
+async function loadStaticGeometry(): Promise<Map<string, ApiBarrio["geometry"]>> {
+  await loadStaticFeatures();
+  return _geoMap;
 }
 
 // ── Scraped stats cache (barrios_stats.json — all Valle de Aburrá) ────────────
