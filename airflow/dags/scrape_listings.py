@@ -12,6 +12,11 @@ Tasks:
     t3 — scrape Metrocuadrado (--since-days 4, all_valle)
     t4 — refresh analytics cache (enrich_barrios_stats)
     t5 — validar URLs activas (url_activa, ventana 7 días)
+    t7 — dbt run incremental (staging/analytics dependientes de stg_listings_unificado)
+
+t7 viene de ~/urbi/airflow/dags/scrape_listings_incremental.py (2026-08-23) —
+esa DAG scrapeaba Fincaraíz+Metrocuadrado de nuevo (duplicado exacto de t1-t3
+de aquí), solo se rescató su paso final de dbt.
 """
 
 import os
@@ -28,7 +33,7 @@ SCRIPTS_DIR = PROJECT_DIR / "scripts"
 URBI_DIR = Path("/home/edwlearn/urbi")
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 1,
     "retry_delay": timedelta(minutes=10),
     "email_on_failure": False,
@@ -126,6 +131,13 @@ def validate_urls() -> None:
     )
 
 
+def dbt_run_incremental() -> None:
+    _run(
+        [sys.executable, "-m", "dbt", "run", "--profiles-dir", "."],
+        cwd=URBI_DIR / "dbt",
+    )
+
+
 def mirror_media() -> None:
     # Espeja portadas nuevas a R2 (incremental: solo listings sin fila en el
     # mirror). Backfill completo se corre una vez a mano con --all.
@@ -189,10 +201,18 @@ with DAG(
         execution_timeout=timedelta(hours=2),
     )
 
+    t7 = PythonOperator(
+        task_id="dbt_run_incremental",
+        python_callable=dbt_run_incremental,
+        execution_timeout=timedelta(minutes=30),
+    )
+
     # fincaraiz: scrape → load → dedup → analytics
     # metrocuadrado: scrape → analytics (dedupa al insertar)
     # analytics espera ambos; validación de URLs y espejo de portadas al final
+    # dbt incremental corre último, depende de stg_listings_unificado ya fresco
     t1 >> t2 >> t2b >> t4
     t3 >> t4
     t4 >> t5
     t4 >> t6
+    t4 >> t7
