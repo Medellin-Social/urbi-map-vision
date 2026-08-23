@@ -193,7 +193,7 @@ SELECT
     l.listing_uid,
     l.fuente,
     CASE
-        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.tier IN ('agente_premium', 'agencia_premium') THEN 'agente_verificado'
         WHEN l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente') THEN 'propio_pro'
         WHEN l.fuente = 'propio' THEN 'propio'
         ELSE l.fuente
@@ -308,9 +308,11 @@ ORDER BY
          WHEN l.barrio_id = ANY(COALESCE($2, ARRAY[]::int[])) THEN 1
          ELSE 2 END,
     -- Pro / agente verificado primero dentro de cada zona (visibilidad pagada).
-    CASE WHEN l.tier = 'agente_premium'
+    CASE WHEN l.tier IN ('agente_premium', 'agencia_premium')
               OR (l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente'))
          THEN 0 ELSE 1 END,
+    -- Casadolcecasa siempre primero dentro del bloque premium (socio top).
+    CASE WHEN l.fuente = 'casadolcecasa' THEN 0 ELSE 1 END,
     CASE WHEN l.fuente = 'medellinliving' THEN 0 ELSE 1 END,
     -- Orden por PRECIO TOTAL, no precio/m²: un lote enorme (768k/m² pero 40B
     -- totales) no debe aparecer entre los "más baratos".
@@ -322,8 +324,9 @@ _LISTINGS_SQL = _LISTINGS_SQL_TMPL.format(amenidades_filter="")
 # Sin filtro de zona, el query base joinea ~54K filas antes del ORDER BY+LIMIT
 # (≈1.5s). Aquí aplicamos los filtros de columnas de stg + pre-orden por
 # (prioridad pagada, precio/m²) y LIMIT 700 candidatos ANTES de los joins pesados,
-# así solo se joinean ~700 filas (≈0.15s). Seguro: solo ~9 listings prioritarios
-# (propio/agente_premium), el top-500 real siempre cabe en 700 candidatos.
+# así solo se joinean ~700 filas (≈0.15s). Seguro: solo ~300 listings prioritarios
+# (propio/agente_premium/agencia_premium — incl. casadolcecasa), el top-500 real
+# siempre cabe en 700 candidatos.
 # Solo aplica cuando NO hay filtros del lado del join (estrato/antiguedad/amenidades).
 _ALLCITY_CTE_CLOSE = (
     "      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)\n)"
@@ -342,7 +345,7 @@ _ALLCITY_CTE_REPLACEMENT = """      AND NOT (tipo_operacion = 'venta'    AND pre
       -- para que los 700 candidatos coincidan con el set efectivo del slow path.
       AND EXISTS (SELECT 1 FROM analytics.listings_georef _g WHERE _g.url = staging.stg_listings_unificado.url)
       AND EXISTS (SELECT 1 FROM raw.barrios _b WHERE _b.id = staging.stg_listings_unificado.barrio_id)
-    ORDER BY CASE WHEN tier = 'agente_premium' OR fuente = 'propio' THEN 0 ELSE 1 END,
+    ORDER BY CASE WHEN tier IN ('agente_premium', 'agencia_premium') OR fuente = 'propio' THEN 0 ELSE 1 END,
              CASE WHEN fuente = 'medellinliving' THEN 0 ELSE 1 END,
              precio_cop ASC NULLS LAST
     LIMIT 700
@@ -723,7 +726,7 @@ SELECT
     l.listing_uid,
     l.fuente,
     CASE
-        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.tier IN ('agente_premium', 'agencia_premium') THEN 'agente_verificado'
         WHEN l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente') THEN 'propio_pro'
         WHEN l.fuente = 'propio' THEN 'propio'
         ELSE l.fuente
@@ -1046,7 +1049,7 @@ WITH lraw AS (
 SELECT
     l.id, l.fuente,
     CASE
-        WHEN l.tier = 'agente_premium' THEN 'agente_verificado'
+        WHEN l.tier IN ('agente_premium', 'agencia_premium') THEN 'agente_verificado'
         WHEN l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente') THEN 'propio_pro'
         WHEN l.fuente = 'propio' THEN 'propio'
         ELSE l.fuente
@@ -1084,9 +1087,10 @@ WHERE ($1::float8 IS NULL OR g.lon >= $1)
   AND ($11::boolean IS NULL OR l.amoblado = $11)
 {extra_where}
 ORDER BY
-    CASE WHEN l.tier = 'agente_premium'
+    CASE WHEN l.tier IN ('agente_premium', 'agencia_premium')
               OR (l.fuente = 'propio' AND _lp.owner_plan IN ('pro','agente'))
          THEN 0 ELSE 1 END,
+    CASE WHEN l.fuente = 'casadolcecasa' THEN 0 ELSE 1 END,
     l.fecha_scraping DESC NULLS LAST
 """.format(usd=int(_USD), dm_join=_VIEWPORT_DM_JOIN, extra_where=_VIEWPORT_EXTRA_WHERE)
 
