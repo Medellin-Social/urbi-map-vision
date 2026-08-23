@@ -33,6 +33,8 @@ export type SharedFilters = {
   amoblado: boolean | null;
   busqueda: string | null;
   soloPromium: boolean;
+  estadoInmueble: "Nuevo" | "Usado" | null;
+  pisoMin: number | null;
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
@@ -51,6 +53,8 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   amoblado: null,
   busqueda: null,
   soloPromium: false,
+  estadoInmueble: null,
+  pisoMin: null,
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
@@ -223,7 +227,7 @@ const TIPO_OPTIONS = [
   { value: "bodega",        label: "Bodega" },
 ];
 
-type DropdownId = "precio" | "area" | "habBanos" | "tipo" | "filtros" | "amenidades";
+type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
 
 function countActive(f: SharedFilters): number {
   let n = 0;
@@ -237,19 +241,22 @@ function countActive(f: SharedFilters): number {
   if (f.diasMercado !== null) n++;
   if (f.amoblado !== null) n++;
   if (f.busqueda !== null) n++;
+  if (f.estadoInmueble !== null) n++;
+  if (f.pisoMin !== null) n++;
   return n;
 }
 
 // ─── FilterPill ───────────────────────────────────────────────────────────────
 
 function FilterPill({
-  label, active, onClear, onClick, isOpen,
+  label, active, onClear, onClick, isOpen, computedLabel,
 }: {
   label: string;
   active: boolean;
   onClear?: () => void;
   onClick: (anchor: DOMRect) => void;
   isOpen: boolean;
+  computedLabel?: boolean; // true if label text is lang-computed (e.g. COP/USD) rather than dict-translated
 }) {
   return (
     <button
@@ -268,7 +275,7 @@ function FilterPill({
         flexShrink: 0,
       }}
     >
-      <span>{label}</span>
+      <span {...(computedLabel ? { "data-i18n-skip": "true" } : {})}>{label}</span>
       {active && onClear ? (
         <span
           role="button"
@@ -337,13 +344,6 @@ function habLabel(f: SharedFilters): string {
 
 function tipoLabel(f: SharedFilters): string {
   return TIPO_OPTIONS.find((o) => o.value === f.tipoInmueble)?.label ?? "Tipo";
-}
-
-function areaLabel(f: SharedFilters): string {
-  if (f.areaMin !== null && f.areaMax !== null) return `${f.areaMin}–${f.areaMax} m²`;
-  if (f.areaMax !== null) return `Hasta ${f.areaMax} m²`;
-  if (f.areaMin !== null) return `Desde ${f.areaMin} m²`;
-  return "Área";
 }
 
 // areaMin/areaMax en SharedFilters siempre están en m² (canónico para la API);
@@ -483,9 +483,15 @@ function PrecioPanel({
 }) {
   const TOTAL_MIN = 0;
   // Ranges calibrated to real data (validity-capped): arriendo p99 ~38M (cap 50M);
-  // venta p99 ~9B. STEP: arriendo 0.5M uniforme; venta 5M.
+  // venta p99 ~9B. STEP: arriendo 100K; venta 1M — fine-grained since the CURVE
+  // below (not STEP) is what controls how many usable thumb positions there are.
   const TOTAL_MAX = isRent ? 50_000_000 : 10_000_000_000;
-  const STEP      = isRent ? 500_000    : 5_000_000;
+  const STEP      = isRent ? 100_000    : 1_000_000;
+  // Zillow-style non-linear scale: most listings sit in the low/mid band, so a
+  // straight linear map (old behavior) gave that band a sliver of the track and
+  // made the thumb jump in huge increments there. Power curve gives it most of
+  // the drag distance instead, with the long tail compressed into the rest.
+  const CURVE     = isRent ? 2.2 : 2.8;
 
   const curMin = filters.precioMin ?? TOTAL_MIN;
   const curMax = filters.precioMax ?? TOTAL_MAX;
@@ -493,8 +499,8 @@ function PrecioPanel({
   const trackRef = useRef<HTMLDivElement>(null);
 
   const snap  = (v: number) => Math.round(v / STEP) * STEP;
-  const toR   = (v: number) => (v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN);
-  const fromR = (r: number) => snap(TOTAL_MIN + r * (TOTAL_MAX - TOTAL_MIN));
+  const toR   = (v: number) => Math.pow(Math.max(0, v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN), 1 / CURVE);
+  const fromR = (r: number) => snap(TOTAL_MIN + Math.pow(r, CURVE) * (TOTAL_MAX - TOTAL_MIN));
 
   const minR = toR(curMin);
   const maxR = toR(curMax);
@@ -507,7 +513,9 @@ function PrecioPanel({
 
   const BARS = 30;
   const hist = useMemo(() => {
-    const peak  = isRent ? 0.28 : 0.15;
+    // Peak set in money terms (typical Medellín listing) then mapped through the
+    // same curved toR() the thumbs use, so the decorative shape still lines up.
+    const peak  = toR(isRent ? 2_000_000 : 350_000_000);
     const sigma = isRent ? 0.20 : 0.16;
     const raw   = Array.from({ length: BARS }, (_, i) => {
       const x = (i + 0.5) / BARS;
@@ -537,8 +545,8 @@ function PrecioPanel({
     <div style={{ ...panelBase, minWidth: 300, userSelect: "none" }}>
       {/* Range labels */}
       <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMin)}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMax)}</span>
+        <span data-i18n-skip="true" style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMin)}</span>
+        <span data-i18n-skip="true" style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMax)}</span>
       </div>
 
       {/* Histogram + dual slider */}
@@ -779,6 +787,44 @@ function HabBanosPanel({
   );
 }
 
+// ─── Tipo de inmueble ───────────────────────────────────────────────────────────
+
+function TipoPanel({
+  filters, onChange,
+}: {
+  filters: SharedFilters;
+  onChange: (f: Partial<SharedFilters>) => void;
+}) {
+  const OPTS = [{ value: null as string | null, label: "Todos" }, ...TIPO_OPTIONS];
+  return (
+    <div style={{ ...panelBase, minWidth: 200, padding: "12px 8px" }}>
+      <span style={{ ...labelSm, padding: "0 8px" }}>Tipo de inmueble</span>
+      <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
+        {OPTS.map((opt) => {
+          const active = filters.tipoInmueble === opt.value;
+          return (
+            <button
+              key={String(opt.value)}
+              onClick={() => onChange({ tipoInmueble: opt.value })}
+              style={{
+                width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7,
+                border: "none", cursor: "pointer", fontSize: 13,
+                background: active ? C.teal : "transparent",
+                color: active ? "#fff" : C.ink,
+                fontWeight: active ? 600 : 400,
+              }}
+              onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = C.surface; }}
+              onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ─── Amenidades ───────────────────────────────────────────────────────────────
 
 type AmenItem = { key: string; label: string; Icon: React.ElementType };
@@ -1009,7 +1055,6 @@ export function MapFilterBar({
   const precioActive     = filters.precioMax !== null || filters.precioMin !== null;
   const habActive        = filters.habitaciones !== null;
   const tipoActive       = filters.tipoInmueble !== null;
-  const areaActive       = filters.areaMin !== null || filters.areaMax !== null;
   const banosActive      = filters.banos !== null;
 
   // ── Sell tab: barrio selector ──────────────────────────────────────────────
@@ -1043,8 +1088,9 @@ export function MapFilterBar({
   const filtrosCount = [
     (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
-    filters.tipoInmueble !== null,
-    filters.soloPromium,
+    filters.areaMin !== null || filters.areaMax !== null,
+    filters.estadoInmueble !== null,
+    filters.pisoMin !== null,
   ].filter(Boolean).length;
   const amenCount = filters.amenidades?.length ?? 0;
 
@@ -1110,43 +1156,8 @@ export function MapFilterBar({
           onClear={() => onFiltersChange({ precioMin: null, precioMax: null })}
           onClick={(a) => toggle("precio", a)}
           isOpen={open === "precio"}
+          computedLabel
         />
-      </div>
-
-      {/* Área */}
-      <div style={{ position: "relative", flexShrink: 0 }}>
-        <FilterPill
-          label={areaLabel(filters)}
-          active={areaActive}
-          onClear={areaActive ? () => onFiltersChange({ areaMin: null, areaMax: null }) : undefined}
-          onClick={(a) => toggle("area", a)}
-          isOpen={open === "area"}
-        />
-        {open === "area" && (
-          <div style={{
-            position: "absolute", top: "calc(100% + 6px)", left: 0, zIndex: 200,
-            background: C.white, border: `1px solid ${C.border}`, borderRadius: 12,
-            boxShadow: "0 12px 32px rgba(26,18,8,0.14)", padding: 16, minWidth: 220,
-          }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: "0.06em", display: "block", marginBottom: 10 }}>
-              Área ({areaUnitLabel})
-            </span>
-            <div style={{ display: "flex", gap: 8 }}>
-              <input
-                type="number" placeholder="Mínima"
-                value={areaMinField.text}
-                onChange={(e) => areaMinField.handleChange(e.target.value)}
-                style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
-              />
-              <input
-                type="number" placeholder="Máxima"
-                value={areaMaxField.text}
-                onChange={(e) => areaMaxField.handleChange(e.target.value)}
-                style={{ flex: 1, border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
-              />
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Habitaciones y Baños */}
@@ -1160,12 +1171,23 @@ export function MapFilterBar({
         />
       </div>
 
+      {/* Tipo de inmueble */}
+      <div style={{ position: "relative", flexShrink: 0 }}>
+        <FilterPill
+          label={tipoLabel(filters)}
+          active={tipoActive}
+          onClear={tipoActive ? () => onFiltersChange({ tipoInmueble: null }) : undefined}
+          onClick={(a) => toggle("tipo", a)}
+          isOpen={open === "tipo"}
+        />
+      </div>
+
       {/* Filtros */}
       <div style={{ position: "relative", flexShrink: 0 }}>
         <FilterPill
           label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ antiguedad: null, estrato: null, diasMercado: null, tipoInmueble: null, soloPromium: false }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ antiguedad: null, estrato: null, diasMercado: null, soloPromium: false, areaMin: null, areaMax: null, estadoInmueble: null, pisoMin: null }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1281,12 +1303,12 @@ export function MapFilterBar({
           <span style={labelSm}>{isRent ? "Precio / mes" : "Precio"}</span>
           <div style={{ display: "flex", gap: 8 }}>
             <input
-              type="number" placeholder="Mínimo" value={filters.precioMin ?? ""}
+              type="number" placeholder="Mínimo" aria-label="Precio mínimo" value={filters.precioMin ?? ""}
               onChange={(e) => onFiltersChange({ precioMin: e.target.value ? Number(e.target.value) : null })}
               style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
             />
             <input
-              type="number" placeholder="Máximo" value={filters.precioMax ?? ""}
+              type="number" placeholder="Máximo" aria-label="Precio máximo" value={filters.precioMax ?? ""}
               onChange={(e) => onFiltersChange({ precioMax: e.target.value ? Number(e.target.value) : null })}
               style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, padding: "8px 12px", fontSize: 13, outline: "none", color: C.ink, background: "#fff" }}
             />
@@ -1335,22 +1357,6 @@ export function MapFilterBar({
               </button>
             ))}
           </div>
-        </div>
-
-        {/* Premium */}
-        <div style={{ marginBottom: 20 }}>
-          <button
-            onClick={() => onFiltersChange({ soloPromium: !filters.soloPromium })}
-            style={{
-              width: "100%", padding: "10px 14px", borderRadius: 8, cursor: "pointer",
-              fontSize: 13, fontWeight: 600, textAlign: "left",
-              border: `1.5px solid ${filters.soloPromium ? "#f59e0b" : C.border}`,
-              background: filters.soloPromium ? "rgba(245,158,11,0.12)" : "transparent",
-              color: filters.soloPromium ? "#b45309" : C.ink,
-            }}
-          >
-            ✦ Solo Premium
-          </button>
         </div>
 
         {activeTab === "buy" && (
@@ -1419,6 +1425,12 @@ export function MapFilterBar({
             <HabBanosPanel filters={filters} onChange={onFiltersChange} />
           </div>
         );
+      case "tipo":
+        return (
+          <div ref={dropdownRef} style={wrapStyle}>
+            <TipoPanel filters={filters} onChange={onFiltersChange} />
+          </div>
+        );
       case "amenidades":
         return (
           <div ref={dropdownRef} style={wrapStyle}>
@@ -1465,46 +1477,13 @@ export function MapFilterBar({
                 Filtros
               </span>
 
-              {/* Tipo de inmueble */}
-              <span style={labelSm}>Tipo de inmueble</span>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 16 }}>
-                {[{ value: null, label: "Todos" }, ...TIPO_OPTIONS].map((opt) => (
-                  <button
-                    key={String(opt.value)}
-                    onClick={() => onFiltersChange({ tipoInmueble: opt.value })}
-                    style={{
-                      padding: "6px 12px", borderRadius: 8, fontSize: 12,
-                      border: `1px solid ${filters.tipoInmueble === opt.value ? C.teal : C.border}`,
-                      background: filters.tipoInmueble === opt.value ? C.teal : "transparent",
-                      color: filters.tipoInmueble === opt.value ? "#fff" : C.ink,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {opt.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* Premium */}
-              <button
-                onClick={() => onFiltersChange({ soloPromium: !filters.soloPromium })}
-                style={{
-                  width: "100%", padding: "8px 12px", borderRadius: 8, cursor: "pointer",
-                  marginBottom: 16, fontSize: 12, fontWeight: 600, textAlign: "left",
-                  border: `1.5px solid ${filters.soloPromium ? "#f59e0b" : C.border}`,
-                  background: filters.soloPromium ? "rgba(245,158,11,0.12)" : "transparent",
-                  color: filters.soloPromium ? "#b45309" : C.ink,
-                }}
-              >
-                ✦ Solo Premium
-              </button>
-
               {/* Área */}
               <span style={labelSm}>Área {areaUnitLabel}</span>
               <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
                 <input
                   type="number"
                   placeholder="Mínimo"
+                  aria-label="Área mínima"
                   value={areaMinField.text}
                   onChange={(e) => areaMinField.handleChange(e.target.value)}
                   style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", background: C.white, color: C.ink }}
@@ -1512,6 +1491,7 @@ export function MapFilterBar({
                 <input
                   type="number"
                   placeholder="Máximo"
+                  aria-label="Área máxima"
                   value={areaMaxField.text}
                   onChange={(e) => areaMaxField.handleChange(e.target.value)}
                   style={{ width: "100%", border: `1px solid ${C.border}`, borderRadius: 8, padding: "7px 10px", fontSize: 12, outline: "none", background: C.white, color: C.ink }}
@@ -1568,6 +1548,49 @@ export function MapFilterBar({
                 })}
               </div>
 
+              {/* Estado del inmueble */}
+              <span style={labelSm}>Estado del inmueble</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                {[{ value: null, label: "Cualquiera" }, { value: "Nuevo", label: "Nuevo" }, { value: "Usado", label: "Usado" }].map((opt) => (
+                  <button
+                    key={String(opt.value)}
+                    onClick={() => onFiltersChange({ estadoInmueble: opt.value as "Nuevo" | "Usado" | null })}
+                    style={{
+                      flex: 1, padding: "6px 4px", borderRadius: 8, fontSize: 12,
+                      border: `1px solid ${filters.estadoInmueble === opt.value ? C.teal : C.border}`,
+                      background: filters.estadoInmueble === opt.value ? C.teal : "transparent",
+                      color: filters.estadoInmueble === opt.value ? "#fff" : C.ink,
+                      cursor: "pointer",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* Piso mínimo */}
+              <span style={labelSm}>Piso mínimo</span>
+              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
+                {[null, 1, 5, 10, 20].map((p) => {
+                  const active = filters.pisoMin === p;
+                  return (
+                    <button
+                      key={String(p)}
+                      onClick={() => onFiltersChange({ pisoMin: p })}
+                      style={{
+                        flex: 1, padding: "6px 0", borderRadius: 8, fontSize: 12,
+                        border: `1px solid ${active ? C.teal : C.border}`,
+                        background: active ? C.teal : "transparent",
+                        color: active ? "#fff" : C.ink,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {p === null ? "Cualquiera" : `${p}+`}
+                    </button>
+                  );
+                })}
+              </div>
+
               {/* PRO teasers — solo para usuarios sin plan pro */}
               {!isPro && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
@@ -1599,7 +1622,7 @@ export function MapFilterBar({
               {/* Actions */}
               <div style={{ display: "flex", gap: 8, paddingTop: 8, borderTop: `1px solid ${C.border}` }}>
                 <button
-                  onClick={() => { onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, amoblado: null }); close(); }}
+                  onClick={() => { onFiltersChange({ areaMin: null, areaMax: null, antiguedad: null, estrato: null, diasMercado: null, amoblado: null, estadoInmueble: null, pisoMin: null }); close(); }}
                   style={{ flex: 1, padding: "8px", borderRadius: 8, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, fontSize: 12, cursor: "pointer" }}
                 >
                   Limpiar

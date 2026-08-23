@@ -260,7 +260,7 @@ function PlanesPage() {
                   popular={false}
                   cta={!user ? "Comenzar gratis" : "Tu plan actual"}
                   ctaDisabled={!!user && planActual === "free"}
-                  onCTA={() => navigate({ to: "/registro" as never })}
+                  onCTA={() => navigate({ to: "/register" })}
                   iniciando={false}
                 />
                 <PlanCard
@@ -292,7 +292,7 @@ function PlanesPage() {
                   popular={false}
                   cta={!user ? "Crear cuenta" : "Tu plan actual"}
                   ctaDisabled={!!user && planActual === "free"}
-                  onCTA={() => navigate({ to: "/registro" as never })}
+                  onCTA={() => navigate({ to: "/register" })}
                   iniciando={false}
                 />
                 <PlanCard

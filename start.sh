@@ -48,14 +48,14 @@ for p in "$API_PORT" "$WEB_PORT"; do
 done
 
 # ── 1. PostgreSQL (Docker, puerto 5433) ──────────────────────────────────────
-POSTGRES_CONTAINER="urbidata-postgres"
+POSTGRES_CONTAINER="social-postgres"
 if ! docker inspect "$POSTGRES_CONTAINER" --format '{{.State.Status}}' 2>/dev/null | grep -q "running"; then
   echo "Iniciando postgres (docker)..."
   docker start "$POSTGRES_CONTAINER" 2>/dev/null \
     || docker compose up -d postgres 2>/dev/null
   echo -n "Esperando postgres"
   for i in $(seq 1 20); do
-    if PGPASSWORD=urbidata007 psql "postgresql://urbidata:urbidata007@localhost:5433/urbidata" \
+    if PGPASSWORD=urbidata007 psql "postgresql://social:urbidata007@localhost:5433/social" \
          -c "SELECT 1" -q >/dev/null 2>&1; then
       echo " OK"
       break

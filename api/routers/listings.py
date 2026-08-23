@@ -7,11 +7,11 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user, is_agente
+from api.dependencies import get_current_user, get_optional_user, is_agente
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
@@ -921,7 +921,9 @@ _VIEWPORT_PANEL_CAP = 200
 # $11 amoblado, $12 habitaciones (>=), $13 banos (>=), $14 area_min, $15 area_max,
 # $16 estrato int[], $17 tipo_inmueble (substring), $18 dias_mercado bucket,
 # $19 busqueda (ILIKE direccion), $20 amenidades ILIKE patterns text[] (OR match,
-# strict on NULL). Clusters group by comuna/municipio — no extra param needed.
+# strict on NULL), $21 estado_inmueble ("Nuevo"|"Usado", metrocuadrado only),
+# $22 piso_min (>=, metrocuadrado only). Clusters group by comuna/municipio —
+# no extra param needed.
 
 # dias_en_mercado only exists for metrocuadrado listings (fecha_primera_vez).
 # Dedupe on url first (url is not unique in the raw table) so the LEFT JOIN can't
@@ -951,6 +953,13 @@ _VIEWPORT_EXTRA_WHERE = """\
   AND ($19::text   IS NULL OR l.direccion_raw ILIKE '%' || $19 || '%')
   AND ($20::text[] IS NULL OR EXISTS (
         SELECT 1 FROM unnest(l.amenidades) _a WHERE _a ILIKE ANY($20)))
+  AND ($21::text   IS NULL OR EXISTS (
+        SELECT 1 FROM raw.listings_metrocuadrado _ei
+        WHERE _ei.url = l.url AND _ei.raw_data->>'mestadoinmueble' = $21))
+  AND ($22::int    IS NULL OR EXISTS (
+        SELECT 1 FROM raw.listings_metrocuadrado _pi
+        WHERE _pi.url = l.url AND _pi.raw_data->>'nroPiso' ~ '^\d+$'
+          AND (_pi.raw_data->>'nroPiso')::int >= $22))
 """
 
 # UI amenity key → substring patterns matched (ILIKE, OR) against the source
@@ -1119,6 +1128,8 @@ async def get_listings_viewport(
     dias_mercado: Optional[str] = Query(default=None),
     busqueda: Optional[str] = Query(default=None),
     amenidades: Optional[list[str]] = Query(default=None),
+    estado_inmueble: Optional[str] = Query(default=None),
+    piso_min: Optional[int] = Query(default=None),
 ):
     """Listings within the map viewport. Server-side clustering at low zoom
     (mode=clusters), individual points at high zoom (mode=points, capped).
@@ -1140,6 +1151,7 @@ async def get_listings_viewport(
         habitaciones, banos, area_min, area_max, estrato_arg, tipo_inmueble,
         (dias_mercado or None), (busqueda.strip() if busqueda and busqueda.strip() else None),
         _amenidad_like_patterns(amenidades),
+        estado_inmueble, piso_min,
     )
 
     if zoom >= _VIEWPORT_CLUSTER_MAX_ZOOM:
@@ -1203,6 +1215,99 @@ async def get_socio_casadolcecasa(limit: int = Query(default=6, ge=1, le=12)):
     pool = get_pool()
     rows = await pool.fetch(_SOCIO_CASADOLCECASA_SQL, limit)
     return [SocioListing(**dict(r)) for r in rows]
+
+
+class AgenteDirectorio(BaseModel):
+    id: str
+    nombre: str
+    foto_url: Optional[str] = None
+    telefono: str
+    email: str
+    zonas: list[str] = []
+    agencia_nombre: Optional[str] = None
+    agencia_verificada: bool = False
+    rating_promedio: Optional[float] = None  # None = sin reseñas (nunca 0 falso)
+    n_resenas: int = 0
+
+
+# zonas = nombres de comuna/barrio con sponsorship VIGENTE (fecha activa hoy) del
+# agente — mismo criterio que _LISTING_AGENTE_SQL. Solo comuna/barrio (municipio
+# no tiene un caso de uso real todavía). agencia_verificada viene de agency.verificada
+# (flag real que ya mantiene el sistema, no inventado). rating_promedio/n_resenas
+# de agent_review — pre-agregados en su propio CTE porque unirlos crudo al de sp
+# (otro 1-a-muchos) infla el array_agg de zonas por producto cartesiano.
+_AGENTES_DIRECTORIO_SQL = """
+WITH sp AS (
+    SELECT am.agent_id,
+           CASE s.zona_nivel
+             WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
+                                  JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
+                                  WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
+             WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
+             ELSE NULL
+           END AS zona_nombre
+    FROM sponsorship s
+    JOIN agency_member am ON am.agency_id = s.agency_id
+    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+),
+rev AS (
+    SELECT agent_id,
+           ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio,
+           COUNT(*)::int AS n_resenas
+    FROM agent_review
+    GROUP BY agent_id
+)
+SELECT a.id::text, a.nombre, a.foto_url, a.telefono, a.email,
+       COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
+       agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+FROM agent a
+LEFT JOIN sp  ON sp.agent_id = a.id
+LEFT JOIN rev ON rev.agent_id = a.id
+LEFT JOIN LATERAL (
+    SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
+    FROM agency_member am2 JOIN agency ag ON ag.id = am2.agency_id
+    WHERE am2.agent_id = a.id LIMIT 1
+) agcy ON true
+WHERE a.estado = 'activo'
+GROUP BY a.id, a.nombre, a.foto_url, a.telefono, a.email,
+         agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
+ORDER BY a.nombre
+"""
+
+
+@router.get("/agentes", response_model=list[AgenteDirectorio])
+async def get_agentes_directorio():
+    """Directorio público de agentes activos, para /agentes ('Encuentra un agente')."""
+    pool = get_pool()
+    rows = await pool.fetch(_AGENTES_DIRECTORIO_SQL)
+    return [AgenteDirectorio(**dict(r)) for r in rows]
+
+
+class ResenaIn(BaseModel):
+    calificacion: int = Field(ge=1, le=5)
+    comentario: Optional[str] = None
+
+
+@router.post("/agentes/{agent_id}/resenas", status_code=201)
+async def crear_resena_agente(agent_id: str, body: ResenaIn, current_user: dict = Depends(get_current_user)):
+    """Deja/actualiza tu reseña de un agente. Login-gated: un usuario, una
+    reseña por agente (UNIQUE agent_id+user_id) — es el piso anti-spam, sin
+    cola de moderación (ponytail: agregar si aparece abuso)."""
+    pool = get_pool()
+    agente = await pool.fetchval("SELECT 1 FROM agent WHERE id = $1 AND estado = 'activo'", agent_id)
+    if not agente:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    await pool.execute(
+        """INSERT INTO agent_review (agent_id, user_id, calificacion, comentario)
+           VALUES ($1, $2, $3, $4)
+           ON CONFLICT (agent_id, user_id)
+           DO UPDATE SET calificacion = EXCLUDED.calificacion,
+                         comentario = EXCLUDED.comentario,
+                         created_at = now()""",
+        agent_id, current_user["id"], body.calificacion, body.comentario,
+    )
+    return {"ok": True}
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)

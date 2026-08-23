@@ -30,6 +30,8 @@ export const API_ENDPOINTS = {
   listingVista: (id: number) => `${API_BASE_URL}/listings/${id}/vista`,
   listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
   listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
+  agentesDirectorio: `${API_BASE_URL}/listings/agentes`,
+  agenteResenas: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/resenas`,
   listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
   visitas: `${API_BASE_URL}/visitas`,
 
@@ -38,6 +40,7 @@ export const API_ENDPOINTS = {
   perfil: `${API_BASE_URL}/usuario/perfil`,
   authPerfil: `${API_BASE_URL}/auth/perfil`,
   configMapa: `${API_BASE_URL}/usuario/configuracion_mapa`,
+  suscribirse: `${API_BASE_URL}/usuario/suscribirse`,
 
   // Admin
   adminDashboard: `${API_BASE_URL}/admin/dashboard`,

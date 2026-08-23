@@ -97,7 +97,7 @@ function tierColor(l: ApiListing): string {
 }
 
 // Listing con visibilidad pagada (owner Pro o agente verificado) → destacado.
-const DESTACADO_COLOR = "#FF2D95";
+const DESTACADO_COLOR = "#ffc928";
 function esDestacado(l: ApiListing): boolean {
   return l.fuente_display === "propio_pro" || l.fuente_display === "agente_verificado";
 }
@@ -168,13 +168,15 @@ function ListingCard({
     : null;
   const precio    = lang === "en" && precioUSD ? precioUSD : precioCOP;
   const precioSub = lang === "en" ? precioCOP  : precioUSD;
-  const _pm2 = listing.precio_m2;
+  // precio_m2 del backend es venta-only (precio total/m²); en arriendo sería
+  // canon mensual/m² (escala de miles) — dividir por 1M ahí da basura ($0.0M/m²).
+  const _pm2 = listing.tipo_operacion === "venta" ? listing.precio_m2 : null;
   const m2 =
     _pm2 && _pm2 > 0 && _pm2 < 50_000_000
       ? unit === "sqft"
         ? `$${(_pm2 / 10.7639 / 1_000).toFixed(0)}k/ft²`
         : `$${(_pm2 / 1_000_000).toFixed(1)}M/m²`
-      : "N/A";
+      : null;
   const tipo = listing.tipo_operacion?.toUpperCase() ?? "—";
   const tipoInmueble = listing.tipo_inmueble ?? "";
   const specs = [
@@ -214,7 +216,7 @@ function ListingCard({
         </div>
         <div className="flex items-start justify-between gap-2 p-2">
           <div className="min-w-0">
-            <div className="text-sm font-bold leading-tight text-[#1A1208]">{precio}</div>
+            <div data-i18n-skip="true" className="text-sm font-bold leading-tight text-[#1A1208]">{precio}</div>
             {specs && <div className="mt-0.5 truncate text-[11px] text-[#6B5B45]">{specs}</div>}
           </div>
           <button
@@ -307,13 +309,8 @@ function ListingCard({
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {esDestacado(listing) && (
-          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: DESTACADO_COLOR, color: '#FFFFFF' }}>
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: DESTACADO_COLOR, color: '#1A1208' }}>
             ★ Destacado
-          </span>
-        )}
-        {listing.tier === "agencia_premium" && (
-          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#ffc928', color: '#1A1208' }}>
-            ✦ Premium
           </span>
         )}
         {listing.disponible_actualmente === false && (
@@ -353,10 +350,10 @@ function ListingCard({
         )}
       </div>
 
-      <div className="text-base font-bold leading-tight text-[#1A1208]">{precio}</div>
-      {precioSub && <div className="text-[11px] text-[#6B5B45]">{precioSub}</div>}
+      <div data-i18n-skip="true" className="text-base font-bold leading-tight text-[#1A1208]">{precio}</div>
+      {precioSub && <div data-i18n-skip="true" className="text-[11px] text-[#6B5B45]">{precioSub}</div>}
       {specs && <div className="mt-1 text-xs text-[#6B5B45]">{specs}</div>}
-      <div className="text-[11px] text-[#6B5B45]">{m2}</div>
+      {m2 && <div className="text-[11px] text-[#6B5B45]">{m2}</div>}
 
       {(listing.pct_bajo_mediana ?? 0) > 5 && (
         <div className="mt-1.5 text-[11px] font-medium text-[#085041]">

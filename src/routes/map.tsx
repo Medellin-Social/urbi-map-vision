@@ -131,18 +131,20 @@ function MapPageInner() {
 
   // Remaining shared filters applied server-side in /viewport (map + panel single source).
   const mlsFilters = useMemo(() => ({
-    habitaciones: sharedFilters.habitaciones,
-    banos:        sharedFilters.banos,
-    areaMin:      sharedFilters.areaMin,
-    areaMax:      sharedFilters.areaMax,
-    estrato:      sharedFilters.estrato,
-    tipoInmueble: sharedFilters.tipoInmueble,
-    diasMercado:  sharedFilters.diasMercado,
-    busqueda:     sharedFilters.busqueda,
-    amenidades:   sharedFilters.amenidades,
+    habitaciones:   sharedFilters.habitaciones,
+    banos:          sharedFilters.banos,
+    areaMin:        sharedFilters.areaMin,
+    areaMax:        sharedFilters.areaMax,
+    estrato:        sharedFilters.estrato,
+    tipoInmueble:   sharedFilters.tipoInmueble,
+    diasMercado:    sharedFilters.diasMercado,
+    busqueda:       sharedFilters.busqueda,
+    amenidades:     sharedFilters.amenidades,
+    estadoInmueble: sharedFilters.estadoInmueble,
+    pisoMin:        sharedFilters.pisoMin,
   }), [sharedFilters.habitaciones, sharedFilters.banos, sharedFilters.areaMin, sharedFilters.areaMax,
        sharedFilters.estrato, sharedFilters.tipoInmueble, sharedFilters.diasMercado, sharedFilters.busqueda,
-       sharedFilters.amenidades]);
+       sharedFilters.amenidades, sharedFilters.estadoInmueble, sharedFilters.pisoMin]);
 
   // Pass tipoOp to backend so it returns the correct type (not a mixed 50/50 split).
   // undefined when "todos" so backend does the balanced venta+arriendo fetch.

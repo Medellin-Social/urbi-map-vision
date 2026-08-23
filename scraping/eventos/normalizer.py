@@ -23,7 +23,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 from config import get_conn, asignar_barrio
 
 _NOMINATIM_URL = "https://nominatim.openstreetmap.org/search"
-_NOMINATIM_HEADERS = {"User-Agent": "urbidata-eventos/1.0 info.facturIA@gmail.com"}
+_NOMINATIM_HEADERS = {"User-Agent": "social-eventos/1.0 info.facturIA@gmail.com"}
 
 
 def geocodificar_direccion(direccion: str) -> tuple[float, float] | tuple[None, None]:

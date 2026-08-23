@@ -38,7 +38,7 @@ type MiPropiedad = {
 
 const K = {
   paper: "#FAF7F2", ink: "#1A1208", muted: "#6B5B45", line: "#E8E0D0",
-  teal: "#1D9E75", tealDeep: "#085041", coral: "#D85A30", fucsia: "#FF2D95",
+  teal: "#1D9E75", tealDeep: "#085041", coral: "#D85A30", dorado: "#ffc928",
   serif: "'Fraunces', Georgia, serif" as const,
 };
 
@@ -138,7 +138,7 @@ function MisPropiedades() {
                         {esArriendo ? "Arriendo" : "Venta"}
                       </span>
                       {p.destacado && (
-                        <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white" style={{ background: K.fucsia }}>
+                        <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: K.dorado, color: K.ink }}>
                           ★ Destacado
                         </span>
                       )}

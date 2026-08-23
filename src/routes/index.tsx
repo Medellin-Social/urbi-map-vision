@@ -9,6 +9,7 @@ import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
 import { useSocioCasadolcecasa } from '@/hooks/useSocioListings'
 import { formatCOP } from '@/lib/format'
+import { API_ENDPOINTS } from '@/config/api'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -207,6 +208,27 @@ function HomeContent() {
   const [nombre, setNombre] = useState('')
   const [email,  setEmail]  = useState('')
   const [suscrito, setSuscrito] = useState(false)
+  const [suscribiendo, setSuscribiendo] = useState(false)
+  const [suscribeError, setSuscribeError] = useState(false)
+
+  const handleSuscribirse = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    setSuscribiendo(true)
+    setSuscribeError(false)
+    try {
+      const res = await fetch(API_ENDPOINTS.suscribirse, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ nombre, email, barrio_id: barrio.barrio_id ?? null }),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setSuscrito(true)
+    } catch {
+      setSuscribeError(true)
+    } finally {
+      setSuscribiendo(false)
+    }
+  }, [nombre, email, barrio.barrio_id])
 
   const [mapPhase, setMapPhase] = useState<MapPhase | null>(null)
   const [pickedBarrio, setPickedBarrio] = useState<PickedBarrio | null>(null)
@@ -479,8 +501,19 @@ function HomeContent() {
                   </p>
 
                   <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 11 }}>
-                    <span style={{ color: '#ffc928', fontSize: 13 }}>★★★★★</span>
-                    <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>{negocio.rating_google?.toFixed(1)}</span>
+                    {negocio.rating_google != null ? (
+                      <>
+                        <span style={{ color: '#ffc928', fontSize: 13, letterSpacing: 1 }}>
+                          {'★'.repeat(Math.round(negocio.rating_google))}
+                          {'☆'.repeat(5 - Math.round(negocio.rating_google))}
+                        </span>
+                        <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>{negocio.rating_google.toFixed(1)}</span>
+                      </>
+                    ) : (
+                      <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>
+                        {t('Sin reseñas aún', 'No reviews yet')}
+                      </span>
+                    )}
                   </div>
 
                   <div style={{ display: 'flex', gap: 8 }}>
@@ -656,12 +689,17 @@ function HomeContent() {
               🎉 {t('¡Estás en la lista fundadora!', "You're on the founding list!")}
             </p>
           ) : (
-            <form onSubmit={e => { e.preventDefault(); setSuscrito(true) }} style={{ display: 'flex', gap: 10, maxWidth: 560, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
+            <form onSubmit={handleSuscribirse} style={{ display: 'flex', gap: 10, maxWidth: 560, margin: '0 auto', flexWrap: 'wrap', justifyContent: 'center' }}>
               <input type="text" required value={nombre} onChange={e => setNombre(e.target.value)} placeholder={t('Tu nombre', 'Your name')} style={{ flex: '1 1 160px', padding: '14px 18px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 11, fontSize: '.96rem', fontFamily: K.manrope, background: 'rgba(255,255,255,.07)', color: '#fff', outline: 'none' }} />
               <input type="email" required value={email} onChange={e => setEmail(e.target.value)} placeholder={t('Tu correo', 'Your email')} style={{ flex: '1 1 180px', padding: '14px 18px', border: '1px solid rgba(255,255,255,.12)', borderRadius: 11, fontSize: '.96rem', fontFamily: K.manrope, background: 'rgba(255,255,255,.07)', color: '#fff', outline: 'none' }} />
-              <button type="submit" style={{ width: '100%', background: K.coral, color: '#fff', border: 'none', fontFamily: K.manrope, fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: 'pointer', fontSize: '.94rem', letterSpacing: '.3px' }}>
-                {t('Quiero mi Invitación 🎟️', 'Get My Invite 🎟️')}
+              <button type="submit" disabled={suscribiendo} style={{ width: '100%', background: K.coral, color: '#fff', border: 'none', fontFamily: K.manrope, fontWeight: 800, padding: '14px 26px', borderRadius: 999, cursor: suscribiendo ? 'default' : 'pointer', fontSize: '.94rem', letterSpacing: '.3px', opacity: suscribiendo ? .7 : 1 }}>
+                {suscribiendo ? t('Enviando...', 'Sending...') : t('Quiero mi Invitación 🎟️', 'Get My Invite 🎟️')}
               </button>
+              {suscribeError && (
+                <p style={{ width: '100%', margin: 0, fontFamily: K.manrope, fontSize: '.85rem', color: '#ffb4a3' }}>
+                  {t('Algo salió mal. Intenta de nuevo.', 'Something went wrong. Please try again.')}
+                </p>
+              )}
             </form>
           )}
           <p style={{ fontFamily: K.manrope, fontSize: '.8rem', opacity: .55, marginTop: 18 }}>

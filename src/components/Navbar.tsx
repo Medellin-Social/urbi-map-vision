@@ -1,7 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { auth } from "@/lib/auth";
-import { useLang } from "@/lib/i18n";
+import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import type { Neighborhood } from "@/lib/adapters";
 
 const K = {
@@ -104,10 +104,10 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
                 borderRadius: 999,
                 padding: '3px 8px',
                 cursor: lang === l ? 'default' : 'pointer',
-                fontSize: 16, lineHeight: 1,
+                display: 'flex', alignItems: 'center',
               }}
             >
-              {l === 'es' ? '🇨🇴' : '🇺🇸'}
+              {l === 'es' ? <FlagCO /> : <FlagUS />}
             </button>
           ))}
         </div>

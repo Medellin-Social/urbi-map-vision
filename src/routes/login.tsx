@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useLogin } from "@/hooks/useAuth";
-import { useLang } from "@/lib/i18n";
+import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { AlertCircle } from "lucide-react";
 
 export const Route = createFileRoute("/login")({
@@ -298,11 +298,11 @@ function AuthLangToggle() {
             background: lang === l ? "#E1F5EE" : K.paper,
             padding: "4px 8px",
             cursor: lang === l ? "default" : "pointer",
-            fontSize: 18, lineHeight: 1,
+            display: "flex", alignItems: "center",
             transition: "border-color 0.15s, background 0.15s",
           }}
         >
-          {l === "es" ? "🇨🇴" : "🇺🇸"}
+          {l === "es" ? <FlagCO /> : <FlagUS />}
         </button>
       ))}
     </div>

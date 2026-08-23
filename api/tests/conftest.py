@@ -5,7 +5,7 @@ import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
 os.environ.setdefault("JWT_SECRET", "test-secret-key-not-for-production")
-os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost/urbidata_test")
+os.environ.setdefault("DATABASE_URL", "postgresql://test:test@localhost/social_test")
 
 from api.main import app  # noqa: E402  (import after env vars set)
 

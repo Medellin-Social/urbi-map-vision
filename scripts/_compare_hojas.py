@@ -1,7 +1,7 @@
 import psycopg2
 import psycopg2.extras
 
-DB_URL = "postgresql://urbidata:urbidata007@localhost:5433/urbidata"
+DB_URL = "postgresql://social:urbidata007@localhost:5433/social"
 conn = psycopg2.connect(DB_URL, cursor_factory=psycopg2.extras.RealDictCursor)
 cur = conn.cursor()
 

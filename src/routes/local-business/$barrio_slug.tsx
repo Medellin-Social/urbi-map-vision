@@ -72,7 +72,7 @@ function TiendasMap({ tiendas, centerLng, centerLat }: {
       const wa = t.whatsapp || t.telefono
       const popup = new mapboxgl.Popup({ offset: 18, closeButton: false, maxWidth: '240px' })
         .setHTML(`<div style="font-family:system-ui;padding:4px 2px">
-            ${t.foto_url ? `<img src="${t.foto_url}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
+            ${t.foto_url ? `<img src="${t.foto_url}" alt="${t.nombre}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
             <strong style="font-size:.9rem;color:${K.ink}">${t.nombre}</strong>
             ${t.categoria ? `<div style="font-size:.68rem;color:${K.tealDeep};font-weight:700;text-transform:uppercase;margin:2px 0">${t.categoria}</div>` : ''}
             ${t.rating_google ? `<div style="color:${K.amarillo};font-size:.82rem">★ ${t.rating_google.toFixed(1)}</div>` : ''}

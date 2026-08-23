@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
-import { useLang } from '../../lib/i18n'
+import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 
 const K = {
   ink:      '#14201d',
@@ -295,11 +295,11 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                     border: 'none',
                     background: lang === l ? K.amarillo : 'transparent',
                     color: lang === l ? K.ink : '#fff',
-                    padding: '4px 10px', fontWeight: 700,
-                    cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                    padding: '4px 10px',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center',
                   }}
                 >
-                  {l === 'es' ? '🇨🇴 ES' : '🇺🇸 EN'}
+                  {l === 'es' ? <FlagCO /> : <FlagUS />}
                 </button>
               ))}
             </div>
@@ -402,11 +402,11 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                       border: 'none',
                       background: lang === l ? K.amarillo : 'transparent',
                       color: lang === l ? K.ink : '#fff',
-                      padding: '4px 10px', fontWeight: 700,
-                      cursor: 'pointer', fontSize: 12, fontFamily: 'inherit',
+                      padding: '4px 10px',
+                      cursor: 'pointer', display: 'flex', alignItems: 'center',
                     }}
                   >
-                    {l === 'es' ? '🇨🇴 ES' : '🇺🇸 EN'}
+                    {l === 'es' ? <FlagCO /> : <FlagUS />}
                   </button>
                 ))}
               </div>

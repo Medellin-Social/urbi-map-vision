@@ -25,7 +25,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 DB_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 
 # Bounding box del Valle de Aburrá (sur, oeste, norte, este)

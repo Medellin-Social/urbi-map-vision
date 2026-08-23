@@ -31,7 +31,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL = os.getenv("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:5433/urbidata")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
 
 # Estimaciones de casos_por_1000hab (equivalente a la escala medata/Medellín).
 # Derivadas de tasas homicidio Policía Nacional 2022 y factores hurto/homicidio

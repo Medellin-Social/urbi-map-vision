@@ -18,7 +18,7 @@ from pathlib import Path
 import psycopg2
 import psycopg2.extras
 
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:5433/urbidata")
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
 RAW_DIR = Path(__file__).parent / "data" / "raw"
 
 SLUG = "medellin"

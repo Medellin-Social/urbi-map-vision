@@ -26,7 +26,7 @@ BASE_URL = "https://www.culturaetereamed.com/api/v1"
 PAGE_SIZE = 500
 HEADERS = {
     "Accept": "application/json",
-    "User-Agent": "urbidata-eventos/1.0 info.facturIA@gmail.com",
+    "User-Agent": "social-eventos/1.0 info.facturIA@gmail.com",
 }
 
 _MUNICIPIOS_VALLE = {

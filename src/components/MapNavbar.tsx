@@ -2,7 +2,7 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, ArrowLeft, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { auth } from "@/lib/auth";
-import { useLang } from "@/lib/i18n";
+import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { useUnit } from "@/hooks/useUnit";
 import { useIsMobile } from "@/hooks/use-mobile";
 import type { Neighborhood } from "@/lib/adapters";
@@ -13,6 +13,7 @@ const TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "buy",        label: "Comprar" },
   { id: "rent",       label: "Arrendar" },
   { id: "sell",       label: "Vender / Arrendar", route: "/vender" },
+  { id: "agent",      label: "Encuentra un agente", route: "/agentes" },
   // ponytail: simulador/comparador ocultos temporalmente del nav, rutas siguen vivas
 ];
 
@@ -32,6 +33,7 @@ const C = {
   border:   "#E8E0D0",
   ink:      "#1A1208",
   coral:    "#D85A30",
+  amarillo: "#ffc928",
   serif:    "'Fraunces', Georgia, serif" as const,
 };
 
@@ -69,7 +71,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       >
         <Link to="/" style={{ textDecoration: "none", flexShrink: 0 }}>
           <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1rem", color: C.ink, letterSpacing: "-0.5px" }}>
-            M<span style={{ color: C.teal }}>S</span><span style={{ color: C.coral }}>.</span>
+            M<span style={{ color: C.teal }}>S</span><span style={{ color: C.amarillo }}>.</span>
           </span>
         </Link>
 
@@ -138,10 +140,10 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                         borderRadius: 999,
                         padding: "3px 8px",
                         cursor: lang === l ? "default" : "pointer",
-                        fontSize: 18, lineHeight: 1,
+                        display: "flex", alignItems: "center",
                       }}
                     >
-                      {l === "es" ? "🇨🇴" : "🇺🇸"}
+                      {l === "es" ? <FlagCO /> : <FlagUS />}
                     </button>
                   ))}
                 </div>
@@ -193,53 +195,14 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         position: "absolute", inset: "0 0 auto 0", zIndex: 40,
         background: C.paper,
         borderBottom: `1px solid ${C.border}`,
-        display: "flex", alignItems: "stretch",
-        padding: "0 16px", height: 52, gap: 0,
+        display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "stretch",
+        padding: "0 16px", height: 52,
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
-      {/* Logo */}
-      <Link
-        to="/"
-        style={{
-          textDecoration: "none", display: "flex", alignItems: "center",
-          flexShrink: 0, marginRight: 12,
-        }}
-      >
-        <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: C.ink, letterSpacing: "-0.5px" }}>
-          Medellín <span style={{ color: C.teal }}>Social</span>
-          <span style={{ color: C.coral }}>.</span>
-        </span>
-      </Link>
-
-      {/* MLS back breadcrumb */}
-      {mlsBarrio && (
-        <button
-          onClick={onBack}
-          style={{
-            display: "flex", alignItems: "center", gap: 6,
-            background: "none", border: `1px solid ${C.border}`,
-            borderRadius: 8, padding: "4px 12px", alignSelf: "center",
-            color: C.muted, fontSize: 12, fontWeight: 600,
-            cursor: "pointer", marginRight: 12, flexShrink: 0,
-          }}
-        >
-          <ArrowLeft size={13} />
-          <span>{mlsBarrio.nombre}</span>
-          {mlsTotal != null && mlsTotal > 0 && (
-            <span style={{
-              background: C.teal, color: "#fff",
-              borderRadius: 999, padding: "1px 7px",
-              fontSize: 10, fontWeight: 700,
-            }}>
-              {mlsTotal}
-            </span>
-          )}
-        </button>
-      )}
-
-      {/* Tabs */}
-      <nav style={{ display: "flex", alignItems: "stretch", flex: 1 }}>
+      {/* Left: tabs + MLS back breadcrumb */}
+      <div style={{ display: "flex", alignItems: "stretch", gap: 12, minWidth: 0, overflow: "hidden" }}>
+      <nav style={{ display: "flex", alignItems: "stretch" }}>
         {TABS.map((tab) => {
           const active = activeTab === tab.id;
 
@@ -296,8 +259,49 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         })}
       </nav>
 
+      {/* MLS back breadcrumb */}
+      {mlsBarrio && (
+        <button
+          onClick={onBack}
+          style={{
+            display: "flex", alignItems: "center", gap: 6,
+            background: "none", border: `1px solid ${C.border}`,
+            borderRadius: 8, padding: "4px 12px", alignSelf: "center",
+            color: C.muted, fontSize: 12, fontWeight: 600,
+            cursor: "pointer", flexShrink: 0,
+          }}
+        >
+          <ArrowLeft size={13} />
+          <span>{mlsBarrio.nombre}</span>
+          {mlsTotal != null && mlsTotal > 0 && (
+            <span style={{
+              background: C.teal, color: "#fff",
+              borderRadius: 999, padding: "1px 7px",
+              fontSize: 10, fontWeight: 700,
+            }}>
+              {mlsTotal}
+            </span>
+          )}
+        </button>
+      )}
+      </div>
+
+      {/* Center: Logo */}
+      <Link
+        to="/"
+        style={{
+          textDecoration: "none", display: "flex", alignItems: "center",
+          justifySelf: "center", flexShrink: 0,
+        }}
+      >
+        <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: C.ink, letterSpacing: "-0.5px" }}>
+          Medellín <span style={{ color: C.teal }}>Social</span>
+          <span style={{ color: C.amarillo }}>.</span>
+        </span>
+      </Link>
+
       {/* Right controls */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, flexShrink: 0 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "end", flexShrink: 0 }}>
         {/* Language */}
         <div style={{ display: "flex", gap: 4 }}>
           {(["es", "en"] as const).map((l) => (
@@ -311,10 +315,10 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 borderRadius: 999,
                 padding: "3px 8px",
                 cursor: lang === l ? "default" : "pointer",
-                fontSize: 16, lineHeight: 1,
+                display: "flex", alignItems: "center",
               }}
             >
-              {l === "es" ? "🇨🇴" : "🇺🇸"}
+              {l === "es" ? <FlagCO /> : <FlagUS />}
             </button>
           ))}
         </div>

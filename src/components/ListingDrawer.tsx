@@ -989,13 +989,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         )
       )}
       {esDestacado && (
-        <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#FF2D95", color: "#FFFFFF" }}>
-          ★ Destacado
-        </span>
-      )}
-      {listing.tier === "agencia_premium" && (
         <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#ffc928", color: "#1A1208" }}>
-          ✦ Premium
+          ★ Destacado
         </span>
       )}
       <span
@@ -1031,7 +1026,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const facts: { icon: React.ReactNode; text: string }[] = [];
   if (listing?.tipo_inmueble) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.tipo_inmueble.replace(/_/g, " ") });
   if (listing?.antiguedad) facts.push({ icon: <Clock className="h-4 w-4" />, text: cleanAntiguedad(listing.antiguedad) ?? "" });
-  if (listing?.precio_m2) facts.push({ icon: <BarChart2 className="h-4 w-4" />, text: `${precioM2Label(listing.precio_m2)}` });
+  if (listing?.tipo_operacion === "venta" && listing?.precio_m2) facts.push({ icon: <BarChart2 className="h-4 w-4" />, text: `${precioM2Label(listing.precio_m2)}` });
   if (listing?.parqueaderos != null && listing.parqueaderos > 0) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `${listing.parqueaderos} parqueadero${listing.parqueaderos === 1 ? "" : "s"}` });
   if (listing?.estrato_real != null) facts.push({ icon: <Shield className="h-4 w-4" />, text: `Estrato ${listing.estrato_real}` });
   if (listing?.piso != null) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `Piso ${listing.piso}` });

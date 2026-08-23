@@ -15,7 +15,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from scripts.fetch_trm import fetch_and_save_trm
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,

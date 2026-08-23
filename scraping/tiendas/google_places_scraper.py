@@ -44,7 +44,7 @@ load_dotenv(_ROOT / ".env")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
 BASE_URL = "https://places.googleapis.com/v1/places:searchNearby"

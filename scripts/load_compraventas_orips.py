@@ -31,7 +31,7 @@ import psycopg2.extras
 
 DB_URL = os.environ.get(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 
 CSV_PATH = Path(__file__).parent.parent / "Compraventas ORIPS Medellín(Exportar ) (1).csv"

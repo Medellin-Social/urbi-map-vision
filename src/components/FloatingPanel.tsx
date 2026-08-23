@@ -1542,10 +1542,10 @@ function ListingCard({ l }: { l: ApiListing }) {
           <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#085041', fontWeight: 700 }}>
             {l.tipo_inmueble ?? "—"} · {l.tipo_operacion ?? "—"}
           </div>
-          <div style={{ marginTop: 4, fontWeight: 800, fontSize: '1rem', color: '#14201d' }}>
+          <div data-i18n-skip="true" style={{ marginTop: 4, fontWeight: 800, fontSize: '1rem', color: '#14201d' }}>
             {primary}
           </div>
-          {secondary && <div style={{ fontSize: 11, color: '#62736d' }}>{secondary}</div>}
+          {secondary && <div data-i18n-skip="true" style={{ fontSize: 11, color: '#62736d' }}>{secondary}</div>}
           <div style={{ marginTop: 2, fontSize: 12, color: '#3d5a50' }}>
             {l.area_m2 != null ? `${l.area_m2} m²` : "—"}
             {l.habitaciones != null ? ` · ${l.habitaciones} hab` : ""}

@@ -57,6 +57,8 @@ type Props = {
     diasMercado: string | null;
     busqueda: string | null;
     amenidades: string[] | null;
+    estadoInmueble: string | null;
+    pisoMin: number | null;
   };
   onViewportListingsChange?: (listings: ApiListing[]) => void;
   onViewportLoadingChange?: (loading: boolean) => void;
@@ -206,7 +208,7 @@ function buildListingPopupHTML(
   ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#1A1208;">${_fmtCOP(precio_cop)} COP</div>` : ""}
   ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
   ${specs       ? `<div style="font-size:12px;color:#6B5B45;margin:6px 0;">${specs}</div>` : ""}
-  ${precio_m2   ? `<div style="font-size:11px;color:#9B8B75;">Precio/m²: <strong style="color:#1A1208;">${_fmtM2(precio_m2)}</strong></div>` : ""}
+  ${precio_m2 && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Precio/m²: <strong style="color:#1A1208;">${_fmtM2(precio_m2)}</strong></div>` : ""}
   ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Mediana zona: <strong style="color:#1A1208;">${_fmtM2(mediana)}</strong></div>` : ""}
   ${badgeHTML}
   ${yieldHTML || scoreHTML ? `<div style="margin-top:6px;">${yieldHTML}${scoreHTML}</div>` : ""}
@@ -511,6 +513,10 @@ export function MapView({
           "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
           "text-letter-spacing": 0.08,
           "text-transform": "uppercase",
+          // Misma coordenada que el centroide de la burbuja de cluster (comuna) →
+          // sin offset el nombre tapaba el número. Sube el label sobre la burbuja.
+          "text-anchor": "bottom",
+          "text-offset": [0, -2.4],
         },
         paint: {
           "text-color": "#1A1208",
@@ -692,11 +698,8 @@ export function MapView({
         layout: { visibility: "none" },
         paint: {
           "circle-radius": 12,
-          "circle-color": [
-            "case",
-            ["==", ["get", "fuente_display"], "agente_verificado"], "#ffc928",
-            "#FF2D95",
-          ],
+          // Filtro ya restringe a destacados (propio_pro/agente_verificado) → dorado fijo.
+          "circle-color": "#ffc928",
           "circle-opacity": 0.4,
           "circle-stroke-width": 0,
         },
@@ -728,10 +731,8 @@ export function MapView({
           ],
           "circle-color": [
             "case",
-            // Agente verificado → amarillo
-            ["==", ["get", "fuente_display"], "agente_verificado"], "#ffc928",
-            // Propietario Pro → fucsia (llamativo, distinto de todo; rojo = "sobreprecio")
-            ["==", ["get", "fuente_display"], "propio_pro"],        "#FF2D95",
+            // Destacado (agente verificado / propietario Pro / socio premium) → dorado
+            ["match", ["get", "fuente_display"], ["agente_verificado", "propio_pro"], true, false], "#ffc928",
             // Propietario Free → gris cálido
             ["==", ["get", "fuente_display"], "propio"],            "#9B8B75",
             // FC/MC → color por tipo de inmueble
@@ -957,10 +958,12 @@ export function MapView({
       if (f?.diasMercado) params.set("dias_mercado", f.diasMercado);
       if (f?.busqueda?.trim()) params.set("busqueda", f.busqueda.trim());
       if (f?.amenidades?.length) for (const a of f.amenidades) params.append("amenidades", a);
+      if (f?.estadoInmueble) params.set("estado_inmueble", f.estadoInmueble);
+      if (f?.pisoMin != null) params.set("piso_min", String(f.pisoMin));
       // Dedup: with a zone active the backend ignores bbox, so panning within the
       // zone returns identical data — skip the refetch (key excludes bbox then).
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
-      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}`;
+      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}|${f?.estadoInmueble}|${f?.pisoMin}`;
       const dedupKey = hasGeo
         ? `z${Math.round(map.getZoom())}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
         : params.toString();

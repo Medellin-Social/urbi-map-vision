@@ -14,7 +14,7 @@ from airflow.operators.python import PythonOperator
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 2,
     "retry_delay": timedelta(minutes=10),
     "email_on_failure": False,

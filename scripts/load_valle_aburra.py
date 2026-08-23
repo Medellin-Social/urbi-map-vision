@@ -24,7 +24,7 @@ from shapely.geometry import Point, shape
 # ── Config ────────────────────────────────────────────────────────────────────
 
 import os
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://urbidata:urbidata007@localhost:5433/urbidata")
+DB_URL = os.environ.get("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
 
 ROOT = Path(__file__).parent.parent
 GEOJSON_PATH = ROOT / "public" / "data" / "barrios_valle_aburra.geojson"

@@ -917,8 +917,8 @@ function VisitaRow({
           <span className="font-medium text-foreground">{v.nombre}</span>
           {v.es_pro && (
             <span
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-              style={{ background: "#FF2D95" }}
+              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+              style={{ background: "#ffc928", color: "#1A1208" }}
               title="Lead de listing destacado — priorízalo"
             >
               🔥 Pro

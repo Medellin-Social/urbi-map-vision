@@ -12,7 +12,7 @@ load_dotenv(_ROOT / ".env")
 
 DATABASE_URL = os.getenv(
     "DATABASE_URL",
-    "postgresql://urbidata:urbidata007@localhost:5433/urbidata",
+    "postgresql://social:urbidata007@localhost:5433/social",
 )
 
 MEETUP_TOKEN = os.getenv("MEETUP_TOKEN", "")

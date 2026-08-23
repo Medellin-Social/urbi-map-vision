@@ -14,7 +14,7 @@ import psycopg2
 import psycopg2.extras
 from pathlib import Path
 
-DB_URL = "postgresql://urbidata:urbidata007@localhost:5433/urbidata"
+DB_URL = "postgresql://social:urbidata007@localhost:5433/social"
 OUT_PATH = Path(__file__).parent.parent / "public" / "data" / "comunas_medellin.geojson"
 
 # Centroides de referencia de cada comuna (lat, lng) — fuente: Alcaldía de Medellín POT

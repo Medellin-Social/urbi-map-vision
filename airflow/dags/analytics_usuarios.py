@@ -18,7 +18,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 2,
     "retry_delay": timedelta(minutes=5),
     "email_on_failure": False,

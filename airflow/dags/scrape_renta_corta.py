@@ -22,7 +22,7 @@ from airflow.operators.python import PythonOperator
 PROJECT_DIR = Path(__file__).parent.parent.parent  # urbi-map-vision/
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 1,
     "retry_delay": timedelta(minutes=15),
     "email_on_failure": False,

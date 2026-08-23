@@ -26,7 +26,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../.."))
 from scripts.trafico_muestrear import run as muestrear
 
 default_args = {
-    "owner": "urbidata",
+    "owner": "social",
     "retries": 1,
     "retry_delay": timedelta(minutes=3),
     "email_on_failure": False,
