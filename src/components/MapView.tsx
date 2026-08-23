@@ -655,8 +655,10 @@ export function MapView({
         filter: ["has", "count"],
         layout: { visibility: "none" },
         paint: {
-          "circle-color": ["step", ["get", "count"], "#1D9E75", 10, "#085041", 50, "#1A1208"],
-          "circle-radius": ["step", ["get", "count"], 20, 10, 30, 50, 40],
+          // Thresholds sized for comuna/municipio-level counts (hundreds to ~20k),
+          // not the old per-grid-cell counts (single/double digits).
+          "circle-color": ["step", ["get", "count"], "#1D9E75", 1000, "#085041", 8000, "#1A1208"],
+          "circle-radius": ["step", ["get", "count"], 20, 1000, 30, 8000, 40],
           "circle-opacity": 0.88,
           "circle-stroke-width": 2,
           "circle-stroke-color": "rgba(29,158,117,0.3)",

@@ -918,7 +918,7 @@ _VIEWPORT_PANEL_CAP = 200
 # $11 amoblado, $12 habitaciones (>=), $13 banos (>=), $14 area_min, $15 area_max,
 # $16 estrato int[], $17 tipo_inmueble (substring), $18 dias_mercado bucket,
 # $19 busqueda (ILIKE direccion), $20 amenidades ILIKE patterns text[] (OR match,
-# strict on NULL). Clusters adds $21 grid-cell size.
+# strict on NULL). Clusters group by comuna/municipio — no extra param needed.
 
 # dias_en_mercado only exists for metrocuadrado listings (fecha_primera_vez).
 # Dedupe on url first (url is not unique in the raw table) so the LEFT JOIN can't
@@ -982,33 +982,54 @@ def _amenidad_like_patterns(keys: Optional[list[str]]) -> Optional[list[str]]:
     pats = [f"%{p}%" for k in keys for p in _AMENIDAD_PATTERNS.get(k, [])]
     return pats or None
 
+# Grouped by comuna (Medellín) / municipio (rest of the metro) instead of a lat/lon
+# grid. The map's min zoom is 11, and at zoom 11-12 the whole Valle de Aburrá (and
+# its ~600 barrios-with-listings) fits in one viewport — so barrio-level grouping
+# doesn't reduce the bubble count at all (measured: 602 barrio-groups vs 25
+# comuna-groups in view at that zoom). Comuna/municipio is the tier that actually
+# gives few, non-overlapping bubbles at "muy alejado" zoom; individual listing pins
+# still appear once zoom flips to "points" mode (>= _VIEWPORT_CLUSTER_MAX_ZOOM).
+# Two-level aggregate: first collapse to one row per barrio (dedupes its geometry so
+# ST_Collect below isn't skewed toward whichever barrio happens to have more
+# listings), then group those into comuna/municipio bubbles centered on the
+# collected shape.
 _VIEWPORT_CLUSTERS_SQL = """
+WITH per_barrio AS (
+    SELECT
+        COALESCE(bc.cd_comuna::text, b.municipio) AS grp,
+        b.id                                      AS barrio_id,
+        b.geometry,
+        COUNT(*)                                  AS n,
+        SUM(l.precio_cop)                         AS sum_precio
+    FROM staging.stg_listings_unificado l
+    JOIN analytics.listings_georef g  ON g.url = l.url
+    JOIN raw.barrios b                ON b.id = l.barrio_id
+    LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+    {dm_join}
+    WHERE l.precio_cop >= 500000
+      AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
+      AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
+      AND ($1::float8 IS NULL OR g.lon >= $1)
+      AND ($2::float8 IS NULL OR g.lat >= $2)
+      AND ($3::float8 IS NULL OR g.lon <= $3)
+      AND ($4::float8 IS NULL OR g.lat <= $4)
+      AND ($5::text   IS NULL OR l.tipo_operacion = $5)
+      AND ($6::bigint IS NULL OR l.precio_cop >= $6)
+      AND ($7::bigint IS NULL OR l.precio_cop <= $7)
+      AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
+      AND ($9::int    IS NULL OR bc.cd_comuna = $9)
+      AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
+      AND ($11::boolean IS NULL OR l.amoblado = $11)
+    {extra_where}
+    GROUP BY grp, b.id
+)
 SELECT
-    COUNT(*)::int                    AS count,
-    AVG(g.lon)::float8               AS lng,
-    AVG(g.lat)::float8               AS lat,
-    ROUND(AVG(l.precio_cop))::bigint AS precio_promedio
-FROM staging.stg_listings_unificado l
-JOIN analytics.listings_georef g  ON g.url = l.url
-JOIN raw.barrios b                ON b.id = l.barrio_id
-LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
-{dm_join}
-WHERE l.precio_cop >= 500000
-  AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
-  AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
-  AND ($1::float8 IS NULL OR g.lon >= $1)
-  AND ($2::float8 IS NULL OR g.lat >= $2)
-  AND ($3::float8 IS NULL OR g.lon <= $3)
-  AND ($4::float8 IS NULL OR g.lat <= $4)
-  AND ($5::text   IS NULL OR l.tipo_operacion = $5)
-  AND ($6::bigint IS NULL OR l.precio_cop >= $6)
-  AND ($7::bigint IS NULL OR l.precio_cop <= $7)
-  AND ($8::int[]  IS NULL OR l.barrio_id = ANY($8))
-  AND ($9::int    IS NULL OR bc.cd_comuna = $9)
-  AND ($10::text  IS NULL OR UPPER(b.municipio) = UPPER($10))
-  AND ($11::boolean IS NULL OR l.amoblado = $11)
-{extra_where}
-GROUP BY floor(g.lon / $21::float8), floor(g.lat / $21::float8)
+    SUM(n)::int                                      AS count,
+    ST_X(ST_Centroid(ST_Collect(geometry)))::float8   AS lng,
+    ST_Y(ST_Centroid(ST_Collect(geometry)))::float8   AS lat,
+    ROUND(SUM(sum_precio)::numeric / SUM(n))::bigint  AS precio_promedio
+FROM per_barrio
+GROUP BY grp
 """.format(dm_join=_VIEWPORT_DM_JOIN, extra_where=_VIEWPORT_EXTRA_WHERE)
 
 _VIEWPORT_POINTS_SQL = """
@@ -1124,12 +1145,9 @@ async def get_listings_viewport(
             listings=[ViewportListing(**dict(r)) for r in rows],
         )
     else:
-        # Grid cell size in degrees, shrinking with zoom. ponytail: +4 ≈ a few hundred
-        # metres per cell at city zoom; bump the constant for finer/coarser clusters.
         # CAMBIO 4A: also return a capped, premium-first panel list for the same bbox/zone.
-        cell = 360.0 / (2 ** (zoom + 4))
         clusters, plist = await asyncio.gather(
-            pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args, cell),
+            pool.fetch(_VIEWPORT_CLUSTERS_SQL, *args),
             pool.fetch(_VIEWPORT_POINTS_SQL + f" LIMIT {_VIEWPORT_PANEL_CAP}", *args),
         )
         result = ViewportResponse(
