@@ -10,6 +10,7 @@ Tasks:
     t2 — load Fincaraiz a DB
     t2b — dedup Fincaraiz (borra duplicados por hash; metrocuadrado dedupa al insertar)
     t3 — scrape Metrocuadrado (--since-days 4, all_valle)
+    t8 — scrape Habi (Valle de Aburrá; escribe directo a DB, sin paso load separado)
     t4 — refresh analytics cache (enrich_barrios_stats)
     t5 — validar URLs activas (url_activa, ventana 7 días)
     t7 — dbt run incremental (staging/analytics dependientes de stg_listings_unificado)
@@ -73,6 +74,13 @@ def scrape_metrocuadrado() -> None:
             "--since-days", "4",
         ],
         cwd=URBI_DIR,
+    )
+
+
+def scrape_habi() -> None:
+    _run(
+        [sys.executable, "-m", "scraping.habi.habi_scraper"],
+        cwd=PROJECT_DIR,
     )
 
 
@@ -151,11 +159,11 @@ def mirror_media() -> None:
 with DAG(
     dag_id="scrape_listings",
     default_args=default_args,
-    description="Scraping incremental de Fincaraiz + Metrocuadrado cada 3 días",
+    description="Scraping incremental de Fincaraiz + Metrocuadrado + Habi cada 3 días",
     schedule_interval="0 8 */3 * *",   # 3:00 AM COT = 08:00 UTC, cada 3 días
     start_date=datetime(2026, 6, 1),
     catchup=False,
-    tags=["listings", "scraping", "fincaraiz", "metrocuadrado"],
+    tags=["listings", "scraping", "fincaraiz", "metrocuadrado", "habi"],
     max_active_runs=1,
 ) as dag:
 
@@ -175,6 +183,12 @@ with DAG(
         task_id="scrape_metrocuadrado",
         python_callable=scrape_metrocuadrado,
         execution_timeout=timedelta(hours=3),
+    )
+
+    t8 = PythonOperator(
+        task_id="scrape_habi",
+        python_callable=scrape_habi,
+        execution_timeout=timedelta(hours=1),
     )
 
     t2b = PythonOperator(
@@ -209,10 +223,12 @@ with DAG(
 
     # fincaraiz: scrape → load → dedup → analytics
     # metrocuadrado: scrape → analytics (dedupa al insertar)
-    # analytics espera ambos; validación de URLs y espejo de portadas al final
+    # habi: scrape → analytics (upsert por property_nid, sin dedup step aparte)
+    # analytics espera las tres; validación de URLs y espejo de portadas al final
     # dbt incremental corre último, depende de stg_listings_unificado ya fresco
     t1 >> t2 >> t2b >> t4
     t3 >> t4
+    t8 >> t4
     t4 >> t5
     t4 >> t6
     t4 >> t7
