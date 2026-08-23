@@ -3,6 +3,7 @@ import { createReadStream, existsSync, statSync } from 'node:fs';
 import { join, extname, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Readable } from 'node:stream';
+import { createGzip, createBrotliCompress } from 'node:zlib';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const PORT = parseInt(process.env.PORT || '8080', 10);
@@ -29,7 +30,12 @@ const MIME = {
 
 const { default: app } = await import('./dist/server/server.js');
 
-function tryServeStatic(pathname, res) {
+// Text formats compress ~80-90% (geojson especially — repetitive coordinate
+// text). Binary formats (images, fonts, .pbf tiles) are already compressed —
+// gzipping them again wastes CPU for no size gain, so only compress these.
+const COMPRESSIBLE = new Set(['.html', '.js', '.mjs', '.css', '.json', '.geojson', '.svg']);
+
+function tryServeStatic(pathname, req, res) {
   // Try dist/client first, then public/ as fallback for data files
   let filePath = join(STATIC_DIR, pathname);
   if (!existsSync(filePath) || !statSync(filePath).isFile()) {
@@ -37,19 +43,35 @@ function tryServeStatic(pathname, res) {
     if (!existsSync(filePath) || !statSync(filePath).isFile()) return false;
   }
 
-  const mime = MIME[extname(filePath)] || 'application/octet-stream';
+  const ext = extname(filePath);
+  const mime = MIME[ext] || 'application/octet-stream';
   res.setHeader('Content-Type', mime);
   if (pathname.startsWith('/assets/')) {
     res.setHeader('Cache-Control', 'public, max-age=31536000, immutable');
+  } else if (pathname.startsWith('/data/')) {
+    // Not immutable (barrios_stats.json refreshes on redeploy) — 1h matches
+    // the API's own hourly cache refresh cadence.
+    res.setHeader('Cache-Control', 'public, max-age=3600');
   }
-  createReadStream(filePath).pipe(res);
+
+  const acceptEncoding = req.headers['accept-encoding'] || '';
+  const source = createReadStream(filePath);
+  if (COMPRESSIBLE.has(ext) && acceptEncoding.includes('br')) {
+    res.setHeader('Content-Encoding', 'br');
+    source.pipe(createBrotliCompress()).pipe(res);
+  } else if (COMPRESSIBLE.has(ext) && acceptEncoding.includes('gzip')) {
+    res.setHeader('Content-Encoding', 'gzip');
+    source.pipe(createGzip()).pipe(res);
+  } else {
+    source.pipe(res);
+  }
   return true;
 }
 
 createServer(async (req, res) => {
   const url = new URL(req.url, `http://localhost`);
 
-  if (tryServeStatic(url.pathname, res)) return;
+  if (tryServeStatic(url.pathname, req, res)) return;
 
   try {
     const headers = {};
