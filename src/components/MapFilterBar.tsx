@@ -1385,6 +1385,53 @@ export function MapFilterBar({
           </>
         )}
 
+        {/* Estado del inmueble */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelSm}>Estado del inmueble</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[{ value: null, label: "Cualquiera" }, { value: "Nuevo", label: "Nuevo" }, { value: "Usado", label: "Usado" }].map((opt) => (
+              <button
+                key={String(opt.value)}
+                onClick={() => onFiltersChange({ estadoInmueble: opt.value as "Nuevo" | "Usado" | null })}
+                style={{
+                  flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12,
+                  border: `1px solid ${filters.estadoInmueble === opt.value ? C.teal : C.border}`,
+                  background: filters.estadoInmueble === opt.value ? C.teal : C.white,
+                  color: filters.estadoInmueble === opt.value ? "#fff" : C.ink,
+                  cursor: "pointer",
+                }}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Piso mínimo */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelSm}>Piso mínimo</span>
+          <div style={{ display: "flex", gap: 6 }}>
+            {[null, 1, 5, 10, 20].map((p) => {
+              const active = filters.pisoMin === p;
+              return (
+                <button
+                  key={String(p)}
+                  onClick={() => onFiltersChange({ pisoMin: p })}
+                  style={{
+                    flex: 1, padding: "8px 0", borderRadius: 8, fontSize: 12,
+                    border: `1px solid ${active ? C.teal : C.border}`,
+                    background: active ? C.teal : C.white,
+                    color: active ? "#fff" : C.ink,
+                    cursor: "pointer",
+                  }}
+                >
+                  {p === null ? "Cualquiera" : `${p}+`}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: "flex", gap: 10, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
           <button
             onClick={() => { onResetAll?.(); setMobileOpen(false); }}

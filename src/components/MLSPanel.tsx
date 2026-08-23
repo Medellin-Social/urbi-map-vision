@@ -213,6 +213,14 @@ function ListingCard({
           >
             {tipo}
           </span>
+          {esDestacado(listing) && (
+            <span
+              className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
+              style={{ background: DESTACADO_COLOR, color: "#1A1208" }}
+            >
+              ★
+            </span>
+          )}
         </div>
         <div className="flex items-start justify-between gap-2 p-2">
           <div className="min-w-0">
