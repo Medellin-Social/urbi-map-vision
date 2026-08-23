@@ -363,6 +363,14 @@ async def refresh_listings_cache(pool: Any) -> None:
                     "CREATE INDEX IF NOT EXISTS idx_stg_listings_url "
                     "ON staging.stg_listings_unificado (url)"
                 )
+                # barrio_id: the zona-seleccionada path (l.barrio_id = ANY($8)) was a
+                # 98k-row seq scan — confirmed via EXPLAIN this index turns it into
+                # an Index Scan (25ms vs seq scan baseline). Same TRUNCATE-survives
+                # pattern as idx_stg_listings_url above.
+                await conn.execute(
+                    "CREATE INDEX IF NOT EXISTS idx_stg_listings_barrio "
+                    "ON staging.stg_listings_unificado (barrio_id)"
+                )
                 logger.info("[cache] stg_listings_unificado refreshed")
 
                 # barrios_medianas queries stg_listings_unificado — only run when stg exists

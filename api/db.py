@@ -20,7 +20,10 @@ async def create_pool() -> None:
         # Server-side statement timeout (15s) for every pooled connection → covers
         # all endpoints uniformly. Heavy background jobs (cache refresh) raise it
         # per-connection; asyncpg RESET ALL on release reverts to this default.
-        server_settings={"statement_timeout": "15000"},
+        # work_mem 64MB: /viewport's cluster-mode GROUP BY (default zoom, first
+        # map load) was spilling to disk at the 4MB default (external merge sort,
+        # confirmed via EXPLAIN ANALYZE) — ~20% slower and adds disk I/O per request.
+        server_settings={"statement_timeout": "15000", "work_mem": "64MB"},
     )
 
 
