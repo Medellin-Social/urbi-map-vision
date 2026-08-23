@@ -22,9 +22,11 @@ COPY scraping/ ./scraping/
 
 # Crontab: listings refresh daily at 03:00 UTC
 #          comunidad (eventos/noticias) every 6h
+#          URL validation (marks url_activa, never deletes) weekly Sunday 04:00 UTC
 RUN printf '%s\n' \
     "0 3 * * * root cd /app && python scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
     "0 */6 * * * root cd /app && python scraping/run_comunidad.py >> /var/log/comunidad.log 2>&1" \
+    "0 4 * * 0 root cd /app && python scripts/validate_listings_urls.py --batch 3000 >> /var/log/validate.log 2>&1" \
     > /etc/cron.d/urbidata \
     && chmod 0644 /etc/cron.d/urbidata \
     && crontab /etc/cron.d/urbidata

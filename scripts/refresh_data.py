@@ -57,8 +57,15 @@ def main() -> int:
     args = parser.parse_args()
 
     python = sys.executable
+    dry = ["--dry-run"] if args.dry_run else []
     steps: list[tuple[list[str], str]] = [
         ([python, "scrape_fincaraiz.py"], "fincaraiz scrape"),
+        # scrape_fincaraiz.py only writes JSON to data/raw/ — these two actually
+        # load it into raw.listings_fincaraiz. Missing here since this pipeline's
+        # inception meant every scrape was discarded on container restart and
+        # prod's fincaraiz table stayed empty indefinitely (see migration 0068).
+        ([python, "load_medellin_fincaraiz.py", *dry], "fincaraiz load (Medellín)"),
+        ([python, "load_valle_aburra.py", *dry], "fincaraiz load (Valle de Aburrá)"),
     ]
     if not args.skip_remates:
         steps.append(([python, "remates/scraper.py"], "remates scrape"))
