@@ -73,12 +73,18 @@ async def lifespan(app: FastAPI):
     await _connect_with_retry()
     await parametros.load()
     pool = get_pool()
-    # Populate materialized cache tables before serving — eliminates per-request CTEs
-    await refresh_listings_cache(pool)
-    # Start hourly background refresh
-    _refresh_task = asyncio.create_task(run_periodic_cache_refresh(pool))
+    # PAUSADO 2026-08-21: refresh_listings_cache hace TRUNCATE + rebuild de
+    # staging.stg_listings_unificado desde raw.listings_metrocuadrado/fincaraiz/
+    # premium/renta_media/listings_propios/listing — todas vacías en prod ahora
+    # mismo (nunca se sincronizó dataset real). Antes de las migraciones 0067-0070
+    # esto crasheaba en silencio y stg_listings_unificado quedó con un snapshot
+    # viejo (~94k filas) que sostenía el mapa. Al arreglar el crash, el refresh
+    # corrió y truncó ese snapshot — el mapa quedó con solo las 265 filas reales
+    # de casadolcecasa. Pausado hasta decidir cómo restaurar/sincronizar datos
+    # reales a prod. Re-activar descomentando estas dos líneas.
+    # await refresh_listings_cache(pool)
+    # _refresh_task = asyncio.create_task(run_periodic_cache_refresh(pool))
     yield
-    _refresh_task.cancel()
     await close_pool()
 
 
