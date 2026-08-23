@@ -275,6 +275,7 @@ async def _activar_plan(
     stripe_customer_id: Optional[str] = None,
     wompi_ref: Optional[str] = None,
     wompi_sub_id: Optional[str] = None,
+    ghl_sub_id: Optional[str] = None,
 ) -> None:
     pool = get_pool()
     now = datetime.now(timezone.utc)
@@ -286,14 +287,16 @@ async def _activar_plan(
             (usuario_id, plan, estado, moneda, precio,
              stripe_subscription_id, stripe_customer_id,
              wompi_subscription_id, wompi_referencia,
+             ghl_subscription_id,
              fecha_inicio, fecha_fin)
-        VALUES ($1, $2, 'activa', $3, $4, $5, $6, $7, $8, $9, $10)
+        VALUES ($1, $2, 'activa', $3, $4, $5, $6, $7, $8, $9, $10, $11)
         ON CONFLICT (usuario_id, plan) DO UPDATE
           SET estado = 'activa',
               stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, suscripciones_usuario.stripe_subscription_id),
               stripe_customer_id     = COALESCE(EXCLUDED.stripe_customer_id, suscripciones_usuario.stripe_customer_id),
               wompi_subscription_id  = COALESCE(EXCLUDED.wompi_subscription_id, suscripciones_usuario.wompi_subscription_id),
               wompi_referencia       = COALESCE(EXCLUDED.wompi_referencia, suscripciones_usuario.wompi_referencia),
+              ghl_subscription_id    = COALESCE(EXCLUDED.ghl_subscription_id, suscripciones_usuario.ghl_subscription_id),
               fecha_inicio = COALESCE(suscripciones_usuario.fecha_inicio, EXCLUDED.fecha_inicio),
               fecha_fin    = EXCLUDED.fecha_fin,
               cancelacion_solicitada = false,
@@ -303,6 +306,7 @@ async def _activar_plan(
         PLANES[plan]["precio_cop"] if moneda == "COP" else PLANES[plan]["precio_usd"],
         stripe_sub_id, stripe_customer_id,
         wompi_sub_id, wompi_ref,
+        ghl_sub_id,
         now, fecha_fin,
     )
     # Promote plan on usuario
