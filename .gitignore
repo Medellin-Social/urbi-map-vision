@@ -3,6 +3,13 @@ logs
 *.log
 .logs/
 
+# dbt (migrado de ~/urbi 2026-08-24) — dbt/profiles.yml SÍ se commitea (cero
+# secretos embebidos, todo por env var vía scripts/dbt_run.py)
+dbt/target/
+dbt/dbt_packages/
+dbt/logs/
+dbt/.user.yml
+
 # Tooling
 .serena/
 npm-debug.log*

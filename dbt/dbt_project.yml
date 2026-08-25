@@ -1,0 +1,80 @@
+name: urbidata
+version: "1.0.0"
+config-version: 2
+
+# Perfil de conexión definido en profiles.yml (no commitear ese archivo)
+profile: urbidata
+
+# Rutas de los directorios de dbt
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+docs-paths: ["docs"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+# =============================================================================
+# Configuración de modelos por capa
+# Cada capa escribe en su schema correspondiente en Postgres.
+# =============================================================================
+models:
+  urbidata:
+
+    # -------------------------------------------------------------------------
+    # Capa RAW
+    # Vistas o tablas que apuntan directamente a los datos crudos.
+    # Materialización: view (no duplicar datos, solo referencias)
+    # -------------------------------------------------------------------------
+    raw:
+      +schema: raw
+      +materialized: view
+      +tags: ["raw"]
+
+    # -------------------------------------------------------------------------
+    # Capa STAGING
+    # Limpieza, tipado, deduplicación. Una tabla por fuente.
+    # Materialización: table (query de limpieza puede ser costosa)
+    # -------------------------------------------------------------------------
+    staging:
+      +schema: staging
+      +materialized: table
+      +tags: ["staging"]
+
+    # -------------------------------------------------------------------------
+    # Capa ANALYTICS
+    # Métricas de negocio finales. Lo que consume la API.
+    # Materialización: table (queries de agregación son costosas)
+    # -------------------------------------------------------------------------
+    analytics:
+      +schema: analytics
+      +materialized: table
+      +tags: ["analytics"]
+
+# =============================================================================
+# Variables globales del proyecto
+# =============================================================================
+vars:
+  # Ciudad principal de análisis
+  ciudad_principal: "Medellín"
+
+  # Municipios del Valle de Aburrá incluidos en el análisis
+  municipios_valle_aburra:
+    - "Medellín"
+    - "Bello"
+    - "Itagüí"
+    - "Envigado"
+    - "Sabaneta"
+    - "La Estrella"
+    - "Caldas"
+    - "Copacabana"
+    - "Girardota"
+    - "Barbosa"
+
+  # Moneda base para todos los cálculos de precio
+  moneda_base: "COP"

@@ -1,0 +1,236 @@
+version: 2
+
+models:
+  - name: stg_listings
+    description: >
+      Listings de Fincaraiz + Metrocuadrado limpios y listos para análisis.
+      Filtra outliers de precio_m2 (percentil 5-95 por tipo_operacion).
+      Solo incluye listings activos con barrio_id asignado.
+      id NO es único: es PK de la tabla de origen (SERIAL independiente por fuente).
+    columns:
+      - name: id
+        description: "PK de la tabla fuente — no único en este modelo combinado"
+        tests:
+          - not_null
+      - name: tipo_operacion
+        description: "'venta' | 'arriendo'"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['venta', 'arriendo']
+      - name: precio
+        description: "Precio en COP"
+        tests:
+          - not_null
+      - name: area_m2
+        description: "Área en m²"
+        tests:
+          - not_null
+      - name: precio_m2
+        description: "precio / area_m2 — outliers ya filtrados"
+        tests:
+          - not_null
+      - name: barrio_id
+        description: "FK a raw.barrios — nunca null en esta capa"
+        tests:
+          - not_null
+      - name: dias_en_mercado
+        description: "Días desde fecha_scraping hasta hoy"
+        tests:
+          - not_null
+
+  - name: stg_listings_unificado
+    description: >
+      UNION ALL de todas las fuentes de listings (fincaraiz, metrocuadrado, premium, renta_media)
+      con deduplicación geoespacial (ROUND lat/lon a 3 decimales ≈ 111m) + dedup por hash.
+      Solo el mejor listing de cada cluster (agencia_premium > renta_media > standard).
+      Incluye precio_min/max del cluster y flag precio_variable.
+    columns:
+      - name: listing_uid
+        description: "PK sintético: id + sufijo fuente (_fc, _mq, _pr, _rm)"
+        tests:
+          - not_null
+          - unique
+      - name: fuente
+        description: "fincaraiz | metrocuadrado | flatio | booking_mensual | agencia_premium"
+        tests:
+          - not_null
+      - name: tipo_operacion
+        description: "'venta' | 'arriendo'"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['venta', 'arriendo']
+      - name: precio_cop
+        description: "Precio en COP"
+        tests:
+          - not_null
+      - name: area_m2
+        description: "Área en m²"
+        tests:
+          - not_null
+      - name: precio_m2
+        description: "precio_cop / area_m2"
+        tests:
+          - not_null
+      - name: n_duplicados
+        description: "Número de listings del cluster incluyendo el ganador"
+        tests:
+          - not_null
+
+  - name: stg_seguridad
+    description: >
+      Índice de seguridad por comuna de Medellín con dos scores diferenciados.
+      score_seguridad_residente: hurto a residencia + homicidio — señal principal para inversor.
+      score_seguridad_transito: todos los delitos — contexto, infla en zonas turísticas.
+      Granularidad: una fila por comuna (16 comunas urbanas).
+    columns:
+      - name: comuna_id
+        description: "PK — FK a raw.comunas"
+        tests:
+          - not_null
+          - unique
+      - name: codigo
+        description: "Código oficial de la comuna (01-16)"
+        tests:
+          - not_null
+      - name: nombre
+        description: "Nombre de la comuna"
+        tests:
+          - not_null
+      - name: zona_turistica
+        description: "TRUE para El Poblado (14), Laureles Estadio (11), La Candelaria (10)"
+      - name: casos_residente_3anios
+        description: "Casos de hurto a residencia + homicidio en los últimos 3 años"
+      - name: casos_totales_3anios
+        description: "Suma de todos los delitos registrados en los últimos 3 años"
+      - name: casos_residente_por_1000hab
+        description: "casos_residente_3anios / población_DANE_2023 × 1000"
+      - name: casos_por_1000hab
+        description: "casos_totales_3anios / población_DANE_2023 × 1000"
+      - name: score_seguridad_residente
+        description: >
+          Score 0-100 normalizado min-max, invertido. Señal principal para el inversor.
+          Basado solo en hurto a residencia + homicidio.
+          100 = comuna más segura para residir, 0 = menos segura.
+      - name: score_seguridad_transito
+        description: >
+          Score 0-100 normalizado sobre todos los delitos. Contexto adicional.
+          Infla en zonas turísticas (La Candelaria, Laureles, El Poblado) por tráfico peatonal.
+      - name: tendencia
+        description: >
+          Comparación año_actual vs año_anterior (delitos residentes).
+          'SUBIENDO' = criminalidad residente subió >5%.
+          'BAJANDO'  = bajó >5% (mejora en seguridad).
+          'ESTABLE'  = variación ≤5%.
+
+  - name: stg_valorizacion
+    description: >
+      Serie trimestral de valorización de vivienda nueva en Medellín.
+      Combina IPVN DANE (1997-2025) + IPVU Banrep (vacío hasta carga manual).
+      Una fila por trimestre. var_promedio_pct = promedio IPVN+IPVU cuando ambos disponibles.
+    columns:
+      - name: periodo
+        description: "YYYY-QN (ej: '2025-Q4')"
+        tests:
+          - not_null
+          - unique
+      - name: anio
+        description: "Año"
+        tests:
+          - not_null
+      - name: trimestre
+        description: "Q1/Q2/Q3/Q4"
+        tests:
+          - not_null
+      - name: fecha_inicio
+        description: "Primer día del trimestre"
+        tests:
+          - not_null
+      - name: ipvn_medellin
+        description: "Índice IPVN Medellín total (base ~2016). NULL antes de 2016."
+      - name: ipvu_medellin
+        description: "Índice IPVU Banrep Medellín. NULL hasta carga manual de raw.ipvu_banrep."
+      - name: var_anual_nueva_pct
+        description: "Variación anual IPVN Medellín total (%)"
+      - name: var_anual_usada_pct
+        description: "Variación anual IPVU Medellín (%)"
+      - name: var_promedio_pct
+        description: "Promedio IPVN+IPVU si ambos disponibles; solo IPVN si IPVU nulo."
+      - name: var_anual_bajo_pct
+        description: "Variación anual IPVN estrato bajo (estratos 1-3)"
+      - name: var_anual_medio_pct
+        description: "Variación anual IPVN estrato medio (estrato 4)"
+      - name: var_anual_alto_pct
+        description: "Variación anual IPVN estrato alto (estratos 5-6)"
+      - name: tendencia
+        description: "'SUBIENDO' si var_anual>5% | 'ESTABLE' 0-5% | 'BAJANDO' <0%"
+      - name: calculado_en
+        description: "Timestamp de la última ejecución"
+        tests:
+          - not_null
+
+  - name: stg_airbnb_amenities
+    description: >
+      Flags de amenidades por listing de Airbnb. Parsea el campo amenities de
+      raw.airbnb_listings_portal (texto libre o JSON array) detectando presencia
+      por substring. Base para barrios_amenities (score_equipamiento).
+    columns:
+      - name: listing_id
+        description: "PK — ID único de Airbnb"
+        tests:
+          - not_null
+          - unique
+      - name: barrio_id
+        description: "FK a raw.barrios"
+        tests:
+          - not_null
+      - name: flag_wifi
+        description: "TRUE si amenities contiene 'wifi' o 'internet'"
+      - name: flag_ac
+        description: "TRUE si amenities contiene 'air_conditioning' / 'ac'"
+      - name: flag_kitchen
+        description: "TRUE si amenities contiene 'kitchen'"
+      - name: flag_washer
+        description: "TRUE si amenities contiene 'washer' o 'washing_machine'"
+      - name: flag_heating
+        description: "TRUE si amenities contiene 'heating'"
+      - name: flag_hot_water
+        description: "TRUE si amenities contiene 'hot_water' o 'hot water'"
+
+  - name: stg_airbnb_segmentado
+    description: >
+      Listings individuales de Airbnb (AirROI Portal) segmentados por tipo de renta
+      según ttm_avg_length_of_stay real TTM. Sin scrapers adicionales — usa campos ya presentes
+      en raw.airbnb_listings_portal.
+      renta_corta: avg_stay < 7 días | renta_media: 7-29 días | renta_larga_airbnb: >=30 días.
+    columns:
+      - name: listing_id
+        description: "PK — ID único de Airbnb"
+        tests:
+          - not_null
+          - unique
+      - name: barrio_id
+        description: "FK a raw.barrios — nunca null en esta capa"
+        tests:
+          - not_null
+      - name: room_type
+        description: "'entire_home' | 'private_room' | 'shared_room'"
+        tests:
+          - not_null
+      - name: tipo_renta
+        description: "'renta_corta' | 'renta_media' | 'renta_larga_airbnb' derivado de ttm_avg_length_of_stay"
+        tests:
+          - not_null
+          - accepted_values:
+              values: ['renta_corta', 'renta_media', 'renta_larga_airbnb']
+      - name: flag_mensual
+        description: "TRUE si ttm_avg_min_nights >= 28 — señal de intención de arriendo mensual"
+      - name: ttm_occupancy
+        description: "Ocupación real TTM, 0-1"
+        tests:
+          - not_null
+      - name: ttm_avg_rate_usd
+        description: "ADR real TTM en USD/noche"
+        tests:
+          - not_null

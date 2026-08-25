@@ -1,0 +1,312 @@
+version: 2
+
+sources:
+  - name: finanzas
+    schema: public
+    description: >
+      Tasas de cambio vigentes, multi-moneda (PK moneda). USD: TRM oficial
+      datos.gov.co, semanal. EUR: exchangerate-api.com, semanal.
+      Cargadas por scripts/fetch_trm.py vía DAG trm_semanal.
+    tables:
+      - name: trm
+        description: "Una fila por moneda con la tasa COP vigente."
+        columns:
+          - name: moneda
+            description: "'USD' | 'EUR' — PK"
+          - name: valor
+            description: "COP por 1 unidad de la moneda"
+          - name: vigencia
+            description: "Fecha de vigencia reportada por la fuente"
+          - name: updated_at
+            description: "Cuándo se actualizó esta fila por última vez"
+
+  - name: fincaraiz
+    schema: raw
+    description: "Datos crudos de Fincaraiz — inmutables, solo INSERT"
+    tables:
+      - name: listings_fincaraiz
+        description: "Listados activos de venta y arriendo scrapeados de Fincaraiz"
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: tipo_operacion
+            description: "'venta' | 'arriendo'"
+          - name: tipo_inmueble
+            description: "'apartamento' | 'casa' | otros"
+          - name: precio
+            description: "Precio en COP"
+          - name: area_m2
+            description: "Área en m²"
+          - name: barrio_id
+            description: "FK a raw.barrios — asignado por geocodificación"
+          - name: fecha_scraping
+            description: "TIMESTAMPTZ cuando se scrapeó el listing"
+          - name: activo
+            description: "true si el listing sigue publicado"
+
+  - name: habi
+    schema: raw
+    description: "Datos crudos de habi.co (iBuyer) — inmutables, solo INSERT"
+    tables:
+      - name: listings_habi
+        description: "Listados de venta en Valle de Aburrá scrapeados de habi.co"
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: tipo_operacion
+            description: "'venta' — habi solo vende"
+          - name: tipo_inmueble
+            description: "'Apartamento' u otros"
+          - name: precio
+            description: "Precio en COP"
+          - name: area_m2
+            description: "Área en m²"
+          - name: barrio_id
+            description: "FK a raw.barrios — asignado por geocodificación"
+          - name: fecha_scraping
+            description: "TIMESTAMPTZ cuando se scrapeó el listing"
+          - name: activo
+            description: "true si el listing sigue publicado"
+
+  - name: metrocuadrado
+    schema: raw
+    description: "Datos crudos de Metrocuadrado — inmutables, solo INSERT"
+    tables:
+      - name: listings_metrocuadrado
+        description: "Listados activos de venta y arriendo scrapeados de Metrocuadrado"
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: tipo_operacion
+            description: "'venta' | 'arriendo'"
+          - name: tipo_inmueble
+            description: "'apartamento' | 'casa' | otros"
+          - name: precio
+            description: "Precio en COP"
+          - name: area_m2
+            description: "Área en m²"
+          - name: barrio_id
+            description: "FK a raw.barrios — asignado por geocodificación"
+          - name: fecha_scraping
+            description: "TIMESTAMPTZ cuando se scrapeó el listing"
+          - name: activo
+            description: "true si el listing sigue publicado"
+
+  - name: airbnb
+    schema: raw
+    description: "Métricas de short-term rental por barrio, vía API de AirROI — inmutables, solo INSERT"
+    tables:
+      - name: airbnb_barrios
+        description: "Ocupación, ADR y revenue Airbnb estimado por barrio. Una fila por barrio por consulta semanal."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: barrio_id
+            description: "FK a raw.barrios"
+          - name: n_listings
+            description: "Listings activos de Airbnb en el radio del barrio"
+          - name: ocupacion_pct
+            description: "Ocupación promedio (%) según AirROI"
+          - name: adr_cop
+            description: "Average Daily Rate en COP (convertido de USD)"
+          - name: ingresos_anuales_estimados
+            description: "Ingreso bruto anual estimado en COP"
+          - name: fecha_consulta
+            description: "TIMESTAMPTZ de la consulta a la API"
+      - name: airbnb_listings_portal
+        description: "Listings individuales de Airbnb descargados del AirROI Data Portal. Una fila por listing. Métricas TTM reales."
+        columns:
+          - name: listing_id
+            description: "PK — ID único de Airbnb"
+          - name: barrio_id
+            description: "FK a raw.barrios — asignado por geocodificación ST_Within"
+          - name: latitude
+            description: "Latitud WGS84"
+          - name: longitude
+            description: "Longitud WGS84"
+          - name: room_type
+            description: "'entire_home' | 'private_room' | 'shared_room'"
+          - name: bedrooms
+            description: "Número de habitaciones"
+          - name: ttm_occupancy
+            description: "Ocupación real TTM (trailing 12 months), 0-1"
+          - name: ttm_avg_rate
+            description: "ADR real TTM en USD/noche"
+          - name: ttm_avg_rate_native
+            description: "ADR real TTM en COP/noche"
+          - name: ttm_revenue
+            description: "Ingreso bruto TTM en USD"
+          - name: ttm_revpar
+            description: "RevPAR TTM en USD/noche"
+          - name: ttm_avg_min_nights
+            description: "Mínimo de noches promedio TTM configurado por el host"
+          - name: ttm_avg_length_of_stay
+            description: "Duración promedio real de estancia TTM en días — clave para segmentar tipo de renta"
+          - name: baths
+            description: "Número de baños"
+          - name: fecha_descarga
+            description: "TIMESTAMPTZ de descarga del portal"
+      - name: airbnb_calendar_portal
+        description: "Performance mensual por listing del AirROI Data Portal. Dos archivos CSV combinados."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: listing_id
+            description: "FK a raw.airbnb_listings_portal"
+          - name: year_month
+            description: "Primer día del mes (DATE)"
+          - name: occupancy
+            description: "Tasa de ocupación del mes, 0-1"
+          - name: revenue
+            description: "Ingreso del mes en USD"
+          - name: rate_avg
+            description: "Tarifa promedio publicada en USD/noche"
+          - name: booked_rate_avg
+            description: "Tarifa promedio real reservada en USD/noche"
+          - name: booking_lead_time_avg
+            description: "Lead time promedio de reservas en días"
+          - name: length_of_stay_avg
+            description: "Duración promedio de estadía en días"
+
+  - name: geo
+    schema: raw
+    description: "Datos geográficos del Valle de Aburrá"
+    tables:
+      - name: barrios
+        description: "Polígonos de barrios con nombre, comuna y municipio"
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: nombre
+          - name: comuna
+          - name: municipio
+          - name: geometry
+            description: "MULTIPOLYGON WGS84 (SRID 4326)"
+      - name: comunas
+        description: "Polígonos de comunas de Medellín con código oficial"
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: codigo
+            description: "Código oficial de la comuna (01-16, 50-90 corregimientos)"
+          - name: nombre
+            description: "Nombre de la comuna"
+          - name: geometry
+            description: "MULTIPOLYGON WGS84 (SRID 4326)"
+
+  - name: renta_media
+    schema: raw
+    description: "Listings de arriendo mensual para nómadas digitales — fuentes: Flatio, AirROI (min 28 noches), Homads"
+    tables:
+      - name: listings_renta_media
+        description: "Listings activos de renta media. UPSERT en url. Un registro por listing por fuente."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: fuente
+            description: "'flatio' | 'airbnb_mensual' | 'homads'"
+          - name: precio_mes_cop
+            description: "Precio mensual en COP (convertido desde EUR/USD según fuente)"
+          - name: precio_mes_usd
+            description: "Precio mensual en USD (para el inversor extranjero)"
+          - name: area_m2
+            description: "Área en m²"
+          - name: habitaciones
+            description: "Número de habitaciones"
+          - name: barrio_raw
+            description: "Nombre del barrio tal como viene de la fuente (sin normalizar)"
+          - name: barrio_id
+            description: "FK a raw.barrios — asignado por geocodificación posterior"
+          - name: url
+            description: "URL única del listing — clave de UPSERT"
+          - name: fecha_scraping
+            description: "TIMESTAMPTZ del último scraping"
+          - name: amoblado
+            description: "TRUE para todos los listings de renta media (siempre amoblado)"
+
+  - name: premium
+    schema: raw
+    description: "Listings de portales y agencias premium (MedellinLiving, etc.)"
+    tables:
+      - name: listings_premium
+        description: "Listings de fuentes premium. UPSERT en url. fuente_tipo='agencia_premium' para inmobiliarias locales."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: fuente
+            description: "Nombre del portal o agencia"
+          - name: fuente_tipo
+            description: "'portal' | 'agencia_premium'"
+          - name: precio_cop
+            description: "Precio en COP"
+          - name: precio_usd
+            description: "Precio en USD (para agencias con tarifa dolarizada)"
+          - name: area_m2
+          - name: lat
+          - name: lon
+          - name: geom
+            description: "Point WGS84 generado desde lat/lon"
+
+  - name: valorizacion
+    schema: raw
+    description: >
+      Índices de precios de vivienda — DANE IPVN + Banrep IPVU. Fusionadas 2026-08-23:
+      antes eran raw.ipvn_dane + raw.ipvu_banrep, ahora una sola tabla
+      raw.indices_precio_vivienda con columna fuente ('dane' | 'banrep_suameca_oac').
+    tables:
+      - name: indices_precio_vivienda
+        description: >
+          IPVN DANE (fuente='dane'): variaciones e índices de vivienda nueva por trimestre,
+          municipio y estrato. Medellín: estrato bajo (1-3), medio (4), alto (5-6).
+          Cargado vía scripts/load_ipvn.py. Cobertura 1997-2025.
+          IPVU Banrep (fuente='banrep_suameca_oac'): índice Colombia total (proxy Medellín).
+          Cargado vía scripts/fetch_ipvu_banrep.py (Playwright/OAC). Cobertura 1988 Q1–2025 Q4.
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: fuente
+            description: "'dane' | 'banrep_suameca_oac' — discrimina el origen tras la fusión"
+          - name: anio
+            description: "Año"
+          - name: trimestre
+            description: "Q1/Q2/Q3/Q4"
+          - name: estrato
+            description: "'total' | 'bajo' | 'medio' | 'alto' — solo fuente='dane'"
+          - name: indice
+            description: "Número índice DANE (base ~2016=100). Solo fuente='dane'."
+          - name: indice_nominal
+            description: "Índice nominal IPVU Colombia total. Solo fuente='banrep_suameca_oac'."
+          - name: indice_real
+            description: "Índice real IPVU (deflactado). Solo fuente='banrep_suameca_oac'."
+          - name: variacion_trimestral_pct
+            description: "Variación trimestral %"
+          - name: variacion_anual_pct
+            description: "Variación anual %"
+
+  - name: seguridad
+    schema: raw
+    description: >
+      Criminalidad — Alcaldía de Medellín / medata.gov.co. Inmutables, solo INSERT.
+      Fusionadas 2026-08-23: antes criminalidad_comunas + criminalidad_comunas_mes +
+      criminalidad_municipios (vacía), ahora una sola tabla raw.criminalidad con
+      geo_nivel/periodo_tipo como discriminadores.
+    tables:
+      - name: criminalidad
+        description: "Casos por conducta y periodo, a nivel comuna (anual/mensual) o municipio (anual)."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: geo_nivel
+            description: "'comuna' | 'municipio'"
+          - name: geo_codigo
+            description: "Código de comuna o nombre de municipio, según geo_nivel"
+          - name: periodo_tipo
+            description: "'anual' | 'mensual'"
+          - name: anio
+            description: "Año del hecho"
+          - name: mes
+            description: "Mes del hecho (1-12) — solo periodo_tipo='mensual'"
+          - name: conducta
+            description: "Tipo de delito (Homicidio, Hurto a persona, etc.)"
+          - name: cantidad_casos
+            description: "Número de casos registrados"

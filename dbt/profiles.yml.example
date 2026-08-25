@@ -1,0 +1,25 @@
+urbidata:
+  target: dev
+  outputs:
+
+    dev:
+      type: postgres
+      host: localhost
+      port: 5432
+      user: urbidata
+      password: cambia_esta_contrasena
+      dbname: urbidata
+      schema: staging   # schema por defecto si un modelo no especifica +schema
+      threads: 4
+      keepalives_idle: 0
+
+    prod:
+      type: postgres
+      host: "{{ env_var('POSTGRES_HOST') }}"
+      port: "{{ env_var('POSTGRES_PORT') | int }}"
+      user: "{{ env_var('POSTGRES_USER') }}"
+      password: "{{ env_var('POSTGRES_PASSWORD') }}"
+      dbname: "{{ env_var('POSTGRES_DB') }}"
+      schema: staging
+      threads: 8
+      keepalives_idle: 0

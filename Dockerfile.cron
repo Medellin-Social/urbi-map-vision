@@ -19,18 +19,58 @@ RUN pip install --no-cache-dir -r /tmp/scraping-requirements.txt \
 COPY scripts/ ./scripts/
 COPY api/ ./api/
 COPY scraping/ ./scraping/
+COPY dbt/ ./dbt/
 
-# Crontab: listings refresh daily at 03:00 UTC
-#          comunidad (eventos/noticias) every 6h
-#          URL validation (marks url_activa, never deletes) weekly Sunday 04:00 UTC
+# Crontab — todo en UTC. Migrado 2026-08-24 de los DAGs de Airflow local
+# (airflow/dags/*.py, que corren solo en WSL2, nunca en la nube) a este cron
+# plano, mismo patrón que ya usaban refresh_data.py / run_comunidad.py.
+#
+# Horarios escalonados a propósito — nunca dos scrapers Playwright pesados
+# arrancando a la misma hora: el contenedor ya tiene riesgo de OOM
+# documentado con menos carga que la que agrega este cron.
+#
+#   listings/renta:
+#     03:00 diario        refresh_data.py            (fincaraiz+remates, ya existía)
+#     08:00 cada 3 días    run_listings_metrocuadrado.py (metrocuadrado+habi+dedup+R2+dbt)
+#     09:00 cada 3 días    run_renta_corta.py         (airbnb/vrbo/nomadbarrio/flatio/booking)
+#   comunidad:
+#     cada 6h              run_comunidad.py           (eventos+noticias, ya existía)
+#   analytics/dbt:
+#     07:00 diario         run_analytics_usuarios.py  (partición + user_interests)
+#     08:00 domingo        run_airbnb_semanal.py      (AirROI + dbt)
+#     07:30 lunes          run_dbt_full_refresh.py    (dbt full-refresh + test)
+#     10:00 miércoles      dbt_run.py (scores post-remates)
+#   ingest / mantenimiento:
+#     03:30 día 1 del mes  load_barrios.py
+#     04:00 lunes          load_pois.py --build-analytics
+#     04:00 domingo        validate_listings_urls.py  (ya existía)
+#     12:00 día 1 del mes  run_seguridad_mensual.py
+#     11:00 diario         fetch_usd_rate.py          (parametros_diario)
+#     11:15 lunes          fetch_trm.py               (trm_semanal)
 RUN printf '%s\n' \
     "0 3 * * * root cd /app && python scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
     "0 */6 * * * root cd /app && python scraping/run_comunidad.py >> /var/log/comunidad.log 2>&1" \
     "0 4 * * 0 root cd /app && python scripts/validate_listings_urls.py --batch 3000 >> /var/log/validate.log 2>&1" \
+    "0 8 */3 * * root cd /app && python scripts/run_listings_metrocuadrado.py >> /var/log/listings_m2.log 2>&1" \
+    "0 9 */3 * * root cd /app && python scripts/run_renta_corta.py >> /var/log/renta_corta.log 2>&1" \
+    "0 7 * * * root cd /app && python scripts/run_analytics_usuarios.py >> /var/log/analytics_usuarios.log 2>&1" \
+    "0 8 * * 0 root cd /app && python scripts/run_airbnb_semanal.py >> /var/log/airbnb_semanal.log 2>&1" \
+    "30 7 * * 1 root cd /app && python scripts/run_dbt_full_refresh.py >> /var/log/dbt_full_refresh.log 2>&1" \
+    "0 10 * * 3 root cd /app && python scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/remates_dbt.log 2>&1" \
+    "30 3 1 * * root cd /app && python scripts/load_barrios.py >> /var/log/ingest_barrios.log 2>&1" \
+    "0 4 * * 1 root cd /app && python scripts/load_pois.py --build-analytics >> /var/log/ingest_pois.log 2>&1" \
+    "0 12 1 * * root cd /app && python scripts/run_seguridad_mensual.py >> /var/log/seguridad_mensual.log 2>&1" \
+    "0 11 * * * root cd /app && python scripts/fetch_usd_rate.py >> /var/log/parametros_diario.log 2>&1" \
+    "15 11 * * 1 root cd /app && python scripts/fetch_trm.py >> /var/log/trm_semanal.log 2>&1" \
     > /etc/cron.d/urbidata \
     && chmod 0644 /etc/cron.d/urbidata \
     && crontab /etc/cron.d/urbidata
 
 ENV PYTHONUNBUFFERED=1
 
-CMD ["cron", "-f"]
+# cron de Debian no hereda el entorno del contenedor a los jobs que dispara
+# (solo setea SHELL/PATH/HOME/LOGNAME por defecto) — pero sí lee /etc/environment
+# como entorno base para todos los jobs. Sin este paso, DATABASE_URL y
+# cualquier otra env var de Railway nunca llegan a los scripts programados:
+# el job arranca, falla al conectar, y se ve igual a "corrió y no hizo nada".
+CMD ["/bin/sh", "-c", "printenv | grep -Ev '^(HOME|PWD|SHLVL|OLDPWD|_)=' > /etc/environment && cron -f"]

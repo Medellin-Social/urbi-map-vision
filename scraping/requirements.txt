@@ -8,3 +8,7 @@ python-dotenv>=1.0.0
 shapely>=2.0.0
 aiohttp>=3.9.0
 sqlalchemy>=2.0.0
+
+# dbt — pasos dbt_run_incremental/full_refresh/test en el cron de Railway
+dbt-core==1.7.4
+dbt-postgres==1.7.4
