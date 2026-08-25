@@ -8,6 +8,7 @@ Tasks (all parallel):
   scrape_medellin_travel — WordPress/Elementor event pages
   scrape_tuboleta        — Playwright + API intercept
   scrape_alcaldia        — Playwright JS-rendered Drupal
+  scrape_cultura_eterea  — REST API pública (sin auth, sin Playwright)
   normalizar_y_cargar    — deduplicate + UPSERT + barrio PIP
 """
 import os
@@ -69,6 +70,13 @@ def run_alcaldia_scraper(**kwargs):
     print(f"[alcaldia] {len(eventos)} eventos")
 
 
+def run_cultura_eterea_scraper(**kwargs):
+    from scraping.eventos.cultura_eterea_scraper import run
+    eventos = run()
+    kwargs["ti"].xcom_push(key="cultura_eterea_eventos", value=eventos)
+    print(f"[cultura_eterea] {len(eventos)} eventos")
+
+
 def normalizar_y_cargar(**kwargs):
     from scraping.eventos.normalizer import run_todos
     ti = kwargs["ti"]
@@ -78,8 +86,9 @@ def normalizar_y_cargar(**kwargs):
     medellin_travel = ti.xcom_pull(task_ids="scrape_medellin_travel", key="medellin_travel_eventos") or []
     tuboleta        = ti.xcom_pull(task_ids="scrape_tuboleta",        key="tuboleta_eventos")        or []
     alcaldia        = ti.xcom_pull(task_ids="scrape_alcaldia",        key="alcaldia_eventos")        or []
+    cultura_eterea  = ti.xcom_pull(task_ids="scrape_cultura_eterea",  key="cultura_eterea_eventos")  or []
 
-    resultado = run_todos(meetup, eventbrite, luma, medellin_travel, tuboleta, alcaldia)
+    resultado = run_todos(meetup, eventbrite, luma, medellin_travel, tuboleta, alcaldia, cultura_eterea)
     print(
         f"[normalizar] procesados={resultado['total_procesados']} "
         f"virtuales_filtrados={resultado['virtuales_filtrados']} "
@@ -107,7 +116,8 @@ with DAG(
     t_mt     = PythonOperator(task_id="scrape_medellin_travel", python_callable=run_medellin_travel_scraper)
     t_tb     = PythonOperator(task_id="scrape_tuboleta",        python_callable=run_tuboleta_scraper)
     t_alc    = PythonOperator(task_id="scrape_alcaldia",        python_callable=run_alcaldia_scraper)
+    t_ce     = PythonOperator(task_id="scrape_cultura_eterea",  python_callable=run_cultura_eterea_scraper)
 
     t_norm = PythonOperator(task_id="normalizar_y_cargar", python_callable=normalizar_y_cargar)
 
-    [t_meetup, t_eb, t_luma, t_mt, t_tb, t_alc] >> t_norm
+    [t_meetup, t_eb, t_luma, t_mt, t_tb, t_alc, t_ce] >> t_norm

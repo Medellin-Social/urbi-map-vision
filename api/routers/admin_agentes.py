@@ -1,13 +1,12 @@
 """Verificación manual de agentes (admin) — cola + aprobar/rechazar/suspender."""
-from __future__ import annotations
-
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
-from api.routers.admin import require_admin
+from api.limiter import limiter
+from api.routers.admin import _audit, _verify_admin_password, require_admin
 from api.services.agent_service import (
     AgentError, aprobar_agente, rechazar_agente, suspender_agente,
 )
@@ -17,6 +16,15 @@ router = APIRouter()
 
 class MotivoRequest(BaseModel):
     motivo: str
+
+
+class AprobarRequest(BaseModel):
+    password: str  # re-auth: aprobar un agente le da acceso pagado a zonas
+
+
+class MotivoConPasswordRequest(BaseModel):
+    motivo: str
+    password: str  # re-auth: suspender revoca acceso ya pagado
 
 
 async def _cargar_agent(agent_id: str, pool):
@@ -42,32 +50,40 @@ async def cola_agentes(estado: str = Query("pendiente"), admin: dict = Depends(r
 
 
 @router.post("/agentes/{agent_id}/aprobar")
-async def aprobar(agent_id: str, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def aprobar(request: Request, agent_id: str, req: AprobarRequest = Body(...), admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+    await _verify_admin_password(pool, admin, req.password)
     agent = await _cargar_agent(agent_id, pool)
     try:
         await aprobar_agente(agent, admin["email"], pool)
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "aprobar_agente", "agent", agent_id, None, request)
     return {"id": agent_id, "estado": "activo"}
 
 
 @router.post("/agentes/{agent_id}/rechazar")
-async def rechazar(agent_id: str, req: MotivoRequest, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def rechazar(request: Request, agent_id: str, req: MotivoRequest = Body(...), admin: dict = Depends(require_admin), pool=Depends(get_pool)):
     agent = await _cargar_agent(agent_id, pool)
     try:
         await rechazar_agente(agent, admin["email"], req.motivo, pool)
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "rechazar_agente", "agent", agent_id, {"motivo": req.motivo}, request)
     return {"id": agent_id, "estado": "rechazado"}
 
 
 @router.post("/agentes/{agent_id}/suspender")
-async def suspender(agent_id: str, req: MotivoRequest, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def suspender(request: Request, agent_id: str, req: MotivoConPasswordRequest = Body(...), admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+    await _verify_admin_password(pool, admin, req.password)
     agent = await _cargar_agent(agent_id, pool)
     try:
         await suspender_agente(agent, admin["email"], req.motivo, pool)
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "suspender_agente", "agent", agent_id, {"motivo": req.motivo}, request)
     return {"id": agent_id, "estado": "inactivo"}
 
 
@@ -116,7 +132,8 @@ class ZonaCreate(BaseModel):
 
 
 @router.post("/agentes/{agent_id}/zonas", status_code=201)
-async def asignar_zona_admin(agent_id: str, body: ZonaCreate, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def asignar_zona_admin(request: Request, agent_id: str, body: ZonaCreate = Body(...), admin: dict = Depends(require_admin), pool=Depends(get_pool)):
     """Asignación manual (admin). Usa el mismo servicio que el webhook de pago."""
     await _cargar_agent(agent_id, pool)  # 404 si no existe
     try:
@@ -127,15 +144,19 @@ async def asignar_zona_admin(agent_id: str, body: ZonaCreate, admin: dict = Depe
         raise HTTPException(status_code=400, detail="zona_nivel debe ser comuna o barrio")
     except ZonaOcupadaError:
         raise HTTPException(status_code=409, detail="Esa zona ya tiene patrocinador activo")
+    await _audit(pool, admin, "asignar_zona", "sponsorship", str(sid),
+                 {"agent_id": agent_id, "zona_nivel": body.zona_nivel, "zona_codigo": body.zona_codigo}, request)
     return {"id": sid, "estado": "activa"}
 
 
 @router.delete("/sponsorship/{sponsorship_id}", status_code=204)
-async def quitar_zona(sponsorship_id: str, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def quitar_zona(request: Request, sponsorship_id: str, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
     async with pool.acquire() as conn:
         r = await conn.execute("DELETE FROM sponsorship WHERE id = $1", sponsorship_id)
     if r.endswith("0"):
         raise HTTPException(status_code=404, detail="Zona no encontrada")
+    await _audit(pool, admin, "quitar_zona", "sponsorship", sponsorship_id, None, request)
 
 
 @router.get("/zonas-catalogo")

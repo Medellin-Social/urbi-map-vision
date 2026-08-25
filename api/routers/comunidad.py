@@ -593,6 +593,51 @@ async def get_municipio_tiendas_counts(municipio: str, pool=Depends(get_pool)):
     return {r["grupo"]: r["n"] for r in rows}
 
 
+# ── Densidad de negocios por comuna — colorea el mapa de zonas en /local-business ─
+# cd_comuna 1-16 = comunas de Medellín, 101-105 = municipios del Valle de Aburrá
+# (mismo esquema que api/routers/comunas.py::get_comunas_geojson).
+
+_COMUNA_TOTAL_COUNTS_QUERY = """
+SELECT bc.cd_comuna, COUNT(*)::int AS total
+FROM public.tiendas t
+JOIN raw.barrios b            ON t.barrio_id = b.id
+JOIN analytics.barrios_cd bc  ON bc.barrio_id = b.id
+WHERE t.activo = TRUE AND b.municipio = 'MEDELLIN'
+GROUP BY bc.cd_comuna
+"""
+
+_MUNICIPIO_TOTAL_COUNTS_QUERY = """
+SELECT
+    CASE b.municipio
+        WHEN 'BELLO'       THEN 101
+        WHEN 'ENVIGADO'    THEN 102
+        WHEN 'ITAGUI'      THEN 103
+        WHEN 'SABANETA'    THEN 104
+        WHEN 'LA ESTRELLA' THEN 105
+    END AS cd_comuna,
+    COUNT(*)::int AS total
+FROM public.tiendas t
+JOIN raw.barrios b ON t.barrio_id = b.id
+WHERE t.activo = TRUE
+  AND b.municipio IN ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA')
+GROUP BY b.municipio
+"""
+
+
+@router.get("/comunas/tiendas-counts")
+async def get_comunas_tiendas_counts(pool=Depends(get_pool)):
+    try:
+        comuna_rows    = await pool.fetch(_COMUNA_TOTAL_COUNTS_QUERY)
+        municipio_rows = await pool.fetch(_MUNICIPIO_TOTAL_COUNTS_QUERY)
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
+    counts: dict[str, int] = {}
+    for r in (*comuna_rows, *municipio_rows):
+        if r["cd_comuna"] is not None:
+            counts[str(r["cd_comuna"])] = r["total"]
+    return {"counts": counts}
+
+
 _MUNICIPIO_TIENDAS_QUERY = """
 SELECT
     t.id,

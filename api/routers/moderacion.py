@@ -1,13 +1,12 @@
 """Moderación de la publicación inicial del listing (admin)."""
-from __future__ import annotations
-
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel  # noqa: F401 (usado en RechazoRequest)
 
 from api.db import get_pool
-from api.routers.admin import require_admin
+from api.limiter import limiter
+from api.routers.admin import _audit, require_admin
 from api.services.listing_service import EstadoError
 from api.services.moderacion_service import aprobar, rechazar
 
@@ -29,18 +28,21 @@ async def _cargar_listing(listing_id: str, pool):
 
 
 @router.post("/listings/{listing_id}/aprobar")
-async def aprobar_listing(listing_id: str, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+@limiter.limit("30/minute")
+async def aprobar_listing(request: Request, listing_id: str, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
     listing = await _cargar_listing(listing_id, pool)
     try:
         await aprobar(listing, admin["email"], pool)
     except EstadoError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "aprobar_listing", "listing", listing_id, None, request)
     return {"id": listing_id, "estado": "publicado"}
 
 
 @router.post("/listings/{listing_id}/rechazar")
+@limiter.limit("30/minute")
 async def rechazar_listing(
-    listing_id: str, req: RechazoRequest,
+    request: Request, listing_id: str, req: RechazoRequest = Body(...),
     admin: dict = Depends(require_admin), pool=Depends(get_pool),
 ):
     listing = await _cargar_listing(listing_id, pool)
@@ -48,6 +50,7 @@ async def rechazar_listing(
         await rechazar(listing, admin["email"], req.motivo, pool)
     except (EstadoError, ValueError) as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "rechazar_listing", "listing", listing_id, {"motivo": req.motivo}, request)
     return {"id": listing_id, "estado": "rechazado"}
 
 

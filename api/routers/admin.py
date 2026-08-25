@@ -1,14 +1,14 @@
-from __future__ import annotations
-
 import os
 from datetime import datetime, timezone
 from typing import Optional
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Query
+import bcrypt
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
+from api.limiter import limiter
 
 router = APIRouter()
 
@@ -19,6 +19,39 @@ def require_admin(user: dict = Depends(get_current_user)) -> dict:
     if user["email"] != ADMIN_EMAIL:
         raise HTTPException(status_code=403, detail="No autorizado")
     return user
+
+
+# ── Seguridad: audit log (capa 2) + re-auth por password (capa 3) ─────────────
+# Capa 1 es require_admin arriba. Rate limit (@limiter.limit, capa extra) va
+# por endpoint mutante. admin_agentes.py y moderacion.py importan _audit y
+# _verify_admin_password de aquí — mismo patrón que ya usan para require_admin.
+
+async def _audit(pool, admin: dict, accion: str, entidad: str, entidad_id: str | None,
+                  detalle: dict | None, request: Request) -> None:
+    """Escribe una fila inmutable en admin_audit_log. Nunca bloquea la acción principal."""
+    try:
+        import json
+        await pool.execute(
+            """INSERT INTO admin_audit_log (admin_email, accion, entidad, entidad_id, detalle, ip)
+               VALUES ($1, $2, $3, $4, $5, $6)""",
+            admin["email"], accion, entidad, entidad_id,
+            json.dumps(detalle) if detalle is not None else None,
+            request.client.host if request.client else None,
+        )
+    except Exception:
+        pass  # el audit log nunca debe tumbar la acción que audita
+
+
+async def _verify_admin_password(pool, admin: dict, password: str) -> None:
+    """Re-auth: exige la contraseña del admin de nuevo antes de una acción crítica.
+
+    403, no 401: el admin YA está autenticado, solo falló un paso extra. apiFetch
+    (frontend) trata cualquier 401 como sesión expirada y desloguea — 401 aquí
+    convertiría un typo de contraseña en un logout forzoso.
+    """
+    row = await pool.fetchrow("SELECT password_hash FROM usuarios WHERE id = $1", admin["id"])
+    if not row or not bcrypt.checkpw(password.encode(), row["password_hash"].encode()):
+        raise HTTPException(status_code=403, detail="Contraseña incorrecta")
 
 
 def _hace_cuanto(dt: datetime) -> str:
@@ -37,6 +70,38 @@ def _hace_cuanto(dt: datetime) -> str:
         return f"hace {h} hora{'s' if h != 1 else ''}"
     d = seconds // 86400
     return f"hace {d} día{'s' if d != 1 else ''}"
+
+
+# ── Audit log (solo lectura, append-only) ─────────────────────────────────────
+
+@router.get("/audit-log")
+async def audit_log(
+    limit: int = Query(100, ge=1, le=500),
+    admin: dict = Depends(require_admin),
+):
+    pool = get_pool()
+    rows = await pool.fetch(
+        "SELECT id, admin_email, accion, entidad, entidad_id, detalle, ip, created_at "
+        "FROM admin_audit_log ORDER BY created_at DESC LIMIT $1",
+        limit,
+    )
+    import json
+    return {
+        "entradas": [
+            {
+                "id": r["id"],
+                "admin_email": r["admin_email"],
+                "accion": r["accion"],
+                "entidad": r["entidad"],
+                "entidad_id": r["entidad_id"],
+                "detalle": json.loads(r["detalle"]) if r["detalle"] else None,
+                "ip": r["ip"],
+                "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+                "hace_cuanto": _hace_cuanto(r["created_at"]) if r["created_at"] else "",
+            }
+            for r in rows
+        ]
+    }
 
 
 # ── Endpoint 1: Dashboard ─────────────────────────────────────────────────────
@@ -549,10 +614,12 @@ async def detalle_usuario(usuario_id: int, admin: dict = Depends(require_admin))
 class UsuarioPatch(BaseModel):
     plan: Optional[str] = None     # free | pro | agente
     activo: Optional[bool] = None
+    password: Optional[str] = None  # re-auth: requerido si se cambia plan o activo
 
 
 @router.patch("/usuarios/{usuario_id}")
-async def editar_usuario(usuario_id: int, body: UsuarioPatch, admin: dict = Depends(require_admin)):
+@limiter.limit("30/minute")
+async def editar_usuario(request: Request, usuario_id: int, body: UsuarioPatch = Body(...), admin: dict = Depends(require_admin)):
     if body.plan is not None and body.plan not in ("free", "pro", "agente"):
         raise HTTPException(status_code=400, detail="plan inválido (free|pro|agente)")
     sets: list[str] = []
@@ -566,6 +633,10 @@ async def editar_usuario(usuario_id: int, body: UsuarioPatch, admin: dict = Depe
     if not sets:
         raise HTTPException(status_code=400, detail="Nada que actualizar")
     pool = get_pool()
+    if body.plan is not None or body.activo is not None:
+        if not body.password:
+            raise HTTPException(status_code=403, detail="Confirma tu contraseña para cambiar plan o estado")
+        await _verify_admin_password(pool, admin, body.password)
     params.append(usuario_id)
     row = await pool.fetchrow(
         f"UPDATE usuarios SET {', '.join(sets)} WHERE id = ${len(params)} "
@@ -574,6 +645,8 @@ async def editar_usuario(usuario_id: int, body: UsuarioPatch, admin: dict = Depe
     )
     if not row:
         raise HTTPException(status_code=404, detail="Usuario no encontrado")
+    await _audit(pool, admin, "editar_usuario", "usuario", str(usuario_id),
+                 {"plan": body.plan, "activo": body.activo}, request)
     return {"id": row["id"], "email": row["email"], "plan": row["plan"], "activo": row["activo"]}
 
 
@@ -757,9 +830,11 @@ async def list_leads(admin: dict = Depends(require_admin)):
 
 
 @router.put("/leads/{lead_id}")
+@limiter.limit("30/minute")
 async def update_lead(
+    request: Request,
     lead_id: int,
-    body: LeadUpdate,
+    body: LeadUpdate = Body(...),
     admin: dict = Depends(require_admin),
 ):
     pool = get_pool()
@@ -792,7 +867,59 @@ async def update_lead(
         f"UPDATE leads SET {', '.join(updates)} WHERE id = ${idx} RETURNING *",
         *params,
     )
+    await _audit(pool, admin, "editar_lead", "lead", str(lead_id),
+                 {"estado": body.estado, "asignado_a": body.asignado_a}, request)
     return dict(updated)
+
+
+# ── Eventos destacados ("pagan por aparecer arriba") ──────────────────────────
+
+@router.get("/eventos")
+async def list_eventos_admin(admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT e.id, e.titulo, e.categoria, e.fecha_inicio, e.destacado, e.gratuito,
+               b.nombre AS barrio_nombre
+        FROM eventos e
+        LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+        WHERE e.activo = true AND e.fecha_inicio > NOW()
+        ORDER BY e.destacado DESC, e.fecha_inicio ASC
+        LIMIT 200
+        """
+    )
+    return {
+        "eventos": [
+            {
+                "id": r["id"],
+                "titulo": r["titulo"],
+                "categoria": r["categoria"],
+                "fecha_inicio": r["fecha_inicio"].isoformat() if r["fecha_inicio"] else None,
+                "destacado": r["destacado"],
+                "gratuito": r["gratuito"],
+                "barrio": r["barrio_nombre"],
+            }
+            for r in rows
+        ]
+    }
+
+
+class EventoPatch(BaseModel):
+    destacado: bool
+
+
+@router.patch("/eventos/{evento_id}")
+@limiter.limit("30/minute")
+async def editar_evento(request: Request, evento_id: int, body: EventoPatch = Body(...), admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "UPDATE eventos SET destacado = $1, updated_at = NOW() WHERE id = $2 RETURNING id, destacado",
+        body.destacado, evento_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Evento no encontrado")
+    await _audit(pool, admin, "editar_evento", "evento", str(evento_id), {"destacado": body.destacado}, request)
+    return {"id": row["id"], "destacado": row["destacado"]}
 
 
 # ── SMTP Test ──────────────────────────────────────────────────────────────────

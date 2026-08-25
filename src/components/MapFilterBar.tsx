@@ -482,21 +482,35 @@ function PrecioPanel({
   trm: number;
 }) {
   const TOTAL_MIN = 0;
-  // Ranges calibrated to real data (validity-capped): arriendo p99 ~38M (cap 50M);
-  // venta p99 ~9B. STEP: arriendo 100K; venta 1M — fine-grained since the CURVE
-  // below (not STEP) is what controls how many usable thumb positions there are.
-  const TOTAL_MAX = isRent ? 50_000_000 : 10_000_000_000;
+  // Ranges scaled to where listings actually live, not the p99 outlier tail:
+  // a ~280px track spread over the full p99 (venta ~9B) gave the whole typical
+  // band (200M–1B) under a fifth of the track, so a 1px drag = tens of millions
+  // — the reported "big jumps". Capping venta at 2B (open "Máx" bucket above
+  // that, same as before) gives every pixel a far smaller, controllable delta.
+  const TOTAL_MAX = isRent ? 50_000_000 : 2_000_000_000;
   const STEP      = isRent ? 100_000    : 1_000_000;
-  // Zillow-style non-linear scale: most listings sit in the low/mid band, so a
-  // straight linear map (old behavior) gave that band a sliver of the track and
-  // made the thumb jump in huge increments there. Power curve gives it most of
-  // the drag distance instead, with the long tail compressed into the rest.
-  const CURVE     = isRent ? 2.2 : 2.8;
-
-  const curMin = filters.precioMin ?? TOTAL_MIN;
-  const curMax = filters.precioMax ?? TOTAL_MAX;
+  // Non-linear scale: most listings sit in the low/mid band, so a straight
+  // linear map gives that band a sliver of the track. Power curve gives it
+  // most of the drag distance instead, tail compressed into the rest.
+  const CURVE     = isRent ? 2.2 : 2.0;
 
   const trackRef = useRef<HTMLDivElement>(null);
+
+  // Local drag state: the thumb follows the pointer every frame, but the
+  // committed filter (→ onChange → map refetch) only updates on release.
+  // Firing onChange per pointermove was pushing a full viewport refetch on
+  // every pixel of drag, which is what made the slider itself feel laggy.
+  const [localMin, setLocalMin] = useState(filters.precioMin ?? TOTAL_MIN);
+  const [localMax, setLocalMax] = useState(filters.precioMax ?? TOTAL_MAX);
+
+  useEffect(() => {
+    setLocalMin(filters.precioMin ?? TOTAL_MIN);
+    setLocalMax(filters.precioMax ?? TOTAL_MAX);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filters.precioMin, filters.precioMax, isRent]);
+
+  const curMin = localMin;
+  const curMax = localMax;
 
   const snap  = (v: number) => Math.round(v / STEP) * STEP;
   const toR   = (v: number) => Math.pow(Math.max(0, v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN), 1 / CURVE);
@@ -596,9 +610,12 @@ function PrecioPanel({
           onPointerMove={(e) => {
             if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
             const v = fromR(getRatio(e));
-            onChange({ precioMin: v <= TOTAL_MIN ? null : Math.min(v, curMax - STEP) });
+            setLocalMin(Math.min(v, curMax - STEP));
           }}
-          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+          onPointerUp={(e) => {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            onChange({ precioMin: localMin <= TOTAL_MIN ? null : localMin });
+          }}
         />
 
         {/* Max thumb */}
@@ -608,9 +625,12 @@ function PrecioPanel({
           onPointerMove={(e) => {
             if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
             const v = fromR(getRatio(e));
-            onChange({ precioMax: v >= TOTAL_MAX ? null : Math.max(v, curMin + STEP) });
+            setLocalMax(Math.max(v, curMin + STEP));
           }}
-          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
+          onPointerUp={(e) => {
+            e.currentTarget.releasePointerCapture(e.pointerId);
+            onChange({ precioMax: localMax >= TOTAL_MAX ? null : localMax });
+          }}
         />
       </div>
 

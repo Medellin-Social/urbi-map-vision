@@ -48,6 +48,10 @@ export const API_ENDPOINTS = {
   adminUsuarioEditar: (id: number) => `${API_BASE_URL}/admin/usuarios/${id}`,
   adminLeads: `${API_BASE_URL}/admin/leads`,
   adminLead: (id: number) => `${API_BASE_URL}/admin/leads/${id}`,
+  adminEventos: `${API_BASE_URL}/admin/eventos`,
+  adminEventoEditar: (id: number) => `${API_BASE_URL}/admin/eventos/${id}`,
+  adminActividad: `${API_BASE_URL}/admin/actividad`,
+  adminAuditLog: `${API_BASE_URL}/admin/audit-log`,
 
   // Features
   calculadora: `${API_BASE_URL}/calculadora/simular`,
@@ -65,6 +69,7 @@ export const API_ENDPOINTS = {
   ticker: (ciudadId = 1) => `${API_BASE_URL}/comunidad/ticker?ciudad_id=${ciudadId}`,
   todosEventos: `${API_BASE_URL}/comunidad/todos/eventos?limit=20`,
   todosTiendas: `${API_BASE_URL}/comunidad/todos/tiendas?limit=4`,
+  comunasTiendasCounts: `${API_BASE_URL}/comunidad/comunas/tiendas-counts`,
 
   // Comunas (MLS visual layer)
   comunasGeoJSON: `${API_BASE_URL}/comunas/geojson`,

@@ -8,6 +8,7 @@ Handles:
   - UPSERT into public.eventos
   - Cleanup of past events
 """
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -131,7 +132,7 @@ CATEGORIAS_MAP: dict[str, str] = {
 }
 
 _KEYWORD_CATEGORIA: list[tuple[str, list[str]]] = [
-    ("musica",      ["concierto", "música", "musica", "rock", "jazz", "reggaeton", "banda", "cantante", "dj set", "festival music", "pop", "metal", "salsa", "cumbia", "vallenato"]),
+    ("musica",      ["concierto", "música", "musica", "rock", "jazz", "reggaeton", "banda", "cantante", "dj set", "festival music", "pop", "metal", "salsa", "cumbia", "vallenato", "techno", "tech house", "edm", "electrónica", "electronica"]),
     ("deporte",     ["hyrox", "run club", "carrera", "maratón", "marathon", "fútbol", "futbol", "crossfit", "yoga", "ciclismo", "natación", "tenis", "basketball", "voleibol", "triatlón", "trail"]),
     ("bienestar",   ["meditación", "meditacion", "mindfulness", "wellness", "salud mental", "bienestar", "respiración", "terapia", "sanación"]),
     ("tech",        ["flutter", "python", "javascript", "react", "aws", "cloud", "ia", "inteligencia artificial", "hackathon", "startup", "devops", "blockchain", "web3", "data science", "machine learning", "ai", "tech", "código", "codigo", "programación", "developer"]),
@@ -143,9 +144,12 @@ _KEYWORD_CATEGORIA: list[tuple[str, list[str]]] = [
 
 
 def _infer_categoria(titulo: str, descripcion: str = "") -> str:
+    # Word-boundary match, not substring: "ia"/"ai"/"bar"/"cena" as bare
+    # substrings hit "social", "colombia", "embarazo", "docena" — any Spanish
+    # text with those endings/words got miscategorized as tech/gastronomia.
     text = (titulo + " " + descripcion).lower()
     for categoria, keywords in _KEYWORD_CATEGORIA:
-        if any(kw in text for kw in keywords):
+        if any(re.search(rf"\b{re.escape(kw)}\b", text) for kw in keywords):
             return categoria
     return "social"
 

@@ -33,11 +33,11 @@ interface EventosResp { total: number; eventos: EventoData[] }
 const PAGE_SIZE = 12
 
 const FILTROS_FECHA = [
-  { id: 'all',    es: 'Todas las fechas', en: 'All dates' },
-  { id: 'hoy',   es: 'Hoy',              en: 'Today' },
-  { id: 'finde', es: 'Este finde',       en: 'Weekend' },
-  { id: 'semana',es: 'Esta semana',      en: 'This week' },
-  { id: 'mes',   es: 'Este mes',         en: 'This month' },
+  { id: 'all',    es: 'Todas',      en: 'All' },
+  { id: 'hoy',   es: 'Hoy',         en: 'Today' },
+  { id: 'finde', es: 'Este finde',  en: 'Weekend' },
+  { id: 'semana',es: 'Esta semana', en: 'This week' },
+  { id: 'mes',   es: 'Este mes',    en: 'This month' },
 ]
 const FILTROS_AUDIENCIA = [
   { id: 'all',         es: 'Todos',       en: 'All' },
@@ -46,16 +46,26 @@ const FILTROS_AUDIENCIA = [
   { id: 'activo',      es: 'Activo',      en: 'Active' },
 ]
 
-function Pill({ active, onClick, label, accent = false }: { active: boolean; onClick: () => void; label: string; accent?: boolean }) {
-  const c = accent ? K.coral : K.teal
+function Pill({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
   return (
     <button onClick={onClick} style={{
-      border: active ? `2px solid ${c}` : `2px solid ${K.line}`,
-      background: active ? c + '18' : 'transparent',
-      color: active ? c : K.muted,
-      fontWeight: 700, fontSize: '.8rem', padding: '7px 15px',
+      border: active ? `1.5px solid ${K.teal}` : `1.5px solid ${K.line}`,
+      background: active ? K.teal : '#fff',
+      color: active ? '#fff' : K.muted,
+      fontWeight: 600, fontSize: '.8rem', padding: '7px 14px',
       borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit',
+      whiteSpace: 'nowrap', flexShrink: 0, transition: 'border-color .12s, background .12s, color .12s',
     }}>{label}</button>
+  )
+}
+
+function GroupLabel({ children }: { children: string }) {
+  return (
+    <span style={{
+      fontSize: '.68rem', fontWeight: 700, color: K.tealDeep,
+      textTransform: 'uppercase', letterSpacing: '.07em',
+      marginBottom: 8, display: 'block',
+    }}>{children}</span>
   )
 }
 
@@ -115,6 +125,10 @@ function EventosPage() {
   const featured = eventos.filter(e => e.destacado)
   const regular  = eventos.filter(e => !e.destacado)
   const reset    = () => setPage(0)
+  const anyFilterActive = categoria !== 'all' || fecha !== 'all' || audiencia !== 'all' || gratuito
+  const clearAllFilters = () => {
+    setCategoria('all'); setFecha('all'); setAudiencia('all'); setGratuito(false); reset()
+  }
 
   return (
     <>
@@ -175,26 +189,57 @@ function EventosPage() {
         </h2>
 
         {/* Filtros */}
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 32 }}>
-          <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-            <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas las categorías', 'All categories')} />
-            {CATEGORIAS_EVENTOS.map(c => (
-              <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${lang === 'es' ? c.label : c.labelEn}`} accent />
-            ))}
+        <div style={{
+          background: K.surface, border: `1px solid ${K.line}`, borderRadius: 14,
+          padding: '18px 20px', marginBottom: 32,
+          display: 'flex', flexDirection: 'column', gap: 16,
+        }}>
+          {/* Categoría — fila scrolleable, sin wrap feo */}
+          <div>
+            <GroupLabel>{t('Categoría', 'Category')}</GroupLabel>
+            <div className="filtros-tabs" style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 2 }}>
+              <Pill active={categoria === 'all'} onClick={() => { setCategoria('all'); reset() }} label={t('Todas', 'All')} />
+              {CATEGORIAS_EVENTOS.map(c => (
+                <Pill key={c.key} active={categoria === c.key} onClick={() => { setCategoria(c.key); reset() }} label={`${c.emoji} ${lang === 'es' ? c.label : c.labelEn}`} />
+              ))}
+            </div>
           </div>
-          <div style={{ height: 1, background: K.line }} />
-          <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-            {FILTROS_FECHA.map(f => (
-              <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
-            ))}
-            <div style={{ width: 1, height: 18, background: K.line, margin: '0 4px' }} />
-            {FILTROS_AUDIENCIA.map(a => (
-              <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
-            ))}
-            <div style={{ width: 1, height: 18, background: K.line, margin: '0 4px' }} />
-            <button onClick={() => { setGratuito(g => !g); reset() }} style={{ border: gratuito ? `2px solid ${K.teal}` : `2px solid ${K.line}`, background: gratuito ? K.teal + '18' : 'transparent', color: gratuito ? K.tealDeep : K.muted, fontWeight: 700, fontSize: '.8rem', padding: '7px 15px', borderRadius: 999, cursor: 'pointer', fontFamily: 'inherit' }}>
-              🎟️ {t('Solo gratis', 'Free only')}
-            </button>
+
+          {/* Cuándo + Para quién — lado a lado en desktop, apiladas en mobile */}
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
+            <div style={{ flex: '1 1 280px' }}>
+              <GroupLabel>{t('Cuándo', 'When')}</GroupLabel>
+              <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {FILTROS_FECHA.map(f => (
+                  <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
+                ))}
+              </div>
+            </div>
+            <div style={{ flex: '1 1 240px' }}>
+              <GroupLabel>{t('Para quién', 'For who')}</GroupLabel>
+              <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {FILTROS_AUDIENCIA.map(a => (
+                  <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Solo gratis + limpiar — separados del resto por su naturaleza (toggle vs. selección) */}
+          <div style={{
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            paddingTop: 14, borderTop: `1px solid ${K.line}`,
+          }}>
+            <Pill active={gratuito} onClick={() => { setGratuito(g => !g); reset() }} label={`🎟️ ${t('Solo gratis', 'Free only')}`} />
+            {anyFilterActive && (
+              <button onClick={clearAllFilters} style={{
+                border: 'none', background: 'none', color: K.coral,
+                fontWeight: 700, fontSize: '.8rem', cursor: 'pointer', fontFamily: 'inherit',
+                padding: '4px 2px',
+              }}>
+                {t('Limpiar filtros ✕', 'Clear filters ✕')}
+              </button>
+            )}
           </div>
         </div>
 

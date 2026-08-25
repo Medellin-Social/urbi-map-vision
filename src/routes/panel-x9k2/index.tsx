@@ -1,7 +1,15 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, redirect, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban, Building2, CreditCard, MapPinned, Plus, Trash2, ClipboardList } from "lucide-react";
+import {
+  Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban,
+  Building2, CreditCard, MapPinned, Plus, Trash2, ClipboardList, Star, Lock, KeyRound,
+  UserSearch, ShieldAlert, Activity,
+} from "lucide-react";
+import {
+  ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
+  Tooltip, LabelList,
+} from "recharts";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
@@ -9,6 +17,9 @@ import { toast } from "sonner";
 
 // Ruta ofuscada (no /admin). El gate real es el backend (ADMIN_EMAIL); esto solo
 // evita descubrimiento casual. beforeLoad exige sesión; los datos 403 si no eres admin.
+// El gate de verdad vive en 3 capas server-side (ver SeguridadTab más abajo):
+// 1) require_admin (email allowlist + JWT) 2) audit log inmutable 3) re-auth por
+// password en mutaciones críticas. El redirect de AdminPanel es UX, no seguridad.
 export const Route = createFileRoute("/panel-x9k2/")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
@@ -24,38 +35,62 @@ const K = {
   amber: "#D97706", fucsia: "#FF2D95", serif: "'Fraunces', Georgia, serif" as const,
 };
 
-type Tab = "overview" | "realtors" | "usuarios" | "listings";
+type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "eventos" | "seguridad";
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: "overview",  label: "Resumen",   Icon: LayoutDashboard },
+  { id: "usuarios",  label: "Usuarios",  Icon: Users },
+  { id: "leads",     label: "Leads",     Icon: UserSearch },
   { id: "listings",  label: "Listings",  Icon: ClipboardList },
   { id: "realtors",  label: "Realtors",  Icon: ShieldCheck },
-  { id: "usuarios",  label: "Usuarios",  Icon: Users },
+  { id: "eventos",   label: "Eventos",   Icon: Star },
+  { id: "seguridad", label: "Seguridad", Icon: ShieldAlert },
 ];
 
 function AdminPanel() {
   const [tab, setTab] = useState<Tab>("overview");
+  const navigate = useNavigate();
+  // Gate de UI: una sola consulta arriba decide si se muestra el panel entero.
+  // No es una capa de seguridad (el backend ya rechaza con 403 sin esto) — solo
+  // evita que un usuario no-admin vea la estructura de tabs antes del rechazo.
+  const gate = useQuery<Dashboard>({
+    queryKey: ["admin", "dashboard"],
+    queryFn: () => apiFetch<Dashboard>(API_ENDPOINTS.adminDashboard),
+    retry: false,
+  });
+  useEffect(() => {
+    if (gate.error && /403|no autorizado/i.test(String((gate.error as Error).message))) {
+      navigate({ to: "/" });
+    }
+  }, [gate.error, navigate]);
+
+  if (gate.isLoading) return <div style={{ background: K.paper, minHeight: "100vh" }} />;
+  if (gate.error) return null; // redirigiendo
+
   return (
     <div style={{ background: K.paper, minHeight: "100vh" }}>
       <header className="border-b" style={{ borderColor: K.line, background: "#FFFFFF" }}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4">
+        <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <h1 className="text-xl font-bold" style={{ fontFamily: K.serif, color: K.ink }}>Panel de administración</h1>
           <span className="text-xs" style={{ color: K.muted }}>{auth.get()?.email}</span>
         </div>
-        <div className="mx-auto flex max-w-5xl gap-6 px-4">
+        <div className="mx-auto flex max-w-6xl gap-6 overflow-x-auto px-4">
           {TABS.map(({ id, label, Icon }) => (
             <button key={id} onClick={() => setTab(id)}
-              className="flex items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm transition"
+              className="flex shrink-0 items-center gap-1.5 border-b-2 pb-2.5 pt-1 text-sm transition"
               style={tab === id ? { borderColor: K.teal, color: K.ink, fontWeight: 600 } : { borderColor: "transparent", color: K.muted }}>
               <Icon className="h-4 w-4" /> {label}
             </button>
           ))}
         </div>
       </header>
-      <main className="mx-auto max-w-5xl px-4 py-8">
-        {tab === "overview"  && <OverviewTab />}
+      <main className="mx-auto max-w-6xl px-4 py-8">
+        {tab === "overview"  && <OverviewTab data={gate.data} />}
+        {tab === "usuarios"  && <UsuariosTab />}
+        {tab === "leads"     && <LeadsTab />}
         {tab === "listings"  && <ListingsTab />}
         {tab === "realtors"  && <RealtorsTab />}
-        {tab === "usuarios"  && <UsuariosTab />}
+        {tab === "eventos"   && <EventosTab />}
+        {tab === "seguridad" && <SeguridadTab />}
       </main>
     </div>
   );
@@ -78,6 +113,123 @@ function Kpi({ icon, value, label, accent }: { icon: React.ReactNode; value: num
   );
 }
 
+// ── Re-auth por password (capa 3) ──────────────────────────────────────────────
+// Acciones que otorgan o revocan acceso pagado (cambiar plan, activar/desactivar
+// usuario, aprobar/suspender agente) piden la contraseña del admin de nuevo antes
+// de ejecutarse. Un token robado ya-adentro no puede escalar acceso en silencio.
+function usePasswordPrompt() {
+  const [pending, setPending] = useState<{ resolve: (pw: string) => void; reject: () => void; label: string } | null>(null);
+  const ask = (label: string) =>
+    new Promise<string>((resolve, reject) => setPending({ resolve, reject, label }));
+  const modal = pending ? (
+    <PasswordModal label={pending.label}
+      onConfirm={(pw) => { pending.resolve(pw); setPending(null); }}
+      onCancel={() => { pending.reject(); setPending(null); }} />
+  ) : null;
+  return { ask, modal };
+}
+
+function PasswordModal({ label, onConfirm, onCancel }: { label: string; onConfirm: (pw: string) => void; onCancel: () => void }) {
+  const [pw, setPw] = useState("");
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: "rgba(20,32,29,0.45)" }}>
+      <div className="w-full max-w-sm rounded-xl border p-5" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+        <div className="mb-3 flex items-center gap-2" style={{ color: K.tealDeep }}>
+          <Lock className="h-4 w-4" />
+          <span className="text-sm font-semibold">Confirma tu contraseña</span>
+        </div>
+        <p className="mb-3 text-xs" style={{ color: K.muted }}>{label}</p>
+        <input
+          type="password" autoFocus value={pw} onChange={(e) => setPw(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter" && pw) onConfirm(pw); if (e.key === "Escape") onCancel(); }}
+          placeholder="Tu contraseña de admin"
+          className="mb-3 w-full rounded-md border px-3 py-2 text-sm"
+          style={{ borderColor: K.line, color: K.ink }}
+        />
+        <div className="flex justify-end gap-2">
+          <button onClick={onCancel} className="rounded-lg px-3 py-1.5 text-xs font-medium" style={{ color: K.muted }}>Cancelar</button>
+          <button onClick={() => pw && onConfirm(pw)} disabled={!pw}
+            className="inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50"
+            style={{ background: K.tealDeep }}>
+            <KeyRound className="h-3.5 w-3.5" /> Confirmar
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Gráficas — un solo hue por gráfica (job = magnitud/tendencia, no identidad) ─
+const chartTick = { fontSize: 11, fill: K.muted };
+
+function ChartCard({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border p-4" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+      <div className="mb-3">
+        <div className="text-sm font-semibold" style={{ color: K.ink }}>{title}</div>
+        {subtitle && <div className="text-xs" style={{ color: K.muted }}>{subtitle}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+function ChartTooltip({ active, payload, label, suffix }: { active?: boolean; payload?: { value: number }[]; label?: string; suffix?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-lg border px-3 py-2 text-xs shadow-sm" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+      <div style={{ color: K.muted }}>{label}</div>
+      <div className="font-semibold" style={{ color: K.ink }}>{payload[0].value.toLocaleString("es-CO")}{suffix ?? ""}</div>
+    </div>
+  );
+}
+
+function TrendLine({ data, xKey, yKey, suffix }: { data: Record<string, unknown>[]; xKey: string; yKey: string; suffix?: string }) {
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <CartesianGrid stroke={K.line} vertical={false} />
+        <XAxis dataKey={xKey} tick={chartTick} axisLine={{ stroke: K.line }} tickLine={false}
+          tickFormatter={(v: string) => v.slice(5)} interval="preserveStartEnd" />
+        <YAxis tick={chartTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+        <Tooltip content={<ChartTooltip suffix={suffix} />} />
+        <Line type="monotone" dataKey={yKey} stroke={K.teal} strokeWidth={2}
+          strokeLinecap="round" strokeLinejoin="round" dot={false} activeDot={{ r: 4, fill: K.teal, stroke: "#FFFFFF", strokeWidth: 2 }} />
+      </LineChart>
+    </ResponsiveContainer>
+  );
+}
+
+function TrendBars({ data, xKey, yKey, suffix }: { data: Record<string, unknown>[]; xKey: string; yKey: string; suffix?: string }) {
+  return (
+    <ResponsiveContainer width="100%" height={200}>
+      <BarChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+        <CartesianGrid stroke={K.line} vertical={false} />
+        <XAxis dataKey={xKey} tick={chartTick} axisLine={{ stroke: K.line }} tickLine={false}
+          tickFormatter={(v: string) => v.slice(5)} interval="preserveStartEnd" />
+        <YAxis tick={chartTick} axisLine={false} tickLine={false} width={36} allowDecimals={false} />
+        <Tooltip content={<ChartTooltip suffix={suffix} />} cursor={{ fill: K.surface }} />
+        <Bar dataKey={yKey} fill={K.teal} radius={[4, 4, 0, 0]} maxBarSize={22} />
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
+function RankBars({ items, height }: { items: { label: string; value: number }[]; height?: number }) {
+  return (
+    <ResponsiveContainer width="100%" height={height ?? Math.max(120, items.length * 34)}>
+      <BarChart data={items} layout="vertical" margin={{ top: 4, right: 28, left: 0, bottom: 4 }}>
+        <XAxis type="number" hide />
+        <YAxis type="category" dataKey="label" tick={chartTick} axisLine={false} tickLine={false} width={110} />
+        <Tooltip content={<ChartTooltip />} cursor={{ fill: K.surface }} />
+        <Bar dataKey="value" fill={K.teal} radius={[0, 4, 4, 0]} maxBarSize={18}>
+          <LabelList dataKey="value" position="right" style={{ fill: K.muted, fontSize: 11 }} />
+        </Bar>
+      </BarChart>
+    </ResponsiveContainer>
+  );
+}
+
 // ── Overview ─────────────────────────────────────────────────────────────────
 type Dashboard = {
   negocio: {
@@ -87,17 +239,30 @@ type Dashboard = {
     sponsorships_activos: number;
   };
   usuarios: { total: number; activos_7dias: number; activos_30dias: number; nuevos_hoy: number; nuevos_7dias: number; nuevos_30dias: number };
-  comportamiento: { total_simulaciones: number; total_comparaciones: number; total_vistas_barrio: number; total_favoritos: number; barrios_top10: { nombre: string; visitas: number }[] };
+  perfiles: {
+    por_objetivo: Record<string, number>;
+    por_riesgo: Record<string, number>;
+    por_presupuesto: Record<string, number>;
+  };
+  comportamiento: { total_simulaciones: number; total_comparaciones: number; total_vistas_barrio: number; total_favoritos: number; barrios_top10: { nombre: string; visitas: number }[]; municipios_top5: { municipio: string; visitas: number }[] };
+  registros_por_dia: { fecha: string; count: number }[];
+  actividad_por_dia: { fecha: string; acciones: number }[];
 };
 
-function OverviewTab() {
-  const { data, isLoading, error } = useQuery<Dashboard>({
-    queryKey: ["admin", "dashboard"],
-    queryFn: () => apiFetch<Dashboard>(API_ENDPOINTS.adminDashboard),
-  });
-  if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
-  if (error || !data) return <AccessError error={error} />;
-  const { usuarios: u, comportamiento: c, negocio: n } = data;
+const LABELS_OBJETIVO: Record<string, string> = {
+  airbnb: "Airbnb / renta corta", nomadas: "Nómadas digitales", mediano_plazo: "Mediano plazo",
+  largo_plazo: "Largo plazo", mixto: "Mixto",
+};
+const LABELS_RIESGO: Record<string, string> = { conservador: "Conservador", moderado: "Moderado", agresivo: "Agresivo" };
+const LABELS_PRESUPUESTO: Record<string, string> = {
+  menos_200M: "< $200M", "200M_500M": "$200M – 500M", "500M_1000M": "$500M – 1.000M", mas_1000M: "> $1.000M",
+};
+const toRankItems = (rec: Record<string, number>, labels: Record<string, string>) =>
+  Object.entries(rec).filter(([, v]) => v > 0).map(([k, v]) => ({ label: labels[k] ?? k, value: v }));
+
+function OverviewTab({ data }: { data?: Dashboard }) {
+  if (!data) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
+  const { usuarios: u, comportamiento: c, negocio: n, perfiles: p, registros_por_dia, actividad_por_dia } = data;
   const subsTotal = Object.values(n.suscripciones).reduce((s, x) => s + x, 0);
   return (
     <div className="space-y-6">
@@ -130,19 +295,62 @@ function OverviewTab() {
           <Kpi icon={<Heart className="h-4 w-4" />} value={c.total_favoritos} label="favoritos" />
         </div>
       </div>
-      {c.barrios_top10?.length > 0 && (
-        <div>
-          <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider" style={{ color: K.muted }}>Barrios más vistos</h2>
-          <div className="rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
-            {c.barrios_top10.slice(0, 8).map((b, i) => (
-              <div key={i} className="flex items-center justify-between border-b px-4 py-2 text-sm last:border-0" style={{ borderColor: K.line }}>
-                <span style={{ color: K.ink }}>{i + 1}. {b.nombre}</span>
-                <span style={{ color: K.muted }}>{b.visitas} vistas</span>
-              </div>
-            ))}
-          </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider" style={{ color: K.muted }}>Crecimiento</h2>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <ChartCard title="Registros nuevos" subtitle="Últimos 30 días">
+            {registros_por_dia?.length ? <TrendLine data={registros_por_dia} xKey="fecha" yKey="count" suffix=" registros" />
+              : <p className="text-xs" style={{ color: K.muted }}>Sin registros en el rango.</p>}
+          </ChartCard>
+          <ChartCard title="Acciones de usuarios" subtitle="Últimos 14 días · simulaciones + comparaciones + vistas">
+            {actividad_por_dia?.length ? <TrendBars data={actividad_por_dia} xKey="fecha" yKey="acciones" suffix=" acciones" />
+              : <p className="text-xs" style={{ color: K.muted }}>Sin actividad en el rango.</p>}
+          </ChartCard>
         </div>
-      )}
+      </div>
+
+      <div>
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wider" style={{ color: K.muted }}>Perfiles de inversión</h2>
+        <div className="grid gap-3 sm:grid-cols-3">
+          <ChartCard title="Objetivo">
+            {toRankItems(p.por_objetivo, LABELS_OBJETIVO).length
+              ? <RankBars items={toRankItems(p.por_objetivo, LABELS_OBJETIVO)} />
+              : <p className="text-xs" style={{ color: K.muted }}>Sin datos.</p>}
+          </ChartCard>
+          <ChartCard title="Perfil de riesgo">
+            {toRankItems(p.por_riesgo, LABELS_RIESGO).length
+              ? <RankBars items={toRankItems(p.por_riesgo, LABELS_RIESGO)} />
+              : <p className="text-xs" style={{ color: K.muted }}>Sin datos.</p>}
+          </ChartCard>
+          <ChartCard title="Presupuesto">
+            {toRankItems(p.por_presupuesto, LABELS_PRESUPUESTO).length
+              ? <RankBars items={toRankItems(p.por_presupuesto, LABELS_PRESUPUESTO)} />
+              : <p className="text-xs" style={{ color: K.muted }}>Sin datos.</p>}
+          </ChartCard>
+        </div>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2">
+        {c.barrios_top10?.length > 0 && (
+          <div>
+            <h2 className="mb-2 text-sm font-semibold uppercase tracking-wider" style={{ color: K.muted }}>Barrios más vistos</h2>
+            <div className="rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+              {c.barrios_top10.slice(0, 8).map((b, i) => (
+                <div key={i} className="flex items-center justify-between border-b px-4 py-2 text-sm last:border-0" style={{ borderColor: K.line }}>
+                  <span style={{ color: K.ink }}>{i + 1}. {b.nombre}</span>
+                  <span style={{ color: K.muted }}>{b.visitas} vistas</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        {c.municipios_top5?.length > 0 && (
+          <ChartCard title="Municipios más vistos">
+            <RankBars items={c.municipios_top5.map((m) => ({ label: m.municipio, value: m.visitas }))} />
+          </ChartCard>
+        )}
+      </div>
     </div>
   );
 }
@@ -292,17 +500,34 @@ function RealtorsTab() {
   const qc = useQueryClient();
   const [estado, setEstado] = useState("pendiente");
   const [zonasDe, setZonasDe] = useState<string | null>(null);
+  const { ask, modal } = usePasswordPrompt();
   const { data, isLoading, error } = useQuery<Agente[]>({
     queryKey: ["admin", "agentes", estado],
     queryFn: () => apiFetch<Agente[]>(`${API_ENDPOINTS.adminAgentes}?estado=${estado}`),
   });
   const accion = useMutation({
-    mutationFn: ({ url }: { url: string }) => apiFetch<void>(url, { method: "POST" }),
+    mutationFn: ({ url, body }: { url: string; body?: Record<string, unknown> }) =>
+      apiFetch<void>(url, { method: "POST", body: body ? JSON.stringify(body) : undefined }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "agentes"] }); toast.success("Actualizado"); },
-    onError: () => toast.error("No se pudo actualizar"),
+    onError: (e) => toast.error((e as Error).message || "No se pudo actualizar"),
   });
+
+  const aprobarConReauth = async (a: Agente) => {
+    try {
+      const password = await ask(`Aprobar a ${a.nombre} le da acceso pagado a zonas patrocinadas.`);
+      accion.mutate({ url: API_ENDPOINTS.adminAgenteAprobar(a.id), body: { password } });
+    } catch { /* cancelado */ }
+  };
+  const suspenderConReauth = async (a: Agente) => {
+    try {
+      const password = await ask(`Suspender a ${a.nombre} revoca su acceso pagado ya activo.`);
+      accion.mutate({ url: API_ENDPOINTS.adminAgenteSuspender(a.id), body: { motivo: "Suspendido desde panel admin", password } });
+    } catch { /* cancelado */ }
+  };
+
   return (
     <div className="space-y-4">
+      {modal}
       <div className="flex flex-wrap gap-1.5">
         {ESTADOS.map((e) => (
           <button key={e.id} onClick={() => setEstado(e.id)}
@@ -330,24 +555,24 @@ function RealtorsTab() {
               </button>
               {estado === "pendiente" && (
                 <>
-                  <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteAprobar(a.id) })}
+                  <button onClick={() => aprobarConReauth(a)}
                     className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ background: K.teal }}>
                     <Check className="h-3.5 w-3.5" /> Aprobar
                   </button>
-                  <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteRechazar(a.id) })}
+                  <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteRechazar(a.id), body: { motivo: "Rechazado desde panel admin" } })}
                     className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: K.coral, color: K.coral }}>
                     <X className="h-3.5 w-3.5" /> Rechazar
                   </button>
                 </>
               )}
               {estado === "activo" && (
-                <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteSuspender(a.id) })}
+                <button onClick={() => suspenderConReauth(a)}
                   className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: K.amber, color: K.amber }}>
                   <Ban className="h-3.5 w-3.5" /> Suspender
                 </button>
               )}
               {(estado === "rechazado" || estado === "inactivo") && (
-                <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteAprobar(a.id) })}
+                <button onClick={() => aprobarConReauth(a)}
                   className="inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-xs font-semibold text-white" style={{ background: K.teal }}>
                   <Check className="h-3.5 w-3.5" /> Reactivar
                 </button>
@@ -454,6 +679,229 @@ function ZonasManager({ agentId }: { agentId: string }) {
   );
 }
 
+// ── Eventos destacados (los que pagan por aparecer arriba) ────────────────────
+type EventoRow = { id: number; titulo: string; categoria: string | null; fecha_inicio: string; destacado: boolean; gratuito: boolean; barrio: string | null };
+
+function EventosTab() {
+  const qc = useQueryClient();
+  const { data, isLoading, error } = useQuery<{ eventos: EventoRow[] }>({
+    queryKey: ["admin", "eventos"],
+    queryFn: () => apiFetch<{ eventos: EventoRow[] }>(API_ENDPOINTS.adminEventos),
+  });
+  const editar = useMutation({
+    mutationFn: ({ id, destacado }: { id: number; destacado: boolean }) =>
+      apiFetch<void>(API_ENDPOINTS.adminEventoEditar(id), { method: "PATCH", body: JSON.stringify({ destacado }) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "eventos"] }); toast.success("Evento actualizado"); },
+    onError: () => toast.error("No se pudo actualizar"),
+  });
+  if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
+  if (error || !data) return <AccessError error={error} />;
+  const destacados = data.eventos.filter((e) => e.destacado).length;
+  return (
+    <div className="space-y-3">
+      <p className="text-sm" style={{ color: K.muted }}>
+        {data.eventos.length} eventos próximos · {destacados} destacado{destacados !== 1 ? "s" : ""} (aparecen arriba en /eventos)
+      </p>
+      <div className="overflow-x-auto rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+        <table className="w-full min-w-[640px] text-sm">
+          <thead>
+            <tr className="border-b text-left text-xs" style={{ borderColor: K.line, color: K.muted }}>
+              <th className="px-4 py-3 font-medium">Evento</th>
+              <th className="px-4 py-3 font-medium">Categoría</th>
+              <th className="px-4 py-3 font-medium">Fecha</th>
+              <th className="px-4 py-3 text-center font-medium">Destacado</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.eventos.map((e) => (
+              <tr key={e.id} className="border-b last:border-0" style={{ borderColor: K.line }}>
+                <td className="px-4 py-3">
+                  <div className="font-medium" style={{ color: K.ink }}>{e.titulo}</div>
+                  <div className="text-xs" style={{ color: K.muted }}>{e.barrio ?? "—"}{e.gratuito ? " · gratis" : ""}</div>
+                </td>
+                <td className="px-4 py-3 capitalize" style={{ color: K.muted }}>{e.categoria ?? "—"}</td>
+                <td className="px-4 py-3 text-xs" style={{ color: K.muted }}>
+                  {new Date(e.fecha_inicio).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
+                </td>
+                <td className="px-4 py-3 text-center">
+                  <button
+                    onClick={() => editar.mutate({ id: e.id, destacado: !e.destacado })}
+                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                    style={e.destacado ? { background: "#E1F5EE", color: K.tealDeep } : { background: K.surface, color: K.muted }}
+                    title="Click para alternar"
+                  >
+                    <Star className="h-3 w-3" fill={e.destacado ? K.tealDeep : "none"} />
+                    {e.destacado ? "Destacado" : "Marcar"}
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Leads (usuarios que pidieron agente / cotización) ──────────────────────────
+type LeadRow = {
+  lead_id: number; estado: string; asignado_a: string | null; notas: string | null; registrado: string;
+  usuario: { id: number; nombre: string; email: string };
+  perfil: { presupuesto: string | null; objetivo: string | null; perfil_riesgo: string | null; wants_agent: boolean | null };
+};
+const LEAD_ESTADOS = [
+  { id: "nuevo", label: "Nuevo" },
+  { id: "contactado", label: "Contactado" },
+  { id: "calificado", label: "Calificado" },
+  { id: "cerrado", label: "Cerrado" },
+  { id: "descartado", label: "Descartado" },
+];
+
+function LeadsTab() {
+  const qc = useQueryClient();
+  const [filtro, setFiltro] = useState<string>("todos");
+  const [notasAbierto, setNotasAbierto] = useState<number | null>(null);
+  const [notas, setNotas] = useState("");
+  const { data, isLoading, error } = useQuery<{ leads: LeadRow[]; total: number }>({
+    queryKey: ["admin", "leads"],
+    queryFn: () => apiFetch<{ leads: LeadRow[]; total: number }>(API_ENDPOINTS.adminLeads),
+  });
+  const editar = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: { estado?: string; notas?: string } }) =>
+      apiFetch<void>(API_ENDPOINTS.adminLead(id), { method: "PUT", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "leads"] }); toast.success("Lead actualizado"); },
+    onError: () => toast.error("No se pudo actualizar"),
+  });
+
+  if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
+  if (error || !data) return <AccessError error={error} />;
+  const leads = filtro === "todos" ? data.leads : data.leads.filter((l) => l.estado === filtro);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm" style={{ color: K.muted }}>{data.total} leads · piden conexión con un agente</p>
+        <div className="flex flex-wrap gap-1.5">
+          <button onClick={() => setFiltro("todos")}
+            className="rounded-full border px-3 py-1 text-xs font-medium transition"
+            style={filtro === "todos" ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
+            Todos
+          </button>
+          {LEAD_ESTADOS.map((e) => (
+            <button key={e.id} onClick={() => setFiltro(e.id)}
+              className="rounded-full border px-3 py-1 text-xs font-medium transition"
+              style={filtro === e.id ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
+              {e.label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {leads.length === 0 && <p className="text-sm" style={{ color: K.muted }}>Sin leads en este filtro.</p>}
+      <div className="space-y-2">
+        {leads.map((l) => (
+          <div key={l.lead_id} className="rounded-xl border p-3" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="font-medium" style={{ color: K.ink }}>{l.usuario.nombre || l.usuario.email}</div>
+                <div className="text-xs" style={{ color: K.muted }}>{l.usuario.email} · {l.registrado}</div>
+                <div className="mt-1 flex flex-wrap gap-1.5">
+                  {l.perfil.objetivo && <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: K.surface, color: K.muted }}>{l.perfil.objetivo}</span>}
+                  {l.perfil.perfil_riesgo && <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: K.surface, color: K.muted }}>{l.perfil.perfil_riesgo}</span>}
+                  {l.perfil.presupuesto && <span className="rounded-full px-2 py-0.5 text-[11px]" style={{ background: K.surface, color: K.muted }}>{l.perfil.presupuesto}</span>}
+                </div>
+              </div>
+              <select
+                value={l.estado}
+                onChange={(e) => editar.mutate({ id: l.lead_id, body: { estado: e.target.value } })}
+                className="rounded-md border px-2 py-1 text-xs" style={{ borderColor: K.line, color: K.ink, background: "#FFF" }}
+              >
+                {LEAD_ESTADOS.map((e) => <option key={e.id} value={e.id}>{e.label}</option>)}
+              </select>
+            </div>
+            {notasAbierto === l.lead_id ? (
+              <div className="mt-2 flex flex-col gap-1.5">
+                <textarea value={notas} onChange={(ev) => setNotas(ev.target.value)} rows={2}
+                  placeholder="Notas de seguimiento…" className="rounded-md border px-2 py-1.5 text-xs" style={{ borderColor: K.line, color: K.ink, resize: "none" }} />
+                <div className="flex gap-1.5">
+                  <button onClick={() => { editar.mutate({ id: l.lead_id, body: { notas } }); setNotasAbierto(null); }}
+                    className="rounded-lg px-3 py-1 text-xs font-semibold text-white" style={{ background: K.tealDeep }}>Guardar</button>
+                  <button onClick={() => setNotasAbierto(null)} className="text-xs" style={{ color: K.muted }}>Cancelar</button>
+                </div>
+              </div>
+            ) : (
+              <button onClick={() => { setNotasAbierto(l.lead_id); setNotas(l.notas ?? ""); }}
+                className="mt-2 text-xs underline" style={{ color: K.muted }}>
+                {l.notas ? `Notas: ${l.notas}` : "Agregar nota"}
+              </button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Seguridad: audit log inmutable (capa 2) + explicación de las 3 capas ──────
+type AuditEntry = { id: number; admin_email: string; accion: string; entidad: string; entidad_id: string | null; detalle: Record<string, unknown> | null; ip: string | null; created_at: string; hace_cuanto: string };
+
+function SeguridadTab() {
+  const { data, isLoading, error } = useQuery<{ entradas: AuditEntry[] }>({
+    queryKey: ["admin", "audit-log"],
+    queryFn: () => apiFetch<{ entradas: AuditEntry[] }>(API_ENDPOINTS.adminAuditLog),
+    refetchInterval: 30_000,
+  });
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-3 sm:grid-cols-3">
+        <div className="rounded-xl border p-4" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          <div className="mb-1 flex items-center gap-1.5" style={{ color: K.teal }}><ShieldCheck className="h-4 w-4" /><span className="text-xs font-semibold">Capa 1 · Acceso</span></div>
+          <p className="text-xs" style={{ color: K.muted }}>Solo el email admin autenticado con JWT ve este panel. Todo lo demás recibe 403.</p>
+        </div>
+        <div className="rounded-xl border p-4" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          <div className="mb-1 flex items-center gap-1.5" style={{ color: K.teal }}><Activity className="h-4 w-4" /><span className="text-xs font-semibold">Capa 2 · Audit log</span></div>
+          <p className="text-xs" style={{ color: K.muted }}>Cada acción que otorga/revoca acceso queda registrada abajo, sin ruta de borrado.</p>
+        </div>
+        <div className="rounded-xl border p-4" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          <div className="mb-1 flex items-center gap-1.5" style={{ color: K.teal }}><Lock className="h-4 w-4" /><span className="text-xs font-semibold">Capa 3 · Re-auth</span></div>
+          <p className="text-xs" style={{ color: K.muted }}>Cambiar plan, activo, o aprobar/suspender agentes pide tu contraseña de nuevo. Además, rate limit (30/min) en toda mutación admin.</p>
+        </div>
+      </div>
+
+      {isLoading && <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>}
+      {error && <AccessError error={error} />}
+      {data && (
+        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          <table className="w-full min-w-[680px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs" style={{ borderColor: K.line, color: K.muted }}>
+                <th className="px-4 py-3 font-medium">Cuándo</th>
+                <th className="px-4 py-3 font-medium">Admin</th>
+                <th className="px-4 py-3 font-medium">Acción</th>
+                <th className="px-4 py-3 font-medium">Sobre</th>
+                <th className="px-4 py-3 font-medium">IP</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.entradas.map((e) => (
+                <tr key={e.id} className="border-b last:border-0" style={{ borderColor: K.line }}>
+                  <td className="px-4 py-3 text-xs" style={{ color: K.muted }}>{e.hace_cuanto}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: K.ink }}>{e.admin_email}</td>
+                  <td className="px-4 py-3 text-xs font-medium" style={{ color: K.tealDeep }}>{e.accion}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: K.muted }}>{e.entidad}{e.entidad_id ? ` #${e.entidad_id}` : ""}</td>
+                  <td className="px-4 py-3 text-xs" style={{ color: K.muted }}>{e.ip ?? "—"}</td>
+                </tr>
+              ))}
+              {data.entradas.length === 0 && (
+                <tr><td colSpan={5} className="px-4 py-6 text-center text-xs" style={{ color: K.muted }}>Sin actividad registrada aún.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Usuarios (editable: plan + activo) ─────────────────────────────────────────
 type UsuarioRow = {
   id: number; nombre: string | null; email: string; created_at: string | null;
@@ -466,20 +914,36 @@ const actividadTotal = (u: UsuarioRow) => u.stats.barrios_visitados + u.stats.si
 
 function UsuariosTab() {
   const qc = useQueryClient();
+  const { ask, modal } = usePasswordPrompt();
   const { data, isLoading, error } = useQuery<UsuariosResp>({
     queryKey: ["admin", "usuarios"],
     queryFn: () => apiFetch<UsuariosResp>(API_ENDPOINTS.adminUsuarios),
   });
   const editar = useMutation({
-    mutationFn: ({ id, body }: { id: number; body: { plan?: string; activo?: boolean } }) =>
+    mutationFn: ({ id, body }: { id: number; body: { plan?: string; activo?: boolean; password?: string } }) =>
       apiFetch<void>(API_ENDPOINTS.adminUsuarioEditar(id), { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "usuarios"] }); qc.invalidateQueries({ queryKey: ["admin", "dashboard"] }); toast.success("Usuario actualizado"); },
-    onError: () => toast.error("No se pudo actualizar"),
+    onError: (e) => toast.error((e as Error).message || "No se pudo actualizar"),
   });
+
+  const cambiarPlan = async (u: UsuarioRow, plan: string) => {
+    try {
+      const password = await ask(`Dar plan "${plan}" a ${u.email}.`);
+      editar.mutate({ id: u.id, body: { plan, password } });
+    } catch { /* cancelado */ }
+  };
+  const toggleActivo = async (u: UsuarioRow) => {
+    try {
+      const password = await ask(`${(u.activo ?? true) ? "Desactivar" : "Activar"} la cuenta de ${u.email}.`);
+      editar.mutate({ id: u.id, body: { activo: !(u.activo ?? true), password } });
+    } catch { /* cancelado */ }
+  };
+
   if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
   if (error || !data) return <AccessError error={error} />;
   return (
     <div className="space-y-3">
+      {modal}
       <p className="text-sm" style={{ color: K.muted }}>{data.total} usuarios · edita plan (acceso Pro/Agente) o desactiva cuenta</p>
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
         <table className="w-full min-w-[680px] text-sm">
@@ -504,7 +968,7 @@ function UsuariosTab() {
                 <td className="px-4 py-3">
                   <select
                     value={u.plan ?? "free"}
-                    onChange={(e) => editar.mutate({ id: u.id, body: { plan: e.target.value } })}
+                    onChange={(e) => cambiarPlan(u, e.target.value)}
                     className="rounded-md border px-2 py-1 text-xs" style={{ borderColor: K.line, color: K.ink, background: "#FFF" }}
                   >
                     <option value="free">Free</option>
@@ -514,7 +978,7 @@ function UsuariosTab() {
                 </td>
                 <td className="px-4 py-3 text-center">
                   <button
-                    onClick={() => editar.mutate({ id: u.id, body: { activo: !(u.activo ?? true) } })}
+                    onClick={() => toggleActivo(u)}
                     className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
                     style={(u.activo ?? true)
                       ? { background: "#E1F5EE", color: K.tealDeep }
