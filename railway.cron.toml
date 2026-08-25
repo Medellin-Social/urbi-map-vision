@@ -1,8 +1,0 @@
-# Config-as-code solo para el servicio urbi-cron (Settings → Source → Config
-# File Path = /railway.cron.toml). Separado de /railway.toml a propósito:
-# ese archivo fija healthcheckPath = "/" para el frontend, pero urbi-cron es
-# un contenedor headless (cron -f, sin servidor HTTP) — el healthcheck HTTP
-# nunca puede pasar ahí y mata el deploy siempre. Sin [deploy] acá, Railway
-# no aplica healthcheck y solo vigila que el proceso siga vivo.
-[build]
-builder = "DOCKERFILE"

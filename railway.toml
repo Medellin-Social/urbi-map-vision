@@ -3,9 +3,15 @@
 [build]
 builder = "DOCKERFILE"
 
+# Sin healthcheckPath: este archivo es compartido por los 3 servicios
+# Dockerfile (WEB, Social-api, social-cron) — Railway nunca separó el
+# Config File Path por servicio en el dashboard pese a los comentarios de
+# abajo, así que "/" se aplicaba también a social-cron, que es un
+# contenedor headless (cron -f) sin nada escuchando en $PORT. Railway
+# reintentaba "service unavailable" y mataba el deploy siempre — nunca
+# corrió en la nube. Sin healthcheckPath, Railway solo vigila que el
+# proceso del contenedor siga vivo (restartPolicyType se conserva).
 [deploy]
-healthcheckPath = "/"
-healthcheckTimeout = 60
 restartPolicyType = "on_failure"
 
 # ── Servicio Backend ──────────────────────────────────────────────────────────
