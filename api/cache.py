@@ -210,31 +210,6 @@ WITH todas_fuentes AS (
            NULL::text AS antiguedad, amenidades
     FROM raw.listings_renta_media WHERE precio_mes_cop > 0
     UNION ALL
-    SELECT
-        id::text || '_lp'                                        AS listing_uid,
-        'propio'                                                  AS fuente,
-        CASE WHEN agente_id IS NOT NULL THEN 'agente_premium'
-             ELSE 'standard' END                                  AS tier,
-        tipo_operacion, tipo_inmueble,
-        precio_cop, precio_usd::bigint,
-        COALESCE(area_m2, 0)::numeric                            AS area_m2,
-        habitaciones, banos,
-        NULL::text                                                AS barrio_raw,
-        barrio_id,
-        direccion                                                 AS direccion_raw,
-        lat::double precision, lon::double precision,
-        CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
-             THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
-        id::text                                                  AS url,
-        fotos,
-        COALESCE(fecha_publicacion, created_at)                  AS fecha_scraping,
-        md5(id::text || '_lp')                                   AS dedup_hash,
-        estrato                                                   AS estrato_real,
-        NULL::boolean                                             AS amoblado,
-        antiguedad::text, amenidades
-    FROM public.listings_propios
-    WHERE estado = 'activo' AND precio_cop > 0
-    UNION ALL
     -- Modelo unificado: publicaciones directas (owner/agente) en tabla listing.
     -- Entran al mapa en 'publicado' aunque verificado=false (publica primero).
     SELECT
@@ -318,7 +293,7 @@ FROM sin_geo WHERE _rn = 1
 """
 
 _INSERT_LISTINGS_GEOREF = """
-INSERT INTO analytics.listings_georef
+INSERT INTO analytics.listings_georef_new
     (url, lat, lon, url_activa, estrato_real, uso_suelo_pot, estrato_manzana, refreshed_at)
 SELECT DISTINCT ON (l.url)
     l.url,
@@ -424,11 +399,28 @@ async def refresh_listings_cache(pool: Any) -> None:
                     await conn.execute(_INSERT_BARRIOS_MEDIANAS, timeout=heavy_timeout)
                 logger.info("[cache] barrios_medianas refreshed")
 
-                # listings_georef queries stg_listings_unificado — only run when stg exists
+                # listings_georef queries stg_listings_unificado — only run when stg exists.
+                # Swap-table instead of TRUNCATE+INSERT: el INSERT hace 2 LATERAL joins
+                # espaciales por listing (~100k filas) y tarda varios minutos — un
+                # TRUNCATE en la misma transacción toma lock exclusivo y deja /listings
+                # sin responder todo ese tiempo (pasó en vivo 2026-08-27/28, 2 veces).
+                # Se llena una tabla nueva sin tocar la que están leyendo, y el RENAME
+                # final es ~instantáneo.
+                await conn.execute("DROP TABLE IF EXISTS analytics.listings_georef_new")
+                await conn.execute(
+                    "CREATE TABLE analytics.listings_georef_new "
+                    "(LIKE analytics.listings_georef INCLUDING ALL)"
+                )
+                await conn.execute(_INSERT_LISTINGS_GEOREF, timeout=heavy_timeout)
                 async with conn.transaction():
-                    await conn.execute("TRUNCATE analytics.listings_georef")
-                    await conn.execute(_INSERT_LISTINGS_GEOREF, timeout=heavy_timeout)
-                logger.info("[cache] listings_georef refreshed")
+                    await conn.execute(
+                        "ALTER TABLE analytics.listings_georef RENAME TO listings_georef_old"
+                    )
+                    await conn.execute(
+                        "ALTER TABLE analytics.listings_georef_new RENAME TO listings_georef"
+                    )
+                await conn.execute("DROP TABLE analytics.listings_georef_old")
+                logger.info("[cache] listings_georef refreshed (swap)")
             else:
                 logger.warning("[cache] stg_listings_unificado missing — skipping stg-dependent refreshes")
 
