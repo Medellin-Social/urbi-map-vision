@@ -415,9 +415,32 @@ ON CONFLICT (barrio_id) DO UPDATE SET
     calculado_en        = EXCLUDED.calculado_en
 """
 
-# Columnas nuevas (colegios + scores). IF NOT EXISTS → idempotente.
+# Base + columnas nuevas, todo IF NOT EXISTS → idempotente en cualquier
+# entorno. Descubierto 2026-08: prod tenía una versión esqueleto de esta
+# tabla (13 columnas, sin PK) muy anterior a lo que hay en local — este
+# script ahora se auto-repara en vez de asumir que el schema ya está al día.
+CREATE_SQL = """
+CREATE TABLE IF NOT EXISTS analytics.barrios_pois_distancia (
+    barrio_id integer PRIMARY KEY
+);
+"""
+
 ALTER_SQL = """
 ALTER TABLE analytics.barrios_pois_distancia
+    ADD COLUMN IF NOT EXISTS nombre_barrio      text,
+    ADD COLUMN IF NOT EXISTS municipio          text,
+    ADD COLUMN IF NOT EXISTS dist_metro_km      numeric(8,3),
+    ADD COLUMN IF NOT EXISTS dist_parque_km     numeric(8,3),
+    ADD COLUMN IF NOT EXISTS dist_mall_km       numeric(8,3),
+    ADD COLUMN IF NOT EXISTS dist_yoga_km       numeric(8,3),
+    ADD COLUMN IF NOT EXISTS n_cafes_500m       integer,
+    ADD COLUMN IF NOT EXISTS n_coworking_1km    integer,
+    ADD COLUMN IF NOT EXISTS n_gimnasios_1km    integer,
+    ADD COLUMN IF NOT EXISTS n_restaurantes_500m integer,
+    ADD COLUMN IF NOT EXISTS n_bares_500m       integer,
+    ADD COLUMN IF NOT EXISTS n_yoga_1km         integer,
+    ADD COLUMN IF NOT EXISTS n_universidades_2km integer,
+    ADD COLUMN IF NOT EXISTS n_hospitales_3km   integer,
     ADD COLUMN IF NOT EXISTS n_colegios_1km     integer,
     ADD COLUMN IF NOT EXISTS dist_colegio_km    numeric(8,3),
     ADD COLUMN IF NOT EXISTS walk_score         integer,
@@ -434,7 +457,20 @@ ALTER TABLE analytics.barrios_pois_distancia
     ADD COLUMN IF NOT EXISTS dist_obra_publica_km  numeric(8,3),
     ADD COLUMN IF NOT EXISTS nombre_obra_cercana   text,
     ADD COLUMN IF NOT EXISTS db_ruido_dia_cercano  numeric(5,1),
-    ADD COLUMN IF NOT EXISTS dist_ruido_km         numeric(8,3)
+    ADD COLUMN IF NOT EXISTS dist_ruido_km         numeric(8,3),
+    ADD COLUMN IF NOT EXISTS indice_nomada      double precision,
+    ADD COLUMN IF NOT EXISTS calculado_en       timestamptz;
+
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE table_schema = 'analytics' AND table_name = 'barrios_pois_distancia'
+          AND constraint_type IN ('PRIMARY KEY', 'UNIQUE')
+    ) THEN
+        ALTER TABLE analytics.barrios_pois_distancia ADD PRIMARY KEY (barrio_id);
+    END IF;
+END $$;
 """
 
 VERIFY_SQL = """
@@ -477,7 +513,8 @@ def main():
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
 
-    cur.execute(ALTER_SQL)  # columnas nuevas (colegios + scores), idempotente
+    cur.execute(CREATE_SQL)
+    cur.execute(ALTER_SQL)  # columnas base + nuevas, idempotente
     scope = args.municipio or "todos los municipios"
     print(f"Calculando barrios_pois_distancia para {scope}...")
     cur.execute(sql)
