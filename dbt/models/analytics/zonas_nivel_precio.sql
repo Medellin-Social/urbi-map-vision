@@ -120,6 +120,12 @@ barrio_nivel as (
 -- promedio ponderado nunca pasaba de B aunque el precio_m2 real de la
 -- comuna sea, por lejos, el más alto de Medellín. Normalizando la comuna
 -- contra el rango de comunas (no de barrios) sí refleja eso.
+-- Los 5 municipios satélite (sin comunas oficiales) se tratan como pseudo-
+-- comunas 101-105 — mismo esquema que api/routers/comunidad.py
+-- (_MUNICIPIO_TOTAL_COUNTS_QUERY) y api/routers/comunas.py::get_comunas_geojson.
+-- Compiten en el mismo pool de anchors que las 16 comunas de Medellín: para
+-- un realtor eligiendo dónde pagar, Envigado vs. El Poblado es una
+-- comparación real, no dos escalas separadas.
 comuna_base as (
 
     select
@@ -132,6 +138,25 @@ comuna_base as (
     join analytics.barrios_cd bc on bc.barrio_id = b.barrio_id
     where bc.cd_comuna is not null
     group by bc.cd_comuna
+
+    union all
+
+    select
+        case rb.municipio
+            when 'BELLO'       then 101
+            when 'ENVIGADO'    then 102
+            when 'ITAGUI'      then 103
+            when 'SABANETA'    then 104
+            when 'LA ESTRELLA' then 105
+        end                                                                          as cd_comuna,
+        sum(b.precio_m2_efectivo * b.n_datos)::numeric / nullif(sum(b.n_datos), 0)   as precio_m2_comuna,
+        sum(b.n_datos)                                                                as n_datos_comuna,
+        max(b.poblacion)                                                             as poblacion_comuna,
+        sum(b.n_eventos)                                                             as n_eventos_comuna
+    from base b
+    join raw.barrios rb on rb.id = b.barrio_id
+    where rb.municipio in ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA')
+    group by rb.municipio
 
 ),
 
