@@ -16,10 +16,12 @@
 -- un realtor es directamente el tamaño de las comisiones (precio) y qué tan
 -- activo/grande es el mercado ahí (volumen, población).
 --
--- Score = 55% precio_m2 + 25% volumen de datos (n_venta+n_arriendo) + 20%
--- población (tamaño de mercado/audiencia — raw.poblacion_comuna para
--- Medellín, raw.poblacion_municipio para los 5 municipios satélite, ver
--- migración 0081). precio_m2/volumen/población se normalizan min-max, pero
+-- Score = 55% precio_m2 + 20% volumen de datos (n_venta+n_arriendo) + 15%
+-- eventos de comunidad (vida/actividad de la zona — más eventos = zona más
+-- deseable, atrae más interés de compra, mismo tipo de señal que ya usa
+-- Zillow con "walkability") + 10% población (tamaño de mercado/audiencia —
+-- raw.poblacion_comuna para Medellín, raw.poblacion_municipio para los 5
+-- municipios satélite, ver migración 0081). Todo se normaliza min-max, pero
 -- el min/max se calcula SOLO sobre zonas con n_datos >= 10 (piso mínimo) para
 -- que un barrio con 1-2 listings no distorsione la escala. Zonas por debajo
 -- del piso igual reciben nivel, solo no participan en fijar los extremos.
@@ -35,15 +37,26 @@ with poblacion as (
 
 ),
 
+eventos as (
+
+    select barrio_id, count(*) as n_eventos
+    from public.eventos
+    where activo and barrio_id is not null
+    group by barrio_id
+
+),
+
 base as (
 
     select
         bm.barrio_id,
         coalesce(bm.precio_venta_m2_p50, bm.pbn_precio_justo_m2)   as precio_m2_efectivo,
         coalesce(bm.n_venta, 0) + coalesce(bm.n_arriendo, 0)       as n_datos,
-        p.poblacion
+        p.poblacion,
+        coalesce(ev.n_eventos, 0)                                   as n_eventos
     from {{ ref('barrios_mercado') }} bm
     left join poblacion p on p.barrio_id = bm.barrio_id
+    left join eventos   ev on ev.barrio_id = bm.barrio_id
     where coalesce(bm.precio_venta_m2_p50, bm.pbn_precio_justo_m2) is not null
 
 ),
@@ -56,7 +69,9 @@ anchors as (
         min(n_datos)            filter (where n_datos >= 10) as vol_min,
         max(n_datos)            filter (where n_datos >= 10) as vol_max,
         min(poblacion)          filter (where n_datos >= 10) as pob_min,
-        max(poblacion)          filter (where n_datos >= 10) as pob_max
+        max(poblacion)          filter (where n_datos >= 10) as pob_max,
+        min(n_eventos)          filter (where n_datos >= 10) as ev_min,
+        max(n_eventos)          filter (where n_datos >= 10) as ev_max
     from base
 
 ),
@@ -73,7 +88,10 @@ barrio_scored as (
         ))                                                          as volumen_score,
         greatest(0, least(100,
             (b.poblacion - a.pob_min)::numeric / nullif(a.pob_max - a.pob_min, 0) * 100
-        ))                                                          as poblacion_score
+        ))                                                          as poblacion_score,
+        greatest(0, least(100,
+            (b.n_eventos - a.ev_min)::numeric / nullif(a.ev_max - a.ev_min, 0) * 100
+        ))                                                          as eventos_score
     from base b
     cross join anchors a
 
@@ -84,8 +102,9 @@ barrio_nivel as (
     select
         barrio_id,
         round(
-            0.65 * precio_score
-            + 0.25 * volumen_score
+            0.55 * precio_score
+            + 0.20 * volumen_score
+            + 0.15 * coalesce(eventos_score, 0)
             + 0.10 * coalesce(poblacion_score, volumen_score)
         ) as score_nivel
     from barrio_scored
@@ -107,7 +126,8 @@ comuna_base as (
         bc.cd_comuna,
         sum(b.precio_m2_efectivo * b.n_datos)::numeric / nullif(sum(b.n_datos), 0) as precio_m2_comuna,
         sum(b.n_datos)                                                              as n_datos_comuna,
-        max(b.poblacion)                                                            as poblacion_comuna
+        max(b.poblacion)                                                            as poblacion_comuna,
+        sum(b.n_eventos)                                                            as n_eventos_comuna
     from base b
     join analytics.barrios_cd bc on bc.barrio_id = b.barrio_id
     where bc.cd_comuna is not null
@@ -123,7 +143,9 @@ comuna_anchors as (
         min(n_datos_comuna)    as vol_min,
         max(n_datos_comuna)    as vol_max,
         min(poblacion_comuna)  as pob_min,
-        max(poblacion_comuna)  as pob_max
+        max(poblacion_comuna)  as pob_max,
+        min(n_eventos_comuna)  as ev_min,
+        max(n_eventos_comuna)  as ev_max
     from comuna_base
 
 ),
@@ -133,11 +155,14 @@ comuna_nivel as (
     select
         cb.cd_comuna,
         round(
-            0.65 * greatest(0, least(100,
+            0.55 * greatest(0, least(100,
                 (cb.precio_m2_comuna - ca.precio_min) / nullif(ca.precio_max - ca.precio_min, 0) * 100
             ))
-            + 0.25 * greatest(0, least(100,
+            + 0.20 * greatest(0, least(100,
                 (cb.n_datos_comuna - ca.vol_min)::numeric / nullif(ca.vol_max - ca.vol_min, 0) * 100
+            ))
+            + 0.15 * greatest(0, least(100,
+                (cb.n_eventos_comuna - ca.ev_min)::numeric / nullif(ca.ev_max - ca.ev_min, 0) * 100
             ))
             + 0.10 * coalesce(greatest(0, least(100,
                 (cb.poblacion_comuna - ca.pob_min)::numeric / nullif(ca.pob_max - ca.pob_min, 0) * 100
