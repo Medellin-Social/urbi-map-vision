@@ -22,12 +22,17 @@
 -- un realtor es directamente el tamaño de las comisiones (precio) y qué tan
 -- activo/grande es el mercado ahí (volumen, población).
 --
--- Score = 55% precio_m2 + 20% volumen de datos (n_venta+n_arriendo) + 15%
+-- Score = 60% precio_m2 + 22% volumen de datos (n_venta+n_arriendo) + 8%
 -- eventos de comunidad (vida/actividad de la zona — más eventos = zona más
--- deseable, atrae más interés de compra, mismo tipo de señal que ya usa
--- Zillow con "walkability") + 10% población (tamaño de mercado/audiencia —
--- raw.poblacion_comuna para Medellín, raw.poblacion_municipio para los 5
--- municipios satélite, ver migración 0081). Todo se normaliza min-max, pero
+-- deseable, mismo tipo de señal que Zillow usa con "walkability", pero con
+-- peso bajo a propósito: el conteo de eventos depende de qué tan bien
+-- cubren nuestros scrapers cada zona, no solo de actividad real — no debe
+-- poder tapar una ventaja clara en las otras 3 variables. Ej. real: Laureles
+-- Estadio ganaba precio+volumen+población 3 de 4 contra La Candelaria, pero
+-- con eventos al 15% terminaba perdiendo el nivel — con 8% ya no) + 10%
+-- población (tamaño de mercado/audiencia — raw.poblacion_comuna para
+-- Medellín, raw.poblacion_municipio para los 5 municipios satélite, ver
+-- migración 0081). Todo se normaliza min-max, pero
 -- el min/max se calcula SOLO sobre zonas con n_datos >= 10 (piso mínimo) para
 -- que un barrio con 1-2 listings no distorsione la escala. Zonas por debajo
 -- del piso igual reciben nivel, solo no participan en fijar los extremos.
@@ -108,9 +113,9 @@ barrio_nivel as (
     select
         barrio_id,
         round(
-            0.55 * precio_score
-            + 0.20 * volumen_score
-            + 0.15 * coalesce(eventos_score, 0)
+            0.60 * precio_score
+            + 0.22 * volumen_score
+            + 0.08 * coalesce(eventos_score, 0)
             + 0.10 * coalesce(poblacion_score, volumen_score)
         ) as score_nivel
     from barrio_scored
@@ -186,13 +191,13 @@ comuna_nivel as (
     select
         cb.cd_comuna,
         round(
-            0.55 * greatest(0, least(100,
+            0.60 * greatest(0, least(100,
                 (cb.precio_m2_comuna - ca.precio_min) / nullif(ca.precio_max - ca.precio_min, 0) * 100
             ))
-            + 0.20 * greatest(0, least(100,
+            + 0.22 * greatest(0, least(100,
                 (cb.n_datos_comuna - ca.vol_min)::numeric / nullif(ca.vol_max - ca.vol_min, 0) * 100
             ))
-            + 0.15 * greatest(0, least(100,
+            + 0.08 * greatest(0, least(100,
                 (cb.n_eventos_comuna - ca.ev_min)::numeric / nullif(ca.ev_max - ca.ev_min, 0) * 100
             ))
             + 0.10 * coalesce(greatest(0, least(100,
