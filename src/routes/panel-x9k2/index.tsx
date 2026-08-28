@@ -4,7 +4,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban,
   Building2, CreditCard, MapPinned, Plus, Trash2, ClipboardList, Star, Lock, KeyRound,
-  UserSearch, ShieldAlert, Activity,
+  UserSearch, ShieldAlert, Activity, Store, Search, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
@@ -35,7 +35,7 @@ const K = {
   amber: "#D97706", fucsia: "#FF2D95", serif: "'Fraunces', Georgia, serif" as const,
 };
 
-type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "eventos" | "seguridad";
+type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "eventos" | "negocios" | "seguridad";
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: "overview",  label: "Resumen",   Icon: LayoutDashboard },
   { id: "usuarios",  label: "Usuarios",  Icon: Users },
@@ -43,6 +43,7 @@ const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: "listings",  label: "Listings",  Icon: ClipboardList },
   { id: "realtors",  label: "Realtors",  Icon: ShieldCheck },
   { id: "eventos",   label: "Eventos",   Icon: Star },
+  { id: "negocios",  label: "Negocios",  Icon: Store },
   { id: "seguridad", label: "Seguridad", Icon: ShieldAlert },
 ];
 
@@ -90,6 +91,7 @@ function AdminPanel() {
         {tab === "listings"  && <ListingsTab />}
         {tab === "realtors"  && <RealtorsTab />}
         {tab === "eventos"   && <EventosTab />}
+        {tab === "negocios"  && <NegociosTab />}
         {tab === "seguridad" && <SeguridadTab />}
       </main>
     </div>
@@ -679,8 +681,96 @@ function ZonasManager({ agentId }: { agentId: string }) {
   );
 }
 
+// ── Destacado con alcance (barrio propio / comuna propia / toda la ciudad) ────
+// Compartido por Eventos y Negocios — el backend resuelve la zona (barrio_id o
+// cd_comuna) desde la ubicación real del item; el admin solo elige el nivel.
+type NivelDestacado = "off" | "barrio" | "comuna" | "ciudad";
+const nivelActual = (destacado: boolean, nivel: string | null): NivelDestacado =>
+  !destacado ? "off" : ((nivel as NivelDestacado) || "ciudad");
+
+type DestacadoBody = { destacado: boolean; destacado_nivel?: NivelDestacado; destacado_zona_codigo?: string };
+type DestacadosCatalogo = { comunas: { codigo: string; nombre: string }[]; barrios: { id: number; nombre: string; municipio: string }[] };
+
+function useDestacadosCatalogo() {
+  return useQuery<DestacadosCatalogo>({
+    queryKey: ["admin", "destacados-catalogo"],
+    queryFn: () => apiFetch<DestacadosCatalogo>(API_ENDPOINTS.adminDestacadosCatalogo),
+    staleTime: 10 * 60 * 1000,
+  });
+}
+
+// Nivel + LA zona concreta (qué comuna, qué barrio) — el admin elige ambos.
+// Cambiar a Barrio/Comuna no guarda hasta que se elige una zona del combo.
+function DestacadoScope({ destacado, nivel, zonaCodigo, onSave, disabled }: {
+  destacado: boolean; nivel: string | null; zonaCodigo: string | null;
+  onSave: (body: DestacadoBody) => void; disabled?: boolean;
+}) {
+  const serverNivel = nivelActual(destacado, nivel);
+  const [localNivel, setLocalNivel] = useState<NivelDestacado>(serverNivel);
+  const [localZona, setLocalZona] = useState(zonaCodigo ?? "");
+  useEffect(() => { setLocalNivel(serverNivel); setLocalZona(zonaCodigo ?? ""); }, [serverNivel, zonaCodigo]);
+  const catalogo = useDestacadosCatalogo();
+
+  const handleNivel = (v: NivelDestacado) => {
+    setLocalNivel(v);
+    if (v === "off") onSave({ destacado: false });
+    else if (v === "ciudad") onSave({ destacado: true, destacado_nivel: "ciudad" });
+    // barrio/comuna: espera a que elijan la zona en el segundo combo antes de guardar
+  };
+  const handleZona = (codigo: string) => {
+    setLocalZona(codigo);
+    if (codigo) onSave({ destacado: true, destacado_nivel: localNivel, destacado_zona_codigo: codigo });
+  };
+
+  const activo = localNivel !== "off";
+  const barriosPorMunicipio = catalogo.data?.barrios.reduce<Record<string, typeof catalogo.data.barrios>>((acc, b) => {
+    (acc[b.municipio] ??= []).push(b);
+    return acc;
+  }, {});
+
+  return (
+    <div className="flex items-center justify-end gap-1.5">
+      <select
+        value={localNivel}
+        onChange={(e) => handleNivel(e.target.value as NivelDestacado)}
+        disabled={disabled}
+        title="Alcance del destacado"
+        className="rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50"
+        style={activo ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, background: K.surface, color: K.muted }}
+      >
+        <option value="off">Apagado</option>
+        <option value="barrio">★ Barrio</option>
+        <option value="comuna">★ Comuna</option>
+        <option value="ciudad">★ Ciudad</option>
+      </select>
+      {localNivel === "comuna" && (
+        <select value={localZona} onChange={(e) => handleZona(e.target.value)} disabled={disabled || catalogo.isLoading}
+          className="rounded-md border px-2 py-1 text-[11px]" style={{ borderColor: K.line, color: K.ink, background: "#FFF" }}>
+          <option value="">{catalogo.isLoading ? "Cargando…" : "Elegir comuna…"}</option>
+          {catalogo.data?.comunas.map((c) => <option key={c.codigo} value={c.codigo}>{c.nombre}</option>)}
+        </select>
+      )}
+      {localNivel === "barrio" && (
+        <select value={localZona} onChange={(e) => handleZona(e.target.value)} disabled={disabled || catalogo.isLoading}
+          className="rounded-md border px-2 py-1 text-[11px]" style={{ borderColor: K.line, color: K.ink, background: "#FFF" }}>
+          <option value="">{catalogo.isLoading ? "Cargando…" : "Elegir barrio…"}</option>
+          {Object.entries(barriosPorMunicipio ?? {}).map(([municipio, barrios]) => (
+            <optgroup key={municipio} label={municipio}>
+              {barrios.map((b) => <option key={b.id} value={String(b.id)}>{b.nombre}</option>)}
+            </optgroup>
+          ))}
+        </select>
+      )}
+    </div>
+  );
+}
+
 // ── Eventos destacados (los que pagan por aparecer arriba) ────────────────────
-type EventoRow = { id: number; titulo: string; categoria: string | null; fecha_inicio: string; destacado: boolean; gratuito: boolean; barrio: string | null };
+type EventoRow = {
+  id: number; titulo: string; categoria: string | null; fecha_inicio: string;
+  destacado: boolean; destacado_nivel: string | null; destacado_zona_codigo: string | null; barrio_id: number | null;
+  gratuito: boolean; barrio: string | null;
+};
 
 function EventosTab() {
   const qc = useQueryClient();
@@ -689,10 +779,10 @@ function EventosTab() {
     queryFn: () => apiFetch<{ eventos: EventoRow[] }>(API_ENDPOINTS.adminEventos),
   });
   const editar = useMutation({
-    mutationFn: ({ id, destacado }: { id: number; destacado: boolean }) =>
-      apiFetch<void>(API_ENDPOINTS.adminEventoEditar(id), { method: "PATCH", body: JSON.stringify({ destacado }) }),
+    mutationFn: ({ id, body }: { id: number; body: DestacadoBody }) =>
+      apiFetch<void>(API_ENDPOINTS.adminEventoEditar(id), { method: "PATCH", body: JSON.stringify(body) }),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "eventos"] }); toast.success("Evento actualizado"); },
-    onError: () => toast.error("No se pudo actualizar"),
+    onError: (e) => toast.error((e as Error).message || "No se pudo actualizar"),
   });
   if (isLoading) return <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>;
   if (error || !data) return <AccessError error={error} />;
@@ -700,7 +790,7 @@ function EventosTab() {
   return (
     <div className="space-y-3">
       <p className="text-sm" style={{ color: K.muted }}>
-        {data.eventos.length} eventos próximos · {destacados} destacado{destacados !== 1 ? "s" : ""} (aparecen arriba en /eventos)
+        {data.eventos.length} eventos próximos · {destacados} destacado{destacados !== 1 ? "s" : ""} · alcance: barrio propio, su comuna, o toda la ciudad
       </p>
       <div className="overflow-x-auto rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
         <table className="w-full min-w-[640px] text-sm">
@@ -724,21 +814,120 @@ function EventosTab() {
                   {new Date(e.fecha_inicio).toLocaleDateString("es-CO", { day: "2-digit", month: "short" })}
                 </td>
                 <td className="px-4 py-3 text-center">
-                  <button
-                    onClick={() => editar.mutate({ id: e.id, destacado: !e.destacado })}
-                    className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                    style={e.destacado ? { background: "#E1F5EE", color: K.tealDeep } : { background: K.surface, color: K.muted }}
-                    title="Click para alternar"
-                  >
-                    <Star className="h-3 w-3" fill={e.destacado ? K.tealDeep : "none"} />
-                    {e.destacado ? "Destacado" : "Marcar"}
-                  </button>
+                  <DestacadoScope
+                    destacado={e.destacado} nivel={e.destacado_nivel} zonaCodigo={e.destacado_zona_codigo}
+                    disabled={editar.isPending}
+                    onSave={(body) => editar.mutate({ id: e.id, body })}
+                  />
                 </td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
+
+// ── Negocios locales (tiendas) — mismo destacado con alcance ───────────────────
+type TiendaRow = {
+  id: number; nombre: string; categoria: string | null;
+  destacado: boolean; destacado_nivel: string | null; destacado_zona_codigo: string | null;
+  barrio_id: number | null; barrio: string | null; municipio: string | null;
+};
+type TiendasAdminResp = { total: number; page: number; pages: number; tiendas: TiendaRow[] };
+
+function NegociosTab() {
+  const qc = useQueryClient();
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+
+  const { data, isLoading, error } = useQuery<TiendasAdminResp>({
+    queryKey: ["admin", "tiendas", page, search],
+    queryFn: () => apiFetch<TiendasAdminResp>(
+      `${API_ENDPOINTS.adminTiendas}?page=${page}&limit=20${search ? `&search=${encodeURIComponent(search)}` : ""}`
+    ),
+  });
+  const editar = useMutation({
+    mutationFn: ({ id, body }: { id: number; body: DestacadoBody }) =>
+      apiFetch<void>(API_ENDPOINTS.adminTiendaEditar(id), { method: "PATCH", body: JSON.stringify(body) }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["admin", "tiendas"] }); toast.success("Negocio actualizado"); },
+    onError: (e) => toast.error((e as Error).message || "No se pudo actualizar"),
+  });
+
+  const buscar = (e: React.FormEvent) => { e.preventDefault(); setPage(1); setSearch(searchInput.trim()); };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-sm" style={{ color: K.muted }}>
+          {data ? `${data.total.toLocaleString("es-CO")} negocios` : "Cargando…"} · alcance: barrio propio, su comuna, o toda la ciudad
+        </p>
+        <form onSubmit={buscar} className="flex items-center gap-1.5">
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: K.muted }} />
+            <input
+              value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              placeholder="Buscar por nombre…"
+              className="rounded-md border py-1.5 pl-7 pr-2 text-xs" style={{ borderColor: K.line, color: K.ink }}
+            />
+          </div>
+          <button type="submit" className="rounded-md px-3 py-1.5 text-xs font-semibold text-white" style={{ background: K.tealDeep }}>Buscar</button>
+        </form>
+      </div>
+
+      {isLoading && <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>}
+      {error && <AccessError error={error} />}
+      {data && data.tiendas.length === 0 && <p className="text-sm" style={{ color: K.muted }}>Sin resultados.</p>}
+
+      {data && data.tiendas.length > 0 && (
+        <div className="overflow-x-auto rounded-xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+          <table className="w-full min-w-[640px] text-sm">
+            <thead>
+              <tr className="border-b text-left text-xs" style={{ borderColor: K.line, color: K.muted }}>
+                <th className="px-4 py-3 font-medium">Negocio</th>
+                <th className="px-4 py-3 font-medium">Categoría</th>
+                <th className="px-4 py-3 text-center font-medium">Destacado</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.tiendas.map((t) => (
+                <tr key={t.id} className="border-b last:border-0" style={{ borderColor: K.line }}>
+                  <td className="px-4 py-3">
+                    <div className="font-medium" style={{ color: K.ink }}>{t.nombre}</div>
+                    <div className="text-xs" style={{ color: K.muted }}>{[t.barrio, t.municipio].filter(Boolean).join(", ") || "—"}</div>
+                  </td>
+                  <td className="px-4 py-3 capitalize" style={{ color: K.muted }}>{t.categoria ?? "—"}</td>
+                  <td className="px-4 py-3 text-center">
+                    <DestacadoScope
+                      destacado={t.destacado} nivel={t.destacado_nivel} zonaCodigo={t.destacado_zona_codigo}
+                      disabled={editar.isPending || !t.barrio_id}
+                      onSave={(body) => editar.mutate({ id: t.id, body })}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {data && data.pages > 1 && (
+        <div className="flex items-center justify-between text-xs" style={{ color: K.muted }}>
+          <span>Página {data.page} de {data.pages}</span>
+          <div className="flex gap-1.5">
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-40" style={{ borderColor: K.line }}>
+              <ChevronLeft className="h-3.5 w-3.5" /> Anterior
+            </button>
+            <button onClick={() => setPage((p) => Math.min(data.pages, p + 1))} disabled={page >= data.pages}
+              className="inline-flex items-center gap-1 rounded-md border px-2 py-1 disabled:opacity-40" style={{ borderColor: K.line }}>
+              Siguiente <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,6 +1,10 @@
-"""Simple email sender via SMTP.
+"""Simple email sender — Gmail API (OAuth2) if configured, else plain SMTP.
 
-Env vars required:
+send_email() tries api.utils.gmail_api first (see that module for its env
+vars: GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET / GOOGLE_REFRESH_TOKEN /
+GMAIL_SENDER). Falls back to SMTP below when Gmail API isn't configured.
+
+SMTP env vars:
   SMTP_HOST   — default: smtp.gmail.com
   SMTP_PORT   — default: 587
   SMTP_USER   — Gmail address used to send
@@ -45,6 +49,12 @@ def _send_sync(to: str, subject: str, html: str) -> None:
 
 
 async def send_email(to: str, subject: str, html: str) -> None:
+    from api.utils.gmail_api import is_configured, send_via_gmail_api
+
+    if is_configured():
+        await send_via_gmail_api(to, subject, html)
+        return
+
     loop = asyncio.get_event_loop()
     await loop.run_in_executor(None, _send_sync, to, subject, html)
 

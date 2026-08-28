@@ -377,10 +377,10 @@ function SimuladorPage() {
       <MapNavbar activeTab="simulator" onTabChange={() => {}} />
       <main className="relative z-10 mx-auto max-w-7xl px-4 pb-20 pt-24 sm:px-6">
         <button
-          onClick={() => navigate({ to: "/map" })}
+          onClick={() => navigate({ to: "/realtor/dashboard" })}
           className="mb-4 inline-flex items-center gap-1 text-[11px] uppercase tracking-widest text-muted-foreground transition hover:text-primary"
         >
-          <ArrowLeft className="h-3 w-3" /> Volver al mapa
+          <ArrowLeft className="h-3 w-3" /> Volver al dashboard
         </button>
 
         {/* Listing banner — Flujo B */}

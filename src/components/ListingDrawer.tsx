@@ -395,6 +395,7 @@ type BarrioFetch = {
     transit_score?: number | null;
   } | null;
   liquidez?: { score?: number | null } | null;
+  trafico?: { nivel?: string | null; jam_prom?: number | null } | null;
 };
 
 /** Score bar en escala 1-10 estilo Zillow. Recibe score interno 0-100. Público. */
@@ -423,11 +424,12 @@ function GettingAround({ barrioId }: { barrioId: number }) {
     staleTime: 300_000,
   });
   const c = data?.conectividad;
-  if (!c) return null;
-  const walk = c.walk_score;
-  const transit = c.transit_score;
-  const nColegios = c.n_colegios_1km;
-  const distColegio = c.dist_colegio_km;
+  const trafico = data?.trafico;
+  if (!c && trafico?.nivel == null) return null;
+  const walk = c?.walk_score;
+  const transit = c?.transit_score;
+  const nColegios = c?.n_colegios_1km;
+  const distColegio = c?.dist_colegio_km;
   const walkSub = (s: number) => s >= 70 ? "Muy caminable" : s >= 40 ? "Algo caminable" : "Requiere carro";
   const transitSub = (s: number) => s >= 70 ? "Metro a pasos" : s >= 40 ? "Metro cercano" : "Metro lejos";
 
@@ -437,10 +439,15 @@ function GettingAround({ barrioId }: { barrioId: number }) {
     ? `${nColegios} a 1 km${distColegio != null ? ` · ${distColegio.toFixed(1)} km` : ""}`
     : "";
 
+  // jamFactor HERE (0=libre, 10=parado) invertido a score 0-100 (100=fluido), estilo walk/transit.
+  const traficoScore = trafico?.jam_prom != null ? Math.max(0, Math.min(100, (10 - trafico.jam_prom) * 10)) : null;
+  const traficoSub = trafico?.nivel === "bajo" ? "Vías fluidas" : trafico?.nivel === "alto" ? "Tráfico pesado" : "Tráfico moderado";
+
   const tiles: { label: string; score: number; sub: string }[] = [];
   if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
   if (transit != null) tiles.push({ label: "Transporte público", score: transit, sub: transitSub(transit) });
   if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  if (traficoScore != null) tiles.push({ label: "Tráfico", score: traficoScore, sub: traficoSub });
   if (tiles.length === 0) return null;
 
   return (
@@ -1030,6 +1037,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   if (listing?.parqueaderos != null && listing.parqueaderos > 0) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `${listing.parqueaderos} parqueadero${listing.parqueaderos === 1 ? "" : "s"}` });
   if (listing?.estrato_real != null) facts.push({ icon: <Shield className="h-4 w-4" />, text: `Estrato ${listing.estrato_real}` });
   if (listing?.piso != null) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `Piso ${listing.piso}` });
+  // Uso de suelo POT — solo Medellín, dato del punto exacto (raw.pot_usos_medellin).
+  if (listing?.uso_suelo_pot) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.uso_suelo_pot });
   if (listing?.estado_inmueble) facts.push({ icon: <Check className="h-4 w-4" />, text: listing.estado_inmueble.toLowerCase() });
   const factsTable = facts.length > 0 ? (
     <div className="grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>

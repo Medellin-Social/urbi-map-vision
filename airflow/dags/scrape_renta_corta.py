@@ -1,14 +1,18 @@
 """
-DAG: scrape_renta_corta — Airbnb + VRBO (renta corta) cada 3 días.
+DAG: scrape_renta_corta — Airbnb + VRBO + NomadBarrio + Flatio + Booking
+(renta corta/media) cada 3 días.
 
 Schedule: cada 3 días a las 4:00 AM COT (09:00 UTC), 1h después de
 scrape_listings para no competir por CPU/memoria con esos scrapers.
 
-Tasks (paralelas, escriben a tablas distintas):
-    airbnb — scraping/renta_media/airbnb_mensual_scraper.py → raw.listings_renta_media
-             --detail-limit 150: visita páginas de detalle para campos ricos
-             (coords faltantes primero)
-    vrbo   — scraping/vrbo/vrbo_scraper.py → raw.listings_premium
+Tasks (paralelas, todas → raw.listings_renta_media salvo vrbo):
+    airbnb       — scraping/renta_media/airbnb_mensual_scraper.py
+                   --detail-limit 150: visita páginas de detalle para campos ricos
+                   (coords faltantes primero)
+    vrbo         — scraping/vrbo/vrbo_scraper.py → raw.listings_premium
+    nomadbarrio  — scraping/renta_media/nomadbarrio_scraper.py
+    flatio       — scraping/renta_media/flatio_scraper.py
+    booking      — scraping/renta_media/booking_scraper.py
 """
 
 import subprocess
@@ -50,14 +54,26 @@ def scrape_vrbo() -> None:
     _run([sys.executable, "scraping/vrbo/vrbo_scraper.py"])
 
 
+def scrape_nomadbarrio() -> None:
+    _run([sys.executable, "scraping/renta_media/nomadbarrio_scraper.py"])
+
+
+def scrape_flatio() -> None:
+    _run([sys.executable, "scraping/renta_media/flatio_scraper.py"])
+
+
+def scrape_booking() -> None:
+    _run([sys.executable, "scraping/renta_media/booking_scraper.py", "--max-pages", "3"])
+
+
 with DAG(
     dag_id="scrape_renta_corta",
     default_args=default_args,
-    description="Airbnb + VRBO renta corta cada 3 días",
+    description="Airbnb + VRBO + NomadBarrio + Flatio + Booking renta corta/media cada 3 días",
     schedule_interval="0 9 */3 * *",  # 4:00 AM COT = 09:00 UTC, cada 3 días
     start_date=datetime(2026, 7, 1),
     catchup=False,
-    tags=["renta_corta", "airbnb", "vrbo", "scraping"],
+    tags=["renta_corta", "airbnb", "vrbo", "nomadbarrio", "flatio", "booking", "scraping"],
     max_active_runs=1,
 ) as dag:
 
@@ -71,4 +87,22 @@ with DAG(
         task_id="scrape_vrbo",
         python_callable=scrape_vrbo,
         execution_timeout=timedelta(hours=2),
+    )
+
+    t_nomadbarrio = PythonOperator(
+        task_id="scrape_nomadbarrio",
+        python_callable=scrape_nomadbarrio,
+        execution_timeout=timedelta(hours=1),
+    )
+
+    t_flatio = PythonOperator(
+        task_id="scrape_flatio",
+        python_callable=scrape_flatio,
+        execution_timeout=timedelta(hours=1),
+    )
+
+    t_booking = PythonOperator(
+        task_id="scrape_booking",
+        python_callable=scrape_booking,
+        execution_timeout=timedelta(hours=1),
     )

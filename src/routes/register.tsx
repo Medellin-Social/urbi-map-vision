@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useRegister } from "@/hooks/useAuth";
 import { AuthShell, Field, ErrorBanner, AuthButton, inputStyle } from "./login";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export const Route = createFileRoute("/register")({
   component: RegisterPage,
@@ -93,6 +94,16 @@ function RegisterPage() {
         <AuthButton disabled={register.isPending}>
           {register.isPending ? "Creando cuenta…" : "Crear cuenta →"}
         </AuthButton>
+        <GoogleSignInButton
+          onSuccess={() => {
+            localStorage.removeItem("registro_origen");
+            localStorage.removeItem("onboarding_complete");
+            localStorage.setItem("onboarding_origen", origen);
+            window.dispatchEvent(new CustomEvent("show-onboarding", { detail: { origen } }));
+            navigate({ to: origen === "mls" ? "/map" : "/" });
+          }}
+          onError={setError}
+        />
         <p style={{ textAlign: "center", fontSize: 13, fontFamily: "'Manrope', system-ui, sans-serif", color: "#62736d", margin: 0 }}>
           ¿Ya tienes cuenta?{" "}
           <Link to="/login" style={{ color: "#1D9E75", fontWeight: 700, textDecoration: "none" }}>

@@ -1,0 +1,396 @@
+﻿MEDELLÍN SOCIAL – CERTIFIED REALTOR PROGRAM
+Program Outline & Development Directives
+Date: August 25, 2026
+1. PROJECT OBJECTIVE
+Develop the Medellín Social Certified Realtor Program as an integrated real estate marketing, technology, training, and referral ecosystem.
+The program should provide participating realtors with:
+* Visibility throughout Medellín Social.
+* Individual realtor marketing pages.
+* Property-search exposure.
+* A template realtor website.
+* AI-powered lead response and appointment scheduling.
+* WhatsApp integration.
+* Social media integrations.
+* Marketing automation.
+* Mobile/social Linktree-style pages.
+* Training and certification.
+* Access to the EASE member community.
+* Participation in a Medellín referral network.
+* Opportunities to generate additional referral income where legally permitted.
+The development work must be separated into:
+1. Medellín Social Public Website
+2. EASE Membership Community & Mobile App
+3. Realtor Technology Package & Workflow
+4. Training and Certification
+5. Referral Network
+6. Pricing, Offer, Testing, and Launch
+________________
+
+
+PART I — MEDELLÍN SOCIAL PUBLIC WEBSITE
+2. INDIVIDUAL REALTOR LISTING/PAGE
+Directive
+Complete the mapping and development framework for a standardized individual realtor page.
+Every participating/certified realtor should have an individual featured page within Medellín Social.
+The page should be designed as a reusable template so new certified realtors can be added efficiently.
+Page should accommodate:
+* Realtor name.
+* Professional photograph.
+* Brokerage/company.
+* Contact information.
+* Biography.
+* Areas served.
+* Specialties.
+* Languages.
+* Social media profiles.
+* WhatsApp contact.
+* Call/contact CTA.
+* Appointment scheduling.
+* Realtor's property listings.
+* Relevant certifications.
+* Medellín Social certification/status.
+* Links to the realtor's individual website.
+* Mobile/social profile page.
+* Lead capture.
+Referral Opportunity Feature
+Investigate and design an optional section allowing the realtor to indicate that they accept referrals for:
+* Buyers.
+* Sellers.
+* Investors.
+* Renters or other applicable prospects.
+The system should potentially allow the realtor to advertise a referral opportunity or referral compensation.
+IMPORTANT: This functionality should not be activated publicly until the legality and regulatory requirements surrounding referral compensation in Colombia have been researched and confirmed.
+________________
+
+
+3. PROPERTY SEARCH PAGE
+Directive
+Complete the mapping of the primary Medellín Social property-search experience.
+The page should allow visitors to search available properties using appropriate criteria.
+The system should be designed so property results can connect visitors with the appropriate:
+* Property.
+* Realtor.
+* Comuna.
+* Barrio.
+Property pages and search results should create multiple paths for lead generation and realtor discovery.
+________________
+
+
+4. COMUNA PROPERTY SEARCH PAGES
+Directive
+Develop a reusable page structure for individual Medellín comunas.
+Each Comuna page should function both as:
+1. A geographic/community information page.
+2. A property-search landing page.
+The structure should accommodate:
+* Comuna overview.
+* Available properties.
+* Relevant barrios.
+* Realtors serving the area.
+* Internal links to Barrio pages.
+* Internal links to property pages.
+* Lead-generation opportunities.
+The template should be reusable rather than requiring each Comuna page to be independently engineered.
+________________
+
+
+5. BARRIO PROPERTY SEARCH PAGES
+Directive
+Develop a reusable Barrio page structure.
+Each Barrio page should combine neighborhood information with relevant real estate inventory and realtor discovery.
+The structure should accommodate:
+* Barrio overview.
+* Properties available within the Barrio.
+* Realtors serving or specializing in the Barrio.
+* Links to the associated Comuna.
+* Property search/filtering.
+* Lead capture.
+* Appropriate calls to action.
+Barrio pages should become important landing pages for both visitors and search-engine discovery.
+________________
+
+
+6. REALTOR MOBILE / SOCIAL PROFILE PAGE
+Directive
+Create a standardized mobile-first individual realtor page similar in function to a Linktree-style page.
+This page is intended primarily for use from:
+* Instagram.
+* Facebook.
+* TikTok.
+* LinkedIn.
+* WhatsApp.
+* QR codes.
+* Realtor marketing materials.
+It should provide quick access to the realtor's primary actions and resources, including their Medellín Social profile, listings, WhatsApp, appointment scheduling, social profiles, website, and other relevant calls to action.
+________________
+
+
+PART II — REALTOR TECHNOLOGY PACKAGE
+7. REALTOR TEMPLATE WEBSITE
+Directive
+Develop one standardized realtor website template that can be duplicated and provisioned for each qualifying realtor.
+Access to this website will be included as part of the realtor's certification/program package.
+The objective is NOT to custom-build an entirely different website for every realtor.
+Create a scalable template that can be quickly personalized using each realtor's:
+* Name.
+* Branding.
+* Photograph.
+* Contact information.
+* Biography.
+* Social profiles.
+* WhatsApp.
+* Listings.
+* Service areas.
+* Lead forms.
+* Appointment calendar.
+Determine what information can be automatically populated during onboarding.
+________________
+
+
+8. AI REALTOR AGENT
+Directive
+Each participating realtor should receive access to an AI agent capable of assisting with incoming opportunities.
+The system should be configured to support:
+* Answering incoming calls.
+* Basic prospect qualification.
+* Answering common questions.
+* Capturing prospect information.
+* Scheduling appointments.
+* Routing appropriate conversations to the realtor.
+* Triggering appropriate follow-up.
+Develop a standardized realtor AI-agent configuration that can be duplicated and customized during onboarding.
+________________
+
+
+9. WHATSAPP INTEGRATION
+Directive
+Develop the standard process for integrating the realtor's WhatsApp into their marketing and lead-response system.
+The integration should support appropriate:
+* Lead response.
+* Conversations.
+* Follow-up.
+* Appointment scheduling.
+* Marketing responsiveness.
+* Automations.
+The engineering team should determine the appropriate technical architecture and document any limitations imposed by WhatsApp/Meta.
+________________
+
+
+10. SOCIAL MEDIA INTEGRATION
+Directive
+Develop the process for connecting the realtor's applicable social media accounts.
+The system should support, where technically available:
+* Direct-message management.
+* Lead capture from social conversations.
+* Automated responses.
+* Content posting.
+* Content scheduling.
+* Marketing follow-up.
+The objective is to give the realtor a centralized marketing and response system rather than requiring them to independently manage disconnected platforms.
+________________
+
+
+11. REALTOR AUTOMATIONS
+Directive
+Create a standardized automation package for participating realtors.
+Automations should cover the major stages of the realtor customer journey, including:
+Lead → Response → Qualification → Appointment → Follow-Up → Opportunity → Client → Referral.
+Automations should be reusable and provisioned as part of realtor onboarding.
+________________
+
+
+PART III — EASE MEMBERSHIP COMMUNITY & MOBILE APP
+IMPORTANT DEVELOPMENT SEPARATION
+Everything in this section belongs to the EASE Members Community/Mobile App and should NOT be treated as functionality belonging to the public Medellín Social website.
+________________
+
+
+12. MEDELLÍN REALTOR COMMUNITY
+Directive
+Create a dedicated community specifically for Medellín Social participating/certified realtors within the EASE Members Community.
+This becomes the private operational environment for participating realtors.
+The community should support:
+* Realtor communication.
+* Program announcements.
+* Training.
+* Resources.
+* Referral opportunities.
+* Networking.
+* Questions/support.
+* Program updates.
+________________
+
+
+13. MEDELLÍN REFERRAL COMMUNITY
+Directive
+Within the EASE member environment, establish a dedicated area for Medellín referrals.
+This should allow participating members to communicate and coordinate referral opportunities involving buyers, sellers, property owners, investors, and approved professional or home-service providers.
+Develop the structure for referrals to be:
+* Submitted.
+* Assigned or accepted.
+* Tracked.
+* Updated.
+* Completed.
+* Documented.
+Where appropriate, referral compensation should also be tracked.
+________________
+
+
+14. PROFESSIONAL & HOME SERVICES REFERRAL NETWORK
+Directive
+Develop a referral network connecting participating realtors with vetted businesses that can serve their clients.
+Potential categories include:
+* Roofing.
+* Plumbing.
+* Remodeling.
+* Electrical.
+* Home repair.
+* Maintenance.
+* Moving.
+* Property-related services.
+* Other professional and home services.
+Where permitted, participating realtors may be able to receive referral compensation when they introduce clients to participating providers.
+This should become an additional financial benefit of membership in the Medellín Social Realtor Program.
+________________
+
+
+15. PROFESSIONAL-SERVICE REFERRAL RESEARCH
+Before activating referral compensation involving regulated or professional services, conduct a separate legal/compliance review for Colombia.
+Research should specifically address referral compensation involving:
+* Attorneys/legal services.
+* Mortgage/lending.
+* Banking/financial services.
+* Insurance.
+* Real estate transactions.
+* Other regulated professions.
+Determine:
+* Who may legally receive referral compensation.
+* Who may legally pay it.
+* Whether disclosure is required.
+* Whether compensation can be advertised publicly.
+* Whether licensing or registration is required.
+* Whether different rules apply to consumers versus licensed professionals.
+Do not assume U.S. referral rules apply in Colombia.
+________________
+
+
+PART IV — TRAINING & CERTIFICATION
+16. CERTIFIED REALTOR TRAINING PROGRAM
+Directive
+Build an additional training program teaching participating realtors how to use every major component they receive through the program.
+Training should include individual courses/modules covering:
+* Medellín Social realtor profile.
+* Realtor website.
+* Property-search ecosystem.
+* AI agent.
+* Appointment scheduling.
+* WhatsApp.
+* CRM.
+* Marketing automations.
+* Social media integrations.
+* DM management.
+* Social posting and scheduling.
+* Mobile/social profile page.
+* Referral network.
+* EASE community.
+* Lead management and follow-up.
+________________
+
+
+17. MOBILE TRAINING ACCESS
+Directive
+All training courses should also be accessible through the mobile application used by members for training and certification.
+The objective is for the mobile application to become the realtor's ongoing location for:
+Training + Certification + Community + Referrals + Resources
+________________
+
+
+PART V — REALTOR OFFER & PROGRAM WORKFLOW
+18. COMPLETE REALTOR WORKFLOW
+Map and test the complete realtor lifecycle:
+Prospect
+→ Program Presentation
+→ Pricing/Offer
+→ Enrollment
+→ Payment
+→ Onboarding
+→ Information Collection
+→ Realtor Profile Creation
+→ Template Website Provisioning
+→ AI Agent Setup
+→ WhatsApp Integration
+→ Social Account Integration
+→ Automations
+→ Community Access
+→ Training
+→ Certification
+→ Medellín Social Activation
+→ Referral Network Participation
+→ Ongoing Marketing & Support
+________________
+
+
+19. PRICING AND OFFER
+Directive
+Complete the realtor pricing and offer structure.
+Determine:
+* Initial certification cost.
+* Setup costs, if applicable.
+* Monthly membership.
+* Included technology.
+* Included website.
+* AI usage/limits.
+* WhatsApp services.
+* Social media functionality.
+* Training.
+* Community access.
+* Referral-network participation.
+* Optional upgrades.
+The offer needs to clearly communicate that certification provides considerably more than a badge or educational course.
+It provides an integrated marketing, technology, visibility, training, community, and business-development system.
+________________
+
+
+20. TESTING
+Before full rollout, complete an end-to-end test using at least one sample realtor.
+Test the complete experience from:
+Enrollment → Payment → Setup → Website → Realtor Page → AI → WhatsApp → Social → Automations → Community → Training → Certification → Referrals
+Document every failure point, manual intervention, missing automation, and unnecessary step.
+Correct those issues before scaling enrollment.
+________________
+
+
+21. ENGINEERING PRIORITY
+The immediate engineering priority is to finish mapping and standardization before expanding functionality.
+Public Website Work
+1. Individual Realtor Page
+2. Property Search Page
+3. Comuna Property Search/Page
+4. Barrio Property Search/Page
+5. Realtor Mobile/Social Page
+6. Template Realtor Website
+Technology & Automation
+7. AI Agent Template
+8. WhatsApp Integration
+9. Social Integrations
+10. Realtor Automations
+11. Complete Onboarding Workflow
+EASE Community
+12. Medellín Realtor Community
+13. Referral Community
+14. Training/Course Structure
+15. Mobile App Access
+Business/Management
+16. Pricing and Offer
+17. Referral Program Rules
+18. Colombian Legal/Compliance Research
+19. End-to-End Testing
+20. Launch Readiness
+________________
+
+
+22. CORE PROGRAM CONCEPT
+The Medellín Social Certified Realtor Program should ultimately operate as an ecosystem rather than simply a realtor directory.
+A participating realtor should receive:
+Visibility + Website + AI + WhatsApp + Social Media + Automation + Training + Certification + Community + Referral Network + Business Development Opportunities
+Every development decision should support making this package scalable so that a new realtor can be enrolled, provisioned, trained, certified, published, and activated without rebuilding the system from scratch.

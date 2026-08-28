@@ -17,7 +17,8 @@ from pydantic import BaseModel, Field
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.services.zona_sponsor_service import (
-    ZonaOcupadaError, get_or_create_agency, precio_zona, procesar_pago_zona, zona_ocupada_por_otro,
+    ZonaOcupadaError, get_or_create_agency, precio_para_nivel, precio_zona, procesar_pago_zona,
+    zona_ocupada_por_otro,
 )
 
 router = APIRouter()
@@ -42,13 +43,17 @@ async def zonas_disponibles(user: dict = Depends(get_current_user), pool=Depends
     """Catálogo de zonas (Medellín) + cuáles están ocupadas (patrocinador activo)."""
     async with pool.acquire() as conn:
         comunas = await conn.fetch(
-            "SELECT DISTINCT bc.cd_comuna, INITCAP(LOWER(b.comuna)) AS nombre "
+            "SELECT DISTINCT bc.cd_comuna, INITCAP(LOWER(b.comuna)) AS nombre, znp.nivel "
             "FROM analytics.barrios_cd bc JOIN raw.barrios b ON b.id = bc.barrio_id "
+            "LEFT JOIN analytics.zonas_nivel_precio znp "
+            "  ON znp.zona_nivel = 'comuna' AND znp.zona_codigo = bc.cd_comuna::text "
             "WHERE b.municipio ILIKE '%medellin%' AND bc.cd_comuna IS NOT NULL ORDER BY bc.cd_comuna"
         )
         barrios = await conn.fetch(
-            "SELECT b.id, INITCAP(LOWER(b.nombre)) AS nombre, bc.cd_comuna "
+            "SELECT b.id, INITCAP(LOWER(b.nombre)) AS nombre, bc.cd_comuna, znp.nivel "
             "FROM raw.barrios b JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id "
+            "LEFT JOIN analytics.zonas_nivel_precio znp "
+            "  ON znp.zona_nivel = 'barrio' AND znp.zona_codigo = b.id::text "
             "WHERE b.municipio ILIKE '%medellin%' AND bc.cd_comuna IS NOT NULL ORDER BY b.nombre"
         )
         ocup = await conn.fetch(
@@ -56,13 +61,24 @@ async def zonas_disponibles(user: dict = Depends(get_current_user), pool=Depends
             "WHERE estado = 'activa' AND CURRENT_DATE BETWEEN fecha_inicio AND fecha_fin"
         )
     return {
-        "comunas": [{"cd_comuna": r["cd_comuna"], "nombre": r["nombre"]} for r in comunas],
-        "barrios": [{"id": r["id"], "nombre": r["nombre"], "cd_comuna": r["cd_comuna"]} for r in barrios],
+        "comunas": [
+            {"cd_comuna": r["cd_comuna"], "nombre": r["nombre"], "nivel": r["nivel"] or "C",
+             "precio_mensual": precio_para_nivel("comuna", r["nivel"])}
+            for r in comunas
+        ],
+        "barrios": [
+            {"id": r["id"], "nombre": r["nombre"], "cd_comuna": r["cd_comuna"], "nivel": r["nivel"] or "C",
+             "precio_mensual": precio_para_nivel("barrio", r["nivel"])}
+            for r in barrios
+        ],
         "ocupadas": {
             "comuna": [r["zona_codigo"] for r in ocup if r["nivel"] == "comuna"],
             "barrio": [r["zona_codigo"] for r in ocup if r["nivel"] == "barrio"],
         },
-        "precios": {"comuna": precio_zona("comuna"), "barrio": precio_zona("barrio")},
+        "precios_por_nivel": {
+            nivel: {"comuna": precio_para_nivel("comuna", nivel), "barrio": precio_para_nivel("barrio", nivel)}
+            for nivel in ("A", "B", "C", "D")
+        },
     }
 
 
@@ -82,7 +98,7 @@ async def checkout(body: ZonaCheckout, user: dict = Depends(get_current_user), p
         agency_id = await get_or_create_agency(conn, agent_id)
         if await zona_ocupada_por_otro(conn, body.zona_nivel, body.zona_codigo, agency_id):
             raise HTTPException(status_code=409, detail="Esa zona ya tiene patrocinador")
-    precio = precio_zona(body.zona_nivel)
+        precio = await precio_zona(conn, body.zona_nivel, body.zona_codigo)
 
     if _gateway_configurado():
         # TODO(wompi): crear link de pago con metadata {tipo:'zona', agent_id,

@@ -100,8 +100,15 @@ function toSlug(nombre: string): string {
     .replace(/[^a-z0-9-]/g, '')
 }
 
-function barrioSlug(id: number, nombre: string): string {
+// Resuelve el slug de la COMUNA a la que pertenece el barrio clickeado: primero
+// por barrio_id exacto (si es uno de los 16 representantes), si no por cd_comuna
+// (cualquier barrio real, ej. Manila → cd_comuna 14 → 'el-poblado'). Sin esto,
+// un barrio fuera de la lista caía a toSlug(nombre) ('manila'), que BarrioContext
+// no reconoce y silenciosamente resuelve a BARRIOS[0] (el-poblado) sin filtrar
+// ni hacer zoom a la comuna real.
+function barrioSlug(id: number, nombre: string, cdComuna: number | null): string {
   const found = BARRIOS.find((b) => b.barrio_id === id)
+    ?? (cdComuna != null ? BARRIOS.find((b) => b.cd_comuna === cdComuna) : undefined)
   return found?.slug ?? toSlug(nombre)
 }
 
@@ -247,9 +254,9 @@ function HomeContent() {
     flyToBarriosRef.current?.()
   }, [])
 
-  const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number) => {
+  const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number, cdComuna: number | null) => {
     if (mapPhase !== 'barrios') return
-    setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug: barrioSlug(id, nombre), lat, lng })
+    setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug: barrioSlug(id, nombre, cdComuna), lat, lng })
     setMapPhase('barrio_action')
   }, [mapPhase])
 

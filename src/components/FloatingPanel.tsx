@@ -14,7 +14,9 @@ import {
   ArrowLeft,
   ArrowRight,
   Briefcase,
+  Building2,
   Calculator,
+  Car,
   ChevronRight,
   Coffee,
   Dumbbell,
@@ -608,6 +610,12 @@ const SEGURIDAD_COLORS: Record<string, string> = {
   "SIN DATOS": "#6b7280",
 };
 
+const TRAFICO_COLORS: Record<string, string> = {
+  "bajo":  "#10b981",
+  "medio": "#f59e0b",
+  "alto":  "#ef4444",
+};
+
 const VERDE_COLORS: Record<string, string> = {
   "ALTA":    "#10b981",
   "MEDIA":   "#22c55e",
@@ -623,6 +631,23 @@ function verdeColor(ratio: number): string {
   const b = Math.round(175 + (94 - 175) * ratio);
   return `rgb(${r},${g},${b})`;
 }
+
+// Categorías POT (raw.pot_usos_medellin.areagraluso) — mixtura alta = más
+// flexible para desarrollo/inversión, espacio público = más restrictivo.
+const USO_SUELO_COLORS: Record<string, string> = {
+  "Áreas y corredores de alta mixtura":  "#1D9E75",
+  "Áreas y corredores de media mixtura": "#22c55e",
+  "Áreas de baja mixtura":               "#f59e0b",
+  "Uso Dotacional":                      "#6366f1",
+  "Espacio Público Existente":           "#6b7280",
+  "Espacio Público Proyectado":          "#9ca3af",
+};
+
+const MERCADO_REAL_COLORS: Record<string, string> = {
+  "vendedor":    "#ef4444",  // poco inventario, se vende rápido
+  "balanceado":  "#f59e0b",
+  "comprador":   "#10b981",  // mucho inventario, más poder de negociación
+};
 
 const SALUD_COLORS: Record<string, string> = {
   "MUY SALUDABLE": "#10b981",
@@ -861,6 +886,8 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
 
       <SeguridadSection n={n} />
       <VerdeSection n={n} maxVerdePct={maxVerdePct} />
+      <TraficoSection n={n} />
+      <UsoSueloSection n={n} />
       <LiquiditySection n={n} />
 
       <ValorizacionSection n={n} />
@@ -881,6 +908,7 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
       </div>
 
       <CatastroSection n={n} />
+      <MercadoRealSection n={n} />
     </div>
   );
 }
@@ -1355,6 +1383,95 @@ function VerdeSection({ n, maxVerdePct }: { n: Neighborhood; maxVerdePct: number
   );
 }
 
+/* ------------- Tráfico ------------- */
+
+function fmtHora(h: number): string {
+  const ampm = h < 12 || h === 24 ? "am" : "pm";
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}${ampm}`;
+}
+
+function TraficoSection({ n }: { n: Neighborhood }) {
+  const nivel = n.trafico_nivel;
+  const jam = n.trafico_jam;
+  if (nivel == null) return null;
+  const color = TRAFICO_COLORS[nivel] ?? TRAFICO_COLORS["medio"];
+  const barWidth = jam != null ? `${Math.min(100, (jam / 10) * 100).toFixed(0)}%` : "0%";
+  const picos = [n.trafico_pico_am, n.trafico_pico_pm].filter((p): p is [number, number] => p != null);
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        <Car className="h-3 w-3 text-primary" /> Tráfico
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: `${color}66`, background: `${color}10` }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
+            {nivel}
+          </span>
+          {jam != null && (
+            <span className="text-[11px] font-semibold" style={{ color }}>{jam.toFixed(1)}/10</span>
+          )}
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+          <motion.div initial={{ width: 0 }} animate={{ width: barWidth }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full rounded-full" style={{ background: color }} />
+        </div>
+        {picos.length > 0 && (
+          <div className="mt-2 text-[11px] text-muted-foreground">
+            Hora pico: {picos.map((p) => `${fmtHora(p[0])}–${fmtHora(p[1])}`).join(" y ")}
+          </div>
+        )}
+      </motion.div>
+    </div>
+  );
+}
+
+/* ------------- Uso de suelo (POT) ------------- */
+
+function UsoSueloSection({ n }: { n: Neighborhood }) {
+  const categoria = n.uso_suelo_dominante;
+  const score = n.uso_suelo_score;
+  if (categoria == null) return null;
+  const color = USO_SUELO_COLORS[categoria] ?? "#6b7280";
+  const barWidth = score != null ? `${Math.min(100, score).toFixed(0)}%` : "0%";
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+        <Building2 className="h-3 w-3 text-primary" /> Uso de suelo (POT)
+      </div>
+      <motion.div
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.3 }}
+        className="rounded-xl border p-3"
+        style={{ borderColor: `${color}66`, background: `${color}10` }}
+      >
+        <div className="flex items-center justify-between">
+          <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}22`, color }}>
+            {categoria}
+          </span>
+          {score != null && (
+            <span className="text-[11px] font-semibold" style={{ color }}>{score}/100</span>
+          )}
+        </div>
+        <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-background/60">
+          <motion.div initial={{ width: 0 }} animate={{ width: barWidth }} transition={{ duration: 0.8, ease: "easeOut" }} className="h-full rounded-full" style={{ background: color }} />
+        </div>
+        <div className="mt-1.5 text-[10px] text-muted-foreground">
+          Plan de Ordenamiento Territorial de Medellín — solo disponible dentro del municipio
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 /* ------------- Salud financiera ------------- */
 
 function SaludFinancieraSection({ n }: { n: Neighborhood }) {
@@ -1444,6 +1561,68 @@ function CatastroSection({ n }: { n: Neighborhood }) {
       </div>
       <p className="mt-1.5 text-[10px] text-muted-foreground">
         Brecha mercado/catastro vs. mediana ciudad · Medellín 2026
+      </p>
+    </Section>
+  );
+}
+
+/* ------------- Mercado real (compraventas SNR/ORIPS) ------------- */
+
+function MercadoRealSection({ n }: { n: Neighborhood }) {
+  const mr = n.mercado_real;
+  if (!mr || mr.anio_dato == null) return null;
+
+  const color = mr.clasificacion_mercado ? MERCADO_REAL_COLORS[mr.clasificacion_mercado] ?? "#6b7280" : "#6b7280";
+  const clasifLabel = mr.clasificacion_mercado === "vendedor" ? "Mercado de vendedor"
+    : mr.clasificacion_mercado === "comprador" ? "Mercado de comprador"
+    : mr.clasificacion_mercado === "balanceado" ? "Mercado balanceado"
+    : null;
+
+  return (
+    <Section title={`🏛️ Mercado real · ${n.municipio}`}>
+      <div className="rounded-xl border border-border bg-white/60 p-3 space-y-2.5">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-xs">
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Ventas cerradas {mr.anio_dato}</div>
+            <div className="mt-0.5 font-semibold">{mr.n_transacciones_anual?.toLocaleString() ?? "—"}</div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Valor mediana cierre</div>
+            <div className="mt-0.5 font-semibold">
+              {mr.valor_mediana_anual != null ? `$${(mr.valor_mediana_anual / 1_000_000).toFixed(0)}M` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Variación anual</div>
+            <div className="mt-0.5 font-semibold">
+              {mr.var_anual_pct != null ? `${mr.var_anual_pct > 0 ? "+" : ""}${mr.var_anual_pct}%` : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Meses de inventario</div>
+            <div className="mt-0.5 font-semibold">{mr.meses_inventario != null ? `${mr.meses_inventario} meses` : "—"}</div>
+          </div>
+        </div>
+        {clasifLabel && (
+          <div className="border-t border-border pt-2 flex items-center justify-between">
+            <span
+              className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider"
+              style={{ background: `${color}22`, color }}
+            >
+              {clasifLabel}
+            </span>
+            {mr.ratio_cierre_pedido_pct != null && (
+              <span className="text-[10px] text-muted-foreground">
+                Cierra en {mr.ratio_cierre_pedido_pct}% del precio pedido
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+      <p className="mt-1.5 text-[10px] text-muted-foreground">
+        Fuente: registro notarial SNR/ORIPS, nivel municipio (no barrio) — {mr.n_transacciones_anual?.toLocaleString()} transacciones reales de {n.municipio} en {mr.anio_dato}.
+        {mr.ipvn_dane_pct != null && ` Índice DANE nacional del mismo año: ${mr.ipvn_dane_pct > 0 ? "+" : ""}${mr.ipvn_dane_pct}% (referencia, no aplicado como ajuste).`}
+        {" "}Valor absoluto, no controla mezcla de tipo/tamaño de inmueble.
       </p>
     </Section>
   );

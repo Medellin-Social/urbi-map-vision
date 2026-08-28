@@ -18,6 +18,7 @@ import {
   type MiListing,
   type RoiZona,
   type VisitaSolicitud,
+  type ZonaNivel,
 } from "@/lib/realtorApi";
 import { toast } from "sonner";
 import { GHL, ghlRedirect } from "@/config/ghl";
@@ -52,16 +53,15 @@ export const Route = createFileRoute("/realtor/dashboard")({
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 
-type Tab = "inbox" | "agenda" | "horario" | "zonas" | "listings" | "desempeno" | "inteligencia";
+type Tab = "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "inbox",        label: "Inbox" },
   { id: "agenda",       label: "Agenda" },
-  { id: "horario",      label: "Horario" },
-  { id: "zonas",        label: "Zonas" },
   { id: "listings",     label: "Mis listings" },
   { id: "desempeno",    label: "Desempeño" },
   { id: "inteligencia", label: "Inteligencia" },
+  { id: "config",       label: "Configuración" },
 ];
 
 function RealtorDashboardPage() {
@@ -100,11 +100,10 @@ function RealtorDashboardPage() {
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
         {tab === "inbox"        && <InboxTab />}
         {tab === "agenda"       && <AgendaTab />}
-        {tab === "horario"      && <DisponibilidadTab />}
-        {tab === "zonas"        && <ZonasCompraTab />}
         {tab === "listings"     && <ListingsTab />}
         {tab === "desempeno"    && <DesempenoTab />}
         {tab === "inteligencia" && <InteligenciaTab />}
+        {tab === "config"       && <ConfiguracionTab />}
       </main>
     </div>
   );
@@ -1309,21 +1308,24 @@ function InteligenciaTab() {
   const { data: listings } = useMisListings();
 
   const zonas = useMemo(() => {
-    const map = new Map<string, string>();
-    for (const z of perfil?.zonas_patrocinadas ?? []) map.set(z.codigo, z.nombre);
+    const map = new Map<string, { nombre: string; nivel: ZonaNivel }>();
+    // zonas patrocinadas primero: son las que sí tienen datos resolubles
+    // (comuna/barrio con cd_comuna/id real), vs. el barrio-texto libre del listing.
+    for (const z of perfil?.zonas_patrocinadas ?? []) map.set(z.codigo, { nombre: z.nombre, nivel: z.nivel });
     for (const l of listings ?? []) {
       if (l.barrio) {
         const code = l.barrio.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-        if (!map.has(code)) map.set(code, l.barrio);
+        if (!map.has(code)) map.set(code, { nombre: l.barrio, nivel: "barrio" });
       }
     }
-    return Array.from(map.entries()).map(([codigo, nombre]) => ({ codigo, nombre }));
+    return Array.from(map.entries()).map(([codigo, v]) => ({ codigo, nombre: v.nombre, nivel: v.nivel }));
   }, [perfil, listings]);
 
   const [selectedZona, setSelectedZona] = useState<string | null>(null);
   const activeZona = selectedZona ?? zonas[0]?.codigo ?? null;
+  const activeNivel = zonas.find((z) => z.codigo === activeZona)?.nivel ?? "barrio";
 
-  const { data: intel, isLoading, isError } = useInteligenciaBarrio(activeZona);
+  const { data: intel, isLoading, isError } = useInteligenciaBarrio(activeZona, activeNivel);
 
   return (
     <section>
@@ -1358,34 +1360,65 @@ function InteligenciaTab() {
           {isError && <SectionError msg="No se pudo cargar la inteligencia del barrio." />}
 
           {!isLoading && !isError && intel && (
-            <>
-              <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-                <StatTile
-                  label="Score consolidado"
-                  value={`${Math.round(intel.score_consolidado)} / 100`}
-                  sub="potencial de inversión"
-                />
-                <StatTile
-                  label="Liquidez"
-                  value={`${Math.round(intel.liquidez)} / 100`}
-                  sub="facilidad de venta"
-                />
-                <StatTile
-                  label="Mediana m² venta"
-                  value={formatCOP(Math.round(intel.mediana_venta_m2))}
-                  sub="precio por m²"
-                />
-                <StatTile
-                  label="Tiempo estimado de venta"
-                  value={intel.tiempo_estimado_venta ?? "—"}
-                  sub="en el mercado"
-                />
+            <div className="space-y-6">
+              <div className="rounded-lg border-l-4 pl-4" style={{ borderColor: intel.color_hex ?? "#888780" }}>
+                <IntelGroup title="Score de inversión por horizonte">
+                  <StatTile label="Corto plazo" value={intel.scores.corto != null ? `${intel.scores.corto} / 100` : "—"} sub={intel.scores.cat_corto ?? "Airbnb"} />
+                  <StatTile label="Mediano plazo" value={intel.scores.mediano != null ? `${intel.scores.mediano} / 100` : "—"} sub={intel.scores.cat_mediano ?? "renta media"} />
+                  <StatTile label="Largo plazo" value={intel.scores.largo != null ? `${intel.scores.largo} / 100` : "—"} sub={intel.scores.cat_largo ?? "renta larga"} />
+                  <StatTile label="Perfil recomendado" value={intel.scores.perfil_recomendado ?? "—"} sub="mejor uso de la zona" />
+                </IntelGroup>
               </div>
 
-              <p className="mt-3 text-xs text-muted-foreground">
+              <IntelGroup title="Venta">
+                <StatTile label="Liquidez" value={`${intel.liquidez.score ?? "—"} / 100`} sub={intel.liquidez.categoria ?? "facilidad de venta"} />
+                <StatTile label="Mediana m² venta" value={intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"} sub="precio por m²" />
+                <StatTile label="Tiempo estimado de venta" value={intel.liquidez.tiempo_estimado_venta ?? "—"} sub="en el mercado" />
+              </IntelGroup>
+
+              <IntelGroup title="Renta larga">
+                <StatTile label="Canon mediano" value={intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"} sub="COP / mes" />
+                <StatTile label="Yield bruto" value={intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"} sub="anual sobre precio" />
+                <StatTile label="Años de recupero" value={intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"} sub="capital vía arriendo" />
+              </IntelGroup>
+
+              <IntelGroup title="Renta media (nómadas 1-3 meses)">
+                <StatTile label="Precio mediano" value={intel.mercado.precio_renta_media_p50 ? formatCOP(intel.mercado.precio_renta_media_p50) : "—"} sub="COP / mes" />
+                <StatTile label="Yield renta media" value={intel.mercado.yield_renta_media_pct != null ? `${intel.mercado.yield_renta_media_pct.toFixed(1)}%` : "—"} sub="anual" />
+                <StatTile label="Listings activos" value={intel.mercado.n_listings_renta_media ?? "—"} sub="oferta actual" />
+                <StatTile label="Premium vs renta larga" value={intel.mercado.premium_vs_largo_pct != null ? `+${intel.mercado.premium_vs_largo_pct.toFixed(0)}%` : "—"} sub="sobre canon tradicional" />
+              </IntelGroup>
+
+              <IntelGroup title="Renta corta (Airbnb)">
+                <StatTile label="Ocupación" value={intel.airbnb.ocupacion_pct != null ? `${intel.airbnb.ocupacion_pct.toFixed(0)}%` : "—"} sub="promedio zona" />
+                <StatTile label="Tarifa noche" value={intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"} sub="ADR promedio" />
+                <StatTile label="Yield Airbnb" value={intel.airbnb.yield_airbnb_pct != null ? `${intel.airbnb.yield_airbnb_pct.toFixed(1)}%` : "—"} sub="anual" />
+                <StatTile label="Listings activos" value={intel.airbnb.n_listings ?? "—"} sub="oferta actual" />
+              </IntelGroup>
+
+              <IntelGroup title="Seguridad">
+                <StatTile label="Score seguridad" value={intel.seguridad.score != null ? `${intel.seguridad.score} / 100` : "—"} sub={intel.seguridad.categoria ?? "percepción residente"} />
+                <StatTile label="Tendencia" value={intel.seguridad.tendencia ?? "—"} sub="últimos periodos" />
+                {intel.seguridad.nota && <StatTile label="Nota" value="" sub={intel.seguridad.nota} />}
+              </IntelGroup>
+
+              <IntelGroup title="Conectividad">
+                <StatTile label="Al metro" value={intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"} sub="distancia" />
+                <StatTile label="Caminabilidad" value={intel.conectividad.walk_score != null ? `${intel.conectividad.walk_score} / 100` : "—"} sub="walk score" />
+                <StatTile label="Transporte público" value={intel.conectividad.transit_score != null ? `${intel.conectividad.transit_score} / 100` : "—"} sub="transit score" />
+                <StatTile label="Colegios a 1km" value={intel.conectividad.n_colegios_1km ?? "—"} sub="cercanos" />
+              </IntelGroup>
+
+              <IntelGroup title="Valorización">
+                <StatTile label="Variación anual" value={intel.valorizacion.var_anual_pct != null ? `${intel.valorizacion.var_anual_pct.toFixed(1)}%` : "—"} sub={intel.valorizacion.tendencia ?? "histórico"} />
+                <StatTile label="Proyección 3 años" value={intel.valorizacion.proyeccion_3anos_pct != null ? `${intel.valorizacion.proyeccion_3anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
+                <StatTile label="Proyección 5 años" value={intel.valorizacion.proyeccion_5anos_pct != null ? `${intel.valorizacion.proyeccion_5anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
+              </IntelGroup>
+
+              <p className="text-xs text-muted-foreground">
                 Las medianas son nominales; deflactar con IPC (DANE) antes de comparar períodos.
               </p>
-            </>
+            </div>
           )}
         </>
       )}
@@ -1403,6 +1436,15 @@ function SectionHeader({ title, count, sub }: { title: string; count?: number; s
         {count != null && <span className="ml-2 font-normal text-muted-foreground">({count})</span>}
       </h2>
       {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
+    </div>
+  );
+}
+
+function IntelGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
+      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">{children}</div>
     </div>
   );
 }
@@ -1450,6 +1492,42 @@ function relativeTime(iso: string): string {
 }
 
 // ── Horario / disponibilidad del agente (slots de visita, sin Google) ─────────
+// ══ TAB 6: Configuración — horario de visitas + zonas patrocinadas ═════════════
+
+type ConfigSub = "horario" | "zonas";
+
+function ConfiguracionTab() {
+  const [sub, setSub] = useState<ConfigSub>("horario");
+  const subTabs: { id: ConfigSub; label: string }[] = [
+    { id: "horario", label: "Horario de visitas" },
+    { id: "zonas",   label: "Zonas patrocinadas" },
+  ];
+
+  return (
+    <section>
+      <SectionHeader title="Configuración" />
+      <div className="mb-6 flex gap-2 border-b border-border">
+        {subTabs.map(({ id, label }) => (
+          <button
+            key={id}
+            onClick={() => setSub(id)}
+            aria-current={sub === id ? "page" : undefined}
+            className={`shrink-0 border-b-2 px-1 pb-2.5 text-sm transition ${
+              sub === id
+                ? "border-primary font-semibold text-foreground"
+                : "border-transparent font-medium text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+      {sub === "horario" && <DisponibilidadTab />}
+      {sub === "zonas" && <ZonasCompraTab />}
+    </section>
+  );
+}
+
 const DIAS_LABEL = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 const HORAS_OPC: string[] = (() => {
   const out: string[] = [];
@@ -1557,9 +1635,11 @@ function ZonasCompraTab() {
   const qc = useQueryClient();
   const { data: perfil } = useRealtorPerfil();
   const [nivel, setNivel] = useState<"comuna" | "barrio">("comuna");
+  const [comunaFiltro, setComunaFiltro] = useState("");
   const [comunaSel, setComunaSel] = useState("");
   const [barrioSel, setBarrioSel] = useState("");
   const [meses, setMeses] = useState(1);
+  const [confirmando, setConfirmando] = useState(false);
 
   const disp = useQuery<ZonasDisp>({
     queryKey: ["zonas", "disponibles"],
@@ -1581,22 +1661,29 @@ function ZonasCompraTab() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["realtor", "perfil"] });
       qc.invalidateQueries({ queryKey: ["zonas", "disponibles"] });
-      setComunaSel(""); setBarrioSel("");
+      setComunaSel(""); setBarrioSel(""); setConfirmando(false);
       toast.success("¡Zona adquirida! Ya patrocinas esa zona.");
     },
-    onError: (e) => toast.error(/409/.test(String((e as Error).message)) ? "Esa zona ya tiene patrocinador" : "No se pudo completar la compra"),
+    onError: (e) => {
+      setConfirmando(false);
+      toast.error(/409/.test(String((e as Error).message)) ? "Esa zona ya tiene patrocinador" : "No se pudo completar la compra");
+    },
   });
 
   const ocupComuna = new Set(disp.data?.ocupadas.comuna ?? []);
   const ocupBarrio = new Set(disp.data?.ocupadas.barrio ?? []);
-  const comunasLibres = (disp.data?.comunas ?? []).filter((c) => !ocupComuna.has(String(c.cd_comuna)));
-  const barriosDeComuna = (disp.data?.barrios ?? []).filter((b) => String(b.cd_comuna) === comunaSel && !ocupBarrio.has(String(b.id)));
+  const barriosDeComuna = (disp.data?.barrios ?? []).filter((b) => String(b.cd_comuna) === comunaFiltro);
   const precioMes = nivel === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0);
-  const puede = nivel === "comuna" ? !!comunaSel : !!barrioSel;
-  const onComprar = () => comprar.mutate({ zona_nivel: nivel, zona_codigo: nivel === "comuna" ? comunaSel : barrioSel, meses });
+  const zonaCodigo = nivel === "comuna" ? comunaSel : barrioSel;
+  const puede = !!zonaCodigo;
+  const zonaNombre = nivel === "comuna"
+    ? disp.data?.comunas.find((c) => String(c.cd_comuna) === comunaSel)?.nombre
+    : disp.data?.barrios.find((b) => String(b.id) === barrioSel)?.nombre;
+  const total = precioMes * meses;
+  const onConfirmar = () => comprar.mutate({ zona_nivel: nivel, zona_codigo: zonaCodigo, meses });
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-3xl space-y-6">
       <section>
         <h2 className="text-lg font-semibold text-foreground">Mis zonas patrocinadas</h2>
         <p className="mb-3 text-sm text-muted-foreground">Los listings de estas zonas te llegan como leads. Solo tú las patrocinas.</p>
@@ -1616,35 +1703,66 @@ function ZonasCompraTab() {
 
       <section className="rounded-xl border border-border bg-surface p-4">
         <h2 className="mb-3 text-lg font-semibold text-foreground">Comprar nueva zona</h2>
-        <div className="flex flex-wrap items-end gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-xs text-muted-foreground">Nivel</span>
-            <select value={nivel} onChange={(e) => { setNivel(e.target.value as "comuna" | "barrio"); setBarrioSel(""); }}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground">
-              <option value="comuna">Comuna</option>
-              <option value="barrio">Barrio</option>
-            </select>
-          </label>
-          <label className="text-sm">
-            <span className="mb-1 block text-xs text-muted-foreground">Comuna</span>
-            <select value={comunaSel} onChange={(e) => { setComunaSel(e.target.value); setBarrioSel(""); }}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground">
-              <option value="">{nivel === "comuna" ? "Elegir comuna…" : "Filtrar…"}</option>
-              {(nivel === "comuna" ? comunasLibres : disp.data?.comunas ?? []).map((c) => (
+
+        <div className="mb-4 inline-flex rounded-lg border border-border p-0.5">
+          {(["comuna", "barrio"] as const).map((n) => (
+            <button
+              key={n}
+              onClick={() => { setNivel(n); setComunaSel(""); setBarrioSel(""); }}
+              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
+                nivel === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {n === "comuna" ? "Comuna" : "Barrio"}
+              <span className="ml-1.5 text-xs opacity-80">
+                {formatCOP(n === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0))}/mes
+              </span>
+            </button>
+          ))}
+        </div>
+
+        {nivel === "barrio" && (
+          <label className="mb-3 block text-sm">
+            <span className="mb-1 block text-xs text-muted-foreground">Filtrar por comuna</span>
+            <select
+              value={comunaFiltro}
+              onChange={(e) => { setComunaFiltro(e.target.value); setBarrioSel(""); }}
+              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
+            >
+              <option value="">Elegir comuna…</option>
+              {(disp.data?.comunas ?? []).map((c) => (
                 <option key={c.cd_comuna} value={String(c.cd_comuna)}>{c.nombre}</option>
               ))}
             </select>
           </label>
-          {nivel === "barrio" && (
-            <label className="text-sm">
-              <span className="mb-1 block text-xs text-muted-foreground">Barrio</span>
-              <select value={barrioSel} onChange={(e) => setBarrioSel(e.target.value)} disabled={!comunaSel}
-                className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground">
-                <option value="">Elegir barrio…</option>
-                {barriosDeComuna.map((b) => <option key={b.id} value={String(b.id)}>{b.nombre}</option>)}
-              </select>
-            </label>
+        )}
+
+        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
+          {nivel === "comuna"
+            ? (disp.data?.comunas ?? []).map((c) => {
+                const codigo = String(c.cd_comuna);
+                const ocupada = ocupComuna.has(codigo);
+                const selected = comunaSel === codigo;
+                return (
+                  <ZonaCard key={codigo} nombre={c.nombre} ocupada={ocupada} selected={selected}
+                    onClick={() => setComunaSel(codigo)} />
+                );
+              })
+            : barriosDeComuna.map((b) => {
+                const codigo = String(b.id);
+                const ocupada = ocupBarrio.has(codigo);
+                const selected = barrioSel === codigo;
+                return (
+                  <ZonaCard key={codigo} nombre={b.nombre} ocupada={ocupada} selected={selected}
+                    onClick={() => setBarrioSel(codigo)} />
+                );
+              })}
+          {nivel === "barrio" && !comunaFiltro && (
+            <p className="col-span-full text-sm text-muted-foreground">Elige una comuna arriba para ver sus barrios.</p>
           )}
+        </div>
+
+        <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
           <label className="text-sm">
             <span className="mb-1 block text-xs text-muted-foreground">Meses</span>
             <select value={meses} onChange={(e) => setMeses(Number(e.target.value))}
@@ -1652,19 +1770,86 @@ function ZonasCompraTab() {
               {[1, 3, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
             </select>
           </label>
-        </div>
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
           <div className="text-sm text-muted-foreground">
-            Total: <span className="text-base font-bold text-foreground">{formatCOP(precioMes * meses)}</span>
+            Total: <span className="text-base font-bold text-foreground">{formatCOP(total)}</span>
             <span className="text-xs"> ({formatCOP(precioMes)}/mes × {meses})</span>
           </div>
-          <button onClick={onComprar} disabled={!puede || comprar.isPending}
+          <button onClick={() => setConfirmando(true)} disabled={!puede}
             className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
-            <Plus className="h-4 w-4" /> {comprar.isPending ? "Procesando…" : "Comprar zona"}
+            <Plus className="h-4 w-4" /> Comprar zona
           </button>
         </div>
         <p className="mt-2 text-[11px] text-muted-foreground">Una zona = un solo patrocinador (exclusiva). Pago mensual recurrente. (Pasarela en conexión — modo demo por ahora.)</p>
       </section>
+
+      {confirmando && zonaNombre && (
+        <ConfirmarCompraModal
+          zonaNombre={zonaNombre}
+          nivel={nivel}
+          meses={meses}
+          total={total}
+          loading={comprar.isPending}
+          onCancel={() => setConfirmando(false)}
+          onConfirm={onConfirmar}
+        />
+      )}
+    </div>
+  );
+}
+
+function ZonaCard({ nombre, ocupada, selected, onClick }: { nombre: string; ocupada: boolean; selected: boolean; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={ocupada}
+      className={`rounded-lg border p-3 text-left text-sm transition ${
+        ocupada
+          ? "cursor-not-allowed border-border bg-background opacity-50"
+          : selected
+            ? "border-primary bg-primary/10 font-semibold text-foreground"
+            : "border-border bg-background text-foreground hover:border-primary/50"
+      }`}
+    >
+      <div className="truncate">{nombre}</div>
+      <div className={`mt-0.5 text-[11px] ${ocupada ? "text-muted-foreground" : selected ? "text-primary" : "text-success"}`}>
+        {ocupada ? "Ocupada" : selected ? "Seleccionada" : "Disponible"}
+      </div>
+    </button>
+  );
+}
+
+function ConfirmarCompraModal({
+  zonaNombre, nivel, meses, total, loading, onCancel, onConfirm,
+}: {
+  zonaNombre: string; nivel: "comuna" | "barrio"; meses: number; total: number;
+  loading: boolean; onCancel: () => void; onConfirm: () => void;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Confirmar compra de zona">
+      <div className="absolute inset-0 bg-black/40" />
+      <div
+        className="paper-theme relative w-full max-w-sm rounded-lg border border-border bg-background p-5 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-base font-semibold text-foreground">Confirmar patrocinio</h3>
+        <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface p-3 text-sm">
+          <div className="flex justify-between"><span className="text-muted-foreground">Zona</span><span className="font-medium text-foreground">{zonaNombre}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Nivel</span><span className="font-medium text-foreground">{nivel === "comuna" ? "Comuna" : "Barrio"}</span></div>
+          <div className="flex justify-between"><span className="text-muted-foreground">Duración</span><span className="font-medium text-foreground">{meses} {meses === 1 ? "mes" : "meses"}</span></div>
+          <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Total</span><span className="font-bold text-foreground">{formatCOP(total)}</span></div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">Zona exclusiva: al confirmar, ningún otro agente podrá patrocinarla mientras esté activa.</p>
+        <div className="mt-4 flex justify-end gap-2">
+          <button onClick={onCancel} disabled={loading}
+            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface disabled:opacity-50">
+            Cancelar
+          </button>
+          <button onClick={onConfirm} disabled={loading}
+            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">
+            {loading ? "Procesando…" : "Confirmar compra"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

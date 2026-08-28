@@ -50,6 +50,12 @@ export type Neighborhood = {
   seguridad_nota?: string | null;
   verde_pct?: number | null;
   verde_categoria?: string | null;
+  trafico_nivel?: string | null;
+  trafico_jam?: number | null;
+  trafico_pico_am?: [number, number] | null;
+  trafico_pico_pm?: [number, number] | null;
+  uso_suelo_dominante?: string | null;
+  uso_suelo_score?: number | null;
   // GAP fixes
   airbnb_data?: {
     ocupacion_pct: number | null;
@@ -80,6 +86,7 @@ export type Neighborhood = {
   seguridad_tendencia?: string | null;
   premium_vs_largo_pct?: number | null;
   catastro_comuna?: { total_predios: number | null; pct_apartamento: number | null; area_mediana_apto_m2: number | null; avaluo_m2: number | null; ratio_mercado_catastro: number | null; ratio_vs_ciudad: number | null } | null;
+  mercado_real?: { anio_dato: number | null; n_transacciones_anual: number | null; valor_mediana_anual: number | null; var_anual_pct: number | null; ipvn_dane_pct: number | null; meses_inventario: number | null; clasificacion_mercado: string | null; ratio_cierre_pedido_pct: number | null } | null;
 };
 import {
   OPP_COLORS,
@@ -99,6 +106,8 @@ export type ApiBarrio = {
   geometry: { type: string; coordinates: unknown } | null;
   color_hex: string | null;
   excluir_inversion: boolean | null;
+  uso_suelo_dominante?: string | null;
+  uso_suelo_score?: number | null;
   n_remates_municipio?: number | null;
   scores: {
     corto: number | null;
@@ -171,12 +180,24 @@ export type ApiBarrio = {
     n_gimnasios_1km: number | null;
     n_yoga_1km: number | null;
     indice_nomada: number | null;
+    n_colegios_1km: number | null;
+    dist_colegio_km: number | null;
+    walk_score: number | null;
+    transit_score: number | null;
   };
   verde: {
     indice_verde_pct: number | null;
     categoria: string | null;
     score_verde: number | null;
   };
+  trafico?: {
+    nivel: string | null;
+    jam_prom: number | null;
+    pico_am_inicio: number | null;
+    pico_am_fin: number | null;
+    pico_pm_inicio: number | null;
+    pico_pm_fin: number | null;
+  } | null;
   liquidez: {
     score: number | null;
     categoria: string | null;
@@ -201,6 +222,16 @@ export type ApiBarrio = {
     avaluo_m2: number | null;
     ratio_mercado_catastro: number | null;
     ratio_vs_ciudad: number | null;
+  } | null;
+  mercado_real?: {
+    anio_dato: number | null;
+    n_transacciones_anual: number | null;
+    valor_mediana_anual: number | null;
+    var_anual_pct: number | null;
+    ipvn_dane_pct: number | null;
+    meses_inventario: number | null;
+    clasificacion_mercado: string | null;
+    ratio_cierre_pedido_pct: number | null;
   } | null;
 };
 
@@ -261,6 +292,8 @@ export type ApiListing = {
   cd_comuna?: number | null;
   tier?: string | null;
   estrato_real?: number | null;
+  uso_suelo_pot?: string | null;
+  estrato_manzana?: number | null;
   amoblado?: boolean | null;
   // Modelo unificado: due diligence del asesor. Publica primero (false), sello al verificar.
   verificado?: boolean | null;
@@ -433,6 +466,14 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     seguridad_tendencia: b.seguridad?.tendencia ?? null,
     verde_pct: b.verde?.indice_verde_pct ?? null,
     verde_categoria: b.verde?.categoria ?? null,
+    trafico_nivel: b.trafico?.nivel ?? null,
+    trafico_jam: b.trafico?.jam_prom ?? null,
+    trafico_pico_am: b.trafico?.pico_am_inicio != null && b.trafico?.pico_am_fin != null
+      ? [b.trafico.pico_am_inicio, b.trafico.pico_am_fin] : null,
+    trafico_pico_pm: b.trafico?.pico_pm_inicio != null && b.trafico?.pico_pm_fin != null
+      ? [b.trafico.pico_pm_inicio, b.trafico.pico_pm_fin] : null,
+    uso_suelo_dominante: b.uso_suelo_dominante ?? null,
+    uso_suelo_score: b.uso_suelo_score ?? null,
     n_remates_municipio: b.n_remates_municipio ?? undefined,
     airbnb_data: (b.airbnb?.n_listings != null || b.airbnb?.ocupacion_pct != null)
       ? {
@@ -459,6 +500,7 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
       : null,
     premium_vs_largo_pct: b.mercado.premium_vs_largo_pct ?? null,
     catastro_comuna: b.catastro_comuna ?? null,
+    mercado_real: b.mercado_real ?? null,
   };
 }
 

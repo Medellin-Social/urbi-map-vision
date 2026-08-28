@@ -9,25 +9,28 @@ export interface Barrio {
   lon?: number
   zoom?: number
   grupo?: 'Medellín' | 'Valle de Aburrá'
+  cd_comuna?: number
 }
 
 export const BARRIOS: Barrio[] = [
-  // ── Medellín ──
-  { slug: 'el-poblado',    nombre: 'El Poblado',    barrio_id: 236,  lat: 6.2087,    lon: -75.5636,  zoom: 13.5, grupo: 'Medellín' },
-  { slug: 'laureles',      nombre: 'Laureles',      barrio_id: 51,   lat: 6.2376,    lon: -75.5904,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'belen',         nombre: 'Belén',         barrio_id: 96,   lat: 6.2200,    lon: -75.6050,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'robledo',       nombre: 'Robledo',       barrio_id: 45,   lat: 6.2830,    lon: -75.5930,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'aranjuez',      nombre: 'Aranjuez',      barrio_id: 22,   lat: 6.2870,    lon: -75.5590,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'castilla',      nombre: 'Castilla',      barrio_id: 21,   lat: 6.3000,    lon: -75.5760,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'manrique',      nombre: 'Manrique',      barrio_id: 168,  lat: 6.2790,    lon: -75.5460,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'buenos-aires',  nombre: 'Buenos Aires',  barrio_id: 217,  lat: 6.2400,    lon: -75.5490,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'la-candelaria', nombre: 'La Candelaria', barrio_id: 191,  lat: 6.2488,    lon: -75.5666,  zoom: 13.5, grupo: 'Medellín' },
-  { slug: 'guayabal',      nombre: 'Guayabal',      barrio_id: 115,  lat: 6.2140,    lon: -75.5900,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'san-javier',    nombre: 'San Javier',    barrio_id: 66,   lat: 6.2518,    lon: -75.6100,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'popular',       nombre: 'Popular',       barrio_id: 124,  lat: 6.3100,    lon: -75.5500,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'santa-cruz',    nombre: 'Santa Cruz',    barrio_id: 137,  lat: 6.3000,    lon: -75.5600,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'doce-de-octubre', nombre: 'Doce de Octubre', barrio_id: 26, lat: 6.3050,  lon: -75.5700,  zoom: 13,   grupo: 'Medellín' },
-  { slug: 'villa-hermosa', nombre: 'Villa Hermosa', barrio_id: 178,  lat: 6.2600,    lon: -75.5400,  zoom: 13,   grupo: 'Medellín' },
+  // ── Medellín ── (cd_comuna = comuna representada — mismo mapeo que CD_COMUNA_SLUG
+  // en local-business/$barrio_slug.tsx; usado para resolver la comuna de cualquier
+  // barrio real clickeado en el mapa, no solo estos 16 representantes)
+  { slug: 'el-poblado',    nombre: 'El Poblado',    barrio_id: 236,  lat: 6.2087,    lon: -75.5636,  zoom: 13.5, grupo: 'Medellín', cd_comuna: 14 },
+  { slug: 'laureles',      nombre: 'Laureles',      barrio_id: 51,   lat: 6.2376,    lon: -75.5904,  zoom: 13,   grupo: 'Medellín', cd_comuna: 11 },
+  { slug: 'belen',         nombre: 'Belén',         barrio_id: 96,   lat: 6.2200,    lon: -75.6050,  zoom: 13,   grupo: 'Medellín', cd_comuna: 16 },
+  { slug: 'robledo',       nombre: 'Robledo',       barrio_id: 45,   lat: 6.2830,    lon: -75.5930,  zoom: 13,   grupo: 'Medellín', cd_comuna: 7 },
+  { slug: 'aranjuez',      nombre: 'Aranjuez',      barrio_id: 22,   lat: 6.2870,    lon: -75.5590,  zoom: 13,   grupo: 'Medellín', cd_comuna: 4 },
+  { slug: 'castilla',      nombre: 'Castilla',      barrio_id: 21,   lat: 6.3000,    lon: -75.5760,  zoom: 13,   grupo: 'Medellín', cd_comuna: 5 },
+  { slug: 'manrique',      nombre: 'Manrique',      barrio_id: 168,  lat: 6.2790,    lon: -75.5460,  zoom: 13,   grupo: 'Medellín', cd_comuna: 3 },
+  { slug: 'buenos-aires',  nombre: 'Buenos Aires',  barrio_id: 217,  lat: 6.2400,    lon: -75.5490,  zoom: 13,   grupo: 'Medellín', cd_comuna: 9 },
+  { slug: 'la-candelaria', nombre: 'La Candelaria', barrio_id: 191,  lat: 6.2488,    lon: -75.5666,  zoom: 13.5, grupo: 'Medellín', cd_comuna: 10 },
+  { slug: 'guayabal',      nombre: 'Guayabal',      barrio_id: 115,  lat: 6.2140,    lon: -75.5900,  zoom: 13,   grupo: 'Medellín', cd_comuna: 15 },
+  { slug: 'san-javier',    nombre: 'San Javier',    barrio_id: 66,   lat: 6.2518,    lon: -75.6100,  zoom: 13,   grupo: 'Medellín', cd_comuna: 13 },
+  { slug: 'popular',       nombre: 'Popular',       barrio_id: 124,  lat: 6.3100,    lon: -75.5500,  zoom: 13,   grupo: 'Medellín', cd_comuna: 1 },
+  { slug: 'santa-cruz',    nombre: 'Santa Cruz',    barrio_id: 137,  lat: 6.3000,    lon: -75.5600,  zoom: 13,   grupo: 'Medellín', cd_comuna: 2 },
+  { slug: 'doce-de-octubre', nombre: 'Doce de Octubre', barrio_id: 26, lat: 6.3050,  lon: -75.5700,  zoom: 13,   grupo: 'Medellín', cd_comuna: 6 },
+  { slug: 'villa-hermosa', nombre: 'Villa Hermosa', barrio_id: 178,  lat: 6.2600,    lon: -75.5400,  zoom: 13,   grupo: 'Medellín', cd_comuna: 8 },
   // ── Valle de Aburrá ──
   { slug: 'todos',       nombre: 'Valle de Aburrá', barrio_id: null, municipio_nombre: 'VALLE DE ABURRÁ', lat: 6.2442, lon: -75.5812, zoom: 11, grupo: 'Valle de Aburrá' },
   { slug: 'envigado',    nombre: 'Envigado',    barrio_id: null, municipio_nombre: 'ENVIGADO',    lat: 6.168114, lon: -75.583401, zoom: 13, grupo: 'Valle de Aburrá' },

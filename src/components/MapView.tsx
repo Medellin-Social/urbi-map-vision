@@ -70,7 +70,7 @@ type Props = {
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   activeTab?: MapTab;
-  onBarrioClick?: (id: number, nombre: string, lat: number, lng: number) => void;
+  onBarrioClick?: (id: number, nombre: string, lat: number, lng: number, cdComuna: number | null) => void;
   flyToBarriosRef?: React.MutableRefObject<(() => void) | null>;
   cooperativeGestures?: boolean;
 };
@@ -645,9 +645,11 @@ export function MapView({
         const feat = e.features[0];
         const barrioId = typeof feat.id === "number" ? feat.id : Number(feat.id);
         const nombre = (feat.properties?.nombre as string | null) ?? "";
+        const cdComunaRaw = feat.properties?.cd_comuna;
+        const cdComuna = cdComunaRaw != null ? Number(cdComunaRaw) : null;
         if (!isNaN(barrioId) && nombre) {
           const [lat, lng] = featureCentroid(feat);
-          onBarrioClickRef.current?.(barrioId, nombre, lat, lng);
+          onBarrioClickRef.current?.(barrioId, nombre, lat, lng, cdComuna);
         }
       });
 

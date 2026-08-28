@@ -1,5 +1,6 @@
 import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_BASE_URL } from "@/config/api";
+import type { ApiBarrio } from "@/lib/adapters";
 
 // ── Enums — aligned with backend models (realtors.py / listing.py) ─────────────
 
@@ -94,14 +95,9 @@ export type MiListing = {
   vistas_30d: number;
 };
 
-export type InteligenciaBarrio = {
-  zona_codigo: string;
-  zona_nombre: string;
-  score_consolidado: number;
-  liquidez: number;                     // 0–100
-  mediana_venta_m2: number;             // COP por m²
-  tiempo_estimado_venta: string | null; // ej. "3-6 meses"
-};
+// Inteligencia de barrio del realtor = mismo shape que el panel público de
+// barrios (GET /barrios/:id) — sin gates FREE/PAGO, el agente ve todo.
+export type InteligenciaBarrio = ApiBarrio;
 
 export type RoiZona = {
   zona_codigo: string;
@@ -236,7 +232,7 @@ export interface RealtorDashboardApi {
   /** PATCH /api/v1/realtor/visitas/:id */
   actualizarVisita(id: string, estado: Exclude<EstadoVisita, "pendiente">, resultado?: ResultadoVisita): Promise<void>;
   /** GET /api/v1/realtor/inteligencia/:codigo */
-  getInteligenciaBarrio(zonaCodigo: string): Promise<InteligenciaBarrio>;
+  getInteligenciaBarrio(zonaCodigo: string, nivel?: ZonaNivel): Promise<InteligenciaBarrio>;
   /** GET/PUT /api/v1/realtor/disponibilidad */
   getDisponibilidad(): Promise<Franja[]>;
   putDisponibilidad(franjas: Franja[]): Promise<void>;
@@ -253,6 +249,40 @@ export interface RealtorDashboardApi {
 // ── Mock ───────────────────────────────────────────────────────────────────────
 
 const _d = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+const _BARRIO_STATS: Record<string, { nombre: string; precioM2: number; arriendo: number; adr: number; seg: number }> = {
+  "el-poblado": { nombre: "El Poblado", precioM2: 8_500_000, arriendo: 2_600_000, adr: 320_000, seg: 78 },
+  "laureles":   { nombre: "Laureles",   precioM2: 6_800_000, arriendo: 1_900_000, adr: 240_000, seg: 71 },
+};
+
+function _mockBarrio(zonaCodigo: string): ApiBarrio {
+  const s = _BARRIO_STATS[zonaCodigo] ?? { nombre: zonaCodigo, precioM2: 5_500_000, arriendo: 1_500_000, adr: 180_000, seg: 55 };
+  return {
+    barrio_id: 0, nombre: s.nombre, comuna: null, municipio: "Medellín", estrato: 4,
+    geometry: null, color_hex: "#1D9E75", excluir_inversion: false,
+    scores: { corto: s.seg, cat_corto: null, mediano: s.seg - 5, cat_mediano: null, largo: s.seg - 10, cat_largo: null, perfil_recomendado: null, score_activo: s.seg },
+    mercado: {
+      precio_m2_cop: s.precioM2, precio_m2_usd: Math.round(s.precioM2 / 4100), precio_venta_promedio: null,
+      arriendo_p50_cop: s.arriendo, yield_bruto_pct: 6.2, anos_recupero: 16, estado_precio: null,
+      pbn_precio_justo: null, poi_precio_oferta: null,
+      yield_renta_media_pct: 7.5, precio_renta_media_p50: Math.round(s.arriendo * 1.6), premium_vs_largo_pct: 60,
+      n_listings_renta_media: 40, precio_accesible: null, presupuesto_max: null,
+    },
+    airbnb: {
+      ocupacion_pct: 62, ocupacion_p25_pct: null, ocupacion_p75_pct: null, adr_usd: Math.round(s.adr / 4100),
+      adr_cop: s.adr, yield_airbnb_pct: 9.1, yield_airbnb_real_pct: null, n_listings: 120,
+      n_entire_home: null, n_private_room: null, n_superhosts: null,
+      ingresos_anuales_p50_usd: null, ingresos_anuales_p50_cop: null, rating_promedio: null, reviews_promedio: null,
+      diff_ocupacion_pct: null, diff_adr_cop: null,
+    },
+    seguridad: { score: s.seg, categoria: s.seg >= 70 ? "Segura" : "Moderada", zona_turistica: null, tendencia: "estable", nota: null },
+    conectividad: { dist_metro_km: 1.2, dist_parque_km: 0.5, dist_mall_km: 1.0, n_cafes_500m: 8, n_coworking_1km: 3, n_gimnasios_1km: 5, n_yoga_1km: 2, indice_nomada: null, n_colegios_1km: 4, dist_colegio_km: 0.6, walk_score: 68, transit_score: 55 },
+    verde: { indice_verde_pct: null, categoria: null, score_verde: null },
+    liquidez: { score: s.seg, categoria: s.seg >= 70 ? "Alta" : "Media", tiempo_estimado_venta: s.seg >= 70 ? "2-4 meses" : "4-8 meses", nota_metodologia: null },
+    oportunidad: { detectada: false, tipo: null, descripcion: null },
+    valorizacion: { var_anual_pct: 5.4, proyeccion_3anos_pct: 17, proyeccion_5anos_pct: 30, tendencia: "alza" },
+  };
+}
 
 // Mutable so tomarDelPool can remove rows optimistically
 let _pool: ItemPool[] = [
@@ -474,14 +504,7 @@ const mockApi: RealtorDashboardApi = {
 
   async getInteligenciaBarrio(zonaCodigo) {
     await _d(500);
-    const table: Record<string, InteligenciaBarrio> = {
-      "el-poblado": { zona_codigo: "el-poblado", zona_nombre: "El Poblado", score_consolidado: 78, liquidez: 72, mediana_venta_m2: 8_500_000, tiempo_estimado_venta: "2-4 meses" },
-      "laureles":   { zona_codigo: "laureles",   zona_nombre: "Laureles",   score_consolidado: 71, liquidez: 68, mediana_venta_m2: 6_800_000, tiempo_estimado_venta: "3-6 meses" },
-    };
-    return table[zonaCodigo] ?? {
-      zona_codigo: zonaCodigo, zona_nombre: zonaCodigo,
-      score_consolidado: 60, liquidez: 55, mediana_venta_m2: 5_500_000, tiempo_estimado_venta: "4-8 meses",
-    };
+    return _mockBarrio(zonaCodigo);
   },
 
   async getDisponibilidad() {
@@ -509,7 +532,7 @@ const httpApi: RealtorDashboardApi = {
   getDesempeno:         ()     => apiFetch<Desempeno>          (`${API_BASE_URL}/realtor/desempeno`),
   getAgenda:            ()     => apiFetch<Agenda>             (`${API_BASE_URL}/realtor/agenda`),
   actualizarVisita:     (id, estado, resultado) => apiFetch<void>(`${API_BASE_URL}/realtor/visitas/${id}`, { method: "PATCH", body: JSON.stringify({ estado, resultado }) }),
-  getInteligenciaBarrio:(code) => apiFetch<InteligenciaBarrio> (`${API_BASE_URL}/realtor/inteligencia/${code}`),
+  getInteligenciaBarrio:(code, nivel) => apiFetch<InteligenciaBarrio> (`${API_BASE_URL}/realtor/inteligencia/${code}${nivel ? `?nivel=${nivel}` : ""}`),
   getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
   putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),
   getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),

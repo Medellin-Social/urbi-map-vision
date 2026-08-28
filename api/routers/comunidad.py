@@ -43,7 +43,12 @@ class EventosResponse(BaseModel):
 
 # ── Todos (Valle de Aburrá completo) — must be before /{barrio_id}/ routes ────
 
-_TODOS_EVENTOS_QUERY = """
+# "Destacado" en un contexto sin barrio (todos / municipio) solo cuenta si el
+# alcance es 'ciudad' (o NULL — filas de antes de la migración 0079, tratadas
+# como ciudad para no regresar el comportamiento que ya tenían).
+_DESTACADO_CIUDAD = "(e.destacado AND (e.destacado_nivel IS NULL OR e.destacado_nivel = 'ciudad'))"
+
+_TODOS_EVENTOS_QUERY = f"""
 SELECT
     e.id, e.fuente, e.titulo, e.descripcion,
     e.foto_url, e.url_externo,
@@ -54,7 +59,7 @@ SELECT
     e.organizador, e.categoria, e.tipo_audiencia,
     e.lat, e.lon, e.barrio_id,
     b.nombre AS barrio_nombre,
-    e.destacado
+    {_DESTACADO_CIUDAD} AS destacado
 FROM public.eventos e
 LEFT JOIN raw.barrios b ON e.barrio_id = b.id
 WHERE e.activo = TRUE
@@ -63,7 +68,7 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-ORDER BY e.destacado DESC, e.fecha_inicio ASC
+ORDER BY destacado DESC, e.fecha_inicio ASC
 LIMIT $6 OFFSET $7
 """
 
@@ -107,7 +112,31 @@ async def get_eventos_todos(
     )
 
 
-_EVENTOS_QUERY = """
+# "Comuna" de un barrio: la real (Medellín, analytics.barrios_cd) o, para los otros
+# municipios del Valle de Aburrá (sin comunas), el pseudo-código 101-105 del municipio —
+# mismo mapeo que admin.py::_MUNICIPIO_A_PSEUDO_COMUNA y comunidad.py::_MUNICIPIO_TOTAL_COUNTS_QUERY.
+def _zona_comuna_de(barrio_param: str) -> str:
+    return f"""COALESCE(
+        (SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc WHERE bc.barrio_id = {barrio_param}),
+        (SELECT CASE bx.municipio
+            WHEN 'BELLO' THEN '101' WHEN 'ENVIGADO' THEN '102' WHEN 'ITAGUI' THEN '103'
+            WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105' END
+         FROM raw.barrios bx WHERE bx.id = {barrio_param})
+    )"""
+
+
+# Alcance completo (barrio | comuna | ciudad) para la vista de un barrio puntual.
+# NULL en destacado_nivel (filas de antes de 0079) = ciudad, mismo criterio que arriba.
+_DESTACADO_AQUI = f"""(
+    e.destacado AND (
+        e.destacado_nivel IS NULL
+        OR e.destacado_nivel = 'ciudad'
+        OR (e.destacado_nivel = 'comuna' AND e.destacado_zona_codigo = {_zona_comuna_de("$6")})
+        OR (e.destacado_nivel = 'barrio' AND e.destacado_zona_codigo = $6::text)
+    )
+)"""
+
+_EVENTOS_QUERY = f"""
 SELECT
     e.id,
     e.fuente,
@@ -127,7 +156,7 @@ SELECT
     e.lon,
     e.barrio_id,
     b.nombre                AS barrio_nombre,
-    e.destacado
+    {_DESTACADO_AQUI} AS destacado
 FROM public.eventos e
 LEFT JOIN raw.barrios b ON e.barrio_id = b.id
 WHERE e.activo = TRUE
@@ -136,16 +165,19 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND e.barrio_id IN (
-      SELECT b2.id FROM raw.barrios b2
-      WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
-        AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
+  AND (
+    e.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
+          AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
+    )
+    OR {_DESTACADO_AQUI}
   )
-ORDER BY e.destacado DESC, e.fecha_inicio ASC
+ORDER BY destacado DESC, e.fecha_inicio ASC
 LIMIT $7 OFFSET $8
 """
 
-_COUNT_QUERY = """
+_COUNT_QUERY = f"""
 SELECT COUNT(*)
 FROM public.eventos e
 WHERE e.activo = TRUE
@@ -154,10 +186,13 @@ WHERE e.activo = TRUE
   AND ($3::text IS NULL OR e.categoria     = $3)
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
-  AND e.barrio_id IN (
-      SELECT b2.id FROM raw.barrios b2
-      WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
-        AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
+  AND (
+    e.barrio_id IN (
+        SELECT b2.id FROM raw.barrios b2
+        WHERE b2.municipio = (SELECT municipio FROM raw.barrios WHERE id = $6)
+          AND b2.comuna    = (SELECT comuna    FROM raw.barrios WHERE id = $6)
+    )
+    OR {_DESTACADO_AQUI}
   )
 """
 
@@ -193,7 +228,7 @@ async def get_eventos_barrio(
     )
 
 
-_MUNICIPIO_EVENTOS_QUERY = """
+_MUNICIPIO_EVENTOS_QUERY = f"""
 SELECT
     e.id, e.fuente, e.titulo, e.descripcion,
     e.foto_url, e.url_externo,
@@ -204,7 +239,7 @@ SELECT
     e.organizador, e.categoria, e.tipo_audiencia,
     e.lat, e.lon, e.barrio_id,
     b.nombre AS barrio_nombre,
-    e.destacado
+    {_DESTACADO_CIUDAD} AS destacado
 FROM public.eventos e
 LEFT JOIN raw.barrios b ON e.barrio_id = b.id
 WHERE e.activo = TRUE
@@ -214,7 +249,7 @@ WHERE e.activo = TRUE
   AND ($4::text IS NULL OR e.tipo_audiencia = $4)
   AND ($5::bool IS NULL OR e.gratuito       = $5)
   AND ($6::text IS NULL OR UPPER(b.municipio) = UPPER($6))
-ORDER BY e.destacado DESC, e.fecha_inicio ASC
+ORDER BY destacado DESC, e.fecha_inicio ASC
 LIMIT $7 OFFSET $8
 """
 
@@ -317,7 +352,31 @@ class TiendasResponse(BaseModel):
     tiendas: list[TiendaOut]
 
 
-_TIENDAS_QUERY = """
+_DESTACADO_AQUI_TIENDA = f"""(
+    t.destacado AND (
+        t.destacado_nivel IS NULL
+        OR t.destacado_nivel = 'ciudad'
+        OR (t.destacado_nivel = 'comuna' AND t.destacado_zona_codigo = {_zona_comuna_de("$1")})
+        OR (t.destacado_nivel = 'barrio' AND t.destacado_zona_codigo = $1::text)
+    )
+)"""
+_DESTACADO_CIUDAD_TIENDA = "(t.destacado AND (t.destacado_nivel IS NULL OR t.destacado_nivel = 'ciudad'))"
+
+# Vista agregada de un municipio completo (Bello/Envigado/...) — $1 = nombre de
+# municipio, no hay un barrio_id puntual. Solo ciudad o comuna (pseudo-código del
+# propio municipio) pueden aparecer aquí; un destacado a nivel barrio nunca
+# "sube" a esta vista agregada (mismo criterio que a nivel comuna en `_DESTACADO_AQUI_TIENDA`).
+_DESTACADO_MUNICIPIO_TIENDA = """(
+    t.destacado AND (
+        t.destacado_nivel IS NULL
+        OR t.destacado_nivel = 'ciudad'
+        OR (t.destacado_nivel = 'comuna' AND t.destacado_zona_codigo = CASE UPPER($1)
+              WHEN 'BELLO' THEN '101' WHEN 'ENVIGADO' THEN '102' WHEN 'ITAGUI' THEN '103'
+              WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105' END)
+    )
+)"""
+
+_TIENDAS_QUERY = f"""
 SELECT
     t.id,
     t.google_place_id,
@@ -336,7 +395,7 @@ SELECT
     t.rating_google,
     t.precio_rango,
     t.horario,
-    t.destacado,
+    {_DESTACADO_AQUI_TIENDA} AS destacado,
     t.verificado
 FROM public.tiendas t
 LEFT JOIN raw.barrios b ON t.barrio_id = b.id
@@ -351,18 +410,19 @@ WHERE t.activo = TRUE
             1500
         )
     )
+    OR {_DESTACADO_AQUI_TIENDA}
   )
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
   AND ($5::float IS NULL OR t.rating_google >= $5::float)
   AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($7::bool IS NULL OR t.destacado = $7::bool)
-ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+  AND ($7::bool IS NULL OR {_DESTACADO_AQUI_TIENDA} = $7::bool)
+ORDER BY destacado DESC, t.rating_google DESC NULLS LAST
 LIMIT $8 OFFSET $9
 """
 
-_TIENDAS_COUNT_QUERY = """
+_TIENDAS_COUNT_QUERY = f"""
 SELECT COUNT(*)
 FROM public.tiendas t
 WHERE t.activo = TRUE
@@ -376,24 +436,25 @@ WHERE t.activo = TRUE
             1500
         )
     )
+    OR {_DESTACADO_AQUI_TIENDA}
   )
   AND ($2::text[] IS NULL OR t.categoria = ANY($2::text[]))
   AND ($3::text IS NULL OR t.categoria    = $3)
   AND ($4::text IS NULL OR t.precio_rango = $4)
   AND ($5::float IS NULL OR t.rating_google >= $5::float)
   AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($7::bool IS NULL OR t.destacado = $7::bool)
+  AND ($7::bool IS NULL OR {_DESTACADO_AQUI_TIENDA} = $7::bool)
 """
 
 
-_TODOS_TIENDAS_QUERY = """
+_TODOS_TIENDAS_QUERY = f"""
 SELECT
     t.id, t.google_place_id, t.nombre, t.descripcion, t.categoria,
     t.barrio_id, b.nombre AS barrio_nombre,
     t.direccion, t.telefono, t.whatsapp, t.website,
     t.foto_url, t.lat, t.lon,
     t.rating_google, t.precio_rango, t.horario,
-    t.destacado, t.verificado
+    {_DESTACADO_CIUDAD_TIENDA} AS destacado, t.verificado
 FROM public.tiendas t
 LEFT JOIN raw.barrios b ON t.barrio_id = b.id
 WHERE t.activo = TRUE
@@ -402,12 +463,12 @@ WHERE t.activo = TRUE
   AND ($3::text IS NULL OR t.precio_rango = $3)
   AND ($4::float IS NULL OR t.rating_google >= $4::float)
   AND (NOT $5::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($6::bool IS NULL OR t.destacado = $6::bool)
-ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+  AND ($6::bool IS NULL OR {_DESTACADO_CIUDAD_TIENDA} = $6::bool)
+ORDER BY destacado DESC, t.rating_google DESC NULLS LAST
 LIMIT $7 OFFSET $8
 """
 
-_TODOS_TIENDAS_COUNT_QUERY = """
+_TODOS_TIENDAS_COUNT_QUERY = f"""
 SELECT COUNT(*) FROM public.tiendas t
 WHERE t.activo = TRUE
   AND ($1::text[] IS NULL OR t.categoria = ANY($1::text[]))
@@ -415,7 +476,7 @@ WHERE t.activo = TRUE
   AND ($3::text IS NULL OR t.precio_rango = $3)
   AND ($4::float IS NULL OR t.rating_google >= $4::float)
   AND (NOT $5::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($6::bool IS NULL OR t.destacado = $6::bool)
+  AND ($6::bool IS NULL OR {_DESTACADO_CIUDAD_TIENDA} = $6::bool)
 """
 
 
@@ -638,7 +699,7 @@ async def get_comunas_tiendas_counts(pool=Depends(get_pool)):
     return {"counts": counts}
 
 
-_MUNICIPIO_TIENDAS_QUERY = """
+_MUNICIPIO_TIENDAS_QUERY = f"""
 SELECT
     t.id,
     t.google_place_id,
@@ -657,7 +718,7 @@ SELECT
     t.rating_google,
     t.precio_rango,
     t.horario,
-    t.destacado,
+    {_DESTACADO_MUNICIPIO_TIENDA} AS destacado,
     t.verificado
 FROM public.tiendas t
 LEFT JOIN raw.barrios b ON t.barrio_id = b.id
@@ -668,12 +729,12 @@ WHERE t.activo = TRUE
   AND ($4::text IS NULL OR t.precio_rango = $4)
   AND ($5::float IS NULL OR t.rating_google >= $5::float)
   AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($7::bool IS NULL OR t.destacado = $7::bool)
-ORDER BY t.destacado DESC, t.rating_google DESC NULLS LAST
+  AND ($7::bool IS NULL OR {_DESTACADO_MUNICIPIO_TIENDA} = $7::bool)
+ORDER BY destacado DESC, t.rating_google DESC NULLS LAST
 LIMIT $8 OFFSET $9
 """
 
-_MUNICIPIO_TIENDAS_COUNT_QUERY = """
+_MUNICIPIO_TIENDAS_COUNT_QUERY = f"""
 SELECT COUNT(*)
 FROM public.tiendas t
 LEFT JOIN raw.barrios b ON t.barrio_id = b.id
@@ -684,7 +745,7 @@ WHERE t.activo = TRUE
   AND ($4::text IS NULL OR t.precio_rango = $4)
   AND ($5::float IS NULL OR t.rating_google >= $5::float)
   AND (NOT $6::bool OR t.whatsapp IS NOT NULL OR t.telefono IS NOT NULL)
-  AND ($7::bool IS NULL OR t.destacado = $7::bool)
+  AND ($7::bool IS NULL OR {_DESTACADO_MUNICIPIO_TIENDA} = $7::bool)
 """
 
 

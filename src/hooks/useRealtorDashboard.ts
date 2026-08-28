@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { realtorApi, type ItemPool } from "@/lib/realtorApi";
+import { realtorApi, type ItemPool, type ZonaNivel } from "@/lib/realtorApi";
 
 export function useRealtorPerfil() {
   return useQuery({
@@ -142,10 +142,10 @@ export function useEditarListing() {
   });
 }
 
-export function useInteligenciaBarrio(zonaCodigo: string | null) {
+export function useInteligenciaBarrio(zonaCodigo: string | null, nivel?: ZonaNivel) {
   return useQuery({
-    queryKey: ["realtor", "inteligencia", zonaCodigo],
-    queryFn: () => realtorApi.getInteligenciaBarrio(zonaCodigo!),
+    queryKey: ["realtor", "inteligencia", zonaCodigo, nivel],
+    queryFn: () => realtorApi.getInteligenciaBarrio(zonaCodigo!, nivel),
     enabled: zonaCodigo !== null,
     staleTime: 5 * 60 * 1000,
   });

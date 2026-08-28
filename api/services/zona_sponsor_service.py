@@ -12,15 +12,35 @@ from datetime import date, timedelta
 PRECIO_COMUNA = 1_000_000
 PRECIO_BARRIO = 200_000
 
+# Multiplicador por nivel A/B/C/D (ver dbt/models/analytics/zonas_nivel_precio.sql).
+# C = precio base histórico (sin cambio); D = descuento para mover zonas de baja demanda.
+NIVEL_MULTIPLICADOR = {"A": 2.0, "B": 1.4, "C": 1.0, "D": 0.6}
+NIVEL_DEFAULT = "C"
+
 
 class ZonaOcupadaError(Exception):
     """La zona ya tiene un patrocinador activo de otra agencia."""
 
 
-def precio_zona(nivel: str, override: float | None = None) -> float:
+def precio_para_nivel(zona_nivel: str, nivel: str | None) -> float:
+    base = PRECIO_COMUNA if zona_nivel == "comuna" else PRECIO_BARRIO
+    return round(base * NIVEL_MULTIPLICADOR.get(nivel or NIVEL_DEFAULT, 1.0))
+
+
+async def get_nivel_zona(conn, zona_nivel: str, zona_codigo: str) -> str:
+    """Nivel A/B/C/D de la zona (analytics.zonas_nivel_precio). C si aún no está calculado."""
+    nivel = await conn.fetchval(
+        "SELECT nivel FROM analytics.zonas_nivel_precio WHERE zona_nivel = $1 AND zona_codigo = $2",
+        zona_nivel, zona_codigo,
+    )
+    return nivel or NIVEL_DEFAULT
+
+
+async def precio_zona(conn, zona_nivel: str, zona_codigo: str, override: float | None = None) -> float:
     if override is not None:
         return override
-    return PRECIO_COMUNA if nivel == "comuna" else PRECIO_BARRIO
+    nivel = await get_nivel_zona(conn, zona_nivel, zona_codigo)
+    return precio_para_nivel(zona_nivel, nivel)
 
 
 async def get_or_create_agency(conn, agent_id: str) -> str:
@@ -79,11 +99,12 @@ async def asignar_zona(conn, agent_id: str, zona_nivel: str, zona_codigo: str,
         return str(existente["id"])
 
     sid = str(uuid.uuid4())
+    monto = await precio_zona(conn, zona_nivel, zona_codigo, precio)
     await conn.execute(
         "INSERT INTO sponsorship (id, agency_id, zona_nivel, zona_codigo, tier, precio_mensual, "
         "fecha_inicio, fecha_fin, estado) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'activa')",
         sid, agency_id, zona_nivel, zona_codigo, zona_nivel,
-        precio_zona(zona_nivel, precio), hoy, hoy + timedelta(days=30 * meses),
+        monto, hoy, hoy + timedelta(days=30 * meses),
     )
     return sid
 

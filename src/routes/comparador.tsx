@@ -960,10 +960,10 @@ function ComparadorPage() {
       <MapNavbar activeTab="comparador" onTabChange={() => {}} />
       <main className="mx-auto max-w-6xl px-4 pt-24 sm:px-6">
         <Link
-          to="/map"
+          to="/realtor/dashboard"
           className="inline-flex items-center gap-1 text-xs uppercase tracking-widest text-muted-foreground transition hover:text-primary"
         >
-          <ArrowLeft className="h-3 w-3" /> Volver al mapa
+          <ArrowLeft className="h-3 w-3" /> Volver al dashboard
         </Link>
 
         <h1 className="mt-4 font-display text-3xl font-semibold">Comparador</h1>

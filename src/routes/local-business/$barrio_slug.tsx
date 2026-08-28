@@ -3,7 +3,7 @@ import { useState, useRef, useEffect, type ReactNode } from 'react'
 import mapboxgl from 'mapbox-gl'
 import 'mapbox-gl/dist/mapbox-gl.css'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
-import { useBarrio } from '@/components/comunidad/BarrioContext'
+import { useBarrio, type Barrio } from '@/components/comunidad/BarrioContext'
 import { BusinessCardDirectory, BusinessCardList } from '@/components/comunidad/BusinessCard'
 import { useTiendas, useGrupoCounts } from '@/hooks/useTiendas'
 import { useBarriosRaw } from '@/hooks/useBarrios'
@@ -33,6 +33,20 @@ const K = {
   teal: '#1D9E75', tealDeep: '#085041', coral: '#D85A30', coralLight: '#FAECE7',
   amarillo: '#ffc928', serif: "'Fraunces', Georgia, serif" as const,
 }
+
+// categoria → grupo (mismo agrupamiento que GRUPOS_TIENDAS/backend _GRUPOS_MAP)
+// y grupo → color: cada categoría de negocio pinta distinto en el mapa.
+const CATEGORIA_A_GRUPO: Record<string, string> = Object.fromEntries(
+  GRUPOS_TIENDAS.flatMap(g => g.categorias.map(c => [c.key, g.key])),
+)
+const GRUPO_COLOR: Record<string, string> = {
+  gastronomia:      K.coral,
+  salud:            K.teal,
+  fitness:          K.amarillo,
+  servicios_hogar:  '#002776',
+  mas_servicios:    K.muted,
+}
+const GRUPO_DEFAULT_COLOR = K.muted
 
 // ── Mapa de zonas — mismo sistema visual y de niveles que MapView (/map): ──────
 // comunas (relleno ámbar + burbuja de conteo) → click → barrios de esa comuna
@@ -65,21 +79,45 @@ function boundsOf(geom: GeoJSON.Geometry): mapboxgl.LngLatBounds {
   return bounds
 }
 
-function NegociosMap() {
+// Comunas de Medellín (cd_comuna 1-16) no traen slug en el geojson estático —
+// hace falta para ubicar qué polígono corresponde al `barrio` activo de la página
+// (BARRIOS en BarrioContext) y así auto-abrir esa comuna al cargar el mapa.
+const CD_COMUNA_SLUG: Record<number, string> = {
+  1: 'popular', 2: 'santa-cruz', 3: 'manrique', 4: 'aranjuez', 5: 'castilla',
+  6: 'doce-de-octubre', 7: 'robledo', 8: 'villa-hermosa', 9: 'buenos-aires',
+  10: 'la-candelaria', 11: 'laureles', 13: 'san-javier', 14: 'el-poblado',
+  15: 'guayabal', 16: 'belen',
+}
+
+function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] }) {
   const containerRef      = useRef<HTMLDivElement>(null)
   const mapRef            = useRef<mapboxgl.Map | null>(null)
-  const markersRef        = useRef<mapboxgl.Marker[]>([])
   const staticFeaturesRef = useRef<GeoJSON.Feature[]>([])
   const hoverComunaRef    = useRef<number | string | undefined>(undefined)
   const hoverBarrioRef    = useRef<number | string | undefined>(undefined)
   const selectedBarrioRef = useRef<number | string | undefined>(undefined)
 
+  const [mapReady, setMapReady]         = useState(false)
   const [level, setLevel]               = useState<'comunas' | 'barrios'>('comunas')
   const [activeComuna, setActiveComuna] = useState<{ cd: number; nombre: string; municipio: string } | null>(null)
-  const [activeBarrioId, setActiveBarrioId] = useState<number | null>(null)
 
   const { data: barriosRaw } = useBarriosRaw()
-  const { data: barrioTiendas } = useTiendas({ barrio_id: activeBarrioId ?? undefined, limit: 500, offset: 0 })
+
+  // Alcance de negocios a pinear: la comuna/municipio actualmente abierto en el
+  // mapa — no un barrio catastral suelto. Resuelve a barrio_id (Medellín, vía el
+  // representante de BARRIOS) o municipio_nombre (Valle de Aburrá), igual que ya
+  // usa la lista de la izquierda — mismos negocios, ubicación exacta (lat/lon).
+  const scope: { barrio_id?: number; municipio_nombre?: string } = (() => {
+    if (!activeComuna) return {}
+    if (activeComuna.municipio.toUpperCase() === 'MEDELLIN') {
+      const slug = CD_COMUNA_SLUG[activeComuna.cd]
+      const rep = slug ? barrios.find(b => b.slug === slug) : undefined
+      return rep?.barrio_id != null ? { barrio_id: rep.barrio_id } : {}
+    }
+    const rep = barrios.find(b => b.municipio_nombre?.toUpperCase() === activeComuna.municipio.toUpperCase())
+    return rep?.municipio_nombre ? { municipio_nombre: rep.municipio_nombre } : {}
+  })()
+  const { data: zonaTiendas } = useTiendas({ ...scope, limit: 500, offset: 0 })
 
   function goToComunas() {
     const map = mapRef.current
@@ -93,7 +131,18 @@ function NegociosMap() {
     if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 16, duration: 400 })
     setLevel('comunas')
     setActiveComuna(null)
-    setActiveBarrioId(null)
+  }
+
+  // Abre comuna/municipio en el mapa: pinta sus barrios y encuadra. Mismo código
+  // para el click manual y para el auto-drill inicial al barrio de la página.
+  function openComuna(map: mapboxgl.Map, cd: number, nombre: string, municipio: string, geom: GeoJSON.Geometry) {
+    const setVis = (id: string, v: 'visible' | 'none') => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v) }
+    setVis('comunas-fill', 'none'); setVis('comunas-line', 'none'); setVis('comunas-label', 'none')
+    setVis('comunas-bubble-circle', 'none'); setVis('comunas-bubble-count', 'none')
+    setVis('barrios-fill', 'visible'); setVis('barrios-line', 'visible'); setVis('barrios-label', 'visible')
+    map.fitBounds(boundsOf(geom), { padding: 40, duration: 450 })
+    setLevel('barrios')
+    setActiveComuna({ cd, nombre, municipio })
   }
 
   // ── Init del mapa (una sola vez) ──────────────────────────────────────────
@@ -102,7 +151,7 @@ function NegociosMap() {
     mapboxgl.accessToken = MAPBOX_TOKEN
     const map = new mapboxgl.Map({
       container: containerRef.current,
-      style: 'mapbox://styles/mapbox/light-v11',
+      style: 'mapbox://styles/mapbox/streets-v12',
       center: [-75.5812, 6.2442],
       zoom: 10.4,
       minZoom: 9.3,
@@ -204,9 +253,89 @@ function NegociosMap() {
           paint: { 'text-color': '#1A1208', 'text-halo-color': '#FAF7F2', 'text-halo-width': 1.5 },
         })
 
+        // ── Pines de negocios — color por categoría (grupo), no un naranja plano.
+        // Un solo layer que persiste toda la vida del mapa: entrar/salir de una
+        // comuna solo llama .setData() (barato) en vez de crear/destruir 500
+        // mapboxgl.Marker (DOM) cada vez — eso era lo que se sentía como "recarga".
+        map.addSource('negocios-pines', { type: 'geojson', data: EMPTY_FC })
+        map.addLayer({
+          id: 'negocios-pines-circle', type: 'circle', source: 'negocios-pines',
+          paint: {
+            'circle-color': [
+              'match', ['get', 'grupo'],
+              'gastronomia',     GRUPO_COLOR.gastronomia,
+              'salud',           GRUPO_COLOR.salud,
+              'fitness',         GRUPO_COLOR.fitness,
+              'servicios_hogar', GRUPO_COLOR.servicios_hogar,
+              'mas_servicios',   GRUPO_COLOR.mas_servicios,
+              GRUPO_DEFAULT_COLOR,
+            ],
+            'circle-radius': ['case', ['boolean', ['feature-state', 'hover'], false], 9, 6.5],
+            'circle-stroke-width': 2,
+            'circle-stroke-color': '#ffffff',
+            'circle-opacity': 0.92,
+          },
+        })
+
+        let hoverPinId: number | string | undefined
+        map.on('mousemove', 'negocios-pines-circle', (e) => {
+          if (!e.features?.length) return
+          if (hoverPinId !== undefined) map.setFeatureState({ source: 'negocios-pines', id: hoverPinId }, { hover: false })
+          hoverPinId = e.features[0].id as number | string
+          map.setFeatureState({ source: 'negocios-pines', id: hoverPinId }, { hover: true })
+          map.getCanvas().style.cursor = 'pointer'
+        })
+        map.on('mouseleave', 'negocios-pines-circle', () => {
+          if (hoverPinId !== undefined) map.setFeatureState({ source: 'negocios-pines', id: hoverPinId }, { hover: false })
+          hoverPinId = undefined
+          map.getCanvas().style.cursor = ''
+        })
+        map.on('click', 'negocios-pines-circle', (e) => {
+          const p = e.features?.[0]?.properties
+          if (!p) return
+          const mapsUrl = p.google_place_id
+            ? `https://www.google.com/maps/place/?q=place_id:${p.google_place_id}`
+            : `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`
+          const wa = p.whatsapp || p.telefono
+          new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: '240px' })
+            .setLngLat(e.lngLat)
+            .setHTML(`<div style="font-family:system-ui;padding:4px 2px">
+                ${p.foto_url ? `<img src="${p.foto_url}" alt="${p.nombre}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
+                <strong style="font-size:.9rem;color:${K.ink}">${p.nombre}</strong>
+                ${p.categoria ? `<div style="font-size:.68rem;color:${K.tealDeep};font-weight:700;text-transform:uppercase;margin:2px 0">${p.categoria}</div>` : ''}
+                ${p.rating_google ? `<div style="color:${K.amarillo};font-size:.82rem">★ ${Number(p.rating_google).toFixed(1)}</div>` : ''}
+                ${p.direccion ? `<div style="font-size:.72rem;color:${K.muted};margin-top:4px">${p.direccion}</div>` : ''}
+                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
+                  ${wa ? `<a href="https://wa.me/${String(wa).replace(/\D/g, '')}" target="_blank" style="background:#25D366;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">💬 WA</a>` : ''}
+                  <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">📍 Maps</a>
+                  ${p.website ? `<a href="${p.website}" target="_blank" style="background:${K.coralLight};color:${K.coral};padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">🌐 Web</a>` : ''}
+                </div></div>`)
+            .addTo(map)
+        })
+
         const bounds = new mapboxgl.LngLatBounds()
         features.forEach(f => { const b = boundsOf(f.geometry); if (!b.isEmpty()) { bounds.extend(b.getSouthWest()); bounds.extend(b.getNorthEast()) } })
         if (!bounds.isEmpty()) map.fitBounds(bounds, { padding: 16, duration: 0 })
+
+        // Auto-drill al cargar: abre de una vez la comuna/municipio del `barrio`
+        // activo de la página — mismo alcance que la lista, para no depender de
+        // un click extra para ver negocios con ubicación exacta ("todos" queda
+        // en la vista de comunas, no hay un único polígono al que encuadrar).
+        if (barrio.slug !== 'todos') {
+          const target = barrio.municipio_nombre
+            ? features.find(f => (f.properties?.municipio ?? '').toUpperCase() === barrio.municipio_nombre?.toUpperCase())
+            : features.find(f => CD_COMUNA_SLUG[f.properties?.cd_comuna as number] === barrio.slug)
+          if (target) {
+            openComuna(
+              map,
+              target.properties?.cd_comuna as number,
+              (target.properties?.nombre ?? '') as string,
+              (target.properties?.municipio ?? '') as string,
+              target.geometry,
+            )
+          }
+        }
+        setMapReady(true)
       } catch (err) {
         console.error('[NegociosMap] failed to load zonas', err)
       }
@@ -232,14 +361,7 @@ function NegociosMap() {
       const nombre = (f.properties?.nombre ?? '') as string
       const municipio = (f.properties?.municipio ?? '') as string
       const full = staticFeaturesRef.current.find(sf => sf.properties?.nombre === nombre) ?? f
-      const setVis = (id: string, v: 'visible' | 'none') => { if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', v) }
-      setVis('comunas-fill', 'none'); setVis('comunas-line', 'none'); setVis('comunas-label', 'none')
-      setVis('comunas-bubble-circle', 'none'); setVis('comunas-bubble-count', 'none')
-      setVis('barrios-fill', 'visible'); setVis('barrios-line', 'visible'); setVis('barrios-label', 'visible')
-      map.fitBounds(boundsOf(full.geometry), { padding: 40, duration: 450 })
-      setLevel('barrios')
-      setActiveComuna({ cd, nombre, municipio })
-      setActiveBarrioId(null)
+      openComuna(map, cd, nombre, municipio, full.geometry)
     })
 
     // Hover + click barrio
@@ -265,7 +387,6 @@ function NegociosMap() {
       selectedBarrioRef.current = f.id as number
       map.setFeatureState({ source: 'barrios', id: selectedBarrioRef.current }, { selected: true })
       map.fitBounds(boundsOf(f.geometry), { padding: 60, maxZoom: 15, duration: 400 })
-      setActiveBarrioId(f.properties?.barrio_id as number)
     })
 
     return () => { map.remove(); mapRef.current = null }
@@ -290,42 +411,30 @@ function NegociosMap() {
     src.setData({ type: 'FeatureCollection', features: feats })
   }, [activeComuna, barriosRaw])
 
-  // Pines de negocios del barrio elegido — mismo marker/popup que el mapa de pines anterior.
+  // Pines de negocios de la comuna/municipio activo — ubicación exacta (lat/lon),
+  // color por categoría. Un solo setData() sobre el layer persistente (creado en
+  // 'load'): nada de crear/destruir DOM markers, por eso no hay flash de "recarga"
+  // al entrar/salir de una comuna.
   useEffect(() => {
     const map = mapRef.current
-    if (!map) return
-    markersRef.current.forEach(m => m.remove())
-    markersRef.current = []
-    const list = (barrioTiendas?.tiendas ?? []).filter(t => t.lat && t.lon)
-
-    const place = () => {
-      list.forEach(t => {
-        const el = document.createElement('div')
-        el.style.cssText = `width:26px;height:26px;border-radius:50%;background:${K.coral};
-          border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);cursor:pointer;`
-        el.title = t.nombre
-        const mapsUrl = t.google_place_id
-          ? `https://www.google.com/maps/place/?q=place_id:${t.google_place_id}`
-          : `https://www.google.com/maps/search/?api=1&query=${t.lat},${t.lon}`
-        const wa = t.whatsapp || t.telefono
-        const popup = new mapboxgl.Popup({ offset: 16, closeButton: false, maxWidth: '240px' })
-          .setHTML(`<div style="font-family:system-ui;padding:4px 2px">
-              ${t.foto_url ? `<img src="${t.foto_url}" alt="${t.nombre}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
-              <strong style="font-size:.9rem;color:${K.ink}">${t.nombre}</strong>
-              ${t.categoria ? `<div style="font-size:.68rem;color:${K.tealDeep};font-weight:700;text-transform:uppercase;margin:2px 0">${t.categoria}</div>` : ''}
-              ${t.rating_google ? `<div style="color:${K.amarillo};font-size:.82rem">★ ${t.rating_google.toFixed(1)}</div>` : ''}
-              ${t.direccion ? `<div style="font-size:.72rem;color:${K.muted};margin-top:4px">${t.direccion}</div>` : ''}
-              <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-                ${wa ? `<a href="https://wa.me/${wa.replace(/\D/g, '')}" target="_blank" style="background:#25D366;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">💬 WA</a>` : ''}
-                <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">📍 Maps</a>
-                ${t.website ? `<a href="${t.website}" target="_blank" style="background:${K.coralLight};color:${K.coral};padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">🌐 Web</a>` : ''}
-              </div></div>`)
-        const marker = new mapboxgl.Marker({ element: el }).setLngLat([t.lon!, t.lat!]).setPopup(popup).addTo(map)
-        markersRef.current.push(marker)
-      })
-    }
-    if (map.isStyleLoaded()) place(); else map.once('load', place)
-  }, [barrioTiendas])
+    const src = map?.getSource('negocios-pines') as mapboxgl.GeoJSONSource | undefined
+    if (!src) return
+    const feats: GeoJSON.Feature[] = (zonaTiendas?.tiendas ?? [])
+      .filter(t => t.lat && t.lon)
+      .map(t => ({
+        type: 'Feature', id: t.id,
+        geometry: { type: 'Point', coordinates: [t.lon!, t.lat!] },
+        properties: {
+          nombre: t.nombre, categoria: t.categoria ?? null,
+          grupo: (t.categoria && CATEGORIA_A_GRUPO[t.categoria]) || 'mas_servicios',
+          foto_url: t.foto_url ?? null, rating_google: t.rating_google ?? null,
+          direccion: t.direccion ?? null, whatsapp: t.whatsapp ?? null,
+          telefono: t.telefono ?? null, website: t.website ?? null,
+          google_place_id: t.google_place_id ?? null, lat: t.lat, lon: t.lon,
+        },
+      }))
+    src.setData({ type: 'FeatureCollection', features: feats })
+  }, [zonaTiendas, mapReady])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -374,7 +483,7 @@ function GroupLabel({ children }: { children: string }) {
 const PANEL_H = 'calc(100vh - 210px)'
 
 function LocalBusinessPage() {
-  const { barrio, lang } = useBarrio()
+  const { barrio, barrios, lang } = useBarrio()
   const t = (es: string, en: string) => lang === 'es' ? es : en
 
   const [grupo,       setGrupo]       = useState<string | null>(null)
@@ -456,27 +565,36 @@ function LocalBusinessPage() {
         </div>
       </div>
 
-      {/* ── Destacados — fila horizontal (negocios que pagan) ── */}
+      {/* ── Destacados — negocios patrocinados, misma tarjeta que los filtros ── */}
       {featured.length > 0 && (
-        <section style={{ background: '#FAF7F2', borderBottom: '0.5px solid #E8E0D0', padding: '18px 2rem' }}>
+        <div style={{ padding: '1.5rem 2rem 0', background: '#FAF7F2' }}>
           <div style={{ maxWidth: 1440, margin: '0 auto' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 12 }}>
-              <h2 style={{ fontFamily: K.serif, fontSize: 17, fontWeight: 700, color: K.ink, margin: 0 }}>
-                {t('Negocios Destacados', 'Featured Businesses')}
-              </h2>
-              <span style={{ fontSize: 10, color: '#9B8B75', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
-                {t('Patrocinado', 'Sponsored')}
-              </span>
-            </div>
-            <div style={{ display: 'flex', gap: 12, overflowX: 'auto', paddingBottom: 4 }}>
-              {featured.map(neg => (
-                <div key={neg.id} style={{ minWidth: 220, maxWidth: 220, flexShrink: 0 }}>
-                  <BusinessCardDirectory tienda={neg} />
-                </div>
-              ))}
+            <div style={{
+              background: '#fff', border: `1px solid ${K.line}`, borderTop: `3px solid ${K.amarillo}`,
+              borderRadius: 14, padding: '18px 20px 20px',
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 14 }}>
+                <h2 style={{ fontFamily: K.serif, fontSize: 18, fontWeight: 700, color: K.ink, margin: 0 }}>
+                  ⭐ {t('Negocios Destacados', 'Featured Businesses')}
+                </h2>
+                <span style={{
+                  fontSize: 10, color: '#8A6D1D', fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', background: '#FFF6DC', border: '1px solid #F0DFA0',
+                  borderRadius: 999, padding: '3px 10px',
+                }}>
+                  {t('Patrocinado', 'Sponsored')}
+                </span>
+              </div>
+              <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4 }}>
+                {featured.map(neg => (
+                  <div key={neg.id} style={{ minWidth: 240, maxWidth: 240, flexShrink: 0 }}>
+                    <BusinessCardDirectory tienda={neg} />
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
-        </section>
+        </div>
       )}
 
       {/* ── Filtros ── */}
@@ -617,7 +735,7 @@ function LocalBusinessPage() {
 
         {/* Mapa — derecha */}
         <div className="negocios-mapa" style={{ flex: 1, padding: 12, background: K.surface }}>
-          <NegociosMap />
+          <NegociosMap barrio={barrio} barrios={barrios} />
         </div>
 
       </div>

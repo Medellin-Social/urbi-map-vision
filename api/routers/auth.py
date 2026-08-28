@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
+import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
@@ -35,6 +36,10 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+
+class GoogleAuthRequest(BaseModel):
+    id_token: str
 
 
 class UserBasic(BaseModel):
@@ -79,6 +84,33 @@ async def _get_perfil(pool, user_id: int) -> Optional[dict]:
         user_id,
     )
     return dict(row) if row else None
+
+
+_GOOGLE_TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
+
+
+async def _verify_google_id_token(id_token: str) -> dict:
+    """Validate a Google Identity Services id_token against Google's tokeninfo
+    endpoint and return its claims. Raises 401 on any invalid/mismatched token.
+    """
+    client_id = os.getenv("GOOGLE_CLIENT_ID")
+    async with httpx.AsyncClient(timeout=5) as client:
+        try:
+            resp = await client.get(_GOOGLE_TOKENINFO_URL, params={"id_token": id_token})
+        except httpx.HTTPError:
+            raise HTTPException(status_code=401, detail="No se pudo verificar el token de Google")
+
+    if resp.status_code != 200:
+        raise HTTPException(status_code=401, detail="Token de Google inválido")
+
+    claims = resp.json()
+    if not client_id or claims.get("aud") != client_id:
+        raise HTTPException(status_code=401, detail="Token de Google inválido")
+    if claims.get("email_verified") not in ("true", True):
+        raise HTTPException(status_code=401, detail="Correo de Google no verificado")
+    if not claims.get("email"):
+        raise HTTPException(status_code=401, detail="Token de Google inválido")
+    return claims
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -145,6 +177,57 @@ async def login(request: Request, req: LoginRequest = Body(...)):
 
     await pool.execute(
         "UPDATE usuarios SET last_login = NOW() WHERE id = $1", row["id"]
+    )
+    token = _make_token(row["id"])
+    perfil = await _get_perfil(pool, row["id"])
+    return AuthResponse(
+        token=token,
+        user=UserBasic(
+            id=row["id"], email=row["email"], nombre=row["nombre"], apellido=row["apellido"],
+            plan=row["plan"], perfil_busqueda=row["perfil_busqueda"],
+            onboarding_completado=row["onboarding_completado"],
+            origen_registro=row["origen_registro"],
+        ),
+        perfil_inversor=perfil,
+    )
+
+
+@router.post("/google", response_model=AuthResponse)
+@limiter.limit("10/minute")
+async def google_login(request: Request, req: GoogleAuthRequest = Body(...)):
+    """Login or auto-register via Google Sign-In. Google already verified the
+    email, so accounts created/matched here are trusted (email_verificado=TRUE)."""
+    claims = await _verify_google_id_token(req.id_token)
+    email = claims["email"]
+    pool = get_pool()
+
+    row = await pool.fetchrow(
+        """SELECT id, email, nombre, apellido, activo, plan,
+                  perfil_busqueda, onboarding_completado, origen_registro
+           FROM usuarios WHERE email = $1""",
+        email,
+    )
+    if row is None:
+        password_hash = _hash_password(secrets.token_urlsafe(32))
+        user_id = await pool.fetchval(
+            """
+            INSERT INTO usuarios (email, password_hash, nombre, apellido, origen_registro, email_verificado)
+            VALUES ($1, $2, $3, $4, 'google', TRUE)
+            RETURNING id
+            """,
+            email, password_hash, claims.get("given_name"), claims.get("family_name"),
+        )
+        row = await pool.fetchrow(
+            """SELECT id, email, nombre, apellido, activo, plan,
+                      perfil_busqueda, onboarding_completado, origen_registro
+               FROM usuarios WHERE id = $1""",
+            user_id,
+        )
+    elif not row["activo"]:
+        raise HTTPException(status_code=403, detail="Cuenta desactivada")
+
+    await pool.execute(
+        "UPDATE usuarios SET last_login = NOW(), email_verificado = TRUE WHERE id = $1", row["id"]
     )
     token = _make_token(row["id"])
     perfil = await _get_perfil(pool, row["id"])

@@ -2357,6 +2357,32 @@ const PHRASES: Array<[string, string]> = [
   // Lista / panel
   ["Cargando inmuebles…", "Loading properties…"],
   ["Datos y características", "Facts & features"],
+  // ── Uso de suelo POT + Mercado real (Fase 1/2) — 2026-08-26 ────────────────
+  // Entradas completas (más largas que "Área"/"Valor"/"Mes"/"Venta" ya
+  // existentes) para que el longest-match-first las capture antes que esos
+  // fragmentos cortos las corten a medias — ver test src/__tests__/i18n-pot-mercado.test.ts.
+  ["Áreas y corredores de alta mixtura", "High mixed-use areas and corridors"],
+  ["Áreas y corredores de media mixtura", "Medium mixed-use areas and corridors"],
+  ["Áreas de baja mixtura", "Low mixed-use areas"],
+  ["Uso Dotacional", "Institutional use"],
+  ["Espacio Público Existente", "Existing public space"],
+  ["Espacio Público Proyectado", "Planned public space"],
+  ["Uso de suelo (POT)", "Land use (POT)"],
+  ["Plan de Ordenamiento Territorial de Medellín — solo disponible dentro del municipio", "Medellín Land Use Plan — only available within the municipality"],
+  ["Ventas cerradas", "Closed sales"],
+  ["Valor mediana cierre", "Median closing value"],
+  ["Variación anual", "Annual change"],
+  ["Meses de inventario", "Months of inventory"],
+  ["Mercado de vendedor", "Seller's market"],
+  ["Mercado de comprador", "Buyer's market"],
+  ["Mercado balanceado", "Balanced market"],
+  ["Cierra en", "Closes at"],
+  ["del precio pedido", "of asking price"],
+  ["Fuente: registro notarial SNR/ORIPS, nivel municipio (no barrio)", "Source: SNR/ORIPS notary registry, municipality level (not neighborhood)"],
+  ["transacciones reales de", "real transactions in"],
+  ["Índice DANE nacional del mismo año:", "National DANE index for the same year:"],
+  ["(referencia, no aplicado como ajuste).", "(reference only, not applied as an adjustment)."],
+  ["Valor absoluto, no controla mezcla de tipo/tamaño de inmueble.", "Absolute value, does not control for property type/size mix."],
 ];
 
 /* Tokens that should never be translated (brand, neighborhood names, etc.) */
@@ -2383,7 +2409,7 @@ const PROTECT = new Set([
 // Sort once, longest phrases first so substrings don't pre-empt phrases.
 const SORTED_PHRASES = [...PHRASES].sort((a, b) => b[0].length - a[0].length);
 
-function translateString(input: string): string {
+export function translateString(input: string): string {
   if (!input) return input;
   let out = input;
   for (const [es, en] of SORTED_PHRASES) {

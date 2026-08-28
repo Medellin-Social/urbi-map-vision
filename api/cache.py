@@ -318,16 +318,41 @@ FROM sin_geo WHERE _rn = 1
 """
 
 _INSERT_LISTINGS_GEOREF = """
-INSERT INTO analytics.listings_georef (url, lat, lon, url_activa, estrato_real, refreshed_at)
+INSERT INTO analytics.listings_georef
+    (url, lat, lon, url_activa, estrato_real, uso_suelo_pot, estrato_manzana, refreshed_at)
 SELECT DISTINCT ON (l.url)
     l.url,
     l.lat,
     l.lon,
     TRUE           AS url_activa,
     l.estrato_real AS estrato_real,
+    pot.areagraluso,
+    em.estrato,
     now()
 FROM staging.stg_listings_unificado l
 JOIN raw.barrios b ON b.id = l.barrio_id
+-- Uso de suelo POT: point-in-polygon con buffer 0.0003° (~30m) para costuras
+-- de reproyección — ST_Contains exacto llega a 72.6% de cobertura en
+-- Medellín, el buffer sube a ~96% (verificado 2026-08-25). ORDER BY prefiere
+-- el match exacto (Contains) sobre el de buffer cuando ambos existen.
+-- pot_usos_medellin es Medellín-only — NULL en los otros 9 municipios, esperado.
+LEFT JOIN LATERAL (
+    SELECT p.areagraluso
+    FROM raw.pot_usos_medellin p
+    WHERE b.municipio ILIKE 'MEDELLIN'
+      AND ST_DWithin(p.geometry, ST_SetSRID(ST_MakePoint(l.lon, l.lat), 4326), 0.0003)
+    ORDER BY ST_Contains(p.geometry, ST_SetSRID(ST_MakePoint(l.lon, l.lat), 4326)) DESC
+    LIMIT 1
+) pot ON TRUE
+-- Estrato a nivel manzana (más fino que estrato_real/comuna) — 99.9% cobertura
+-- directa en Medellín, sin necesidad de buffer.
+LEFT JOIN LATERAL (
+    SELECT em.estrato
+    FROM raw.estratos_manzana em
+    WHERE b.municipio ILIKE 'MEDELLIN'
+      AND ST_Contains(em.geometry, ST_SetSRID(ST_MakePoint(l.lon, l.lat), 4326))
+    LIMIT 1
+) em ON TRUE
 WHERE l.precio_cop >= 500000
   AND NOT (l.tipo_operacion = 'arriendo' AND l.precio_cop > 50000000)
   AND NOT (l.tipo_operacion = 'venta'    AND l.precio_cop > 50000000000)
@@ -349,6 +374,11 @@ async def refresh_listings_cache(pool: Any) -> None:
             # pool-wide 15s statement_timeout — raise it for this connection only
             # (asyncpg RESET ALL on release reverts to the 15s default).
             await conn.execute("SET statement_timeout = '600000'")
+            # asyncpg's own command_timeout=30 (api/db.py) is client-side and
+            # independent from the server-side statement_timeout above — must
+            # be overridden per-call too, or heavy queries below get killed at
+            # 30s with an empty-message TimeoutError.
+            heavy_timeout = 600
             # stg_listings_unificado: rebuild from raw tables (normally managed by dbt;
             # this keeps it fresh on environments where dbt doesn't run, e.g. Railway)
             stg_exists = await conn.fetchval(
@@ -365,7 +395,7 @@ async def refresh_listings_cache(pool: Any) -> None:
                 )
                 async with conn.transaction():
                     await conn.execute(_TRUNCATE_STG_LISTINGS)
-                    await conn.execute(_REFRESH_STG_LISTINGS)
+                    await conn.execute(_REFRESH_STG_LISTINGS, timeout=heavy_timeout)
                     # Propagar verificado a las filas de publicación directa (_ls).
                     await conn.execute(
                         "UPDATE staging.stg_listings_unificado s SET verificado = l.verificado "
@@ -391,19 +421,19 @@ async def refresh_listings_cache(pool: Any) -> None:
                 # barrios_medianas queries stg_listings_unificado — only run when stg exists
                 async with conn.transaction():
                     await conn.execute("TRUNCATE analytics.barrios_medianas")
-                    await conn.execute(_INSERT_BARRIOS_MEDIANAS)
+                    await conn.execute(_INSERT_BARRIOS_MEDIANAS, timeout=heavy_timeout)
                 logger.info("[cache] barrios_medianas refreshed")
 
                 # listings_georef queries stg_listings_unificado — only run when stg exists
                 async with conn.transaction():
                     await conn.execute("TRUNCATE analytics.listings_georef")
-                    await conn.execute(_INSERT_LISTINGS_GEOREF)
+                    await conn.execute(_INSERT_LISTINGS_GEOREF, timeout=heavy_timeout)
                 logger.info("[cache] listings_georef refreshed")
             else:
                 logger.warning("[cache] stg_listings_unificado missing — skipping stg-dependent refreshes")
 
             # barrios_contexto: upsert from analytics tables — no stg dependency
-            await conn.execute(_INSERT_BARRIOS_CONTEXTO)
+            await conn.execute(_INSERT_BARRIOS_CONTEXTO, timeout=heavy_timeout)
             logger.info("[cache] barrios_contexto refreshed")
 
     except Exception as exc:

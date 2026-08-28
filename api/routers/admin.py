@@ -880,6 +880,7 @@ async def list_eventos_admin(admin: dict = Depends(require_admin)):
     rows = await pool.fetch(
         """
         SELECT e.id, e.titulo, e.categoria, e.fecha_inicio, e.destacado, e.gratuito,
+               e.destacado_nivel, e.destacado_zona_codigo, e.barrio_id,
                b.nombre AS barrio_nombre
         FROM eventos e
         LEFT JOIN raw.barrios b ON e.barrio_id = b.id
@@ -896,6 +897,9 @@ async def list_eventos_admin(admin: dict = Depends(require_admin)):
                 "categoria": r["categoria"],
                 "fecha_inicio": r["fecha_inicio"].isoformat() if r["fecha_inicio"] else None,
                 "destacado": r["destacado"],
+                "destacado_nivel": r["destacado_nivel"],
+                "destacado_zona_codigo": r["destacado_zona_codigo"],
+                "barrio_id": r["barrio_id"],
                 "gratuito": r["gratuito"],
                 "barrio": r["barrio_nombre"],
             }
@@ -904,22 +908,195 @@ async def list_eventos_admin(admin: dict = Depends(require_admin)):
     }
 
 
-class EventoPatch(BaseModel):
-    destacado: bool
+_NIVELES_DESTACADO = ("barrio", "comuna", "ciudad")
+
+# Comunas reales de Medellín son 1-16 (analytics.barrios_cd). Los otros municipios del
+# Valle de Aburrá no tienen comunas — se tratan como "comuna" propia con un pseudo-código
+# 101-105, mismo esquema que ya usa comunidad.py (_MUNICIPIO_TOTAL_COUNTS_QUERY) y
+# comunas.py para colorear el mapa. Así "comuna" cubre los 10 municipios, no solo Medellín.
+_MUNICIPIO_A_PSEUDO_COMUNA = {
+    "BELLO": "101", "ENVIGADO": "102", "ITAGUI": "103", "SABANETA": "104", "LA ESTRELLA": "105",
+}
+_PSEUDO_COMUNA_A_MUNICIPIO = {v: k for k, v in _MUNICIPIO_A_PSEUDO_COMUNA.items()}
+
+
+class DestacadoPatch(BaseModel):
+    destacado: Optional[bool] = None
+    destacado_nivel: Optional[str] = None          # barrio | comuna | ciudad
+    destacado_zona_codigo: Optional[str] = None    # qué barrio/comuna — si no se manda, se usa la propia del item
+
+
+@router.get("/destacados-catalogo")
+async def destacados_catalogo(admin: dict = Depends(require_admin)):
+    """Comunas (16 de Medellín + 5 municipios como pseudo-comuna) y TODOS los barrios
+    del Valle de Aburrá, para elegir en qué zona destacar un negocio o evento."""
+    pool = get_pool()
+    comunas_medellin = await pool.fetch(
+        "SELECT DISTINCT bc.cd_comuna, INITCAP(LOWER(b.comuna)) AS nombre "
+        "FROM analytics.barrios_cd bc JOIN raw.barrios b ON b.id = bc.barrio_id "
+        "WHERE b.municipio = 'MEDELLIN' AND bc.cd_comuna IS NOT NULL ORDER BY bc.cd_comuna"
+    )
+    barrios = await pool.fetch(
+        "SELECT id, INITCAP(LOWER(nombre)) AS nombre, municipio FROM raw.barrios "
+        "WHERE municipio IN ('MEDELLIN','BELLO','ENVIGADO','ITAGUI','SABANETA','LA ESTRELLA',"
+        "'GIRARDOTA','CALDAS','COPACABANA','BARBOSA') ORDER BY municipio, nombre"
+    )
+    comunas = [{"codigo": str(r["cd_comuna"]), "nombre": f'Medellín · {r["nombre"]}'} for r in comunas_medellin]
+    comunas += [{"codigo": c, "nombre": m.title()} for m, c in _MUNICIPIO_A_PSEUDO_COMUNA.items()]
+    return {
+        "comunas": comunas,
+        "barrios": [{"id": r["id"], "nombre": r["nombre"], "municipio": r["municipio"]} for r in barrios],
+    }
+
+
+async def _validar_zona_codigo(pool, nivel: str, codigo: str) -> bool:
+    if nivel == "barrio":
+        return bool(await pool.fetchval("SELECT 1 FROM raw.barrios WHERE id = $1", int(codigo)) if codigo.isdigit() else False)
+    if nivel == "comuna":
+        if codigo in _PSEUDO_COMUNA_A_MUNICIPIO:
+            return True
+        return bool(await pool.fetchval("SELECT 1 FROM analytics.barrios_cd WHERE cd_comuna::text = $1 LIMIT 1", codigo))
+    return False
+
+
+async def _resolve_own_zona_codigo(pool, tabla: str, item_id: int, nivel: str) -> Optional[str]:
+    """Zona por defecto cuando el admin no elige una explícita: la propia ubicación del item.
+    barrio → su barrio_id. comuna → su cd_comuna real (Medellín) o el pseudo-código de su municipio."""
+    row = await pool.fetchrow(f"SELECT t.barrio_id, b.municipio FROM {tabla} t LEFT JOIN raw.barrios b ON b.id = t.barrio_id WHERE t.id = $1", item_id)
+    if not row or row["barrio_id"] is None:
+        return None
+    if nivel == "barrio":
+        return str(row["barrio_id"])
+    if nivel == "comuna":
+        if row["municipio"] in _MUNICIPIO_A_PSEUDO_COMUNA:
+            return _MUNICIPIO_A_PSEUDO_COMUNA[row["municipio"]]
+        cd = await pool.fetchval("SELECT cd_comuna FROM analytics.barrios_cd WHERE barrio_id = $1", row["barrio_id"])
+        return str(cd) if cd is not None else None
+    return None
+
+
+async def _build_destacado_sets(pool, tabla: str, item_id: int, body: "DestacadoPatch") -> tuple[list[str], list]:
+    """SET clauses compartidos por eventos y tiendas para el patch de destacado con alcance."""
+    if body.destacado_nivel is not None and body.destacado_nivel not in _NIVELES_DESTACADO:
+        raise HTTPException(status_code=400, detail="destacado_nivel debe ser barrio, comuna o ciudad")
+    sets: list[str] = []
+    params: list = []
+    if body.destacado is not None:
+        params.append(body.destacado)
+        sets.append(f"destacado = ${len(params)}")
+        if not body.destacado:
+            sets.append("destacado_nivel = NULL")
+            sets.append("destacado_zona_codigo = NULL")
+    if body.destacado is not False and body.destacado_nivel is not None:
+        params.append(body.destacado_nivel)
+        sets.append(f"destacado_nivel = ${len(params)}")
+        if body.destacado_nivel == "ciudad":
+            sets.append("destacado_zona_codigo = NULL")
+        else:
+            zona = body.destacado_zona_codigo
+            if zona is not None:
+                if not await _validar_zona_codigo(pool, body.destacado_nivel, zona):
+                    raise HTTPException(status_code=400, detail=f"Zona inválida para nivel {body.destacado_nivel}")
+            else:
+                zona = await _resolve_own_zona_codigo(pool, tabla, item_id, body.destacado_nivel)
+            if zona is None:
+                raise HTTPException(status_code=400, detail=f"Sin barrio asignado — no se puede destacar por {body.destacado_nivel}")
+            params.append(zona)
+            sets.append(f"destacado_zona_codigo = ${len(params)}")
+    if not sets:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    return sets, params
 
 
 @router.patch("/eventos/{evento_id}")
 @limiter.limit("30/minute")
-async def editar_evento(request: Request, evento_id: int, body: EventoPatch = Body(...), admin: dict = Depends(require_admin)):
+async def editar_evento(request: Request, evento_id: int, body: DestacadoPatch = Body(...), admin: dict = Depends(require_admin)):
     pool = get_pool()
+    sets, params = await _build_destacado_sets(pool, "eventos", evento_id, body)
+    params.append(evento_id)
     row = await pool.fetchrow(
-        "UPDATE eventos SET destacado = $1, updated_at = NOW() WHERE id = $2 RETURNING id, destacado",
-        body.destacado, evento_id,
+        f"UPDATE eventos SET {', '.join(sets)}, updated_at = NOW() WHERE id = ${len(params)} "
+        "RETURNING id, destacado, destacado_nivel, destacado_zona_codigo",
+        *params,
     )
     if not row:
         raise HTTPException(status_code=404, detail="Evento no encontrado")
-    await _audit(pool, admin, "editar_evento", "evento", str(evento_id), {"destacado": body.destacado}, request)
-    return {"id": row["id"], "destacado": row["destacado"]}
+    await _audit(pool, admin, "editar_evento", "evento", str(evento_id),
+                 {"destacado": row["destacado"], "nivel": row["destacado_nivel"], "zona": row["destacado_zona_codigo"]}, request)
+    return dict(row)
+
+
+# ── Negocios locales (tiendas) — destacados con alcance ────────────────────────
+
+@router.get("/tiendas")
+async def list_tiendas_admin(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    search: Optional[str] = Query(None),
+    destacado: Optional[bool] = Query(None),
+    admin: dict = Depends(require_admin),
+):
+    pool = get_pool()
+    offset = (page - 1) * limit
+
+    where_parts = ["t.activo = true"]
+    params: list = []
+    if search:
+        params.append(f"%{search}%")
+        where_parts.append(f"t.nombre ILIKE ${len(params)}")
+    if destacado is not None:
+        params.append(destacado)
+        where_parts.append(f"t.destacado = ${len(params)}")
+    where_clause = " AND ".join(where_parts)
+
+    total = await pool.fetchval(f"SELECT COUNT(*) FROM tiendas t WHERE {where_clause}", *params) or 0
+
+    params_paged = params + [limit, offset]
+    rows = await pool.fetch(
+        f"""
+        SELECT t.id, t.nombre, t.categoria, t.destacado, t.destacado_nivel, t.destacado_zona_codigo,
+               t.barrio_id, b.nombre AS barrio_nombre, b.municipio
+        FROM tiendas t
+        LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+        WHERE {where_clause}
+        ORDER BY t.destacado DESC, t.nombre ASC
+        LIMIT ${len(params_paged) - 1} OFFSET ${len(params_paged)}
+        """,
+        *params_paged,
+    )
+    import math
+    return {
+        "total": int(total),
+        "page": page,
+        "pages": math.ceil(int(total) / limit) if total else 1,
+        "tiendas": [
+            {
+                "id": r["id"], "nombre": r["nombre"], "categoria": r["categoria"],
+                "destacado": r["destacado"], "destacado_nivel": r["destacado_nivel"],
+                "destacado_zona_codigo": r["destacado_zona_codigo"],
+                "barrio_id": r["barrio_id"], "barrio": r["barrio_nombre"], "municipio": r["municipio"],
+            }
+            for r in rows
+        ],
+    }
+
+
+@router.patch("/tiendas/{tienda_id}")
+@limiter.limit("30/minute")
+async def editar_tienda(request: Request, tienda_id: int, body: DestacadoPatch = Body(...), admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    sets, params = await _build_destacado_sets(pool, "tiendas", tienda_id, body)
+    params.append(tienda_id)
+    row = await pool.fetchrow(
+        f"UPDATE tiendas SET {', '.join(sets)}, updated_at = NOW() WHERE id = ${len(params)} "
+        "RETURNING id, destacado, destacado_nivel, destacado_zona_codigo",
+        *params,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado")
+    await _audit(pool, admin, "editar_tienda", "tienda", str(tienda_id),
+                 {"destacado": row["destacado"], "nivel": row["destacado_nivel"], "zona": row["destacado_zona_codigo"]}, request)
+    return dict(row)
 
 
 # ── SMTP Test ──────────────────────────────────────────────────────────────────

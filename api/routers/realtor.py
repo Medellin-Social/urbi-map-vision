@@ -13,6 +13,7 @@ from pydantic import BaseModel, Field
 
 from api.db import get_pool
 from api.dependencies import get_current_user
+from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
 from api.services.listing_service import datos_minimos_completos
 from api.utils.storage import upload_file
@@ -608,37 +609,51 @@ async def actualizar_visita(
     return {"id": visita_id, "estado": req.estado, "resultado": req.resultado}
 
 
-@router.get("/inteligencia/{zona_codigo}")
-async def inteligencia(zona_codigo: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    """Inteligencia de mercado de la zona — solo realtors autenticados."""
+# zona_codigo llega en 2 namespaces que colisionan si se adivinan por string:
+# barrio_id (patrocinio barrio, $200/mes) y cd_comuna (patrocinio comuna,
+# tier principal $1k/mes — ambos son enteros pequeños, ej. "11" es a la vez
+# un barrio_id real y el cd_comuna de El Poblado). `nivel` (de
+# ZonaPatrocinada/sponsorship) desambigua cuál es. Para comuna no hay una
+# fila de barrio única: se usa como representativa la que tenga más datos
+# de mercado (bm.precio_venta_m2_p50 poblado).
+_ZONA_A_BARRIO_SQL = """
+    SELECT b.id
+    FROM raw.barrios b
+    LEFT JOIN analytics.barrios_cd     bc ON bc.barrio_id = b.id
+    LEFT JOIN analytics.barrios_mercado bm ON bm.barrio_id = b.id
+    WHERE CASE WHEN $2 = 'comuna' THEN bc.cd_comuna::text = $1
+               ELSE b.id::text = $1
+                    OR LOWER(b.nombre) = LOWER(REPLACE($1, '-', ' '))
+                    -- municipios fuera de Medellín: el listing suele guardar
+                    -- "{municipio} {barrio}" (ej. "Envigado Centro" vs. barrio "CENTRO")
+                    OR LOWER(b.municipio || ' ' || b.nombre) = LOWER(REPLACE($1, '-', ' '))
+          END
+    ORDER BY (bm.precio_venta_m2_p50 IS NOT NULL) DESC, b.nombre
+    LIMIT 1
+"""
+
+
+@router.get("/inteligencia/{zona_codigo}", response_model=BarrioResponse)
+async def inteligencia(
+    zona_codigo: str,
+    nivel: str | None = None,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Inteligencia de mercado completa de la zona — solo realtors autenticados.
+
+    Reusa la misma consulta que el panel público de barrios (_BARRIO_SQL):
+    renta corta/media/larga, yield, seguridad, liquidez, conectividad,
+    valorización, catastro — una sola fuente de verdad, sin duplicar campos.
+    """
     await _agent_del_usuario(user, pool)
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            """
-            SELECT b.id::text AS zona_codigo, b.nombre AS zona_nombre,
-                   COALESCE(sc.score_mediano, sc.score_largo, sc.score_corto) AS score_consolidado,
-                   lq.liquidez_score AS liquidez,
-                   bm.precio_venta_m2_p50 AS mediana_venta_m2,
-                   lq.tiempo_estimado_venta
-            FROM raw.barrios b
-            LEFT JOIN analytics.barrios_score_consolidado sc ON sc.barrio_id = b.id
-            LEFT JOIN analytics.barrios_liquidez lq ON lq.barrio_id = b.id
-            LEFT JOIN analytics.barrios_mercado bm ON bm.barrio_id = b.id
-            WHERE b.id::text = $1 OR LOWER(b.nombre) = LOWER(REPLACE($1, '-', ' '))
-            LIMIT 1
-            """,
-            zona_codigo,
-        )
+    barrio_id = await pool.fetchval(_ZONA_A_BARRIO_SQL, zona_codigo, nivel)
+    if barrio_id is None:
+        raise HTTPException(status_code=404, detail=f"Zona '{zona_codigo}' no encontrada")
+    row = await pool.fetchrow(_BARRIO_SQL + " WHERE b.id = $1", barrio_id)
     if not row:
         raise HTTPException(status_code=404, detail=f"Zona '{zona_codigo}' no encontrada")
-    return {
-        "zona_codigo": row["zona_codigo"],
-        "zona_nombre": row["zona_nombre"],
-        "score_consolidado": float(row["score_consolidado"] or 0),
-        "liquidez": float(row["liquidez"] or 0),
-        "mediana_venta_m2": float(row["mediana_venta_m2"] or 0),
-        "tiempo_estimado_venta": row["tiempo_estimado_venta"],
-    }
+    return _build_response(dict(row))
 
 
 # ── Disponibilidad semanal del agente (para slots de visita, sin Google) ──────

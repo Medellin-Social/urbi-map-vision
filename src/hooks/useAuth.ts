@@ -69,6 +69,20 @@ export function useLogin() {
   });
 }
 
+export function useGoogleLogin() {
+  return useMutation({
+    mutationFn: async (data: { id_token: string }) => {
+      const res = await apiFetch<AuthResponse>(API_ENDPOINTS.googleLogin, {
+        method: "POST",
+        body: JSON.stringify(data),
+        skipAuth: true,
+      });
+      storeAuth(res);
+      return res;
+    },
+  });
+}
+
 export function useMe() {
   return useQuery({
     queryKey: ["me"],

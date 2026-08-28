@@ -95,6 +95,8 @@ class ListingFull(BaseModel):
     disponible_actualmente: Optional[bool] = None
     fecha_ultima_verificacion: Optional[datetime] = None
     estrato_real: Optional[int] = None
+    uso_suelo_pot: Optional[str] = None
+    estrato_manzana: Optional[int] = None
     amoblado: Optional[bool] = None
     verificado: Optional[bool] = None
     tier: Optional[str] = None
@@ -746,6 +748,8 @@ SELECT
     g.lon,
     g.url_activa AS disponible_actualmente,
     g.estrato_real,
+    g.uso_suelo_pot,
+    g.estrato_manzana,
     l.barrio_id,
     b.nombre                           AS barrio_nombre,
     INITCAP(LOWER(b.nombre))           AS barrio_display,

@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useLogin } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { AlertCircle } from "lucide-react";
+import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
@@ -86,6 +87,13 @@ function LoginPage() {
         <AuthButton disabled={login.isPending}>
           {login.isPending ? "Entrando…" : "Iniciar sesión"}
         </AuthButton>
+        <GoogleSignInButton
+          onSuccess={(res) => {
+            const hasProfile = !!res.perfil_inversor?.objetivo;
+            navigate({ to: hasProfile ? "/map" : "/onboarding" });
+          }}
+          onError={setError}
+        />
         <p style={{ textAlign: "center", fontSize: 13, fontFamily: K.manrope, color: K.muted, margin: 0 }}>
           ¿No tienes cuenta?{" "}
           <Link to="/register" style={{ color: K.teal, fontWeight: 700, textDecoration: "none" }}>

@@ -12,6 +12,7 @@ export const API_ENDPOINTS = {
   // Auth
   register: `${API_BASE_URL}/auth/register`,
   login: `${API_BASE_URL}/auth/login`,
+  googleLogin: `${API_BASE_URL}/auth/google`,
   me: `${API_BASE_URL}/auth/me`,
   logout: `${API_BASE_URL}/auth/logout`,
   refreshToken: `${API_BASE_URL}/auth/refresh`,
@@ -52,6 +53,9 @@ export const API_ENDPOINTS = {
   adminEventoEditar: (id: number) => `${API_BASE_URL}/admin/eventos/${id}`,
   adminActividad: `${API_BASE_URL}/admin/actividad`,
   adminAuditLog: `${API_BASE_URL}/admin/audit-log`,
+  adminTiendas: `${API_BASE_URL}/admin/tiendas`,
+  adminTiendaEditar: (id: number) => `${API_BASE_URL}/admin/tiendas/${id}`,
+  adminDestacadosCatalogo: `${API_BASE_URL}/admin/destacados-catalogo`,
 
   // Features
   calculadora: `${API_BASE_URL}/calculadora/simular`,

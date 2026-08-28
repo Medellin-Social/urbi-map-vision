@@ -58,9 +58,24 @@ if not DB_URL:
     )
 
 # ---------------------------------------------------------------------------
-# DDL — la tabla raw.criminalidad ya existe (fusión 2026-08-23); solo índices.
+# DDL — CREATE TABLE IF NOT EXISTS: la tabla existía en local (fusión
+# 2026-08-23) pero nunca se migró a prod (no hay migración alembic para
+# ella, se creó ad-hoc). Idempotente en cualquier entorno.
 # ---------------------------------------------------------------------------
 DDL_ANUAL = """
+CREATE TABLE IF NOT EXISTS raw.criminalidad (
+    id             serial PRIMARY KEY,
+    geo_nivel      varchar NOT NULL,
+    geo_codigo     text NOT NULL,
+    periodo_tipo   varchar NOT NULL,
+    anio           smallint NOT NULL,
+    mes            smallint,
+    conducta       text NOT NULL,
+    cantidad_casos integer NOT NULL,
+    departamento   text,
+    fuente         text,
+    cargado_en     timestamptz NOT NULL DEFAULT now()
+);
 CREATE INDEX IF NOT EXISTS idx_criminalidad_geo ON raw.criminalidad (geo_nivel, geo_codigo);
 CREATE INDEX IF NOT EXISTS idx_criminalidad_periodo ON raw.criminalidad (periodo_tipo, anio, mes);
 """
