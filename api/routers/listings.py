@@ -261,6 +261,8 @@ SELECT
     ctx.var_anual_pct,
     ctx.pct_wifi,
     g.estrato_real,
+    g.uso_suelo_pot,
+    g.estrato_manzana,
     l.amoblado,
     l.verificado,
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
