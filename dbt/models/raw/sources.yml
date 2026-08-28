@@ -193,6 +193,20 @@ sources:
             description: "Nombre de la comuna"
           - name: geometry
             description: "MULTIPOLYGON WGS84 (SRID 4326)"
+      - name: pois
+        description: "Puntos de interés de OpenStreetMap (Overpass) — cargados por scripts/load_pois_overpass.py. UPSERT por osm_id."
+        columns:
+          - name: id
+            description: "PK serial"
+          - name: osm_id
+            description: "'type/id' de OSM — clave de UPSERT"
+          - name: nombre
+          - name: tipo
+            description: "cafe | coworking | gimnasio | hospital | mall | metro | parque | restaurante | universidad | bar | yoga_studio | colegio | supermercado | farmacia | paradero_bus | parque_infantil | cancha | encicla | estacion_policia | bomberos"
+          - name: subtipo
+            description: "tag OSM origen, formato 'key=value'"
+          - name: geometry
+            description: "Point WGS84 (SRID 4326)"
 
   - name: renta_media
     schema: raw

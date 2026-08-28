@@ -4,7 +4,9 @@ y los carga en raw.pois (upsert por osm_id).
 
 Tipos buscados (mismos que ya existen en la tabla):
   cafe, coworking, gimnasio, hospital, mall, metro, parque,
-  restaurante, universidad, bar, yoga_studio
+  restaurante, universidad, bar, yoga_studio, colegio,
+  supermercado, farmacia, paradero_bus, parque_infantil, cancha,
+  encicla, estacion_policia, bomberos
 
 Uso:
   python scripts/load_pois_overpass.py
@@ -142,6 +144,51 @@ POI_RULES = [
             'nwr["amenity"="school"]({bbox})',
             'nwr["amenity"="kindergarten"]({bbox})',
         ],
+    },
+    {
+        "tipo": "supermercado",
+        "subtipo": "shop=supermarket",
+        "queries": ['nwr["shop"="supermarket"]({bbox})'],
+    },
+    {
+        "tipo": "farmacia",
+        "subtipo": "amenity=pharmacy",
+        "queries": ['nwr["amenity"="pharmacy"]({bbox})'],
+    },
+    # ── paradero bus: highway=bus_stop (Metroplús usa el mismo tag) ──────────
+    {
+        "tipo": "paradero_bus",
+        "subtipo": "highway=bus_stop",
+        "queries": ['nwr["highway"="bus_stop"]({bbox})'],
+    },
+    {
+        "tipo": "parque_infantil",
+        "subtipo": "leisure=playground",
+        "queries": ['nwr["leisure"="playground"]({bbox})'],
+    },
+    {
+        "tipo": "cancha",
+        "subtipo": "leisure=sports_centre",
+        "queries": [
+            'nwr["leisure"="sports_centre"]({bbox})',
+            'nwr["leisure"="pitch"]({bbox})',
+        ],
+    },
+    # ── EnCicla: bicicletas públicas, tag genérico OSM + operator local ──────
+    {
+        "tipo": "encicla",
+        "subtipo": "amenity=bicycle_rental",
+        "queries": ['nwr["amenity"="bicycle_rental"]({bbox})'],
+    },
+    {
+        "tipo": "estacion_policia",
+        "subtipo": "amenity=police",
+        "queries": ['nwr["amenity"="police"]({bbox})'],
+    },
+    {
+        "tipo": "bomberos",
+        "subtipo": "amenity=fire_station",
+        "queries": ['nwr["amenity"="fire_station"]({bbox})'],
     },
 ]
 

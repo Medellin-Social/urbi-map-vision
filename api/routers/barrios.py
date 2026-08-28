@@ -157,6 +157,21 @@ class Conectividad(BaseModel):
     # Colegios cercanos + scores estilo Zillow (walk/transit)
     n_colegios_1km: Optional[int] = None
     dist_colegio_km: Optional[float] = None
+    n_parques_inf_500m: Optional[int] = None
+    n_canchas_1km: Optional[int] = None
+    dist_encicla_km: Optional[float] = None
+    n_policia_1km: Optional[int] = None
+    dist_policia_km: Optional[float] = None
+    n_bomberos_2km: Optional[int] = None
+    avg_internet_mbps: Optional[float] = None
+    n_tests_internet: Optional[int] = None
+    # Puntaje Saber 11 promedio del MUNICIPIO (no hay dato por barrio/comuna)
+    score_icfes_municipio: Optional[float] = None
+    dist_obra_publica_km: Optional[float] = None
+    nombre_obra_cercana: Optional[str] = None
+    # dB promedio de día de la estación/sensor SIATA más cercano (red oficial + ciudadana)
+    db_ruido_dia_cercano: Optional[float] = None
+    dist_ruido_km: Optional[float] = None
     walk_score: Optional[int] = None
     transit_score: Optional[int] = None
 
@@ -165,6 +180,15 @@ class Verde(BaseModel):
     indice_verde_pct: Optional[float] = None
     categoria: Optional[str] = None
     score_verde: Optional[int] = None
+
+
+class Trafico(BaseModel):
+    nivel: Optional[str] = None            # bajo | medio | alto
+    jam_prom: Optional[float] = None       # jamFactor HERE 0-10 (10=parado)
+    pico_am_inicio: Optional[int] = None
+    pico_am_fin: Optional[int] = None
+    pico_pm_inicio: Optional[int] = None
+    pico_pm_fin: Optional[int] = None
 
 
 class Liquidez(BaseModel):
@@ -201,6 +225,21 @@ class CatastroComuna(BaseModel):
     ratio_vs_ciudad: Optional[float] = None
 
 
+# Compraventas reales (SNR/ORIPS) a nivel MUNICIPIO — no hay geo/dirección en
+# la fuente, así que no baja a barrio (ver memoria project_datos_huerfanos_techos_reales).
+# n_transacciones/valor_mediana son del último año completo (excluye el año en
+# curso, que llega parcial); umbral n>=30 para no mostrar medianas con muestra chica.
+class MercadoReal(BaseModel):
+    anio_dato: Optional[int] = None
+    n_transacciones_anual: Optional[int] = None
+    valor_mediana_anual: Optional[int] = None
+    var_anual_pct: Optional[float] = None          # nominal, año vs año anterior
+    ipvn_dane_pct: Optional[float] = None           # referencia externa (no aplicado como deflactor, solo contexto)
+    meses_inventario: Optional[float] = None
+    clasificacion_mercado: Optional[str] = None     # "comprador" | "balanceado" | "vendedor"
+    ratio_cierre_pedido_pct: Optional[float] = None  # valor cerrado / mediana pedido activo — sin controlar mezcla tipo/tamaño
+
+
 class BarrioResponse(BaseModel):
     barrio_id: int
     nombre: Optional[str] = None
@@ -218,12 +257,14 @@ class BarrioResponse(BaseModel):
     seguridad: Seguridad
     conectividad: Conectividad
     verde: Verde
+    trafico: Optional[Trafico] = None
     liquidez: Liquidez
     oportunidad: Oportunidad
     valorizacion: Valorizacion
     nomada_breakdown: Optional[NomadaBreakdown] = None
     n_remates_municipio: Optional[int] = None
     catastro_comuna: Optional[CatastroComuna] = None
+    mercado_real: Optional[MercadoReal] = None
     amenidades: Optional[Amenidades] = None
 
 
@@ -254,8 +295,8 @@ _BARRIO_MAP_SQL = """
         bm.pbn_precio_justo_m2              AS pbn_precio_justo,
         bm.poi_precio_oferta,
         b.excluir_inversion,
-        NULL::varchar                       AS uso_suelo_dominante,
-        NULL::integer                       AS uso_suelo_score,
+        b.uso_suelo_dominante,
+        b.uso_suelo_score,
         op.oportunidad_detectada,
         op.tipo_oportunidad,
         op.descripcion_oportunidad,
@@ -272,6 +313,19 @@ _BARRIO_MAP_SQL = """
         poi.indice_nomada,
         poi.n_colegios_1km,
         poi.dist_colegio_km,
+        poi.n_parques_inf_500m,
+        poi.n_canchas_1km,
+        poi.dist_encicla_km,
+        poi.n_policia_1km,
+        poi.dist_policia_km,
+        poi.n_bomberos_2km,
+        poi.avg_internet_mbps,
+        poi.n_tests_internet,
+        poi.score_icfes_municipio,
+        poi.dist_obra_publica_km,
+        poi.nombre_obra_cercana,
+        poi.db_ruido_dia_cercano,
+        poi.dist_ruido_km,
         poi.walk_score,
         poi.transit_score
     FROM raw.barrios b
@@ -330,12 +384,32 @@ _BARRIO_SQL = """
         poi.indice_nomada,
         poi.n_colegios_1km,
         poi.dist_colegio_km,
+        poi.n_parques_inf_500m,
+        poi.n_canchas_1km,
+        poi.dist_encicla_km,
+        poi.n_policia_1km,
+        poi.dist_policia_km,
+        poi.n_bomberos_2km,
+        poi.avg_internet_mbps,
+        poi.n_tests_internet,
+        poi.score_icfes_municipio,
+        poi.dist_obra_publica_km,
+        poi.nombre_obra_cercana,
+        poi.db_ruido_dia_cercano,
+        poi.dist_ruido_km,
         poi.walk_score,
         poi.transit_score,
         -- verde
         vd.indice_verde_pct,
         vd.categoria_verde,
         vd.score_verde,
+        -- trafico (HERE Flow, campaña estática — NULL si el barrio no fue muestreado)
+        tp.nivel_trafico,
+        tp.jam_prom,
+        tp.pico_am_inicio,
+        tp.pico_am_fin,
+        tp.pico_pm_inicio,
+        tp.pico_pm_fin,
         -- liquidez
         lq.liquidez_score,
         lq.categoria_liquidez,
@@ -343,8 +417,8 @@ _BARRIO_SQL = """
         lq.nota_metodologia,
         -- zona
         b.excluir_inversion,
-        NULL::varchar                       AS uso_suelo_dominante,
-        NULL::integer                       AS uso_suelo_score,
+        b.uso_suelo_dominante,
+        b.uso_suelo_score,
         -- oportunidad
         op.oportunidad_detectada,
         op.tipo_oportunidad,
@@ -390,13 +464,23 @@ _BARRIO_SQL = """
         cat.total_predios                   AS cat_total_predios,
         cat.pct_apartamento                 AS cat_pct_apartamento,
         cat.area_mediana_apto_m2            AS cat_area_mediana_m2,
-        cat.avaluo_m2                       AS cat_avaluo_m2
+        cat.avaluo_m2                       AS cat_avaluo_m2,
+        -- mercado real (compraventas SNR/ORIPS) a nivel municipio
+        mr.anio_dato,
+        mr.n_transacciones_anual,
+        mr.valor_mediana_anual,
+        mr.var_anual_pct                    AS mr_var_anual_pct,
+        mr.ipvn_dane_pct,
+        mr.meses_inventario,
+        mr.clasificacion_mercado,
+        mr.ratio_cierre_pedido_pct
     FROM raw.barrios b
     LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
     LEFT JOIN analytics.barrios_seguridad         seg ON b.id = seg.barrio_id
     LEFT JOIN analytics.barrios_pois_distancia    poi ON b.id = poi.barrio_id
     LEFT JOIN analytics.barrios_verde             vd  ON b.id = vd.barrio_id
+    LEFT JOIN analytics.barrios_trafico_perfil    tp  ON b.id = tp.barrio_id
     LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
     LEFT JOIN analytics.barrios_oportunidades     op  ON b.id = op.barrio_id
     -- estrato_barrio (score_largo_plazo): mode estrato of listings in barrio — used for filters + projections join
@@ -409,6 +493,71 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.barrios_amenities         am  ON b.id = am.barrio_id
     LEFT JOIN analytics.catastro_comunas_stats cat
            ON UPPER(TRIM(b.comuna)) = cat.comuna
+    LEFT JOIN LATERAL (
+        WITH ultimo AS (
+            SELECT anio, n_transacciones, valor_mediana
+            FROM analytics.compraventas_municipio_stats cs
+            WHERE cs.municipio = UPPER(b.municipio)
+              AND cs.anio IS NOT NULL
+              AND cs.anio < EXTRACT(YEAR FROM CURRENT_DATE)::int
+              AND cs.n_transacciones >= 30
+            ORDER BY cs.anio DESC
+            LIMIT 1
+        ),
+        previo AS (
+            SELECT cs2.valor_mediana
+            FROM analytics.compraventas_municipio_stats cs2, ultimo u
+            WHERE cs2.municipio = UPPER(b.municipio)
+              AND cs2.anio = u.anio - 1
+              AND cs2.n_transacciones >= 30
+        ),
+        dane AS (
+            SELECT ipv.variacion_anual_pct
+            FROM raw.indices_precio_vivienda ipv, ultimo u
+            WHERE ipv.fuente = 'dane' AND ipv.anio = u.anio
+            ORDER BY ipv.trimestre DESC
+            LIMIT 1
+        ),
+        inventario AS (
+            SELECT COUNT(*)::float AS n_activo
+            FROM staging.stg_listings_unificado sl2
+            JOIN raw.barrios b2 ON b2.id = sl2.barrio_id
+            WHERE UPPER(b2.municipio) = UPPER(b.municipio)
+              AND sl2.tipo_operacion = 'venta'
+        ),
+        pedido AS (
+            SELECT PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY sl3.precio_cop) AS asking_mediana
+            FROM staging.stg_listings_unificado sl3
+            JOIN raw.barrios b3 ON b3.id = sl3.barrio_id
+            WHERE UPPER(b3.municipio) = UPPER(b.municipio)
+              AND sl3.tipo_operacion = 'venta' AND sl3.precio_cop > 0
+        )
+        SELECT
+            u.anio                                                       AS anio_dato,
+            u.n_transacciones                                            AS n_transacciones_anual,
+            u.valor_mediana                                              AS valor_mediana_anual,
+            CASE WHEN p.valor_mediana > 0
+                 THEN ROUND(((u.valor_mediana - p.valor_mediana)::numeric / p.valor_mediana) * 100, 1)
+            END                                                          AS var_anual_pct,
+            d.variacion_anual_pct                                        AS ipvn_dane_pct,
+            CASE WHEN u.n_transacciones > 0
+                 THEN ROUND((i.n_activo / (u.n_transacciones / 12.0))::numeric, 1)
+            END                                                          AS meses_inventario,
+            CASE
+                WHEN u.n_transacciones = 0 OR i.n_activo IS NULL THEN NULL
+                WHEN (i.n_activo / (u.n_transacciones / 12.0)) < 3 THEN 'vendedor'
+                WHEN (i.n_activo / (u.n_transacciones / 12.0)) <= 6 THEN 'balanceado'
+                ELSE 'comprador'
+            END                                                          AS clasificacion_mercado,
+            CASE WHEN pe.asking_mediana > 0
+                 THEN ROUND(((u.valor_mediana::numeric / pe.asking_mediana::numeric) * 100)::numeric, 1)
+            END                                                          AS ratio_cierre_pedido_pct
+        FROM ultimo u
+        LEFT JOIN previo p ON TRUE
+        LEFT JOIN dane d ON TRUE
+        LEFT JOIN inventario i ON TRUE
+        LEFT JOIN pedido pe ON TRUE
+    ) mr ON TRUE
 """
 
 
@@ -527,6 +676,19 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             indice_nomada=_f(row, "indice_nomada"),
             n_colegios_1km=_i(row, "n_colegios_1km"),
             dist_colegio_km=_f(row, "dist_colegio_km"),
+            n_parques_inf_500m=_i(row, "n_parques_inf_500m"),
+            n_canchas_1km=_i(row, "n_canchas_1km"),
+            dist_encicla_km=_f(row, "dist_encicla_km"),
+            n_policia_1km=_i(row, "n_policia_1km"),
+            dist_policia_km=_f(row, "dist_policia_km"),
+            n_bomberos_2km=_i(row, "n_bomberos_2km"),
+            avg_internet_mbps=_f(row, "avg_internet_mbps"),
+            n_tests_internet=_i(row, "n_tests_internet"),
+            score_icfes_municipio=_f(row, "score_icfes_municipio"),
+            dist_obra_publica_km=_f(row, "dist_obra_publica_km"),
+            nombre_obra_cercana=row.get("nombre_obra_cercana"),
+            db_ruido_dia_cercano=_f(row, "db_ruido_dia_cercano"),
+            dist_ruido_km=_f(row, "dist_ruido_km"),
             walk_score=_i(row, "walk_score"),
             transit_score=_i(row, "transit_score"),
         ),
@@ -535,6 +697,7 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             categoria=row.get("categoria_verde"),
             score_verde=_i(row, "score_verde"),
         ),
+        trafico=_build_trafico(row),
         liquidez=Liquidez(
             score=_i(row, "liquidez_score"),
             categoria=row.get("categoria_liquidez"),
@@ -562,7 +725,23 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         ) if row.get("pts_yield_nomada") is not None else None,
         n_remates_municipio=_i(row, "n_remates_municipio"),
         catastro_comuna=_build_catastro(row, precio_m2_cop),
+        mercado_real=_build_mercado_real(row),
         amenidades=_build_amenidades(row),
+    )
+
+
+def _build_mercado_real(row: dict) -> Optional[MercadoReal]:
+    if row.get("anio_dato") is None:
+        return None
+    return MercadoReal(
+        anio_dato=_i(row, "anio_dato"),
+        n_transacciones_anual=_i(row, "n_transacciones_anual"),
+        valor_mediana_anual=_i(row, "valor_mediana_anual"),
+        var_anual_pct=_f(row, "mr_var_anual_pct"),
+        ipvn_dane_pct=_f(row, "ipvn_dane_pct"),
+        meses_inventario=_f(row, "meses_inventario"),
+        clasificacion_mercado=row.get("clasificacion_mercado"),
+        ratio_cierre_pedido_pct=_f(row, "ratio_cierre_pedido_pct"),
     )
 
 
@@ -588,6 +767,20 @@ def _build_catastro(row: dict, precio_m2_cop: Optional[float]) -> Optional[Catas
         avaluo_m2=avaluo,
         ratio_mercado_catastro=ratio,
         ratio_vs_ciudad=ratio_vs_ciudad,
+    )
+
+
+def _build_trafico(row: dict) -> Optional[Trafico]:
+    nivel = row.get("nivel_trafico")
+    if nivel is None:
+        return None
+    return Trafico(
+        nivel=nivel,
+        jam_prom=_f(row, "jam_prom"),
+        pico_am_inicio=_i(row, "pico_am_inicio"),
+        pico_am_fin=_i(row, "pico_am_fin"),
+        pico_pm_inicio=_i(row, "pico_pm_inicio"),
+        pico_pm_fin=_i(row, "pico_pm_fin"),
     )
 
 
