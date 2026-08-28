@@ -10,8 +10,14 @@
 -- (no percentil): la distribución entre niveles queda desigual a propósito,
 -- reflejando que la mayoría de zonas del Valle de Aburrá no son premium.
 --
--- Score = 35% precio_m2 + 25% seguridad + 20% volumen de datos (n_venta+n_arriendo)
--- + 20% población (tamaño de mercado/audiencia — raw.poblacion_comuna para
+-- Sin seguridad: el cliente que paga el patrocinio es el REALTOR, no el
+-- comprador — seguridad le importa a quien compra/renta, no a quien decide
+-- si le conviene pagar por visibilidad en una zona. El valor de la zona para
+-- un realtor es directamente el tamaño de las comisiones (precio) y qué tan
+-- activo/grande es el mercado ahí (volumen, población).
+--
+-- Score = 55% precio_m2 + 25% volumen de datos (n_venta+n_arriendo) + 20%
+-- población (tamaño de mercado/audiencia — raw.poblacion_comuna para
 -- Medellín, raw.poblacion_municipio para los 5 municipios satélite, ver
 -- migración 0081). precio_m2/volumen/población se normalizan min-max, pero
 -- el min/max se calcula SOLO sobre zonas con n_datos >= 10 (piso mínimo) para
@@ -35,7 +41,6 @@ base as (
         bm.barrio_id,
         coalesce(bm.precio_venta_m2_p50, bm.pbn_precio_justo_m2)   as precio_m2_efectivo,
         coalesce(bm.n_venta, 0) + coalesce(bm.n_arriendo, 0)       as n_datos,
-        bm.score_seguridad,
         p.poblacion
     from {{ ref('barrios_mercado') }} bm
     left join poblacion p on p.barrio_id = bm.barrio_id
@@ -61,15 +66,14 @@ barrio_scored as (
     select
         b.barrio_id,
         greatest(0, least(100,
-            (b.precio_m2_efectivo - a.precio_min) / nullif(a.precio_max - a.precio_min, 0) * 100
+            (b.precio_m2_efectivo - a.precio_min)::numeric / nullif(a.precio_max - a.precio_min, 0) * 100
         ))                                                          as precio_score,
         greatest(0, least(100,
-            (b.n_datos - a.vol_min) / nullif(a.vol_max - a.vol_min, 0) * 100
+            (b.n_datos - a.vol_min)::numeric / nullif(a.vol_max - a.vol_min, 0) * 100
         ))                                                          as volumen_score,
         greatest(0, least(100,
-            (b.poblacion - a.pob_min) / nullif(a.pob_max - a.pob_min, 0) * 100
-        ))                                                          as poblacion_score,
-        coalesce(b.score_seguridad, 50)                              as seguridad_score
+            (b.poblacion - a.pob_min)::numeric / nullif(a.pob_max - a.pob_min, 0) * 100
+        ))                                                          as poblacion_score
     from base b
     cross join anchors a
 
@@ -80,25 +84,67 @@ barrio_nivel as (
     select
         barrio_id,
         round(
-            0.35 * precio_score
-            + 0.25 * seguridad_score
-            + 0.20 * volumen_score
-            + 0.20 * coalesce(poblacion_score, volumen_score)
+            0.65 * precio_score
+            + 0.25 * volumen_score
+            + 0.10 * coalesce(poblacion_score, volumen_score)
         ) as score_nivel
     from barrio_scored
+
+),
+
+-- Nivel de COMUNA se calcula con el agregado propio de la comuna (precio_m2
+-- ponderado por volumen, n_datos total, población), normalizado contra las
+-- otras 15 comunas — no como promedio de los score_nivel de sus barrios.
+-- Promediar scores de barrio ya normalizados (0-100 contra el rango de TODO
+-- el Valle de Aburrá) diluye comunas caras pero heterogéneas: El Poblado
+-- mezcla barrios en 7-10M/m2 con score_nivel de barrio dispares, y el
+-- promedio ponderado nunca pasaba de B aunque el precio_m2 real de la
+-- comuna sea, por lejos, el más alto de Medellín. Normalizando la comuna
+-- contra el rango de comunas (no de barrios) sí refleja eso.
+comuna_base as (
+
+    select
+        bc.cd_comuna,
+        sum(b.precio_m2_efectivo * b.n_datos)::numeric / nullif(sum(b.n_datos), 0) as precio_m2_comuna,
+        sum(b.n_datos)                                                              as n_datos_comuna,
+        max(b.poblacion)                                                            as poblacion_comuna
+    from base b
+    join analytics.barrios_cd bc on bc.barrio_id = b.barrio_id
+    where bc.cd_comuna is not null
+    group by bc.cd_comuna
+
+),
+
+comuna_anchors as (
+
+    select
+        min(precio_m2_comuna)  as precio_min,
+        max(precio_m2_comuna)  as precio_max,
+        min(n_datos_comuna)    as vol_min,
+        max(n_datos_comuna)    as vol_max,
+        min(poblacion_comuna)  as pob_min,
+        max(poblacion_comuna)  as pob_max
+    from comuna_base
 
 ),
 
 comuna_nivel as (
 
     select
-        bc.cd_comuna,
-        round(sum(bn.score_nivel * base.n_datos) / nullif(sum(base.n_datos), 0)) as score_nivel
-    from barrio_nivel bn
-    join base                    on base.barrio_id = bn.barrio_id
-    join analytics.barrios_cd bc on bc.barrio_id    = bn.barrio_id
-    where bc.cd_comuna is not null
-    group by bc.cd_comuna
+        cb.cd_comuna,
+        round(
+            0.65 * greatest(0, least(100,
+                (cb.precio_m2_comuna - ca.precio_min) / nullif(ca.precio_max - ca.precio_min, 0) * 100
+            ))
+            + 0.25 * greatest(0, least(100,
+                (cb.n_datos_comuna - ca.vol_min)::numeric / nullif(ca.vol_max - ca.vol_min, 0) * 100
+            ))
+            + 0.10 * coalesce(greatest(0, least(100,
+                (cb.poblacion_comuna - ca.pob_min)::numeric / nullif(ca.pob_max - ca.pob_min, 0) * 100
+            )), 50)
+        ) as score_nivel
+    from comuna_base cb
+    cross join comuna_anchors ca
 
 )
 
