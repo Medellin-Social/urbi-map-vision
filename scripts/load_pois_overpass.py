@@ -286,6 +286,21 @@ def fetch_all_pois() -> list[dict]:
     return list(seen.values())
 
 
+DDL = """
+CREATE TABLE IF NOT EXISTS raw.pois (
+    id         serial PRIMARY KEY,
+    osm_id     text UNIQUE,
+    nombre     text,
+    tipo       text,
+    subtipo    text,
+    raw_tags   jsonb,
+    geometry   geometry(Point, 4326),
+    cargado_en timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pois_geom ON raw.pois USING GIST(geometry);
+CREATE INDEX IF NOT EXISTS idx_pois_tipo ON raw.pois (tipo);
+"""
+
 UPSERT_SQL = """
 INSERT INTO raw.pois (osm_id, nombre, tipo, subtipo, raw_tags, geometry)
 VALUES (
@@ -317,6 +332,8 @@ def load_pois(pois: list[dict], dry_run: bool = False) -> None:
 
     conn = psycopg2.connect(DB_URL)
     cur = conn.cursor()
+    cur.execute(DDL)
+    conn.commit()
 
     batch = 500
     inserted = 0
