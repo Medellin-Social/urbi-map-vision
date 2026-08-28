@@ -568,38 +568,6 @@ async def _notify_admin_new_listing(
     )
 
 
-# ── GET /agente/{agente_id} (public listings by agent) ────────────────────────
-
-@router.get("/agente/{agente_id}")
-async def listings_por_agente(
-    agente_id: int,
-    limit: int = Query(6, ge=1, le=20),
-    offset: int = Query(0, ge=0),
-):
-    pool = get_pool()
-    rows = await pool.fetch(
-        """
-        SELECT lp.id, lp.tipo_operacion, lp.tipo_inmueble,
-               lp.precio_cop, lp.precio_usd,
-               lp.area_m2, lp.habitaciones, lp.banos,
-               lp.descripcion, lp.fotos, lp.direccion,
-               lp.estado, lp.destacado, lp.fecha_publicacion,
-               b.nombre AS barrio_nombre, b.municipio
-        FROM listings_propios lp
-        LEFT JOIN raw.barrios b ON b.id = lp.barrio_id
-        WHERE lp.agente_id = $1 AND lp.estado = 'activo'
-        ORDER BY lp.destacado DESC, lp.fecha_publicacion DESC
-        LIMIT $2 OFFSET $3
-        """,
-        agente_id, limit, offset,
-    )
-    total = await pool.fetchval(
-        "SELECT COUNT(*) FROM listings_propios WHERE agente_id = $1 AND estado = 'activo'",
-        agente_id,
-    )
-    return {"total": total or 0, "items": [dict(r) for r in rows]}
-
-
 # ── GET /agentes-para-contactar ────────────────────────────────────────────────
 
 @router.get("/agentes-para-contactar")

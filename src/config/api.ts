@@ -97,7 +97,6 @@ export const API_ENDPOINTS = {
   zonasConfirmarSimulado: `${API_BASE_URL}/zonas/confirmar-simulado`,
 
   // Listings propios
-  listingsPropiosAgente: (id: number) => `${API_BASE_URL}/listings-propios/agente/${id}`,
   listingsPropios: `${API_BASE_URL}/listings-propios`,
   listingsPropiosMe: `${API_BASE_URL}/listings-propios/me`,
   listingsPropiosMis: `${API_BASE_URL}/listings-propios/mis-listings`,

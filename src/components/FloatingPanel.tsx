@@ -1611,11 +1611,6 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
             >
               {clasifLabel}
             </span>
-            {mr.ratio_cierre_pedido_pct != null && (
-              <span className="text-[10px] text-muted-foreground">
-                Cierra en {mr.ratio_cierre_pedido_pct}% del precio pedido
-              </span>
-            )}
           </div>
         )}
       </div>

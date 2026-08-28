@@ -66,3 +66,42 @@ def verificar_webhook(payload: bytes, headers: dict) -> dict:
     raise NotImplementedError(
         "ghl_client.verificar_webhook: needs GHL's webhook signing scheme (header + verification method) from Talal"
     )
+
+
+# ── Outbound: nuestras tablas -> GHL ─────────────────────────────────────────
+# Dirección por entidad (confirmado 2026-08-27):
+#   - tienda, evento: SOLO salida, estas 2 son su único camino de sync.
+#   - listing, deal: bidireccional — api/routers/ghl_webhook.py cubre la
+#     entrada, estas 2 cubren la salida.
+# Mismo objeto de mapeo (public.ghl_object_mapping, migración 0082) sirve
+# para las 4, en ambas direcciones — sync_status ahí registra el resultado
+# del push.
+#
+# Sin wire todavía a los puntos de creación reales (listings_propios.py,
+# intake_service.py para listing; tiendas/eventos/deals no tienen insert vía
+# API hoy, van por scraper/admin) — eso implica tocar 3+ routers y decidir
+# push síncrono vs cola/retry, mejor esperar el contrato antes de comprometerse
+# a un patrón de invocación.
+#
+# Necesario de Talal antes de implementar cualquiera de las 4:
+#   - Endpoint(s) GHL para crear/actualizar cada objeto (¿custom object API,
+#     uno por tipo?) + auth
+#   - Nombres de campo del lado GHL para cada columna (ver
+#     docs/GHL_DB_SCHEMA_FIELDS.pdf para las columnas del lado nuestro)
+#   - Rate limits / si espera llamada síncrona o admite reintentos async
+
+async def push_listing_to_ghl(listing_id: str, campos: dict) -> Optional[str]:
+    """listing_id es uuid (public.listing.id). Retorna ghl_object_id creado."""
+    raise NotImplementedError("ghl_client.push_listing_to_ghl: falta contrato GHL para listing")
+
+
+async def push_tienda_to_ghl(tienda_id: int, campos: dict) -> Optional[str]:
+    raise NotImplementedError("ghl_client.push_tienda_to_ghl: falta contrato GHL para tienda")
+
+
+async def push_evento_to_ghl(evento_id: int, campos: dict) -> Optional[str]:
+    raise NotImplementedError("ghl_client.push_evento_to_ghl: falta contrato GHL para evento")
+
+
+async def push_deal_to_ghl(deal_id: int, campos: dict) -> Optional[str]:
+    raise NotImplementedError("ghl_client.push_deal_to_ghl: falta contrato GHL para deal")
