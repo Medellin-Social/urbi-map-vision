@@ -6,9 +6,15 @@
 }}
 
 -- Nivel A/B/C/D por zona (barrio y comuna), usado para escalonar el precio de
--- patrocinio en api/services/zona_sponsor_service.py. Umbrales de score FIJOS
--- (no percentil): la distribución entre niveles queda desigual a propósito,
--- reflejando que la mayoría de zonas del Valle de Aburrá no son premium.
+-- patrocinio en api/services/zona_sponsor_service.py. Umbrales por PERCENTIL,
+-- no score fijo: con min-max contra un solo extremo (El Poblado, que saca
+-- 100/100/100 en las 3 variables) casi toda comuna quedaba en C/D aunque
+-- fuera objetivamente buena — El Poblado pone el techo y todo lo demás se
+-- comprime cerca de 0 en esa variable. Para vender tiers hace falta que
+-- exista un A/B real y alcanzable, no solo el outlier. Top 15% = A,
+-- siguiente 30% = B, siguiente 30% = C, resto = D — calculado con
+-- percent_rank() por separado dentro de cada zona_nivel (barrio y comuna no
+-- compiten entre sí, tienen su propia escala).
 --
 -- Sin seguridad: el cliente que paga el patrocinio es el REALTOR, no el
 -- comprador — seguridad le importa a quien compra/renta, no a quien decide
@@ -196,30 +202,36 @@ comuna_nivel as (
     from comuna_base cb
     cross join comuna_anchors ca
 
+),
+
+ranked as (
+
+    select
+        'barrio'::text  as zona_nivel,
+        barrio_id::text as zona_codigo,
+        score_nivel,
+        percent_rank() over (order by score_nivel) as pr
+    from barrio_nivel
+
+    union all
+
+    select
+        'comuna'::text  as zona_nivel,
+        cd_comuna::text as zona_codigo,
+        score_nivel,
+        percent_rank() over (order by score_nivel) as pr
+    from comuna_nivel
+
 )
 
 select
-    'barrio'::text  as zona_nivel,
-    barrio_id::text as zona_codigo,
+    zona_nivel,
+    zona_codigo,
     score_nivel,
     case
-        when score_nivel >= 75 then 'A'
-        when score_nivel >= 55 then 'B'
-        when score_nivel >= 35 then 'C'
+        when pr >= 0.85 then 'A'
+        when pr >= 0.55 then 'B'
+        when pr >= 0.25 then 'C'
         else 'D'
     end as nivel
-from barrio_nivel
-
-union all
-
-select
-    'comuna'::text  as zona_nivel,
-    cd_comuna::text as zona_codigo,
-    score_nivel,
-    case
-        when score_nivel >= 75 then 'A'
-        when score_nivel >= 55 then 'B'
-        when score_nivel >= 35 then 'C'
-        else 'D'
-    end as nivel
-from comuna_nivel
+from ranked
