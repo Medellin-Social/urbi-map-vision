@@ -141,7 +141,25 @@ comuna_base as (
 
     select
         bc.cd_comuna,
-        sum(b.precio_m2_efectivo * b.n_datos)::numeric / nullif(sum(b.n_datos), 0) as precio_m2_comuna,
+        -- Precio pondera SOLO barrios con n_datos >= 30 — un barrio con 15-25
+        -- ventas puede tener su mediana de precio_m2 arrastrada por 2-3
+        -- listings mal geocodificados (verificado 2026-08-28: Carpinelo,
+        -- comuna Popular, con 16 ventas daba precio_m2=$10M por listings de
+        -- El Poblado/Las Palmas etiquetados con su coordenada). El volumen
+        -- SÍ cuenta completo — la actividad es real aunque el precio puntual
+        -- de un barrio chico no sea confiable. Si NINGÚN barrio de la comuna
+        -- llega al piso (comunas chicas, todo su dato disperso en barrios
+        -- pequeños), cae a usar todos sin filtrar — mejor dato ruidoso que
+        -- NULL. OJO: GREATEST/LEAST en Postgres ignoran NULL en vez de
+        -- propagarlo — sin este coalesce, precio_m2_comuna=NULL termina
+        -- dando precio_score=100 más abajo (encontrado en vivo: Santa Cruz
+        -- y Castilla saltaban a ~60 de score solo por quedarse sin barrios
+        -- que calificaran, no por precio real).
+        coalesce(
+            sum(b.precio_m2_efectivo * b.n_datos) filter (where b.n_datos >= 30)::numeric
+                / nullif(sum(b.n_datos) filter (where b.n_datos >= 30), 0),
+            sum(b.precio_m2_efectivo * b.n_datos)::numeric / nullif(sum(b.n_datos), 0)
+        )                                                                          as precio_m2_comuna,
         sum(b.n_datos)                                                              as n_datos_comuna,
         max(b.poblacion)                                                            as poblacion_comuna,
         sum(b.n_eventos)                                                            as n_eventos_comuna
