@@ -366,14 +366,15 @@ _DESTACADO_CIUDAD_TIENDA = "(t.destacado AND (t.destacado_nivel IS NULL OR t.des
 # municipio, no hay un barrio_id puntual. Solo ciudad o comuna (pseudo-código del
 # propio municipio) pueden aparecer aquí; un destacado a nivel barrio nunca
 # "sube" a esta vista agregada (mismo criterio que a nivel comuna en `_DESTACADO_AQUI_TIENDA`).
-_DESTACADO_MUNICIPIO_TIENDA = """(
+_DESTACADO_MUNICIPIO_TIENDA = """COALESCE(
     t.destacado AND (
         t.destacado_nivel IS NULL
         OR t.destacado_nivel = 'ciudad'
         OR (t.destacado_nivel = 'comuna' AND t.destacado_zona_codigo = CASE UPPER($1)
               WHEN 'BELLO' THEN '101' WHEN 'ENVIGADO' THEN '102' WHEN 'ITAGUI' THEN '103'
               WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105' END)
-    )
+    ),
+    FALSE
 )"""
 
 _TIENDAS_QUERY = f"""
