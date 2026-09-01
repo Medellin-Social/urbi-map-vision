@@ -437,6 +437,127 @@ async def sync_tienda(tienda_id: int) -> Optional[str]:
     return await push_tienda_to_ghl(tienda_id, dict(row))
 
 
+# ── Agency (Business en GHL, entidad interna distinta de tienda) ────────────
+
+def _agency_campos_to_standard(campos: dict) -> dict:
+    props: dict = {}
+    if campos.get("nombre") is not None:
+        props["name"] = campos["nombre"]
+    return props
+
+
+def _agency_campos_to_custom(campos: dict) -> dict:
+    """public.agency casi no tiene columnas (nombre/nit/tipo/verificada/plan,
+    sin dirección/teléfono/website) — el Business que sale en GHL nace flaco
+    a propósito, no se inventan datos que no tenemos."""
+    props: dict = {}
+    yn = _yes_no(campos.get("verificada"))
+    if yn is not None:
+        props["verified"] = yn
+    return props
+
+
+async def push_agency_to_ghl(agency_id: str, campos: dict) -> Optional[str]:
+    if not is_configured():
+        return None
+
+    pool = get_pool()
+    existing = await pool.fetchrow(
+        "SELECT ghl_object_id FROM public.ghl_object_mapping WHERE object_type = 'agency' AND internal_object_id = $1",
+        str(agency_id),
+    )
+    standard = _agency_campos_to_standard(campos)
+    custom = _agency_campos_to_custom(campos)
+
+    try:
+        if existing:
+            ghl_id = existing["ghl_object_id"]
+            await _request("PUT", f"/businesses/{ghl_id}", params={"locationId": _GHL_LOCATION_ID}, json=standard)
+        else:
+            resp = await _request(
+                "POST", "/businesses/", json={**standard, "locationId": _GHL_LOCATION_ID}
+            )
+            ghl_id = resp.json()["business"]["id"]
+        if custom:
+            await _request(
+                "PUT",
+                f"/objects/{_BUSINESS_OBJECT_KEY}/records/{ghl_id}",
+                params={"locationId": _GHL_LOCATION_ID},
+                json={"properties": custom},
+            )
+    except Exception as e:
+        logger.warning("push_agency_to_ghl(%s) falló: %s", agency_id, e)
+        if existing:
+            await _record_sync_result("agency", agency_id, existing["ghl_object_id"], "failed", str(e))
+        return None
+
+    await _record_sync_result("agency", agency_id, ghl_id, "synced", None)
+    return ghl_id
+
+
+async def sync_agency(agency_id: str) -> Optional[str]:
+    if not is_configured():
+        return None
+    pool = get_pool()
+    row = await pool.fetchrow("SELECT nombre, verificada FROM public.agency WHERE id = $1", agency_id)
+    if row is None:
+        return None
+    return await push_agency_to_ghl(agency_id, dict(row))
+
+
+# ── Associations (§6-7 del PDF) ──────────────────────────────────────────────
+# IDs fijos de la location — hardcodeados a propósito (§18 quirk #8: el
+# listado genérico GET /associations da 404, no está validado).
+_ASSOC_LISTING_AGENT = "6a9030a31a03372600cf77c7"     # Contact  -> Listing
+_ASSOC_PROPERTY_OWNER = "6a9030a3b1739b9f7dd6262e"    # Contact  -> Listing
+_ASSOC_LISTING_AGENCY = "6a9030a3a6611a605762fc43"    # Business -> Listing
+
+
+async def _create_relation(association_id: str, first_record_id: str, second_record_id: str) -> bool:
+    """True si quedó creada (o ya existía — duplicado tratado como no-op,
+    §7.3 del PDF: crear la misma relación 2 veces es 'expected behavior')."""
+    try:
+        await _request(
+            "POST",
+            "/associations/relations",
+            json={
+                "locationId": _GHL_LOCATION_ID,
+                "associationId": association_id,
+                "firstRecordId": first_record_id,
+                "secondRecordId": second_record_id,
+            },
+        )
+        return True
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 400 and "duplicate" in e.response.text.lower():
+            return True
+        logger.warning("_create_relation(%s) falló: %s", association_id, e.response.text)
+        return False
+    except Exception as e:
+        logger.warning("_create_relation(%s) falló: %s", association_id, e)
+        return False
+
+
+async def link_agency_to_listing(listing_id: str, agency_id: Optional[str]) -> None:
+    """Empuja/actualiza la agencia como Business y crea la relación Agency→Listing.
+    No hace nada si no hay agency_id (listing de owner sin agencia) o si el
+    listing todavía no tiene ghl_object_id (sync_listing debe correr antes)."""
+    if not is_configured() or not agency_id:
+        return
+    pool = get_pool()
+    listing_row = await pool.fetchrow(
+        "SELECT ghl_object_id FROM public.ghl_object_mapping WHERE object_type = 'listing' AND internal_object_id = $1",
+        str(listing_id),
+    )
+    if not listing_row:
+        logger.warning("link_agency_to_listing(%s): listing sin sync a GHL todavía", listing_id)
+        return
+    ghl_business_id = await sync_agency(agency_id)
+    if not ghl_business_id:
+        return
+    await _create_relation(_ASSOC_LISTING_AGENCY, ghl_business_id, listing_row["ghl_object_id"])
+
+
 async def push_evento_to_ghl(evento_id: int, campos: dict) -> Optional[str]:
     raise NotImplementedError("ghl_client.push_evento_to_ghl: falta contrato GHL para evento")
 

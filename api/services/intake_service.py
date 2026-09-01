@@ -206,4 +206,5 @@ async def aceptar_intake(
         raise IntakeError(f"Intake {intake_id} ya no está 'asignado' y no tiene listing")
 
     await ghl_client.sync_listing(listing_id)
+    await ghl_client.link_agency_to_listing(listing_id, agency_id)
     return listing_id

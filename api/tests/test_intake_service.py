@@ -12,12 +12,14 @@ from api.utils import ghl_client
 
 @pytest.fixture(autouse=True)
 def _sin_ghl_push(monkeypatch):
-    """aceptar_intake dispara ghl_client.sync_listing, que usa el pool global
-    real (get_pool()) — no el FakePool inyectado. Sin esto, los tests
-    reventarían con 'DB pool not initialized' pese a decir 'sin DB real'."""
+    """aceptar_intake dispara ghl_client.sync_listing/link_agency_to_listing,
+    que usan el pool global real (get_pool()) — no el FakePool inyectado. Sin
+    esto, los tests reventarían con 'DB pool not initialized' pese a decir
+    'sin DB real'."""
     async def _noop(*a, **k):
         return None
     monkeypatch.setattr(ghl_client, "sync_listing", _noop)
+    monkeypatch.setattr(ghl_client, "link_agency_to_listing", _noop)
 
 
 # ── Pool mockeado ─────────────────────────────────────────────────────────────
