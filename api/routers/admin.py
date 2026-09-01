@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
+from api.utils import ghl_client
 
 router = APIRouter()
 
@@ -1096,6 +1097,7 @@ async def editar_tienda(request: Request, tienda_id: int, body: DestacadoPatch =
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     await _audit(pool, admin, "editar_tienda", "tienda", str(tienda_id),
                  {"destacado": row["destacado"], "nivel": row["destacado_nivel"], "zona": row["destacado_zona_codigo"]}, request)
+    await ghl_client.sync_tienda(tienda_id)
     return dict(row)
 
 

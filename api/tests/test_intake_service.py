@@ -7,6 +7,17 @@ from api.schemas.intake_cuestionario import cuestionario_para
 from api.services.intake_service import (
     IntakeError, _validar_payload, aceptar_intake, crear_intake,
 )
+from api.utils import ghl_client
+
+
+@pytest.fixture(autouse=True)
+def _sin_ghl_push(monkeypatch):
+    """aceptar_intake dispara ghl_client.sync_listing, que usa el pool global
+    real (get_pool()) — no el FakePool inyectado. Sin esto, los tests
+    reventarían con 'DB pool not initialized' pese a decir 'sin DB real'."""
+    async def _noop(*a, **k):
+        return None
+    monkeypatch.setattr(ghl_client, "sync_listing", _noop)
 
 
 # ── Pool mockeado ─────────────────────────────────────────────────────────────

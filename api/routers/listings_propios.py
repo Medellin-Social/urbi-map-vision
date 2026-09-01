@@ -23,6 +23,7 @@ from api.schemas.intake_cuestionario import DECLARACIONES_KEYS, cuestionario_par
 from api.services.asignador_service import asignar_intake
 from api.services.intake_service import _aplica, get_or_create_owner
 from api.services.listing_service import datos_minimos_completos
+from api.utils import ghl_client
 from api.utils.email import ADMIN_EMAIL, _wrap, send_email
 from api.utils.storage import upload_file
 
@@ -350,6 +351,8 @@ async def crear_listing(
                     listing_id, url, i, i == 0,
                 )
 
+    await ghl_client.sync_listing(listing_id)
+
     # Puente al inbox del realtor: la publicación del owner crea un intake y el
     # asignador lo entrega (zona patrocinada → realtor; sin patrocinador → pool).
     if not es_agente:
@@ -519,6 +522,7 @@ async def actualizar_listing(
         f"UPDATE listing SET {', '.join(updates)} WHERE id = ${idx}",
         *params,
     )
+    await ghl_client.sync_listing(listing_id)
     return {"ok": True}
 
 
@@ -535,6 +539,7 @@ async def desactivar_listing(
         "UPDATE listing SET estado = 'cerrado', updated_at = NOW() WHERE id = $1",
         listing_id,
     )
+    await ghl_client.sync_listing(listing_id)
 
 
 # ── Email ──────────────────────────────────────────────────────────────────────

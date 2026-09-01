@@ -16,6 +16,7 @@ from api.dependencies import get_current_user
 from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
 from api.services.listing_service import datos_minimos_completos
+from api.utils import ghl_client
 from api.utils.storage import upload_file
 
 router = APIRouter()
@@ -263,6 +264,7 @@ async def editar_listing(
         )
     if not row:
         raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
+    await ghl_client.sync_listing(listing_id)
     return {"id": listing_id, "actualizado": sorted(campos)}
 
 
@@ -334,6 +336,7 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
             "UPDATE listing SET estado = 'en_revision', updated_at = NOW() WHERE id = $1",
             row["listing_id"],
         )
+    await ghl_client.sync_listing(str(row["listing_id"]))
     return {"listing_id": str(row["listing_id"]), "estado": "en_revision"}
 
 

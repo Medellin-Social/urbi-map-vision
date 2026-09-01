@@ -10,6 +10,7 @@ import uuid
 from typing import Any
 
 from api.services.listing_service import transition
+from api.utils import ghl_client
 
 
 async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
@@ -26,6 +27,7 @@ async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
             "VALUES ($1, $2, 'aprobado', $3)",
             str(uuid.uuid4()), listing.id, moderador_id,
         )
+    await ghl_client.sync_listing(listing.id)
 
 
 async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> None:
@@ -43,3 +45,4 @@ async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> N
             "VALUES ($1, $2, 'rechazado', $3, $4)",
             str(uuid.uuid4()), listing.id, motivo, moderador_id,
         )
+    await ghl_client.sync_listing(listing.id)

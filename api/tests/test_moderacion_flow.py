@@ -15,6 +15,16 @@ from api.services.agent_service import (
     AgentError, ESTADOS_ASIGNABLES, aprobar_agente, rechazar_agente, suspender_agente,
 )
 from api.schemas.intake_cuestionario import DECLARACIONES_KEYS
+from api.utils import ghl_client
+
+
+@pytest.fixture(autouse=True)
+def _sin_ghl_push(monkeypatch):
+    """aprobar/rechazar disparan ghl_client.sync_listing, que usa el pool
+    global real (get_pool()) — no el FakePool inyectado."""
+    async def _noop(*a, **k):
+        return None
+    monkeypatch.setattr(ghl_client, "sync_listing", _noop)
 
 
 # ── Pool mockeado ─────────────────────────────────────────────────────────────

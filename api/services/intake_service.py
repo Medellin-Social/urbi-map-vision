@@ -13,6 +13,7 @@ from api.schemas.intake_cuestionario import (
     DECLARACIONES_KEYS, Pregunta, cuestionario_para,
 )
 from api.services.zona_service import resolver_zona
+from api.utils import ghl_client
 
 
 class IntakeError(ValueError):
@@ -204,4 +205,5 @@ async def aceptar_intake(
         # Cambió a un estado sin listing (p.ej. descartado) entre el check y el UPDATE.
         raise IntakeError(f"Intake {intake_id} ya no está 'asignado' y no tiene listing")
 
+    await ghl_client.sync_listing(listing_id)
     return listing_id
