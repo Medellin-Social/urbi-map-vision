@@ -21,6 +21,7 @@ import { Route as RealEstateRouteImport } from './routes/real-estate'
 import { Route as PublicarRouteImport } from './routes/publicar'
 import { Route as PlanesRouteImport } from './routes/planes'
 import { Route as PerfilRouteImport } from './routes/perfil'
+import { Route as PasantiasRouteImport } from './routes/pasantias'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as MisPropiedadesRouteImport } from './routes/mis-propiedades'
 import { Route as MapRouteImport } from './routes/map'
@@ -103,6 +104,11 @@ const PlanesRoute = PlanesRouteImport.update({
 const PerfilRoute = PerfilRouteImport.update({
   id: '/perfil',
   path: '/perfil',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PasantiasRoute = PasantiasRouteImport.update({
+  id: '/pasantias',
+  path: '/pasantias',
   getParentRoute: () => rootRouteImport,
 } as any)
 const OnboardingRoute = OnboardingRouteImport.update({
@@ -236,6 +242,7 @@ export interface FileRoutesByFullPath {
   '/map': typeof MapRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
   '/publicar': typeof PublicarRoute
@@ -273,6 +280,7 @@ export interface FileRoutesByTo {
   '/map': typeof MapRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
   '/publicar': typeof PublicarRoute
@@ -311,6 +319,7 @@ export interface FileRoutesById {
   '/map': typeof MapRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
+  '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
   '/publicar': typeof PublicarRoute
@@ -350,6 +359,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/mis-propiedades'
     | '/onboarding'
+    | '/pasantias'
     | '/perfil'
     | '/planes'
     | '/publicar'
@@ -387,6 +397,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/mis-propiedades'
     | '/onboarding'
+    | '/pasantias'
     | '/perfil'
     | '/planes'
     | '/publicar'
@@ -424,6 +435,7 @@ export interface FileRouteTypes {
     | '/map'
     | '/mis-propiedades'
     | '/onboarding'
+    | '/pasantias'
     | '/perfil'
     | '/planes'
     | '/publicar'
@@ -462,6 +474,7 @@ export interface RootRouteChildren {
   MapRoute: typeof MapRoute
   MisPropiedadesRoute: typeof MisPropiedadesRoute
   OnboardingRoute: typeof OnboardingRoute
+  PasantiasRoute: typeof PasantiasRoute
   PerfilRoute: typeof PerfilRoute
   PlanesRoute: typeof PlanesRoute
   PublicarRoute: typeof PublicarRoute
@@ -570,6 +583,13 @@ declare module '@tanstack/react-router' {
       path: '/perfil'
       fullPath: '/perfil'
       preLoaderRoute: typeof PerfilRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pasantias': {
+      id: '/pasantias'
+      path: '/pasantias'
+      fullPath: '/pasantias'
+      preLoaderRoute: typeof PasantiasRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/onboarding': {
@@ -750,6 +770,7 @@ const rootRouteChildren: RootRouteChildren = {
   MapRoute: MapRoute,
   MisPropiedadesRoute: MisPropiedadesRoute,
   OnboardingRoute: OnboardingRoute,
+  PasantiasRoute: PasantiasRoute,
   PerfilRoute: PerfilRoute,
   PlanesRoute: PlanesRoute,
   PublicarRoute: PublicarRoute,

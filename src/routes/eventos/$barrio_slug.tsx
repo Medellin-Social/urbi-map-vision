@@ -190,7 +190,7 @@ function EventosPage() {
 
         {/* Filtros */}
         <div style={{
-          background: K.surface, border: `1px solid ${K.line}`, borderRadius: 14,
+          background: '#fff', border: `1px solid ${K.line}`, borderRadius: 14,
           padding: '18px 20px', marginBottom: 32,
           display: 'flex', flexDirection: 'column', gap: 16,
         }}>
@@ -205,29 +205,29 @@ function EventosPage() {
             </div>
           </div>
 
-          {/* Cuándo + Para quién — lado a lado en desktop, apiladas en mobile */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
-            <div style={{ flex: '1 1 280px' }}>
-              <GroupLabel>{t('Cuándo', 'When')}</GroupLabel>
-              <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {FILTROS_FECHA.map(f => (
-                  <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
-                ))}
-              </div>
+          {/* Cuándo — fila propia, ancho completo */}
+          <div>
+            <GroupLabel>{t('Cuándo', 'When')}</GroupLabel>
+            <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {FILTROS_FECHA.map(f => (
+                <Pill key={f.id} active={fecha === f.id} onClick={() => { setFecha(f.id); reset() }} label={lang === 'es' ? f.es : f.en} />
+              ))}
             </div>
-            <div style={{ flex: '1 1 240px' }}>
-              <GroupLabel>{t('Para quién', 'For who')}</GroupLabel>
-              <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {FILTROS_AUDIENCIA.map(a => (
-                  <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
-                ))}
-              </div>
+          </div>
+
+          {/* Para quién — fila propia, ancho completo */}
+          <div>
+            <GroupLabel>{t('Para quién', 'For who')}</GroupLabel>
+            <div className="filtros-tabs" style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {FILTROS_AUDIENCIA.map(a => (
+                <Pill key={a.id} active={audiencia === a.id} onClick={() => { setAudiencia(a.id); reset() }} label={lang === 'es' ? a.es : a.en} />
+              ))}
             </div>
           </div>
 
           {/* Solo gratis + limpiar — separados del resto por su naturaleza (toggle vs. selección) */}
           <div style={{
-            display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+            display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 10,
             paddingTop: 14, borderTop: `1px solid ${K.line}`,
           }}>
             <Pill active={gratuito} onClick={() => { setGratuito(g => !g); reset() }} label={`🎟️ ${t('Solo gratis', 'Free only')}`} />

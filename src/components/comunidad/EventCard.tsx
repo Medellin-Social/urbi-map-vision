@@ -166,6 +166,44 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
   )
 }
 
+// Variante compacta para paneles laterales angostos: foto circular, todo centrado.
+export function EventCardCompact({ evento }: { evento: EventoData }) {
+  const f = parseFecha(evento.fecha_inicio)
+  const cat = catMeta(evento.categoria)
+  const priceLabel = evento.gratuito ? ' · Gratis' : evento.precio > 0 ? ` · ${formatPrecio(evento.precio, evento.moneda)}` : ''
+
+  return (
+    <a
+      href={evento.url_externo ?? '#'}
+      target="_blank" rel="noopener noreferrer"
+      style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+        background: '#FFFFFF', border: '0.5px solid #E8E0D0',
+        borderRadius: 12, overflow: 'hidden', textDecoration: 'none', padding: '14px 12px',
+      }}
+    >
+      <div style={{ width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginBottom: 10 }}>
+        {evento.foto_url
+          ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
+          : <ImgPlaceholder categoria={evento.categoria} />
+        }
+      </div>
+      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral, marginBottom: 4 }}>
+        {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
+      </div>
+      <h3 style={{
+        fontSize: 14, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 4px',
+        overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+      }}>
+        {evento.titulo}
+      </h3>
+      <p style={{ fontSize: 11, color: '#9B8B75', margin: 0 }}>
+        {f.day} {f.month} · {evento.barrio_nombre || evento.organizador || 'Medellín'}
+      </p>
+    </a>
+  )
+}
+
 export function EventCardMini({ evento }: { evento: EventoData }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)

@@ -135,7 +135,10 @@ WHERE d.activo    = TRUE
             3000
         )
     ))
-    OR ($2::int IS NULL AND d.ciudad_id = $1)
+    OR ($2::int IS NULL AND $3::text IS NOT NULL AND COALESCE(d.barrio_id, t.barrio_id) IN (
+        SELECT id FROM raw.barrios WHERE municipio = $3
+    ))
+    OR ($2::int IS NULL AND $3::text IS NULL AND d.ciudad_id = $1)
   )
 ORDER BY d.created_at DESC
 LIMIT 4
@@ -146,10 +149,11 @@ LIMIT 4
 async def get_deals(
     ciudad_id: int = Query(1),
     barrio_id: Optional[int] = Query(None),
+    municipio: Optional[str] = Query(None),
     pool=Depends(get_pool),
 ):
     try:
-        rows = await pool.fetch(_DEALS_QUERY, ciudad_id, barrio_id)
+        rows = await pool.fetch(_DEALS_QUERY, ciudad_id, barrio_id, municipio)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     deals = [
@@ -218,7 +222,10 @@ WITH ranked AS (
                 3000
             )
         ))
-        OR ($2::int IS NULL AND t.ciudad_id = $1)
+        OR ($2::int IS NULL AND $4::text IS NOT NULL AND t.barrio_id IN (
+            SELECT id FROM raw.barrios WHERE municipio = $4
+        ))
+        OR ($2::int IS NULL AND $4::text IS NULL AND t.ciudad_id = $1)
       )
 )
 SELECT * FROM ranked WHERE rn = 1 ORDER BY rating_google DESC LIMIT 4
@@ -229,10 +236,11 @@ SELECT * FROM ranked WHERE rn = 1 ORDER BY rating_google DESC LIMIT 4
 async def get_directorio(
     ciudad_id: int = Query(1),
     barrio_id: Optional[int] = Query(None),
+    municipio: Optional[str] = Query(None),
     pool=Depends(get_pool),
 ):
     try:
-        rows = await pool.fetch(_DIRECTORIO_QUERY, ciudad_id, barrio_id, _DIRECTORIO_CATEGORIAS)
+        rows = await pool.fetch(_DIRECTORIO_QUERY, ciudad_id, barrio_id, _DIRECTORIO_CATEGORIAS, municipio)
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
     negocios = [

@@ -7,8 +7,8 @@ import { useIsMobile } from '@/hooks/use-mobile'
 import { useDeals } from '@/hooks/useDeals'
 import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
-import { useSocioCasadolcecasa } from '@/hooks/useSocioListings'
-import { formatCOP } from '@/lib/format'
+import { useEventosTop } from '@/hooks/useEventosTop'
+import { EventCardCompact } from '@/components/comunidad/EventCard'
 import { API_ENDPOINTS } from '@/config/api'
 
 export const Route = createFileRoute('/')({
@@ -114,33 +114,46 @@ function barrioSlug(id: number, nombre: string, cdComuna: number | null): string
 
 type PickedBarrio = { id: number; nombre: string; slug: string; lat: number; lng: number }
 
+function PillButton({ href, onClick, icon, iconBg, label }: {
+  href?: string; onClick?: () => void; icon: string; iconBg: string; label: string
+}) {
+  const inner = (
+    <>
+      <span style={{
+        width: 26, height: 26, borderRadius: '50%', background: iconBg,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, flexShrink: 0,
+      }}>
+        {icon}
+      </span>
+      {label}
+    </>
+  )
+  const style: React.CSSProperties = {
+    display: 'inline-flex', alignItems: 'center', gap: 9,
+    padding: '7px 16px 7px 7px', borderRadius: 999,
+    background: '#fff', border: `1px solid ${K.line}`,
+    fontWeight: 700, fontSize: 13.5, color: K.ink, cursor: 'pointer', fontFamily: 'inherit',
+    textDecoration: 'none', boxShadow: '0 4px 14px rgba(20,32,29,.14)', whiteSpace: 'nowrap',
+  }
+  return href
+    ? <a href={href} style={style}>{inner}</a>
+    : <button onClick={onClick} style={style}>{inner}</button>
+}
+
 function HeroOverlay({ phase, barrio, onChoose, onClose }: {
   phase: MapPhase
   barrio: PickedBarrio | null
   onChoose: (choice: 'barrios' | 'comunidad') => void
   onClose: () => void
 }) {
-  const btnBase: React.CSSProperties = {
-    display: 'inline-flex', alignItems: 'center', gap: 6,
-    padding: '10px 20px', borderRadius: 999, border: 'none',
-    fontWeight: 700, fontSize: 14, cursor: 'pointer', fontFamily: 'inherit',
-    transition: 'opacity .15s',
-  }
-
   if (phase === 'chooser') {
     return (
       <div style={{
         position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
         display: 'flex', gap: 10, zIndex: 10,
       }}>
-        <button style={{ ...btnBase, background: K.teal, color: '#fff' }}
-          onClick={() => onChoose('barrios')}>
-          🗺 Ver barrios
-        </button>
-        <button style={{ ...btnBase, background: K.ink, color: '#fff' }}
-          onClick={() => onChoose('comunidad')}>
-          🎉 Ver comunidad
-        </button>
+        <PillButton icon="🗺" iconBg={K.coralLight} label="Ver barrios" onClick={() => onChoose('barrios')} />
+        <PillButton icon="🎉" iconBg="#FFF1C2" label="Ver comunidad" onClick={() => onChoose('comunidad')} />
       </div>
     )
   }
@@ -150,11 +163,16 @@ function HeroOverlay({ phase, barrio, onChoose, onClose }: {
       <div style={{
         position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
         background: 'rgba(20,32,29,.82)', backdropFilter: 'blur(6px)',
-        color: '#fff', borderRadius: 12, padding: '10px 18px',
-        fontSize: 13, fontWeight: 600, zIndex: 10, display: 'flex', alignItems: 'center', gap: 12,
+        color: '#fff', borderRadius: 999, padding: '9px 8px 9px 18px',
+        fontSize: 13, fontWeight: 600, zIndex: 10, display: 'flex', alignItems: 'center', gap: 10,
+        boxShadow: '0 4px 16px rgba(20,32,29,.2)',
       }}>
         <span>Selecciona un barrio en el mapa</span>
-        <button onClick={onClose} style={{ background: 'none', border: 'none', color: 'rgba(255,255,255,.6)', cursor: 'pointer', fontSize: 18, lineHeight: 1, padding: 0 }}>×</button>
+        <button onClick={onClose} style={{
+          background: 'rgba(255,255,255,.12)', border: 'none', color: '#fff', cursor: 'pointer',
+          fontSize: 15, lineHeight: 1, width: 22, height: 22, borderRadius: '50%',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}>×</button>
       </div>
     )
   }
@@ -163,23 +181,21 @@ function HeroOverlay({ phase, barrio, onChoose, onClose }: {
     return (
       <div style={{
         position: 'absolute', bottom: 24, left: '50%', transform: 'translateX(-50%)',
-        background: K.paper, borderRadius: 16, padding: '16px 20px',
-        boxShadow: '0 8px 32px rgba(20,32,29,.18)', zIndex: 10, minWidth: 280,
+        background: K.paper, borderRadius: 18, padding: '14px 16px',
+        boxShadow: '0 10px 36px rgba(20,32,29,.22)', zIndex: 10, minWidth: 300,
       }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-          <span style={{ fontWeight: 800, fontSize: 15, color: K.ink }}>{barrio.nombre}</span>
-          <button onClick={onClose} style={{ background: 'none', border: 'none', color: K.muted, cursor: 'pointer', fontSize: 20, lineHeight: 1, padding: 0 }}>×</button>
+          <span style={{ fontFamily: K.serif, fontWeight: 800, fontSize: 16, color: K.ink }}>{barrio.nombre}</span>
+          <button onClick={onClose} style={{
+            background: K.surface, border: 'none', color: K.muted, cursor: 'pointer',
+            fontSize: 16, lineHeight: 1, width: 24, height: 24, borderRadius: '50%',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}>×</button>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <a href={`/eventos/${barrio.slug}`} style={{ ...btnBase, background: K.coral, color: '#fff', textDecoration: 'none' }}>
-            📅 Ver eventos
-          </a>
-          <a href={`/local-business/${barrio.slug}`} style={{ ...btnBase, background: K.teal, color: '#fff', textDecoration: 'none' }}>
-            🏪 Ver negocios
-          </a>
-          <a href={`/map?lat=${barrio.lat.toFixed(5)}&lng=${barrio.lng.toFixed(5)}&zoom=14`} style={{ ...btnBase, background: K.ink, color: '#fff', textDecoration: 'none' }}>
-            🏠 Ver listings
-          </a>
+          <PillButton href={`/eventos/${barrio.slug}`} icon="📅" iconBg={K.coralLight} label="Eventos" />
+          <PillButton href={`/local-business/${barrio.slug}`} icon="🏪" iconBg="#D9F0E7" label="Negocios" />
+          <PillButton href={`/map?lat=${barrio.lat.toFixed(5)}&lng=${barrio.lng.toFixed(5)}&zoom=14`} icon="🏠" iconBg="#FFF1C2" label="Listings" />
         </div>
       </div>
     )
@@ -255,7 +271,7 @@ function HomeContent() {
   }, [])
 
   const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number, cdComuna: number | null) => {
-    if (mapPhase !== 'barrios') return
+    if (mapPhase !== 'barrios' && mapPhase !== 'barrio_action') return
     setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug: barrioSlug(id, nombre, cdComuna), lat, lng })
     setMapPhase('barrio_action')
   }, [mapPhase])
@@ -269,35 +285,87 @@ function HomeContent() {
   const noBarrio = !barrio.barrio_id && !isTodos
 
   const barrioFilter = isTodos ? null : (barrio.barrio_id ?? null)
+  const municipioFilter = isTodos ? undefined : barrio.municipio_nombre
 
   const { data: noticias   = [] }                          = useNoticias(4)
-  const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter)
-  const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter)
-  const { data: socioListings = [] }                        = useSocioCasadolcecasa(6)
+  const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter, municipioFilter)
+  const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter, municipioFilter)
+  const { data: eventosTop = [] }                           = useEventosTop(barrioFilter, municipioFilter, 3)
 
   return (
     <>
-      {/* ── HERO — mapa /map (comunas → barrios, sin listings) ─────────── */}
-      <section
-        style={{ position: 'relative', overflow: 'hidden', height: isMobile ? '50vh' : '72vh', minHeight: isMobile ? 320 : 420, cursor: mapPhase === null ? 'pointer' : 'default' }}
-        onClick={mapPhase === null ? handleMapClick : undefined}
-      >
-        <MapView
-          mapView="zonas"
-          selectedId={null}
-          onSelect={() => {}}
-          onBarrioClick={mapPhase === 'barrios' ? handleBarrioClick : undefined}
-          flyToBarriosRef={flyToBarriosRef}
-          cooperativeGestures={isMobile}
-        />
-        {mapPhase !== null && (
-          <HeroOverlay
-            phase={mapPhase}
-            barrio={pickedBarrio}
-            onChoose={handleChoose}
-            onClose={handleOverlayClose}
-          />
-        )}
+      {/* ── HERO — mapa /map (comunas → barrios, sin listings) + Trading en tu barrio ── */}
+      <section style={{ padding: isMobile ? '20px 16px' : '32px 26px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'center', gap: 24 }}>
+          <div
+            style={{
+              position: 'relative', overflow: 'hidden', borderRadius: 16,
+              width: isMobile ? '100%' : '60%', height: isMobile ? '42vh' : '58vh', minHeight: isMobile ? 280 : 380,
+              cursor: mapPhase === null ? 'pointer' : 'default',
+              boxShadow: '0 8px 30px rgba(20,32,29,.12)',
+            }}
+            onClick={mapPhase === null ? handleMapClick : undefined}
+          >
+            <MapView
+              mapView="zonas"
+              selectedId={null}
+              onSelect={() => {}}
+              onBarrioClick={(mapPhase === 'barrios' || mapPhase === 'barrio_action') ? handleBarrioClick : undefined}
+              flyToBarriosRef={flyToBarriosRef}
+              cooperativeGestures={isMobile}
+            />
+            {mapPhase !== null && (
+              <HeroOverlay
+                phase={mapPhase}
+                barrio={pickedBarrio}
+                onChoose={handleChoose}
+                onClose={handleOverlayClose}
+              />
+            )}
+          </div>
+
+          <div style={{
+            width: isMobile ? '100%' : '40%', minWidth: 0, height: isMobile ? 'auto' : '58vh', minHeight: isMobile ? 200 : 380,
+            border: `1px solid ${K.line}`, borderRadius: 16, padding: '20px 22px',
+            background: K.paper, display: 'flex', flexDirection: 'column', overflowY: 'auto',
+          }}>
+            <h2 style={{ fontFamily: K.serif, fontWeight: 800, fontSize: '1.15rem', color: K.ink, margin: '0 0 4px' }}>
+              {t('Trading en tu barrio', 'Trading in your barrio')}
+            </h2>
+            <p style={{ color: K.muted, fontSize: '.88rem', margin: '0 0 16px' }}>
+              {t(`Lo más importante en ${barrio.nombre} ahora mismo.`, `The most important thing in ${barrio.nombre} right now.`)}
+            </p>
+
+            {/* Noticias — últimas, ya cargadas arriba en la página */}
+            <p style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9B8B75', margin: '0 0 8px' }}>
+              {t('Noticias', 'News')}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+              {noticias.length === 0 ? (
+                <p style={{ color: K.muted, fontSize: '.82rem' }}>{t('Sin noticias por ahora.', 'No news right now.')}</p>
+              ) : noticias.slice(0, 3).map((n, i) => (
+                <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
+                  fontSize: '.85rem', color: K.ink, textDecoration: 'none', lineHeight: 1.4,
+                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
+                }}>
+                  {n.titulo}
+                </a>
+              ))}
+            </div>
+
+            {/* Eventos destacados — solo los patrocinados/featured */}
+            <p style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9B8B75', margin: '0 0 8px' }}>
+              {t('Eventos destacados', 'Featured events')}
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {eventosTop.length === 0 ? (
+                <p style={{ color: K.muted, fontSize: '.82rem' }}>{t('Sin eventos destacados por ahora.', 'No featured events right now.')}</p>
+              ) : eventosTop.map(evt => (
+                <EventCardCompact key={evt.id} evento={evt} />
+              ))}
+            </div>
+          </div>
+        </div>
       </section>
 
       {/* ── NO BARRIO ─────────────────────────────────── */}
@@ -365,7 +433,10 @@ function HomeContent() {
             {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
           </SecTitle>
 
-          <div className="deals-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <div className="deals-grid" style={isMobile
+            ? { display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 6, WebkitOverflowScrolling: 'touch' }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }
+          }>
             {dealsLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
                 {t('Cargando deals...', 'Loading deals...')}
@@ -385,14 +456,18 @@ function HomeContent() {
                 borderRadius: 14,
                 overflow: 'hidden',
                 boxShadow: '0 2px 10px rgba(20,32,29,.08)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+                padding: '18px 14px 16px',
+                ...(isMobile ? { flex: '0 0 200px' } : {}),
               }}>
-                {/* Foto con overlay */}
+                {/* Foto circular */}
                 <div style={{
-                  height: 140, overflow: 'hidden', position: 'relative',
+                  width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', position: 'relative',
                   background: CATEGORIA_COLORS[deal.categoria ?? ''] ?? K.surface,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 12, flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: 34, zIndex: 1 }}>
+                  <span style={{ fontSize: 28, zIndex: 1 }}>
                     {deal.categoria === 'bares' ? '🍸' : deal.categoria === 'masajes_spa' ? '💆' : deal.categoria === 'brunch' ? '🥞' : '🍽️'}
                   </span>
                   {deal.foto_url && (
@@ -403,30 +478,22 @@ function HomeContent() {
                       onError={e => { e.currentTarget.style.display = 'none' }}
                     />
                   )}
-                  {/* gradient overlay */}
-                  <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'linear-gradient(to top, rgba(20,32,29,.72) 0%, rgba(20,32,29,.08) 55%, transparent 100%)' }} />
-                  {/* pills over gradient */}
-                  <div style={{ position: 'absolute', bottom: 9, left: 10, right: 10, zIndex: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: 'rgba(255,255,255,.82)', background: 'rgba(255,255,255,.14)', padding: '3px 8px', borderRadius: 999 }}>
-                      {catLabel(deal.categoria ?? '')}
-                    </span>
-                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: '#fff', background: K.coral, padding: '3px 9px', borderRadius: 999 }}>
-                      {deal.tipo_deal}
-                    </span>
-                  </div>
                 </div>
 
-                <div style={{ padding: '12px 14px 14px' }}>
-                  <p style={{ fontFamily: K.manrope, fontSize: 11, color: K.muted, margin: '0 0 4px', letterSpacing: '.3px' }}>
-                    {deal.barrio_nombre ?? ''}
-                  </p>
-                  <p style={{ fontFamily: K.manrope, fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 3px' }}>
-                    {deal.descripcion}
-                  </p>
-                  <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: 0 }}>
-                    {deal.tienda_nombre}
-                  </p>
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                  <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.6px', color: K.muted, background: K.surface, padding: '3px 8px', borderRadius: 999 }}>
+                    {catLabel(deal.categoria ?? '')}
+                  </span>
+                  <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: '#fff', background: K.coral, padding: '3px 9px', borderRadius: 999 }}>
+                    {deal.tipo_deal}
+                  </span>
                 </div>
+                <p style={{ fontFamily: K.manrope, fontWeight: 600, fontSize: 14, color: K.ink, margin: '0 0 3px' }}>
+                  {deal.descripcion}
+                </p>
+                <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: 0 }}>
+                  {deal.tienda_nombre}{deal.barrio_nombre ? ` · ${deal.barrio_nombre}` : ''}
+                </p>
               </div>
             ))}
           </div>
@@ -446,7 +513,10 @@ function HomeContent() {
             )}
           </p>
 
-          <div className="directorio-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+          <div className="directorio-grid" style={isMobile
+            ? { display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 6, WebkitOverflowScrolling: 'touch' }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }
+          }>
             {dirLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
                 {t('Cargando directorio...', 'Loading directory...')}
@@ -466,15 +536,18 @@ function HomeContent() {
                 borderRadius: 14,
                 overflow: 'hidden',
                 boxShadow: '0 2px 10px rgba(20,32,29,.08)',
+                display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
+                padding: '18px 14px 16px',
+                ...(isMobile ? { flex: '0 0 200px' } : {}),
               }}>
-                {/* Foto o placeholder */}
+                {/* Foto circular */}
                 <div style={{
-                  height: 140, overflow: 'hidden',
+                  width: 72, height: 72, borderRadius: '50%', overflow: 'hidden', position: 'relative',
                   background: CATEGORIA_COLORS[negocio.categoria] ?? K.surface,
                   display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  position: 'relative',
+                  marginBottom: 12, flexShrink: 0,
                 }}>
-                  <span style={{ fontSize: 40, zIndex: 1 }}>
+                  <span style={{ fontSize: 32, zIndex: 1 }}>
                     {CATEGORIA_EMOJI[negocio.categoria] ?? '⭐'}
                   </span>
                   {negocio.foto_url && (
@@ -485,77 +558,71 @@ function HomeContent() {
                       onError={e => { e.currentTarget.style.display = 'none' }}
                     />
                   )}
-                  {/* gradient overlay */}
-                  <div style={{ position: 'absolute', inset: 0, zIndex: 3, background: 'linear-gradient(to top, rgba(20,32,29,.68) 0%, rgba(20,32,29,.06) 50%, transparent 100%)' }} />
-                  {/* category pill */}
-                  <div style={{ position: 'absolute', top: 10, left: 10, zIndex: 4 }}>
-                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: K.ink, background: K.amarillo, padding: '3px 9px', borderRadius: 999, letterSpacing: '.4px' }}>
-                      ★ {catLabel(negocio.categoria)}
-                    </span>
-                  </div>
+                </div>
+
+                <div style={{ display: 'flex', gap: 6, justifyContent: 'center', flexWrap: 'wrap', marginBottom: 8 }}>
+                  <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: K.ink, background: K.amarillo, padding: '3px 9px', borderRadius: 999, letterSpacing: '.4px' }}>
+                    ★ {catLabel(negocio.categoria)}
+                  </span>
                   {negocio.barrio_nombre && (
-                    <div style={{ position: 'absolute', bottom: 9, left: 10, zIndex: 4 }}>
-                      <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 600, color: 'rgba(255,255,255,.82)', background: 'rgba(255,255,255,.14)', padding: '3px 8px', borderRadius: 999, letterSpacing: '.3px' }}>
-                        {negocio.barrio_nombre}
-                      </span>
-                    </div>
+                    <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 600, color: K.muted, background: K.surface, padding: '3px 8px', borderRadius: 999, letterSpacing: '.3px' }}>
+                      {negocio.barrio_nombre}
+                    </span>
                   )}
                 </div>
 
-                <div style={{ padding: '12px 14px 14px' }}>
-                  <p style={{ fontFamily: K.manrope, fontWeight: 700, fontSize: 15, color: K.ink, margin: '0 0 5px', lineHeight: 1.2 }}>
-                    {negocio.nombre}
-                  </p>
+                <p style={{ fontFamily: K.manrope, fontWeight: 700, fontSize: 15, color: K.ink, margin: '0 0 5px', lineHeight: 1.2 }}>
+                  {negocio.nombre}
+                </p>
 
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginBottom: 11 }}>
-                    {negocio.rating_google != null ? (
-                      <>
-                        <span style={{ color: '#ffc928', fontSize: 13, letterSpacing: 1 }}>
-                          {'★'.repeat(Math.round(negocio.rating_google))}
-                          {'☆'.repeat(5 - Math.round(negocio.rating_google))}
-                        </span>
-                        <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>{negocio.rating_google.toFixed(1)}</span>
-                      </>
-                    ) : (
-                      <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>
-                        {t('Sin reseñas aún', 'No reviews yet')}
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 11 }}>
+                  {negocio.rating_google != null ? (
+                    <>
+                      <span style={{ color: '#ffc928', fontSize: 13, letterSpacing: 1 }}>
+                        {'★'.repeat(Math.round(negocio.rating_google))}
+                        {'☆'.repeat(5 - Math.round(negocio.rating_google))}
                       </span>
-                    )}
-                  </div>
+                      <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>{negocio.rating_google.toFixed(1)}</span>
+                    </>
+                  ) : (
+                    <span style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted }}>
+                      {t('Sin reseñas aún', 'No reviews yet')}
+                    </span>
+                  )}
+                </div>
 
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    {(negocio.google_place_id || negocio.lat) && (
-                      <a
-                        href={negocio.google_place_id
-                          ? `https://www.google.com/maps/place/?q=place_id:${negocio.google_place_id}`
-                          : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(negocio.nombre + ' ' + (negocio.barrio_nombre ?? 'Medellín'))}`
-                        }
-                        target="_blank" rel="noopener noreferrer"
-                        style={{
-                          flex: 1, textAlign: 'center', padding: '7px 0',
-                          background: K.surface,
-                          borderRadius: 8, fontFamily: K.manrope, fontSize: 12, color: K.ink,
-                          textDecoration: 'none', fontWeight: 600,
-                        }}
-                      >
-                        📍 {t('Ver en Maps', 'View on Maps')}
-                      </a>
-                    )}
-                    {negocio.whatsapp && (
-                      <a
-                        href={`https://wa.me/${negocio.whatsapp.replace(/\D/g, '')}`}
-                        target="_blank" rel="noopener noreferrer"
-                        style={{
-                          flex: 1, textAlign: 'center', padding: '7px 0',
-                          background: '#25D366', borderRadius: 8,
-                          fontFamily: K.manrope, fontSize: 12, color: '#fff',
-                          textDecoration: 'none', fontWeight: 600,
-                        }}
-                      >
-                        💬 WhatsApp
-                      </a>
-                    )}
-                  </div>
+                <div style={{ display: 'flex', gap: 8, width: '100%' }}>
+                  {(negocio.google_place_id || negocio.lat) && (
+                    <a
+                      href={negocio.google_place_id
+                        ? `https://www.google.com/maps/place/?q=place_id:${negocio.google_place_id}`
+                        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(negocio.nombre + ' ' + (negocio.barrio_nombre ?? 'Medellín'))}`
+                      }
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        flex: 1, textAlign: 'center', padding: '7px 0',
+                        background: K.surface,
+                        borderRadius: 8, fontFamily: K.manrope, fontSize: 12, color: K.ink,
+                        textDecoration: 'none', fontWeight: 600,
+                      }}
+                    >
+                      📍 {t('Ver en Maps', 'View on Maps')}
+                    </a>
+                  )}
+                  {negocio.whatsapp && (
+                    <a
+                      href={`https://wa.me/${negocio.whatsapp.replace(/\D/g, '')}`}
+                      target="_blank" rel="noopener noreferrer"
+                      style={{
+                        flex: 1, textAlign: 'center', padding: '7px 0',
+                        background: '#25D366', borderRadius: 8,
+                        fontFamily: K.manrope, fontSize: 12, color: '#fff',
+                        textDecoration: 'none', fontWeight: 600,
+                      }}
+                    >
+                      💬 WhatsApp
+                    </a>
+                  )}
                 </div>
               </div>
             ))}
@@ -610,71 +677,26 @@ function HomeContent() {
         </div>
       </section>
 
-      {/* ── SOCIO INMOBILIARIO — Casa Dolce Casa ─────── */}
-      {socioListings.length > 0 && (
-        <section className="section-padding" style={{ padding: '72px 26px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
-          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-            <SecTitle link="https://casadolcecasa.com.co" linkLabel={t('Ver sitio →', 'View site →')}>
-              {t('Socio Inmobiliario', 'Real Estate Partner')}
-            </SecTitle>
-
-            <div style={{
-              display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 16,
-              background: K.paper, borderRadius: 14, padding: '18px 22px', marginBottom: 20,
+      {/* ── EMPRESAS QUE CONFÍAN EN NOSOTROS — tira de logos aliados ─── */}
+      <section className="section-padding" style={{ padding: '56px 26px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', textAlign: 'center' }}>
+          <p style={{
+            fontFamily: K.manrope, fontSize: '.78rem', fontWeight: 700, textTransform: 'uppercase',
+            letterSpacing: '.1em', color: K.muted, margin: '0 0 20px',
+          }}>
+            {t('Empresas que confían en nosotros', 'Companies that trust us')}
+          </p>
+          <div style={{ display: 'flex', justifyContent: 'center', flexWrap: 'wrap', gap: 16 }}>
+            <a href="https://casadolcecasa.com.co" target="_blank" rel="noopener noreferrer" style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              background: K.paper, padding: '14px 28px', borderRadius: 10,
               boxShadow: '0 2px 10px rgba(20,32,29,.08)',
             }}>
-              <div style={{
-                fontFamily: K.serif, fontWeight: 900, fontSize: '1.15rem', color: K.tealDeep,
-                background: K.coralLight, padding: '8px 16px', borderRadius: 10, whiteSpace: 'nowrap',
-              }}>
-                Casa Dolce Casa
-              </div>
-              <p style={{ fontFamily: K.manrope, color: K.muted, margin: 0, flex: '1 1 260px', fontSize: '.95rem' }}>
-                {t('"Confianza que construye hogares" — agencia aliada de Medellín Social.', '"Trust that builds homes" — Medellín Social\'s allied agency.')}
-              </p>
-              <a href="https://wa.me/573103144877" target="_blank" rel="noopener noreferrer" style={{
-                fontFamily: K.manrope, fontWeight: 700, fontSize: '.85rem', color: '#fff',
-                background: '#25D366', padding: '10px 18px', borderRadius: 999, textDecoration: 'none', whiteSpace: 'nowrap',
-              }}>
-                💬 WhatsApp
-              </a>
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
-              {socioListings.map((l) => (
-                <a key={l.id} href={l.url} target="_blank" rel="noopener noreferrer" style={{
-                  background: K.paper, borderRadius: 14, overflow: 'hidden',
-                  boxShadow: '0 2px 10px rgba(20,32,29,.08)', textDecoration: 'none', display: 'block',
-                }}>
-                  <div style={{ height: 140, overflow: 'hidden', position: 'relative', background: K.line }}>
-                    {l.foto_principal && (
-                      <img src={l.foto_principal} alt={l.tipo_inmueble ?? ''} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                    )}
-                    <span style={{
-                      position: 'absolute', top: 9, left: 9,
-                      fontFamily: K.manrope, fontSize: 10, fontWeight: 800, color: K.ink,
-                      background: K.amarillo, padding: '3px 9px', borderRadius: 999, letterSpacing: '.4px',
-                    }}>
-                      ★ PREMIUM
-                    </span>
-                  </div>
-                  <div style={{ padding: '12px 14px 14px' }}>
-                    <p style={{ fontFamily: K.serif, fontWeight: 800, fontSize: 15, color: K.ink, margin: '0 0 4px' }}>
-                      {formatCOP(l.precio_cop ?? 0)}
-                    </p>
-                    <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: 0 }}>
-                      {[l.habitaciones && `${l.habitaciones} hab`, l.banos && `${l.banos} baños`, l.area_m2 && `${l.area_m2}m²`].filter(Boolean).join(' · ')}
-                    </p>
-                    <p style={{ fontFamily: K.manrope, fontSize: 12, color: K.muted, margin: '2px 0 0' }}>
-                      {l.barrio ?? ''}
-                    </p>
-                  </div>
-                </a>
-              ))}
-            </div>
+              <img src="/partners/casa-dolce-casa.png" alt="Casa Dolce Casa" style={{ height: 40, width: 'auto' }} />
+            </a>
           </div>
-        </section>
-      )}
+        </div>
+      </section>
 
       {/* ── SUSCRIPCIÓN ───────────────────────────────── */}
       <section id="subscribe" className="section-padding" style={{ padding: '0 16px 72px' }}>

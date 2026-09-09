@@ -16,12 +16,13 @@ export interface DirectorioItem {
   barrio_nombre: string | null
 }
 
-export function useDirectorio(ciudad_id = 1, barrio_id?: number | null) {
+export function useDirectorio(ciudad_id = 1, barrio_id?: number | null, municipio?: string) {
   return useQuery<DirectorioItem[]>({
-    queryKey: ['directorio', ciudad_id, barrio_id ?? null],
+    queryKey: ['directorio', ciudad_id, barrio_id ?? null, municipio ?? null],
     queryFn: async () => {
       const sp = new URLSearchParams({ ciudad_id: String(ciudad_id) })
       if (barrio_id) sp.set('barrio_id', String(barrio_id))
+      else if (municipio) sp.set('municipio', municipio)
       const res = await fetch(`${API_BASE_URL}/business/directorio?${sp}`)
       if (!res.ok) return []
       const data = await res.json()

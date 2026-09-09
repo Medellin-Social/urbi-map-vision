@@ -13,12 +13,13 @@ export interface DealData {
   barrio_nombre: string | null
 }
 
-export function useDeals(ciudad_id = 1, barrio_id?: number | null) {
+export function useDeals(ciudad_id = 1, barrio_id?: number | null, municipio?: string) {
   return useQuery<DealData[]>({
-    queryKey: ['deals', ciudad_id, barrio_id ?? null],
+    queryKey: ['deals', ciudad_id, barrio_id ?? null, municipio ?? null],
     queryFn: async () => {
       const sp = new URLSearchParams({ ciudad_id: String(ciudad_id) })
       if (barrio_id) sp.set('barrio_id', String(barrio_id))
+      else if (municipio) sp.set('municipio', municipio)
       const res = await fetch(`${API_BASE_URL}/business/deals?${sp}`)
       if (!res.ok) return []
       const data = await res.json()
