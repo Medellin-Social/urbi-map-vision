@@ -20,12 +20,12 @@ el contrato de Talal (ver api/routers/ghl_webhook.py). Esto solo dej a las
 tablas listas para cuando exista.
 
 Revision ID: 0084
-Revises: 0083
+Revises: 0085
 """
 from alembic import op
 
 revision = "0084"
-down_revision = "0083"
+down_revision = "0085"
 branch_labels = None
 depends_on = None
 

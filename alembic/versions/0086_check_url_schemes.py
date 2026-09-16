@@ -13,13 +13,13 @@ paths there (e.g. eventos.foto_url = '/themes/png/gov.png' from the gov.co
 calendar scraper) that a same-constraint would have broken.
 
 Revision ID: 0086
-Revises: 0085
+Revises: 0084
 Create Date: 2026-09-15
 """
 from alembic import op
 
 revision = "0086"
-down_revision = "0085"
+down_revision = "0084"
 branch_labels = None
 depends_on = None
 
