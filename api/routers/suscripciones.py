@@ -6,12 +6,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
+from pydantic import BaseModel
 
 from api.config.planes import PLANES
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.utils.email import ADMIN_EMAIL, _wrap, send_email
-from api.utils import stripe_client, wompi_client
+from api.utils import stripe_client
 
 router = APIRouter()
 
@@ -40,10 +41,7 @@ async def get_planes(moneda: str = "COP"):
             "precio_usd": p["precio_usd"],
             "features": p["features"],
             "requiere_verificacion": p.get("requiere_verificacion", False),
-            "pago_disponible": (
-                bool(p.get("stripe_price_id_usd")) if moneda == "USD"
-                else bool(p.get("wompi_plan_id_cop") or wompi_client.is_configured())
-            ),
+            "pago_disponible": bool(p.get("stripe_price_id_usd")) if moneda == "USD" else False,
         })
     return {"planes": result, "moneda": moneda}
 
@@ -87,13 +85,6 @@ async def iniciar_suscripcion(
             success_url=success_url,
             cancel_url=cancel_url,
         )
-    else:
-        checkout_url = await wompi_client.crear_link_pago(
-            usuario_id=user_id,
-            plan=plan,
-            email=current_user["email"],
-            redirect_url=success_url,
-        )
 
     if not checkout_url:
         # Payment gateway not yet configured — manual flow
@@ -124,6 +115,41 @@ async def iniciar_suscripcion(
     return {"checkout_url": checkout_url}
 
 
+# ── POST /agente/registro ───────────────────────────────────────────────────────
+
+class AgenteRegistroIn(BaseModel):
+    nombre: str
+    telefono: str
+
+
+@router.post("/agente/registro")
+async def registro_agente(
+    body: AgenteRegistroIn,
+    current_user: dict = Depends(get_current_user),
+):
+    """Aplicación de agente independiente: crea `agent` en estado 'pendiente'
+    para que el admin lo revise (admin_agentes.py aprobar/rechazar). La
+    agency 'independiente' se crea sola, más tarde, la primera vez que se le
+    asigna una zona (zona_sponsor_service.get_or_create_agency) — no acá."""
+    if not body.nombre.strip() or not body.telefono.strip():
+        raise HTTPException(400, "Nombre y teléfono son obligatorios")
+
+    pool = get_pool()
+    row = await pool.fetchrow(
+        """
+        INSERT INTO agent (usuario_id, email, nombre, telefono)
+        VALUES ($1, $2, $3, $4)
+        ON CONFLICT (email) DO UPDATE
+          SET usuario_id = EXCLUDED.usuario_id,
+              nombre = CASE WHEN agent.estado = 'pendiente' THEN EXCLUDED.nombre ELSE agent.nombre END,
+              telefono = CASE WHEN agent.estado = 'pendiente' THEN EXCLUDED.telefono ELSE agent.telefono END
+        RETURNING id, estado
+        """,
+        current_user["id"], current_user["email"], body.nombre.strip(), body.telefono.strip(),
+    )
+    return {"id": str(row["id"]), "estado": row["estado"]}
+
+
 # ── GET /mi-plan ───────────────────────────────────────────────────────────────
 
 @router.get("/mi-plan")
@@ -136,7 +162,7 @@ async def mi_plan(current_user: dict = Depends(get_current_user)):
     sub = await pool.fetchrow(
         """
         SELECT plan, estado, moneda, precio, fecha_inicio, fecha_fin,
-               cancelacion_solicitada, stripe_subscription_id, wompi_subscription_id
+               cancelacion_solicitada, stripe_subscription_id
         FROM public.suscripciones_usuario
         WHERE usuario_id = $1 AND estado = 'activa'
         ORDER BY fecha_creacion DESC
@@ -172,7 +198,7 @@ async def cancelar_suscripcion(current_user: dict = Depends(get_current_user)):
 
     sub = await pool.fetchrow(
         """
-        SELECT id, stripe_subscription_id, wompi_subscription_id
+        SELECT id, stripe_subscription_id
         FROM public.suscripciones_usuario
         WHERE usuario_id = $1 AND estado = 'activa'
         ORDER BY fecha_creacion DESC LIMIT 1
@@ -235,36 +261,6 @@ async def webhook_stripe(request: Request):
     return {"received": True}
 
 
-# ── POST /webhook/wompi ────────────────────────────────────────────────────────
-
-@router.post("/webhook/wompi", include_in_schema=False)
-async def webhook_wompi(request: Request):
-    body = await request.json()
-    checksum = body.get("signature", {}).get("checksum", "")
-
-    if not wompi_client.verificar_webhook(body, checksum):
-        raise HTTPException(400, "Webhook inválido")
-
-    event_type = body.get("event", "")
-    tx = body.get("data", {}).get("transaction", {})
-    status = tx.get("status", "")
-    referencia = tx.get("reference", "")
-
-    if event_type == "transaction.updated" and status == "APPROVED" and referencia:
-        plan, usuario_id = wompi_client.referencia_to_plan_user(referencia)
-        if usuario_id and plan:
-            await _activar_plan(usuario_id, plan, "COP",
-                                wompi_ref=referencia,
-                                wompi_sub_id=tx.get("id"))
-
-    elif event_type == "subscription.charge.failed" and referencia:
-        plan, usuario_id = wompi_client.referencia_to_plan_user(referencia)
-        if usuario_id and plan:
-            await _marcar_vencida_wompi(usuario_id=usuario_id, plan=plan)
-
-    return {"received": True}
-
-
 # ── DB helpers ─────────────────────────────────────────────────────────────────
 
 async def _activar_plan(
@@ -273,8 +269,6 @@ async def _activar_plan(
     moneda: str,
     stripe_sub_id: Optional[str] = None,
     stripe_customer_id: Optional[str] = None,
-    wompi_ref: Optional[str] = None,
-    wompi_sub_id: Optional[str] = None,
     ghl_sub_id: Optional[str] = None,
 ) -> None:
     pool = get_pool()
@@ -286,16 +280,13 @@ async def _activar_plan(
         INSERT INTO public.suscripciones_usuario
             (usuario_id, plan, estado, moneda, precio,
              stripe_subscription_id, stripe_customer_id,
-             wompi_subscription_id, wompi_referencia,
              ghl_subscription_id,
              fecha_inicio, fecha_fin)
-        VALUES ($1, $2, 'activa', $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        VALUES ($1, $2, 'activa', $3, $4, $5, $6, $7, $8, $9)
         ON CONFLICT (usuario_id, plan) DO UPDATE
           SET estado = 'activa',
               stripe_subscription_id = COALESCE(EXCLUDED.stripe_subscription_id, suscripciones_usuario.stripe_subscription_id),
               stripe_customer_id     = COALESCE(EXCLUDED.stripe_customer_id, suscripciones_usuario.stripe_customer_id),
-              wompi_subscription_id  = COALESCE(EXCLUDED.wompi_subscription_id, suscripciones_usuario.wompi_subscription_id),
-              wompi_referencia       = COALESCE(EXCLUDED.wompi_referencia, suscripciones_usuario.wompi_referencia),
               ghl_subscription_id    = COALESCE(EXCLUDED.ghl_subscription_id, suscripciones_usuario.ghl_subscription_id),
               fecha_inicio = COALESCE(suscripciones_usuario.fecha_inicio, EXCLUDED.fecha_inicio),
               fecha_fin    = EXCLUDED.fecha_fin,
@@ -305,7 +296,6 @@ async def _activar_plan(
         usuario_id, plan, moneda,
         PLANES[plan]["precio_cop"] if moneda == "COP" else PLANES[plan]["precio_usd"],
         stripe_sub_id, stripe_customer_id,
-        wompi_sub_id, wompi_ref,
         ghl_sub_id,
         now, fecha_fin,
     )
@@ -344,21 +334,6 @@ async def _marcar_vencida(stripe_sub_id: str) -> None:
         await pool.execute(
             "UPDATE public.usuarios SET plan = 'free' WHERE id = $1", row["usuario_id"]
         )
-
-
-async def _marcar_vencida_wompi(usuario_id: int, plan: str) -> None:
-    pool = get_pool()
-    await pool.execute(
-        """
-        UPDATE public.suscripciones_usuario
-        SET estado = 'vencida', updated_at = NOW()
-        WHERE usuario_id = $1 AND plan = $2
-        """,
-        usuario_id, plan,
-    )
-    await pool.execute(
-        "UPDATE public.usuarios SET plan = 'free' WHERE id = $1", usuario_id
-    )
 
 
 async def _email_bienvenida_plan(email: str, nombre: str, plan: str) -> None:

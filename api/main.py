@@ -113,7 +113,10 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_origins(),
     allow_origin_regex=r"https://.*\.(lovable\.app|lovableproject\.com|up\.railway\.app)",
-    allow_credentials=True,
+    # No cookie/session auth anywhere (Bearer JWT only, checked api/dependencies.py) —
+    # allow_credentials=True bought nothing but let any subdomain of these shared,
+    # publicly-registrable platforms make credentialed cross-origin calls.
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )

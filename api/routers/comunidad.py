@@ -1,14 +1,18 @@
 from __future__ import annotations
 
 import asyncio
-from datetime import date, timedelta
+import logging
+from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
+from fastapi import APIRouter, Body, Depends, HTTPException, Query
+from pydantic import BaseModel, field_validator
 
 from api.db import get_pool
+from api.dependencies import get_current_user
+from api.utils.urls import require_safe_url
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -103,8 +107,9 @@ async def get_eventos_todos(
         rows, total_row = await pool.fetch(
             _TODOS_EVENTOS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_TODOS_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return EventosResponse(
         barrio_id=None, municipio="VALLE DE ABURRÁ",
         total=total_row[0] if total_row else 0,
@@ -219,8 +224,9 @@ async def get_eventos_barrio(
         rows, total_row = await pool.fetch(
             _EVENTOS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     return EventosResponse(
         barrio_id=barrio_id, total=total_row[0] if total_row else 0,
@@ -301,8 +307,9 @@ async def get_eventos_municipio(
         rows, total_row = await pool.fetch(
             _MUNICIPIO_EVENTOS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_MUNICIPIO_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return EventosResponse(
         barrio_id=None, municipio=municipio.upper(),
         total=total_row[0] if total_row else 0,
@@ -499,8 +506,9 @@ async def get_tiendas_todos(
         rows, total_row = await pool.fetch(
             _TODOS_TIENDAS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_TODOS_TIENDAS_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     total = total_row[0] if total_row else 0
     tiendas = [
         TiendaOut(
@@ -537,8 +545,9 @@ async def get_tiendas_barrio(
         rows, total_row = await pool.fetch(
             _TIENDAS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_TIENDAS_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     total = total_row[0] if total_row else 0
 
@@ -634,8 +643,9 @@ async def get_tiendas_counts(barrio_id: int, pool=Depends(get_pool)):
     )
     try:
         rows = await pool.fetch(_COUNTS_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return {r["grupo"]: r["n"] for r in rows}
 
 
@@ -650,8 +660,9 @@ async def get_municipio_tiendas_counts(municipio: str, pool=Depends(get_pool)):
     )
     try:
         rows = await pool.fetch(_MUNICIPIO_COUNTS_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return {r["grupo"]: r["n"] for r in rows}
 
 
@@ -691,8 +702,9 @@ async def get_comunas_tiendas_counts(pool=Depends(get_pool)):
     try:
         comuna_rows    = await pool.fetch(_COMUNA_TOTAL_COUNTS_QUERY)
         municipio_rows = await pool.fetch(_MUNICIPIO_TOTAL_COUNTS_QUERY)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     counts: dict[str, int] = {}
     for r in (*comuna_rows, *municipio_rows):
         if r["cd_comuna"] is not None:
@@ -770,8 +782,9 @@ async def get_tiendas_municipio(
         rows, total_row = await pool.fetch(
             _MUNICIPIO_TIENDAS_QUERY, *args, limit, offset
         ), await pool.fetchrow(_MUNICIPIO_TIENDAS_COUNT_QUERY, *args)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     total = total_row[0] if total_row else 0
 
@@ -860,8 +873,9 @@ async def get_ticker(
             pool.fetch(_TICKER_NOTICIAS_QUERY),
             pool.fetch(_TICKER_EVENTOS_QUERY, list(_TICKER_CATEGORIAS), ciudad_id),
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     items = [
         TickerItem(
@@ -907,8 +921,9 @@ async def get_noticias(
 ):
     try:
         rows = await pool.fetch(_NOTICIAS_QUERY, limit)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     noticias = [
         NoticiaOut(
@@ -921,3 +936,69 @@ async def get_noticias(
         for r in rows
     ]
     return NoticiasResponse(total=len(noticias), noticias=noticias)
+
+
+# ── POST /eventos — publicación de usuario, queda pendiente de aprobación ──────
+
+class EventoSubmitIn(BaseModel):
+    titulo: str
+    fecha_inicio: str  # ISO datetime
+    fecha_fin: Optional[str] = None
+    descripcion: Optional[str] = None
+    categoria: Optional[str] = None
+    barrio_id: Optional[int] = None
+    organizador: Optional[str] = None
+    gratuito: bool = True
+    precio: float = 0
+    url_externo: Optional[str] = None
+    foto_url: Optional[str] = None
+
+    _validar_url_externo = field_validator("url_externo")(require_safe_url)
+    _validar_foto_url = field_validator("foto_url")(require_safe_url)
+
+
+class EventoSubmitOut(BaseModel):
+    id: int
+    estado: str
+
+
+@router.post("/eventos", response_model=EventoSubmitOut, status_code=201)
+async def submit_evento(
+    body: EventoSubmitIn = Body(...),
+    current_user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Evento subido por un usuario ('interno'). Queda con activo=FALSE hasta que
+    admin lo apruebe (admin.py POST /admin/eventos/{id}/aprobar) — mismo filtro
+    activo=TRUE que ya usan todas las queries públicas de este archivo, así que
+    no aparece en ningún lado hasta la aprobación."""
+    try:
+        # eventos.fecha_inicio/fecha_fin son TIMESTAMP sin tz — quitar tzinfo o
+        # asyncpg revienta con "can't subtract offset-naive and offset-aware".
+        fecha_inicio = datetime.fromisoformat(body.fecha_inicio.replace("Z", "+00:00")).replace(tzinfo=None)
+        fecha_fin = (
+            datetime.fromisoformat(body.fecha_fin.replace("Z", "+00:00")).replace(tzinfo=None)
+            if body.fecha_fin else None
+        )
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Fecha inválida (ISO 8601)")
+
+    try:
+        row = await pool.fetchrow(
+            """
+            INSERT INTO public.eventos
+                (titulo, descripcion, categoria, barrio_id, fecha_inicio, fecha_fin,
+                 precio, gratuito, url_externo, foto_url, organizador,
+                 fuente, subido_por, activo)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, 'interno', $12, FALSE)
+            RETURNING id
+            """,
+            body.titulo, body.descripcion, body.categoria, body.barrio_id,
+            fecha_inicio, fecha_fin, body.precio, body.gratuito,
+            body.url_externo, body.foto_url, body.organizador,
+            current_user["id"],
+        )
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+    return EventoSubmitOut(id=row["id"], estado="pendiente")

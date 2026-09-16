@@ -13,7 +13,7 @@ function ForgotPasswordPage() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [resetToken, setResetToken] = useState<string | null>(null);
+  const [sent, setSent] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -21,11 +21,11 @@ function ForgotPasswordPage() {
     setError("");
     setLoading(true);
     try {
-      const res = await apiFetch<{ message: string; reset_token: string | null }>(
+      await apiFetch<{ message: string }>(
         API_ENDPOINTS.forgotPassword,
         { method: "POST", body: JSON.stringify({ email }), skipAuth: true },
       );
-      setResetToken(res.reset_token);
+      setSent(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Error. Intenta de nuevo.");
     } finally {
@@ -33,25 +33,21 @@ function ForgotPasswordPage() {
     }
   };
 
-  if (resetToken) {
+  if (sent) {
     return (
-      <AuthShell title="Token generado" subtitle="Copia el token para restablecer tu contraseña">
+      <AuthShell title="Revisa tu correo" subtitle="Te enviamos instrucciones para recuperar tu contraseña">
         <div className="space-y-4">
           <div className="rounded-lg border border-primary/40 bg-primary/10 p-4">
-            <p className="text-[11px] font-bold uppercase tracking-widest text-primary">
-              Token de recuperación (beta)
-            </p>
-            <p className="mt-2 break-all font-mono text-xs text-foreground">{resetToken}</p>
-            <p className="mt-2 text-[11px] text-muted-foreground">
-              En producción esto llegaría a tu email. Válido por 1 hora.
+            <p className="text-sm text-foreground">
+              Si <span className="font-semibold">{email}</span> está registrado, recibirás un correo con un enlace para
+              restablecer tu contraseña. Válido por 1 hora.
             </p>
           </div>
           <Link
-            to="/reset-password"
-            search={{ token: resetToken }}
+            to="/login"
             className="block w-full rounded-md bg-primary py-2.5 text-center text-sm font-semibold text-primary-foreground glow-cyan"
           >
-            Ir a restablecer contraseña →
+            Volver al login
           </Link>
         </div>
       </AuthShell>

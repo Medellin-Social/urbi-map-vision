@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from typing import Any, Optional
 
@@ -8,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from api.db import get_pool
 from api.routers.barrios import get_score_col
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 # ── Cache 24 h ────────────────────────────────────────────────────────────────
@@ -138,8 +140,9 @@ async def get_comunas_geojson(
     try:
         rows_medellin   = await pool.fetch(sql_medellin)
         rows_municipios = await pool.fetch(sql_municipios)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     metrics: dict[str, dict] = {}
 
@@ -233,8 +236,9 @@ ORDER BY b.nombre
 
     try:
         rows = await pool.fetch(sql, cd_comuna)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     return [
         {
@@ -267,8 +271,9 @@ async def get_barrios_in_comuna(
 
     try:
         rows = await pool.fetch(sql, nombre)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     return [
         {

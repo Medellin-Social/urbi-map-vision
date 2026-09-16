@@ -112,6 +112,9 @@ interface PlanesModo {
 type Audiencia = "propietario" | "agente";
 
 export const Route = createFileRoute("/planes")({
+  validateSearch: (s: Record<string, unknown>) => ({
+    audiencia: s.audiencia === "agente" ? "agente" as const : undefined,
+  }),
   component: PlanesPage,
 });
 
@@ -119,9 +122,10 @@ export const Route = createFileRoute("/planes")({
 
 function PlanesPage() {
   const navigate = useNavigate();
+  const { audiencia: audienciaInicial } = Route.useSearch();
   const user = typeof window !== "undefined" ? auth.get() : null;
 
-  const [audiencia, setAudiencia] = useState<Audiencia>("propietario");
+  const [audiencia, setAudiencia] = useState<Audiencia>(audienciaInicial ?? "propietario");
   const [moneda, setMoneda] = useState<"COP" | "USD">("COP");
   const [iniciando, setIniciando] = useState(false);
   const [modalInfo, setModalInfo] = useState<PlanesModo | null>(null);

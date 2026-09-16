@@ -1,6 +1,7 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ArrowLeft, LogOut } from "lucide-react";
 import { auth } from "@/lib/auth";
+import { logout } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import type { Neighborhood } from "@/lib/adapters";
 
@@ -131,7 +132,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
 
         {/* Logout */}
         <button
-          onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
+          onClick={() => { logout(); navigate({ to: "/login" }); }}
           title="Salir"
           style={{
             background: 'none', border: 'none',

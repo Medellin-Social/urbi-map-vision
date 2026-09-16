@@ -429,7 +429,16 @@ async def refresh_listings_cache(pool: Any) -> None:
             logger.info("[cache] barrios_contexto refreshed")
 
     except Exception as exc:
-        logger.warning("[cache] refresh failed: %s", exc)
+        logger.error("[cache] refresh failed: %s", exc, exc_info=True)
+        try:
+            from api.utils.email import ADMIN_EMAIL, send_email
+            await send_email(
+                ADMIN_EMAIL,
+                "⚠️ Medellín Social — refresh_listings_cache falló",
+                f"<p>El refresh del cache de listings falló y el mapa puede estar desactualizado.</p><pre>{exc}</pre>",
+            )
+        except Exception:
+            logger.error("[cache] no se pudo enviar alerta de fallo de cache", exc_info=True)
 
 
 async def run_periodic_cache_refresh(pool: Any) -> None:

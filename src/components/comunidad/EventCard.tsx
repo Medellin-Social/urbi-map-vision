@@ -1,3 +1,5 @@
+import { safeHref } from "@/lib/utils"
+
 export interface EventoData {
   id: number
   fuente: string
@@ -118,11 +120,11 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
 
   return (
     <a
-      href={evento.url_externo ?? '#'}
+      href={safeHref(evento.url_externo) ?? '#'}
       target="_blank" rel="noopener noreferrer"
       style={{
         display: 'block', background: '#FAF7F2',
-        border: '0.5px solid #E8E0D0', borderRadius: 10,
+        border: '0.5px solid #E8E0D0', borderRadius: 12,
         overflow: 'hidden', textDecoration: 'none', position: 'relative',
       }}
     >
@@ -137,17 +139,17 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
         Destacado
       </div>
 
-      {/* Foto */}
-      <div style={{ height: 140, overflow: 'hidden', flexShrink: 0 }}>
+      {/* Foto — cuadrada, no se deforma según ancho de columna */}
+      <div style={{ width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', flexShrink: 0 }}>
         {evento.foto_url
           ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
           : <ImgPlaceholder categoria={evento.categoria} />
         }
       </div>
 
-      {/* Info */}
-      <div style={{ padding: '12px 14px' }}>
-        <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center' }}>
+      {/* Info — centrada */}
+      <div style={{ padding: '14px 16px', textAlign: 'center' }}>
+        <div style={{ display: 'flex', gap: 6, marginBottom: 6, alignItems: 'center', justifyContent: 'center' }}>
           {cat && (
             <span style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral }}>
               {cat.emoji} {cat.label}
@@ -166,40 +168,40 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
   )
 }
 
-// Variante compacta para paneles laterales angostos: foto circular, todo centrado.
-export function EventCardCompact({ evento }: { evento: EventoData }) {
+// Fila compacta con thumb cuadrado — para listas angostas divididas por línea
+// (ej. panel "Trading en tu barrio" del home).
+export function EventCardRow({ evento, last = false }: { evento: EventoData; last?: boolean }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)
-  const priceLabel = evento.gratuito ? ' · Gratis' : evento.precio > 0 ? ` · ${formatPrecio(evento.precio, evento.moneda)}` : ''
 
   return (
     <a
-      href={evento.url_externo ?? '#'}
+      href={safeHref(evento.url_externo) ?? '#'}
       target="_blank" rel="noopener noreferrer"
       style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', textAlign: 'center',
-        background: '#FFFFFF', border: '0.5px solid #E8E0D0',
-        borderRadius: 12, overflow: 'hidden', textDecoration: 'none', padding: '14px 12px',
+        display: 'flex', gap: 12, alignItems: 'flex-start',
+        paddingBottom: 12, marginBottom: 12,
+        borderBottom: last ? 'none' : `1px solid ${K.line}`,
+        textDecoration: 'none',
       }}
     >
-      <div style={{ width: 64, height: 64, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginBottom: 10 }}>
+      <div style={{ width: 56, height: 56, borderRadius: 10, overflow: 'hidden', flexShrink: 0 }}>
         {evento.foto_url
           ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
           : <ImgPlaceholder categoria={evento.categoria} />
         }
       </div>
-      <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral, marginBottom: 4 }}>
-        {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h4 style={{
+          fontFamily: K.serif, fontWeight: 600, fontSize: 13.5, color: K.ink, lineHeight: 1.3, margin: '0 0 4px',
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+        }}>
+          {evento.titulo}
+        </h4>
+        <p style={{ fontSize: 11, color: K.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '.02em', fontWeight: 600 }}>
+          {cat ? `${cat.label} · ` : ''}{f.day} {f.month}
+        </p>
       </div>
-      <h3 style={{
-        fontSize: 14, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 4px',
-        overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-      }}>
-        {evento.titulo}
-      </h3>
-      <p style={{ fontSize: 11, color: '#9B8B75', margin: 0 }}>
-        {f.day} {f.month} · {evento.barrio_nombre || evento.organizador || 'Medellín'}
-      </p>
     </a>
   )
 }
@@ -211,54 +213,50 @@ export function EventCardMini({ evento }: { evento: EventoData }) {
 
   return (
     <a
-      href={evento.url_externo ?? '#'}
+      href={safeHref(evento.url_externo) ?? '#'}
       target="_blank" rel="noopener noreferrer"
       style={{
         display: 'flex', flexDirection: 'column',
         background: '#FFFFFF', border: '0.5px solid #E8E0D0',
-        borderRadius: 10, overflow: 'hidden', textDecoration: 'none',
+        borderRadius: 12, overflow: 'hidden', textDecoration: 'none',
       }}
     >
-      {/* Foto */}
-      <div style={{ height: 130, overflow: 'hidden', flexShrink: 0 }}>
+      {/* Foto — cuadrada, no se deforma según ancho de columna */}
+      <div style={{ width: '100%', aspectRatio: '1 / 1', overflow: 'hidden', flexShrink: 0, position: 'relative' }}>
         {evento.foto_url
           ? <ImgWithFallback src={evento.foto_url} alt={evento.titulo} categoria={evento.categoria} />
           : <ImgPlaceholder categoria={evento.categoria} />
         }
-      </div>
-
-      {/* Footer: fecha box + contenido */}
-      <div style={{ display: 'flex', gap: 12, padding: 12 }}>
-        {/* Fecha box */}
+        {/* Fecha — superpuesta sobre la foto, centrada */}
         <div style={{
-          background: '#F5F0E8', borderRadius: 8,
-          padding: '8px 10px', textAlign: 'center',
-          minWidth: 44, flexShrink: 0,
-          display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+          position: 'absolute', bottom: 6, left: '50%', transform: 'translateX(-50%)',
+          background: '#FFFFFF', borderRadius: 6,
+          padding: '4px 10px', textAlign: 'center',
+          boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
         }}>
-          <div style={{ fontFamily: K.serif, fontSize: 20, fontWeight: 700, color: '#1A1208', lineHeight: 1 }}>
+          <div style={{ fontFamily: K.serif, fontSize: 14, fontWeight: 700, color: '#1A1208', lineHeight: 1 }}>
             {f.day}
           </div>
-          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B8B75', marginTop: 2 }}>
+          <div style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9B8B75', marginTop: 1 }}>
             {f.month}
           </div>
         </div>
+      </div>
 
-        {/* Contenido */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em', color: K.coral, marginBottom: 4 }}>
-            {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
-          </div>
-          <h3 style={{
-            fontSize: 14, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 4px',
-            overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
-          }}>
-            {evento.titulo}
-          </h3>
-          <p style={{ fontSize: 11, color: '#9B8B75', margin: 0 }}>
-            📍 {evento.barrio_nombre || evento.organizador || 'Medellín'}
-          </p>
+      {/* Contenido — centrado */}
+      <div style={{ padding: '8px 10px', textAlign: 'center' }}>
+        <div style={{ fontSize: 9, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', color: K.coral, marginBottom: 3 }}>
+          {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
         </div>
+        <h3 style={{
+          fontSize: 12.5, fontWeight: 600, color: '#1A1208', lineHeight: 1.25, margin: '0 0 3px',
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+        }}>
+          {evento.titulo}
+        </h3>
+        <p style={{ fontSize: 10, color: '#9B8B75', margin: 0 }}>
+          📍 {evento.barrio_nombre || evento.organizador || 'Medellín'}
+        </p>
       </div>
     </a>
   )

@@ -48,6 +48,7 @@ class UserBasic(BaseModel):
     nombre: Optional[str]
     apellido: Optional[str]
     plan: Optional[str] = "free"
+    es_agente: Optional[bool] = False
     perfil_busqueda: Optional[str] = None
     onboarding_completado: Optional[bool] = False
     origen_registro: Optional[str] = None
@@ -166,7 +167,10 @@ async def login(request: Request, req: LoginRequest = Body(...)):
     pool = get_pool()
     row = await pool.fetchrow(
         """SELECT id, email, password_hash, nombre, apellido, activo, plan,
-                  perfil_busqueda, onboarding_completado, origen_registro
+                  perfil_busqueda, onboarding_completado, origen_registro,
+                  EXISTS(SELECT 1 FROM agent a
+                         WHERE a.usuario_id = usuarios.id
+                           AND a.estado = 'activo') AS es_agente
            FROM usuarios WHERE email = $1""",
         req.email,
     )
@@ -184,7 +188,7 @@ async def login(request: Request, req: LoginRequest = Body(...)):
         token=token,
         user=UserBasic(
             id=row["id"], email=row["email"], nombre=row["nombre"], apellido=row["apellido"],
-            plan=row["plan"], perfil_busqueda=row["perfil_busqueda"],
+            plan=row["plan"], es_agente=row["es_agente"], perfil_busqueda=row["perfil_busqueda"],
             onboarding_completado=row["onboarding_completado"],
             origen_registro=row["origen_registro"],
         ),
@@ -203,7 +207,10 @@ async def google_login(request: Request, req: GoogleAuthRequest = Body(...)):
 
     row = await pool.fetchrow(
         """SELECT id, email, nombre, apellido, activo, plan,
-                  perfil_busqueda, onboarding_completado, origen_registro
+                  perfil_busqueda, onboarding_completado, origen_registro,
+                  EXISTS(SELECT 1 FROM agent a
+                         WHERE a.usuario_id = usuarios.id
+                           AND a.estado = 'activo') AS es_agente
            FROM usuarios WHERE email = $1""",
         email,
     )
@@ -219,7 +226,10 @@ async def google_login(request: Request, req: GoogleAuthRequest = Body(...)):
         )
         row = await pool.fetchrow(
             """SELECT id, email, nombre, apellido, activo, plan,
-                      perfil_busqueda, onboarding_completado, origen_registro
+                      perfil_busqueda, onboarding_completado, origen_registro,
+                      EXISTS(SELECT 1 FROM agent a
+                             WHERE a.usuario_id = usuarios.id
+                               AND a.estado = 'activo') AS es_agente
                FROM usuarios WHERE id = $1""",
             user_id,
         )
@@ -235,7 +245,7 @@ async def google_login(request: Request, req: GoogleAuthRequest = Body(...)):
         token=token,
         user=UserBasic(
             id=row["id"], email=row["email"], nombre=row["nombre"], apellido=row["apellido"],
-            plan=row["plan"], perfil_busqueda=row["perfil_busqueda"],
+            plan=row["plan"], es_agente=row["es_agente"], perfil_busqueda=row["perfil_busqueda"],
             onboarding_completado=row["onboarding_completado"],
             origen_registro=row["origen_registro"],
         ),
@@ -250,7 +260,7 @@ async def me(current_user: dict = Depends(get_current_user)):
     return AuthResponse(
         token="",
         user=UserBasic(**{k: current_user[k] for k in (
-            "id", "email", "nombre", "apellido", "plan",
+            "id", "email", "nombre", "apellido", "plan", "es_agente",
             "perfil_busqueda", "onboarding_completado", "origen_registro",
         )}),
         perfil_inversor=perfil,
@@ -318,7 +328,7 @@ async def refresh_token(
     return AuthResponse(
         token=new_token,
         user=UserBasic(**{k: current_user[k] for k in (
-            "id", "email", "nombre", "apellido", "plan",
+            "id", "email", "nombre", "apellido", "plan", "es_agente",
             "perfil_busqueda", "onboarding_completado", "origen_registro",
         )}),
         perfil_inversor=perfil,

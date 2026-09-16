@@ -9,6 +9,7 @@ type UserBasic = {
   nombre: string | null;
   apellido: string | null;
   plan?: string | null;
+  es_agente?: boolean | null;
   perfil_busqueda?: string | null;
   onboarding_completado?: boolean | null;
   origen_registro?: string | null;
@@ -32,6 +33,7 @@ function storeAuth(res: AuthResponse) {
     name: [res.user.nombre, res.user.apellido].filter(Boolean).join(" ") || res.user.email,
     email: res.user.email,
     plan: (res.user.plan ?? "free") as never,
+    esAgente: res.user.es_agente ?? false,
     goal: (res.perfil_inversor?.objetivo as never) ?? undefined,
     budget: (res.perfil_inversor?.presupuesto as never) ?? undefined,
     risk: (res.perfil_inversor?.perfil_riesgo as never) ?? undefined,
@@ -112,7 +114,19 @@ export function useUpdateAuthPerfil() {
   });
 }
 
-export function logout() {
+export async function logout() {
+  const token = getToken();
+  // Clear local session synchronously first — must not depend on the network.
   clearToken();
   auth.clear();
+  if (token) {
+    try {
+      await fetch(API_ENDPOINTS.logout, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch {
+      // best-effort — local session already cleared above
+    }
+  }
 }

@@ -25,7 +25,7 @@ router = APIRouter()
 
 
 def _gateway_configurado() -> bool:
-    return bool(os.getenv("WOMPI_PRIVATE_KEY") or os.getenv("STRIPE_SECRET_KEY"))
+    return bool(os.getenv("STRIPE_SECRET_KEY"))
 
 
 async def _agente_activo(user: dict, pool) -> str:
@@ -101,8 +101,8 @@ async def checkout(body: ZonaCheckout, user: dict = Depends(get_current_user), p
         precio = await precio_zona(conn, body.zona_nivel, body.zona_codigo)
 
     if _gateway_configurado():
-        # TODO(wompi): crear link de pago con metadata {tipo:'zona', agent_id,
-        # zona_nivel, zona_codigo, meses}; el webhook APROBADO llama procesar_pago_zona.
+        # TODO: crear checkout con metadata {tipo:'zona', agent_id, zona_nivel,
+        # zona_codigo, meses}; el webhook APROBADO llama procesar_pago_zona.
         raise HTTPException(status_code=501, detail="Checkout de zona con pasarela pendiente de cablear")
     return {
         "modo": "simulado",

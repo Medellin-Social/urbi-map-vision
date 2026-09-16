@@ -1,5 +1,3 @@
-from __future__ import annotations
-
 import asyncio
 import hashlib
 import time
@@ -12,6 +10,7 @@ from pydantic import BaseModel, Field
 from api.config import USD_TO_COP
 from api.db import get_pool
 from api.dependencies import get_current_user, get_optional_user, is_agente
+from api.limiter import limiter
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 
 router = APIRouter()
@@ -551,7 +550,9 @@ async def _count_and_fetch(
 
 
 @router.get("", response_model=ListingsAllResponse)
+@limiter.limit("120/minute")
 async def get_all_listings(
+    request: Request,
     municipio: Optional[str] = Query(default=None),
     barrio_id: Optional[int] = Query(default=None),
     only_premium: bool = Query(default=False),
@@ -1111,6 +1112,7 @@ ORDER BY
 
 
 @router.get("/viewport", response_model=ViewportResponse)
+@limiter.limit("120/minute")
 async def get_listings_viewport(
     request: Request,
     min_lng: float = Query(...),
@@ -1216,7 +1218,8 @@ LIMIT $1
 
 
 @router.get("/socio-casadolcecasa", response_model=list[SocioListing])
-async def get_socio_casadolcecasa(limit: int = Query(default=6, ge=1, le=12)):
+@limiter.limit("60/minute")
+async def get_socio_casadolcecasa(request: Request, limit: int = Query(default=6, ge=1, le=12)):
     """Listings del socio patrocinado Casa Dolce Casa, para el home."""
     pool = get_pool()
     rows = await pool.fetch(_SOCIO_CASADOLCECASA_SQL, limit)
@@ -1283,7 +1286,8 @@ ORDER BY a.nombre
 
 
 @router.get("/agentes", response_model=list[AgenteDirectorio])
-async def get_agentes_directorio():
+@limiter.limit("60/minute")
+async def get_agentes_directorio(request: Request):
     """Directorio público de agentes activos, para /agentes ('Encuentra un agente')."""
     pool = get_pool()
     rows = await pool.fetch(_AGENTES_DIRECTORIO_SQL)
@@ -1296,7 +1300,8 @@ class ResenaIn(BaseModel):
 
 
 @router.post("/agentes/{agent_id}/resenas", status_code=201)
-async def crear_resena_agente(agent_id: str, body: ResenaIn, current_user: dict = Depends(get_current_user)):
+@limiter.limit("10/minute")
+async def crear_resena_agente(request: Request, agent_id: str, body: ResenaIn, current_user: dict = Depends(get_current_user)):
     """Deja/actualiza tu reseña de un agente. Login-gated: un usuario, una
     reseña por agente (UNIQUE agent_id+user_id) — es el piso anti-spam, sin
     cola de moderación (ponytail: agregar si aparece abuso)."""
@@ -1317,7 +1322,9 @@ async def crear_resena_agente(agent_id: str, body: ResenaIn, current_user: dict 
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
+@limiter.limit("100/minute")
 async def get_listing_by_id(
+    request: Request,
     listing_id: int,
     current_user: Optional[dict] = Depends(get_optional_user),
 ):
@@ -1379,7 +1386,8 @@ SELECT nombre, telefono, foto_url, email, zona_nivel FROM ranked WHERE rn = 1
 
 
 @router.get("/{listing_id}/agente", response_model=ListingAgentes)
-async def get_listing_agente(listing_id: int):
+@limiter.limit("100/minute")
+async def get_listing_agente(request: Request, listing_id: int):
     pool = get_pool()
     rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     out = ListingAgentes()
@@ -1471,7 +1479,8 @@ LIMIT 4
 
 
 @router.get("/{listing_id}/similares", response_model=list[SimilarListing])
-async def get_similares(listing_id: int):
+@limiter.limit("60/minute")
+async def get_similares(request: Request, listing_id: int):
     pool = get_pool()
     rows = await pool.fetch(_SIMILARES_SQL, listing_id)
     return [SimilarListing(**dict(r)) for r in rows]
@@ -1521,7 +1530,8 @@ def _fmt_hora(h: int, m: int) -> str:
 
 
 @router.get("/{listing_id}/slots")
-async def get_slots(listing_id: int):
+@limiter.limit("60/minute")
+async def get_slots(request: Request, listing_id: int):
     """Slots de visita para el agente de zona del listing: su horario semanal menos
     los ya reservados. Sin agente/sin horario → slots vacío (el front usa fallback)."""
     pool = get_pool()
@@ -1568,6 +1578,7 @@ class VistaPayload(BaseModel):
 
 
 @router.post("/{listing_id}/vista")
+@limiter.limit("60/minute")
 async def registrar_vista(
     listing_id: int,
     request: Request,

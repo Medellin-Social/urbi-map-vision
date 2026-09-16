@@ -40,9 +40,8 @@ function LoginPage() {
     }
     setError("");
     try {
-      const res = await login.mutateAsync({ email, password });
-      const hasProfile = !!res.perfil_inversor?.objetivo;
-      navigate({ to: hasProfile ? "/map" : "/onboarding" });
+      await login.mutateAsync({ email, password });
+      navigate({ to: "/map" });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Credenciales inválidas.");
     }
@@ -88,9 +87,8 @@ function LoginPage() {
           {login.isPending ? "Entrando…" : "Iniciar sesión"}
         </AuthButton>
         <GoogleSignInButton
-          onSuccess={(res) => {
-            const hasProfile = !!res.perfil_inversor?.objetivo;
-            navigate({ to: hasProfile ? "/map" : "/onboarding" });
+          onSuccess={() => {
+            navigate({ to: "/map" });
           }}
           onError={setError}
         />

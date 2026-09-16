@@ -1,6 +1,4 @@
 """Solicitudes de visita a un listing — POST público desde el drawer del mapa."""
-from __future__ import annotations
-
 import asyncio
 import logging
 import os
@@ -9,11 +7,12 @@ from datetime import datetime
 from email.message import EmailMessage
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from api.db import get_pool
 from api.dependencies import get_optional_user
+from api.limiter import limiter
 
 router = APIRouter()
 log = logging.getLogger(__name__)
@@ -67,8 +66,10 @@ class VisitaRequest(BaseModel):
 
 
 @router.post("", status_code=201)
+@limiter.limit("5/minute")
 async def crear_visita(
-    req: VisitaRequest,
+    request: Request,
+    req: VisitaRequest = Body(...),
     user: Optional[dict] = Depends(get_optional_user),
     pool=Depends(get_pool),
 ):

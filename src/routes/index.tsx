@@ -8,8 +8,10 @@ import { useDeals } from '@/hooks/useDeals'
 import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
 import { useEventosTop } from '@/hooks/useEventosTop'
-import { EventCardCompact } from '@/components/comunidad/EventCard'
+import { useEventosSemana } from '@/hooks/useEventosSemana'
+import { EventCardRow } from '@/components/comunidad/EventCard'
 import { API_ENDPOINTS } from '@/config/api'
+import { safeHref } from '@/lib/utils'
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -106,9 +108,10 @@ function toSlug(nombre: string): string {
 // un barrio fuera de la lista caía a toSlug(nombre) ('manila'), que BarrioContext
 // no reconoce y silenciosamente resuelve a BARRIOS[0] (el-poblado) sin filtrar
 // ni hacer zoom a la comuna real.
-function barrioSlug(id: number, nombre: string, cdComuna: number | null): string {
+function barrioSlug(id: number, nombre: string, cdComuna: number | null, municipio: string | null): string {
   const found = BARRIOS.find((b) => b.barrio_id === id)
     ?? (cdComuna != null ? BARRIOS.find((b) => b.cd_comuna === cdComuna) : undefined)
+    ?? (municipio ? BARRIOS.find((b) => b.municipio_nombre === municipio) : undefined)
   return found?.slug ?? toSlug(nombre)
 }
 
@@ -222,8 +225,57 @@ function SecTitle({ children, link, linkLabel }: { children: string; link?: stri
   )
 }
 
+function SideHead({ children }: { children: string }) {
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      fontSize: '.72rem', fontWeight: 800, textTransform: 'uppercase', letterSpacing: '.1em',
+      color: K.tealDeep, borderBottom: `2px solid ${K.teal}`, paddingBottom: 8, margin: '0 0 12px',
+    }}>
+      <span style={{ width: 7, height: 7, borderRadius: '50%', background: K.coral, flexShrink: 0 }} />
+      {children}
+    </div>
+  )
+}
+
+// Fuente sin foto propia → chip de color por fuente en vez de link plano,
+// misma fila (thumb 56x56 + texto) que EventCardRow para que ambas listas
+// del panel "Trading" luzcan como una sola arquitectura.
+function NoticiaRow({ noticia, last = false }: { noticia: { id: number; titulo: string; url: string; fuente: string | null; fecha_publicacion: string | null }; last?: boolean }) {
+  const fecha = noticia.fecha_publicacion
+    ? new Date(noticia.fecha_publicacion).toLocaleDateString('es-CO', { day: 'numeric', month: 'short' })
+    : null
+  return (
+    <a href={noticia.url} target="_blank" rel="noopener noreferrer" style={{
+      display: 'flex', gap: 12, alignItems: 'flex-start',
+      paddingBottom: 12, marginBottom: 12,
+      borderBottom: last ? 'none' : `1px solid ${K.line}`,
+      textDecoration: 'none',
+    }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 10, flexShrink: 0,
+        background: `linear-gradient(135deg, ${K.tealDeep}, ${K.teal})`,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.4rem',
+      }}>
+        📰
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <h4 style={{
+          fontFamily: K.serif, fontWeight: 600, fontSize: 13.5, color: K.ink, lineHeight: 1.3, margin: '0 0 4px',
+          overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+        }}>
+          {noticia.titulo}
+        </h4>
+        <p style={{ fontSize: 11, color: K.muted, margin: 0, textTransform: 'uppercase', letterSpacing: '.02em', fontWeight: 600 }}>
+          {noticia.fuente === 'el_colombiano' ? 'El Colombiano' : (noticia.fuente ?? 'Medellín')}{fecha ? ` · ${fecha}` : ''}
+        </p>
+      </div>
+    </a>
+  )
+}
+
 function HomeContent() {
-  const { barrio, lang } = useBarrio()
+  const { barrio, lang, setBarrioSlug } = useBarrio()
   const isMobile = useIsMobile()
   const t = (es: string, en: string) => lang === 'es' ? es : en
   const catLabel = (cat: string) => (lang === 'es' ? CATEGORIA_LABELS : CATEGORIA_LABELS_EN)[cat] ?? cat
@@ -270,11 +322,13 @@ function HomeContent() {
     flyToBarriosRef.current?.()
   }, [])
 
-  const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number, cdComuna: number | null) => {
+  const handleBarrioClick = useCallback((id: number, nombre: string, lat: number, lng: number, cdComuna: number | null, municipio: string | null) => {
     if (mapPhase !== 'barrios' && mapPhase !== 'barrio_action') return
-    setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug: barrioSlug(id, nombre, cdComuna), lat, lng })
+    const slug = barrioSlug(id, nombre, cdComuna, municipio)
+    setPickedBarrio({ id, nombre: nombre.replace(/_/g, ' '), slug, lat, lng })
     setMapPhase('barrio_action')
-  }, [mapPhase])
+    setBarrioSlug(slug) // filtra deals/directorio/eventos de toda la página en vivo
+  }, [mapPhase, setBarrioSlug])
 
   const handleOverlayClose = useCallback(() => {
     setMapPhase(null)
@@ -291,6 +345,7 @@ function HomeContent() {
   const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter, municipioFilter)
   const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter, municipioFilter)
   const { data: eventosTop = [] }                           = useEventosTop(barrioFilter, municipioFilter, 3)
+  const { data: eventosSemana = [] }                        = useEventosSemana(barrioFilter, municipioFilter, 4)
 
   return (
     <>
@@ -313,6 +368,10 @@ function HomeContent() {
               onBarrioClick={(mapPhase === 'barrios' || mapPhase === 'barrio_action') ? handleBarrioClick : undefined}
               flyToBarriosRef={flyToBarriosRef}
               cooperativeGestures={isMobile}
+              // ponytail: constante por breakpoint, no medida en vivo — alcanza pa
+              // que la tarjeta de barrio_action (la más alta) no tape la zona
+              // recién centrada. Si el overlay crece mucho, medir con ResizeObserver.
+              bottomInset={isMobile ? 180 : 140}
             />
             {mapPhase !== null && (
               <HeroOverlay
@@ -337,31 +396,22 @@ function HomeContent() {
             </p>
 
             {/* Noticias — últimas, ya cargadas arriba en la página */}
-            <p style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9B8B75', margin: '0 0 8px' }}>
-              {t('Noticias', 'News')}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 18 }}>
+            <SideHead>{t('Noticias', 'News')}</SideHead>
+            <div style={{ marginBottom: 20 }}>
               {noticias.length === 0 ? (
                 <p style={{ color: K.muted, fontSize: '.82rem' }}>{t('Sin noticias por ahora.', 'No news right now.')}</p>
-              ) : noticias.slice(0, 3).map((n, i) => (
-                <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
-                  fontSize: '.85rem', color: K.ink, textDecoration: 'none', lineHeight: 1.4,
-                  display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const, overflow: 'hidden',
-                }}>
-                  {n.titulo}
-                </a>
+              ) : noticias.slice(0, 3).map((n, i, arr) => (
+                <NoticiaRow key={n.id ?? i} noticia={n} last={i === arr.length - 1} />
               ))}
             </div>
 
             {/* Eventos destacados — solo los patrocinados/featured */}
-            <p style={{ fontSize: '.72rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em', color: '#9B8B75', margin: '0 0 8px' }}>
-              {t('Eventos destacados', 'Featured events')}
-            </p>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <SideHead>{t('Eventos destacados', 'Featured events')}</SideHead>
+            <div>
               {eventosTop.length === 0 ? (
                 <p style={{ color: K.muted, fontSize: '.82rem' }}>{t('Sin eventos destacados por ahora.', 'No featured events right now.')}</p>
-              ) : eventosTop.map(evt => (
-                <EventCardCompact key={evt.id} evento={evt} />
+              ) : eventosTop.map((evt, i, arr) => (
+                <EventCardRow key={evt.id} evento={evt} last={i === arr.length - 1} />
               ))}
             </div>
           </div>
@@ -423,6 +473,62 @@ function HomeContent() {
               </a>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── QUÉ HACER ESTA SEMANA ─────────────────────── */}
+      <section style={{ padding: isMobile ? '24px 16px' : '48px 26px' }}>
+        <div style={{
+          maxWidth: 1200, margin: '0 auto',
+          background: `linear-gradient(125deg, ${K.tealDeep}, ${K.teal})`, color: '#fff',
+          borderRadius: 18, padding: isMobile ? '24px 18px' : '36px',
+          boxShadow: '0 18px 44px rgba(8,80,65,.25)',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 12, marginBottom: 22 }}>
+            <div>
+              <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: isMobile ? '1.3rem' : '1.7rem', margin: 0 }}>
+                {t('Qué hacer esta semana', "What's On This Week")}
+              </h2>
+              <p style={{ opacity: .9, fontSize: '.95rem', margin: '4px 0 0' }}>
+                {t('Cada evento de tu barrio, en un solo lugar.', 'Every event in your barrio, in one place.')}
+              </p>
+            </div>
+            <a href={`/eventos/${barrio.slug}`} style={{
+              background: '#fff', color: K.ink, padding: '11px 22px', borderRadius: 999,
+              fontWeight: 800, fontSize: '.86rem', textDecoration: 'none', whiteSpace: 'nowrap',
+            }}>
+              {t('Ver calendario →', 'Full Calendar →')}
+            </a>
+          </div>
+
+          {eventosSemana.length === 0 ? (
+            <p style={{ opacity: .9 }}>{t('Sin eventos programados esta semana.', 'No events scheduled this week.')}</p>
+          ) : (
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
+              {eventosSemana.map(evt => {
+                const d = new Date(evt.fecha_inicio.replace(' ', 'T'))
+                const valid = !isNaN(d.getTime())
+                const day = valid ? d.toLocaleDateString(lang === 'es' ? 'es-CO' : 'en-US', { day: 'numeric' }) : '?'
+                const month = valid ? d.toLocaleDateString(lang === 'es' ? 'es-CO' : 'en-US', { month: 'short' }).replace('.', '').toUpperCase() : ''
+                return (
+                  <a key={evt.id} href={safeHref(evt.url_externo) ?? `/eventos/${barrio.slug}`} target="_blank" rel="noopener noreferrer" style={{
+                    display: 'block', background: 'rgba(255,255,255,.13)', border: '1px solid rgba(255,255,255,.22)',
+                    borderRadius: 14, padding: 18, backdropFilter: 'blur(8px)', textDecoration: 'none', color: '#fff',
+                  }}>
+                    <div style={{ fontFamily: K.serif, fontSize: '2.1rem', fontWeight: 900, lineHeight: 1, color: K.amarillo }}>{day}</div>
+                    <div style={{ fontSize: '.72rem', textTransform: 'uppercase', letterSpacing: '1.2px', opacity: .88, marginTop: 3 }}>{month}</div>
+                    <h4 style={{
+                      fontSize: '1.02rem', margin: '11px 0 5px', fontWeight: 700, lineHeight: 1.25,
+                      overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
+                    }}>
+                      {evt.titulo}
+                    </h4>
+                    <div style={{ fontSize: '.82rem', opacity: .85 }}>{evt.barrio_nombre || evt.organizador || 'Medellín'}</div>
+                  </a>
+                )
+              })}
+            </div>
+          )}
         </div>
       </section>
 

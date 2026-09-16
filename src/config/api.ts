@@ -119,6 +119,7 @@ export const API_ENDPOINTS = {
   suscripcionesIniciar: `${API_BASE_URL}/suscripciones/iniciar`,
   suscripcionesMiPlan: `${API_BASE_URL}/suscripciones/mi-plan`,
   suscripcionesCancelar: `${API_BASE_URL}/suscripciones/cancelar`,
+  agenteRegistro: `${API_BASE_URL}/suscripciones/agente/registro`,
 
   // Comparador
   comparadorHistorial: `${API_BASE_URL}/comparador/historial`,

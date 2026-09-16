@@ -2,6 +2,8 @@ import { Link, useNavigate } from "@tanstack/react-router";
 import { LogOut, ArrowLeft, Menu, X } from "lucide-react";
 import { useState } from "react";
 import { auth } from "@/lib/auth";
+import { logout } from "@/hooks/useAuth";
+import { useIsAgente } from "@/components/LockedField";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { useUnit } from "@/hooks/useUnit";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -9,12 +11,17 @@ import type { Neighborhood } from "@/lib/adapters";
 
 export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
 
-const TABS: { id: MapTab; label: string; route?: string }[] = [
+const BASE_TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "buy",        label: "Comprar" },
   { id: "rent",       label: "Arrendar" },
   { id: "sell",       label: "Vender / Arrendar", route: "/vender" },
   { id: "agent",      label: "Encuentra un agente", route: "/agentes" },
-  // ponytail: simulador/comparador ocultos temporalmente del nav, rutas siguen vivas
+];
+
+// Solo agentes/agencias ven estos — herramientas profesionales, no para el consumidor final.
+const AGENTE_TABS: { id: MapTab; label: string; route?: string }[] = [
+  { id: "simulator",  label: "Simular", route: "/simulador" },
+  { id: "comparador", label: "Comparar", route: "/comparador" },
 ];
 
 type MapNavbarProps = {
@@ -42,8 +49,10 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
   const { lang, toggle } = useLang();
   const { unit, toggle: toggleUnit } = useUnit();
   const isMobile = useIsMobile();
+  const isAgente = useIsAgente();
   const [menuOpen, setMenuOpen] = useState(false);
   const user = typeof window !== "undefined" ? auth.get() : null;
+  const TABS = isAgente ? [...BASE_TABS, ...AGENTE_TABS] : BASE_TABS;
 
   const initials = (user?.name ?? "U")
     .split(/\s+/)
@@ -168,7 +177,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 <>
                   <Link to="/perfil" onClick={() => setMenuOpen(false)} style={itemStyle}>Mi perfil</Link>
                   <button
-                    onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
+                    onClick={() => { logout(); navigate({ to: "/login" }); }}
                     style={{ ...itemStyle, color: C.coral, display: "flex", alignItems: "center", gap: 8 }}
                   >
                     <LogOut size={15} /> Salir
@@ -366,7 +375,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
 
             {/* Logout */}
             <button
-              onClick={() => { auth.clear(); navigate({ to: "/login" }); }}
+              onClick={() => { logout(); navigate({ to: "/login" }); }}
               title="Salir"
               style={{
                 background: "none", border: "none", color: C.muted,

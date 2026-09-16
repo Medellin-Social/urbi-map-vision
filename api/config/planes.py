@@ -2,8 +2,7 @@
 
 To activate payments:
   1. Create products/prices in Stripe Dashboard → paste IDs below
-  2. Create plans in Wompi Dashboard → paste IDs below
-  3. Set env vars STRIPE_SECRET_KEY, WOMPI_PUBLIC_KEY, etc.
+  2. Set env vars STRIPE_SECRET_KEY, etc.
 """
 import os
 
@@ -14,7 +13,6 @@ PLANES: dict = {
         "precio_cop": 79_000,
         "precio_usd": 29,
         "stripe_price_id_usd": os.getenv("STRIPE_PRICE_ID_PRO_USD"),
-        "wompi_plan_id_cop": os.getenv("WOMPI_PLAN_ID_PRO_COP"),
         "requiere_verificacion": False,
         "features": [
             "Todo lo del plan Explorador",
@@ -36,7 +34,6 @@ PLANES: dict = {
         "precio_cop": 199_000,
         "precio_usd": 59,
         "stripe_price_id_usd": os.getenv("STRIPE_PRICE_ID_AGENTE_USD"),
-        "wompi_plan_id_cop": os.getenv("WOMPI_PLAN_ID_AGENTE_COP"),
         "requiere_verificacion": True,
         "features": [
             "Todo lo del plan Pro",

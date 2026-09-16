@@ -10,12 +10,18 @@ export function useIsPro(): boolean {
   return true;
 }
 
+// True for the "agente" paid plan OR a real agent/agency row (mirrors
+// api/dependencies.py:is_agente) — covers both agente y agencia accounts,
+// since agency owners/members are agent rows too.
+function _checkIsAgente(): boolean {
+  const u = auth.get();
+  return u?.plan === "agente" || u?.esAgente === true;
+}
+
 export function useIsAgente(): boolean {
-  const [isAgente, setIsAgente] = useState(
-    () => auth.get()?.plan === "agente"
-  );
+  const [isAgente, setIsAgente] = useState(_checkIsAgente);
   useEffect(() => {
-    const handler = () => setIsAgente(auth.get()?.plan === "agente");
+    const handler = () => setIsAgente(_checkIsAgente());
     window.addEventListener("medellin-social:user", handler);
     return () => window.removeEventListener("medellin-social:user", handler);
   }, []);

@@ -1,12 +1,11 @@
-from __future__ import annotations
-
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
+from api.limiter import limiter
 
 router = APIRouter()
 
@@ -19,7 +18,8 @@ class FavListingRequest(BaseModel):
 
 
 @router.get("/listings/ids")
-async def fav_listing_ids(current_user: dict = Depends(get_current_user)):
+@limiter.limit("100/minute")
+async def fav_listing_ids(request: Request, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         "SELECT url FROM raw.favoritos_listings WHERE usuario_id = $1",
@@ -29,7 +29,8 @@ async def fav_listing_ids(current_user: dict = Depends(get_current_user)):
 
 
 @router.get("/listings")
-async def list_fav_listings(current_user: dict = Depends(get_current_user)):
+@limiter.limit("100/minute")
+async def list_fav_listings(request: Request, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         "SELECT id, url, barrio_id, created_at FROM raw.favoritos_listings WHERE usuario_id = $1 ORDER BY created_at DESC",
@@ -39,7 +40,8 @@ async def list_fav_listings(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/listings", status_code=201)
-async def add_fav_listing(req: FavListingRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def add_fav_listing(request: Request, req: FavListingRequest, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     await pool.execute(
         """
@@ -53,7 +55,9 @@ async def add_fav_listing(req: FavListingRequest, current_user: dict = Depends(g
 
 
 @router.delete("/listings", status_code=204)
+@limiter.limit("30/minute")
 async def remove_fav_listing(
+    request: Request,
     url: str = Query(...),
     current_user: dict = Depends(get_current_user),
 ):
@@ -70,7 +74,8 @@ class FavoritoRequest(BaseModel):
 
 
 @router.get("")
-async def list_favoritos(current_user: dict = Depends(get_current_user)):
+@limiter.limit("100/minute")
+async def list_favoritos(request: Request, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     rows = await pool.fetch(
         """
@@ -92,7 +97,8 @@ async def list_favoritos(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("", status_code=201)
-async def add_favorito(req: FavoritoRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def add_favorito(request: Request, req: FavoritoRequest, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     try:
         row = await pool.fetchrow(
@@ -110,7 +116,8 @@ async def add_favorito(req: FavoritoRequest, current_user: dict = Depends(get_cu
 
 
 @router.delete("/{barrio_id}", status_code=204)
-async def remove_favorito(barrio_id: int, current_user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def remove_favorito(request: Request, barrio_id: int, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     deleted = await pool.fetchval(
         "DELETE FROM favoritos WHERE usuario_id = $1 AND barrio_id = $2 RETURNING id",

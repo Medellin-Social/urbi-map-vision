@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Neighborhood Ambassador — Easy Street</title>
+<style>
+  :root { --blue:#27273E; --green:#458C1E; --light:#F4F6F1; --grey:#666; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:#222; line-height:1.6; }
+  html[lang="en"] .t-es { display:none; }
+  html[lang="es"] .t-en { display:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  nav { background:var(--blue); color:#fff; padding:14px 0; position:sticky; top:0; z-index:10; }
+  nav .wrap { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-size:1.3rem; font-weight:800; }
+  .brand span { color:#9BD77A; }
+  #langToggle { background:var(--green); color:#fff; border:none; padding:8px 18px; border-radius:20px; font-weight:700; cursor:pointer; font-size:.9rem; }
+  header { background:linear-gradient(135deg, var(--blue) 0%, #3A3A5C 100%); color:#fff; padding:84px 0 72px; text-align:center; }
+  header h1 { font-size:2.6rem; line-height:1.2; margin-bottom:18px; }
+  header h1 em { color:#9BD77A; font-style:normal; }
+  header p.lead { font-size:1.25rem; max-width:760px; margin:0 auto 30px; color:#E8E8F0; }
+  .cta { display:inline-block; background:var(--green); color:#fff; text-decoration:none; font-weight:800; padding:16px 42px; border-radius:30px; font-size:1.1rem; }
+  .badge { display:inline-block; background:rgba(155,215,122,.18); border:1px solid #9BD77A; color:#9BD77A; padding:6px 16px; border-radius:18px; font-size:.85rem; font-weight:700; margin-bottom:22px; letter-spacing:.05em; }
+  section { padding:64px 0; }
+  section.alt { background:var(--light); }
+  h2 { color:var(--blue); font-size:2rem; text-align:center; margin-bottom:14px; }
+  .sub { text-align:center; color:var(--grey); max-width:720px; margin:0 auto 44px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:22px; }
+  .card { background:#fff; border:1px solid #E2E6DC; border-radius:12px; padding:26px; box-shadow:0 2px 8px rgba(39,39,62,.06); }
+  .card h3 { color:var(--green); font-size:1.1rem; margin-bottom:10px; }
+  .card ul { padding-left:18px; color:#444; font-size:.95rem; }
+  .card li { margin-bottom:6px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 10px rgba(39,39,62,.08); }
+  th { background:var(--blue); color:#fff; padding:14px 16px; text-align:left; font-size:.95rem; }
+  td { padding:13px 16px; border-bottom:1px solid #EEE; font-size:.97rem; }
+  tr:last-child td { border-bottom:none; }
+  tr.hl td { background:#EAF4E2; font-weight:800; color:var(--blue); }
+  .note { font-size:.82rem; color:#888; margin-top:14px; text-align:center; }
+  .steps { counter-reset:step; max-width:740px; margin:0 auto; }
+  .step { display:flex; gap:18px; margin-bottom:26px; align-items:flex-start; }
+  .step .n { background:var(--green); color:#fff; min-width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; }
+  .step h3 { color:var(--blue); margin-bottom:4px; font-size:1.05rem; }
+  form { max-width:640px; margin:0 auto; background:#fff; padding:34px; border-radius:14px; box-shadow:0 4px 16px rgba(39,39,62,.1); }
+  form label { font-weight:700; color:var(--blue); display:block; margin:14px 0 6px; font-size:.92rem; }
+  form input, form select, form textarea { width:100%; padding:12px; border:1px solid #CCD3C4; border-radius:8px; font-size:1rem; font-family:inherit; }
+  form button { margin-top:24px; width:100%; background:var(--green); color:#fff; border:none; padding:16px; border-radius:30px; font-size:1.1rem; font-weight:800; cursor:pointer; }
+  footer { background:var(--blue); color:#B9B9CC; text-align:center; padding:28px 0; font-size:.85rem; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:start; }
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} header h1{font-size:2rem;} }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <div class="brand">Easy <span>Street</span></div>
+    <button id="langToggle"><span class="t-en">Español</span><span class="t-es">English</span></button>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="badge"><span class="t-en">PAID ROLE · MEDIA & CONTENT CAREER LAUNCHPAD</span><span class="t-es">ROL PAGADO · PLATAFORMA DE LANZAMIENTO PARA CARRERAS EN MEDIOS</span></div>
+    <h1>
+      <span class="t-en">Become the <em>Voice of Your Neighborhood</em></span>
+      <span class="t-es">Conviértete en la <em>Voz de Tu Barrio</em></span>
+    </h1>
+    <p class="lead">
+      <span class="t-en">The Neighborhood Ambassador is part local journalist, part content creator, part connector, part entrepreneur. Build your media portfolio, your personal brand, and a growing recurring income — all at once.</span>
+      <span class="t-es">El Embajador de Barrio es en parte periodista local, en parte creador de contenido, en parte conector y en parte emprendedor. Construye tu portafolio de medios, tu marca personal y un ingreso recurrente creciente — todo al mismo tiempo.</span>
+    </p>
+    <a class="cta" href="#apply"><span class="t-en">Apply Now</span><span class="t-es">Aplica Ahora</span></a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">What You'll Do</span><span class="t-es">Qué Harás</span></h2>
+    <p class="sub"><span class="t-en">Four pillars of the role — supported every step of the way by our AI Content Engine, HeyGen video tools, and central team.</span><span class="t-es">Cuatro pilares del rol — con el apoyo en cada paso de nuestro Motor de Contenido con IA, las herramientas de video HeyGen y el equipo central.</span></p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="t-en">Editorial & Content</span><span class="t-es">Editorial y Contenido</span></h3>
+        <ul>
+          <li><span class="t-en">Publish local stories, news, and guides</span><span class="t-es">Publica historias, noticias y guías locales</span></li>
+          <li><span class="t-en">Produce the signature Friday newsletter</span><span class="t-es">Produce el boletín insignia de los viernes</span></li>
+          <li><span class="t-en">Build an on-camera, bylined local presence</span><span class="t-es">Construye presencia local ante cámara y con firma editorial</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">Contributors</span><span class="t-es">Contribuidores</span></h3>
+        <ul>
+          <li><span class="t-en">Recruit & coach Featured Contributors</span><span class="t-es">Recluta y capacita Contribuidores Destacados</span></li>
+          <li><span class="t-en">Manage retention and success stories</span><span class="t-es">Gestiona la retención y los casos de éxito</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">Community Growth</span><span class="t-es">Crecimiento Comunitario</span></h3>
+        <ul>
+          <li><span class="t-en">Be the public face at events, contests & games</span><span class="t-es">Sé el rostro público en eventos, concursos y juegos</span></li>
+          <li><span class="t-en">Grow subscribers; amplify on Reddit, Quora & Facebook groups</span><span class="t-es">Haz crecer los suscriptores; amplifica en Reddit, Quora y grupos de Facebook</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">Business Development</span><span class="t-es">Desarrollo de Negocios</span></h3>
+        <ul>
+          <li><span class="t-en">Sign local businesses — target 12 new featured listings/month</span><span class="t-es">Inscribe negocios locales — meta de 12 nuevos listados destacados/mes</span></li>
+          <li><span class="t-en">Recruit & mentor 4 new Community Affiliates/month</span><span class="t-es">Recluta y mentorea 4 nuevos Afiliados Comunitarios/mes</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="earnings">
+  <div class="wrap">
+    <h2><span class="t-en">Your Earning Power</span><span class="t-es">Tu Potencial de Ingresos</span></h2>
+    <p class="sub">
+      <span class="t-en">100% performance-based. You earn 50% of the first month's payment plus 15% recurring on every account you sign — and 5% recurring on neighborhood accounts signed by others. Illustration below: 12 new featured business listings per month (at $500/mo) and 4 new affiliates recruited per month.</span>
+      <span class="t-es">100% basado en desempeño. Ganas el 50% del pago del primer mes más 15% recurrente en cada cuenta que inscribas — y 5% recurrente en cuentas del barrio inscritas por otros. Ilustración abajo: 12 nuevos listados destacados por mes (a $500/mes) y 4 nuevos afiliados reclutados por mes.</span>
+    </p>
+    <div class="two-col">
+      <table>
+        <tr><th><span class="t-en">Milestone</span><span class="t-es">Hito</span></th><th><span class="t-en">Monthly Income</span><span class="t-es">Ingreso Mensual</span></th></tr>
+        <tr><td><span class="t-en">Month 1</span><span class="t-es">Mes 1</span></td><td>$3,000</td></tr>
+        <tr><td><span class="t-en">Month 6</span><span class="t-es">Mes 6</span></td><td>$7,500</td></tr>
+        <tr><td><span class="t-en">Month 12</span><span class="t-es">Mes 12</span></td><td>$12,900</td></tr>
+        <tr class="hl"><td><span class="t-en">Year 1 Total</span><span class="t-es">Total Año 1</span></td><td>$95,400+</td></tr>
+      </table>
+      <div class="card">
+        <h3><span class="t-en">How the math works</span><span class="t-es">Cómo funciona la matemática</span></h3>
+        <ul>
+          <li><span class="t-en">12 sign-ups × $250 first-month commission = $3,000/mo in new-business commissions</span><span class="t-es">12 inscripciones × $250 de comisión del primer mes = $3,000/mes en comisiones por nuevos negocios</span></li>
+          <li><span class="t-en">Each monthly cohort adds $900/mo in recurring income (12 × $75)</span><span class="t-es">Cada cohorte mensual agrega $900/mes de ingreso recurrente (12 × $75)</span></li>
+          <li><span class="t-en">Your recurring book compounds every month you keep building</span><span class="t-es">Tu libro recurrente se acumula cada mes que sigues construyendo</span></li>
+          <li><span class="t-en">PLUS 5% recurring on every account your recruited affiliates sign in your neighborhood</span><span class="t-es">MÁS 5% recurrente en cada cuenta que tus afiliados reclutados inscriban en tu barrio</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note"><span class="t-en">Illustrative projection assuming $500/mo Featured Contributor accounts and full retention. Individual results vary with effort and market.</span><span class="t-es">Proyección ilustrativa asumiendo cuentas de Contribuidor Destacado de $500/mes y retención total. Los resultados individuales varían según el esfuerzo y el mercado.</span></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">A Real Media Career, Built in Public</span><span class="t-es">Una Carrera Real en Medios, Construida en Público</span></h2>
+    <p class="sub"><span class="t-en">This role was designed for aspiring journalists, content creators, and influencers who want more than followers — a published portfolio, professional AI-powered production tools, and income that grows with the community you build.</span><span class="t-es">Este rol fue diseñado para aspirantes a periodistas, creadores de contenido e influencers que quieren más que seguidores: un portafolio publicado, herramientas profesionales de producción con IA e ingresos que crecen con la comunidad que construyes.</span></p>
+    <div class="grid">
+      <div class="card"><h3><span class="t-en">Your Byline, Everywhere</span><span class="t-es">Tu Firma, En Todas Partes</span></h3><p><span class="t-en">Every article, newsletter, and video carries your name across the neighborhood's website, app, and social channels.</span><span class="t-es">Cada artículo, boletín y video lleva tu nombre en el sitio web, la app y las redes del barrio.</span></p></div>
+      <div class="card"><h3><span class="t-en">Pro Tools, No Cost</span><span class="t-es">Herramientas Pro, Sin Costo</span></h3><p><span class="t-en">AI Content Engine, HeyGen video avatars, a social planner, and a CRM — the production stack of a media company, provided.</span><span class="t-es">Motor de Contenido con IA, avatares de video HeyGen, planificador social y un CRM: el stack de producción de una empresa de medios, incluido.</span></p></div>
+      <div class="card"><h3><span class="t-en">Income That Compounds</span><span class="t-es">Ingresos Que Se Acumulan</span></h3><p><span class="t-en">Unlike one-off gigs, your recurring commission book keeps paying month after month.</span><span class="t-es">A diferencia de los trabajos puntuales, tu libro de comisiones recurrentes sigue pagando mes tras mes.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="t-en">How It Works</span><span class="t-es">Cómo Funciona</span></h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div><h3><span class="t-en">Apply</span><span class="t-es">Aplica</span></h3><p><span class="t-en">Tell us about yourself and your neighborhood.</span><span class="t-es">Cuéntanos sobre ti y tu barrio.</span></p></div></div>
+      <div class="step"><div class="n">2</div><div><h3><span class="t-en">Train</span><span class="t-es">Capacítate</span></h3><p><span class="t-en">Get certified on the platform, the content engine, and the sales playbook.</span><span class="t-es">Certifícate en la plataforma, el motor de contenido y el manual de ventas.</span></p></div></div>
+      <div class="step"><div class="n">3</div><div><h3><span class="t-en">Launch</span><span class="t-es">Lanza</span></h3><p><span class="t-en">Take over your neighborhood's newsletter, content, and business pipeline.</span><span class="t-es">Asume el boletín, el contenido y la cartera de negocios de tu barrio.</span></p></div></div>
+      <div class="step"><div class="n">4</div><div><h3><span class="t-en">Earn & Grow</span><span class="t-es">Gana y Crece</span></h3><p><span class="t-en">Build your recurring book, your audience, and your portfolio.</span><span class="t-es">Construye tu libro recurrente, tu audiencia y tu portafolio.</span></p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="apply">
+  <div class="wrap">
+    <h2><span class="t-en">Apply to Become an Ambassador</span><span class="t-es">Aplica para Ser Embajador</span></h2>
+    <p class="sub"><span class="t-en">One Ambassador per neighborhood. When your neighborhood is taken, it's taken.</span><span class="t-es">Un Embajador por barrio. Cuando tu barrio está tomado, está tomado.</span></p>
+    <form>
+      <label><span class="t-en">Full Name</span><span class="t-es">Nombre Completo</span></label>
+      <input type="text" data-en="Your name" data-es="Tu nombre" placeholder="Your name" required>
+      <label><span class="t-en">Email</span><span class="t-es">Correo Electrónico</span></label>
+      <input type="email" data-en="you@email.com" data-es="tu@correo.com" placeholder="you@email.com" required>
+      <label><span class="t-en">Phone</span><span class="t-es">Teléfono</span></label>
+      <input type="tel" data-en="Phone number" data-es="Número de teléfono" placeholder="Phone number">
+      <label><span class="t-en">Neighborhood / City</span><span class="t-es">Barrio / Ciudad</span></label>
+      <input type="text" data-en="The neighborhood you want to represent" data-es="El barrio que quieres representar" placeholder="The neighborhood you want to represent" required>
+      <label><span class="t-en">Why you? (social handles, writing, media experience)</span><span class="t-es">¿Por qué tú? (redes sociales, escritura, experiencia en medios)</span></label>
+      <textarea rows="4" data-en="Tell us about your content, community, or sales experience" data-es="Cuéntanos sobre tu experiencia en contenido, comunidad o ventas" placeholder="Tell us about your content, community, or sales experience"></textarea>
+      <button type="submit"><span class="t-en">Submit Application</span><span class="t-es">Enviar Aplicación</span></button>
+    </form>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 EASE Association · Easy Street (US) · Medellín Social (Colombia)</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var pref = localStorage.getItem('es-lang-pref') || 'en';
+  setLang(pref);
+  document.getElementById('langToggle').addEventListener('click', function(){
+    setLang(document.documentElement.lang === 'en' ? 'es' : 'en');
+  });
+  function setLang(l){
+    document.documentElement.lang = l;
+    localStorage.setItem('es-lang-pref', l);
+    document.querySelectorAll('[data-en]').forEach(function(el){
+      el.placeholder = el.getAttribute('data-' + l);
+    });
+  }
+})();
+</script>
+</body>
+</html>

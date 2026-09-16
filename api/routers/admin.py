@@ -13,7 +13,9 @@ from api.utils import ghl_client
 
 router = APIRouter()
 
-ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "edwardgiraldo101@gmail.com")
+ADMIN_EMAIL = os.getenv("ADMIN_EMAIL")
+if not ADMIN_EMAIL:
+    raise RuntimeError("ADMIN_EMAIL env var requerida")
 
 
 def require_admin(user: dict = Depends(get_current_user)) -> dict:
@@ -1027,6 +1029,51 @@ async def editar_evento(request: Request, evento_id: int, body: DestacadoPatch =
     return dict(row)
 
 
+# ── Eventos subidos por usuario, pendientes de aprobación ──────────────────────
+
+@router.get("/eventos/pendientes")
+async def list_eventos_pendientes(admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT e.id, e.titulo, e.categoria, e.fecha_inicio, e.descripcion,
+               e.organizador, e.barrio_id, b.nombre AS barrio_nombre,
+               e.url_externo, e.foto_url,
+               u.email AS subido_por_email, e.created_at
+        FROM eventos e
+        LEFT JOIN raw.barrios b ON e.barrio_id = b.id
+        LEFT JOIN usuarios u ON u.id = e.subido_por
+        WHERE e.activo = false AND e.subido_por IS NOT NULL
+        ORDER BY e.created_at ASC
+        """
+    )
+    return [
+        {
+            "id": r["id"], "titulo": r["titulo"], "categoria": r["categoria"],
+            "fecha_inicio": r["fecha_inicio"].isoformat() if r["fecha_inicio"] else None,
+            "descripcion": r["descripcion"], "organizador": r["organizador"],
+            "barrio": r["barrio_nombre"], "url_externo": r["url_externo"], "foto_url": r["foto_url"],
+            "subido_por_email": r["subido_por_email"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/eventos/{evento_id}/aprobar")
+@limiter.limit("30/minute")
+async def aprobar_evento(request: Request, evento_id: int, admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "UPDATE eventos SET activo = true, updated_at = NOW() WHERE id = $1 AND activo = false RETURNING id",
+        evento_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Evento no encontrado o ya activo")
+    await _audit(pool, admin, "aprobar_evento", "evento", str(evento_id), None, request)
+    return {"id": evento_id, "activo": True}
+
+
 # ── Negocios locales (tiendas) — destacados con alcance ────────────────────────
 
 @router.get("/tiendas")
@@ -1099,6 +1146,52 @@ async def editar_tienda(request: Request, tienda_id: int, body: DestacadoPatch =
                  {"destacado": row["destacado"], "nivel": row["destacado_nivel"], "zona": row["destacado_zona_codigo"]}, request)
     await ghl_client.sync_tienda(tienda_id)
     return dict(row)
+
+
+# ── Negocios subidos por su dueño, pendientes de aprobación ────────────────────
+
+@router.get("/tiendas/pendientes")
+async def list_tiendas_pendientes(admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT t.id, t.nombre, t.categoria, t.descripcion, t.direccion,
+               t.telefono, t.whatsapp, t.instagram, t.website, t.foto_url,
+               t.barrio_id, b.nombre AS barrio_nombre,
+               u.email AS subido_por_email, t.created_at
+        FROM tiendas t
+        LEFT JOIN raw.barrios b ON t.barrio_id = b.id
+        LEFT JOIN usuarios u ON u.id = t.subido_por
+        WHERE t.activo = false AND t.subido_por IS NOT NULL
+        ORDER BY t.created_at ASC
+        """
+    )
+    return [
+        {
+            "id": r["id"], "nombre": r["nombre"], "categoria": r["categoria"],
+            "descripcion": r["descripcion"], "direccion": r["direccion"],
+            "telefono": r["telefono"], "whatsapp": r["whatsapp"],
+            "instagram": r["instagram"], "website": r["website"], "foto_url": r["foto_url"],
+            "barrio": r["barrio_nombre"], "subido_por_email": r["subido_por_email"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/tiendas/{tienda_id}/aprobar")
+@limiter.limit("30/minute")
+async def aprobar_tienda(request: Request, tienda_id: int, admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "UPDATE tiendas SET activo = true, updated_at = NOW() WHERE id = $1 AND activo = false RETURNING id",
+        tienda_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Negocio no encontrado o ya activo")
+    await _audit(pool, admin, "aprobar_tienda", "tienda", str(tienda_id), None, request)
+    await ghl_client.sync_tienda(tienda_id)
+    return {"id": tienda_id, "activo": True}
 
 
 # ── SMTP Test ──────────────────────────────────────────────────────────────────

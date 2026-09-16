@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>EAFIT Internships — Medellín Social × EASE</title>
+<style>
+  :root { --blue:#27273E; --green:#458C1E; --light:#F4F6F1; --grey:#666; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:#222; line-height:1.6; }
+  html[lang="en"] .t-es { display:none; }
+  html[lang="es"] .t-en { display:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  nav { background:var(--blue); color:#fff; padding:14px 0; position:sticky; top:0; z-index:10; }
+  nav .wrap { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-size:1.25rem; font-weight:800; }
+  .brand span { color:#9BD77A; }
+  .brand small { font-weight:600; color:#B9B9CC; font-size:.7rem; display:block; letter-spacing:.04em; }
+  #langToggle { background:var(--green); color:#fff; border:none; padding:8px 18px; border-radius:20px; font-weight:700; cursor:pointer; font-size:.9rem; }
+  header { background:linear-gradient(135deg, var(--blue) 0%, #3A3A5C 100%); color:#fff; padding:84px 0 72px; text-align:center; }
+  header h1 { font-size:2.5rem; line-height:1.2; margin-bottom:18px; }
+  header h1 em { color:#9BD77A; font-style:normal; }
+  header p.lead { font-size:1.2rem; max-width:780px; margin:0 auto 30px; color:#E8E8F0; }
+  .cta { display:inline-block; background:var(--green); color:#fff; text-decoration:none; font-weight:800; padding:16px 42px; border-radius:30px; font-size:1.1rem; }
+  .badge { display:inline-block; background:rgba(155,215,122,.18); border:1px solid #9BD77A; color:#9BD77A; padding:6px 16px; border-radius:18px; font-size:.82rem; font-weight:700; margin-bottom:22px; letter-spacing:.05em; }
+  .stats { display:flex; gap:30px; justify-content:center; flex-wrap:wrap; margin-top:34px; }
+  .stat { text-align:center; } .stat b { display:block; font-size:1.8rem; color:#9BD77A; } .stat span { font-size:.8rem; color:#CFCFE0; }
+  section { padding:60px 0; }
+  section.alt { background:var(--light); }
+  h2 { color:var(--blue); font-size:1.9rem; text-align:center; margin-bottom:14px; }
+  .sub { text-align:center; color:var(--grey); max-width:740px; margin:0 auto 42px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:22px; }
+  .card { background:#fff; border:1px solid #E2E6DC; border-radius:12px; padding:26px; box-shadow:0 2px 8px rgba(39,39,62,.06); }
+  .card h3 { color:var(--green); font-size:1.12rem; margin-bottom:10px; }
+  .card p { color:#444; font-size:.96rem; }
+  .card ul { padding-left:18px; color:#444; font-size:.94rem; margin-top:6px; }
+  .card li { margin-bottom:6px; }
+  .tag { display:inline-block; background:#EAF4E2; color:#2E5E13; border-radius:14px; padding:4px 12px; font-size:.78rem; font-weight:700; margin:4px 6px 0 0; }
+  .track { border-top:5px solid var(--green); }
+  .track h3 { color:var(--blue); font-size:1.2rem; }
+  .track .role { color:var(--green); font-weight:700; font-size:.85rem; margin-bottom:8px; display:block; }
+  .steps { counter-reset:step; max-width:760px; margin:0 auto; }
+  .step { display:flex; gap:18px; margin-bottom:24px; align-items:flex-start; }
+  .step .n { background:var(--green); color:#fff; min-width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; }
+  .step h3 { color:var(--blue); margin-bottom:4px; font-size:1.05rem; }
+  form { max-width:640px; margin:0 auto; background:#fff; padding:34px; border-radius:14px; box-shadow:0 4px 16px rgba(39,39,62,.1); }
+  form label { font-weight:700; color:var(--blue); display:block; margin:14px 0 6px; font-size:.92rem; }
+  form input, form select, form textarea { width:100%; padding:12px; border:1px solid #CCD3C4; border-radius:8px; font-size:1rem; font-family:inherit; }
+  form button { margin-top:24px; width:100%; background:var(--green); color:#fff; border:none; padding:16px; border-radius:30px; font-size:1.1rem; font-weight:800; cursor:pointer; }
+  footer { background:var(--blue); color:#B9B9CC; text-align:center; padding:26px 0; font-size:.82rem; }
+  .note { font-size:.8rem; color:#888; margin-top:14px; text-align:center; }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <div class="brand">Medellín <span>Social</span><small>by EASE · Easy Street (USA)</small></div>
+    <button id="langToggle"><span class="t-en">Español</span><span class="t-es">English</span></button>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="badge"><span class="t-en">EAFIT INTERNSHIP · AI &amp; EMERGING TECH · MEDIA</span><span class="t-es">PRÁCTICA EAFIT · IA Y TECNOLOGÍA EMERGENTE · MEDIOS</span></div>
+    <h1>
+      <span class="t-en">Intern With an <em>International Company</em> — Without Leaving Medellín</span>
+      <span class="t-es">Haz Tu Práctica en una <em>Empresa Internacional</em> — Sin Salir de Medellín</span>
+    </h1>
+    <p class="lead">
+      <span class="t-en">Medellín Social is the local brand of EASE, a U.S. company building AI-powered local media platforms. We're opening internships for EAFIT students who want real, hands-on experience in artificial intelligence, emerging technology, and the media industry — the exact international, innovation-driven experience EAFIT champions.</span>
+      <span class="t-es">Medellín Social es la marca local de EASE, una empresa de Estados Unidos que construye plataformas de medios locales impulsadas por IA. Abrimos prácticas para estudiantes de EAFIT que quieren experiencia real y práctica en inteligencia artificial, tecnología emergente y la industria de medios — exactamente la experiencia internacional e innovadora que EAFIT promueve.</span>
+    </p>
+    <a class="cta" href="#apply"><span class="t-en">Apply for an Internship</span><span class="t-es">Aplica a una Práctica</span></a>
+    <div class="stats">
+      <div class="stat"><b>100%</b><span class="t-en">International company</span><span class="t-es">Empresa internacional</span></div>
+      <div class="stat"><b>AI</b><span class="t-en">Emerging-tech stack</span><span class="t-es">Stack de tecnología emergente</span></div>
+      <div class="stat"><b>EN/ES</b><span class="t-en">Bilingual environment</span><span class="t-es">Entorno bilingüe</span></div>
+    </div>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">Why This Internship</span><span class="t-es">Por Qué Esta Práctica</span></h2>
+    <p class="sub"><span class="t-en">An official internship designed to fit EAFIT's prácticas — built around the skills the future of work actually rewards.</span><span class="t-es">Una práctica oficial diseñada para encajar en las prácticas de EAFIT — construida alrededor de las habilidades que el futuro del trabajo realmente recompensa.</span></p>
+    <div class="grid">
+      <div class="card"><h3><span class="t-en">A Real International Company</span><span class="t-es">Una Empresa Internacional Real</span></h3><p><span class="t-en">Work directly with a U.S.-based company (EASE) operating in Medellín as Medellín Social — global standards, local impact.</span><span class="t-es">Trabaja directamente con una empresa de Estados Unidos (EASE) que opera en Medellín como Medellín Social — estándares globales, impacto local.</span></p></div>
+      <div class="card"><h3><span class="t-en">AI &amp; Emerging Technology</span><span class="t-es">IA y Tecnología Emergente</span></h3><p><span class="t-en">Hands-on with an AI content engine, automation, CRM, and AI video — the emerging-tech toolkit, not theory.</span><span class="t-es">De la mano con un motor de contenido con IA, automatización, CRM y video con IA — el kit de tecnología emergente, no teoría.</span></p></div>
+      <div class="card"><h3><span class="t-en">The Media Industry</span><span class="t-es">La Industria de Medios</span></h3><p><span class="t-en">Produce real content for a live local media platform — journalism, social, and video with your name on it.</span><span class="t-es">Produce contenido real para una plataforma de medios local en vivo — periodismo, redes y video con tu nombre.</span></p></div>
+      <div class="card"><h3><span class="t-en">A Portfolio &amp; Bilingual Edge</span><span class="t-es">Portafolio y Ventaja Bilingüe</span></h3><p><span class="t-en">Graduate with published work, measurable results, and English-in-practice experience employers compete for.</span><span class="t-es">Gradúate con trabajo publicado, resultados medibles y experiencia real en inglés que los empleadores buscan.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="t-en">Internship Tracks</span><span class="t-es">Rutas de Práctica</span></h2>
+    <p class="sub"><span class="t-en">Choose the track that fits your program. Each is mentored, project-based, and counts as real, hands-on practice.</span><span class="t-es">Elige la ruta que encaje con tu programa. Cada una es mentorizada, basada en proyectos y cuenta como práctica real.</span></p>
+    <div class="grid">
+      <div class="card track">
+        <span class="role"><span class="t-en">Media / Communication / Journalism</span><span class="t-es">Medios / Comunicación / Periodismo</span></span>
+        <h3><span class="t-en">AI Media &amp; Content Creator</span><span class="t-es">Creador de Medios y Contenido con IA</span></h3>
+        <ul>
+          <li><span class="t-en">Write, film, and publish local stories and a weekly newsletter</span><span class="t-es">Escribir, grabar y publicar historias locales y un boletín semanal</span></li>
+          <li><span class="t-en">Use AI video avatars and the AI content engine to produce studio-grade media</span><span class="t-es">Usar avatares de video con IA y el motor de contenido para producir medios de calidad de estudio</span></li>
+          <li><span class="t-en">Grow audiences across TikTok, Instagram, YouTube &amp; Facebook</span><span class="t-es">Hacer crecer audiencias en TikTok, Instagram, YouTube y Facebook</span></li>
+        </ul>
+        <div><span class="tag">AI</span><span class="tag"><span class="t-en">Video</span><span class="t-es">Video</span></span><span class="tag"><span class="t-en">Storytelling</span><span class="t-es">Narrativa</span></span></div>
+      </div>
+      <div class="card track">
+        <span class="role"><span class="t-en">Marketing / Business / Engineering</span><span class="t-es">Mercadeo / Negocios / Ingeniería</span></span>
+        <h3><span class="t-en">AI Growth &amp; Marketing Technology</span><span class="t-es">Crecimiento y Tecnología de Marketing con IA</span></h3>
+        <ul>
+          <li><span class="t-en">Build automations and cadences in a private-labeled CRM (GoHighLevel)</span><span class="t-es">Construir automatizaciones y cadencias en un CRM de marca privada (GoHighLevel)</span></li>
+          <li><span class="t-en">Run real campaigns and analyze performance for local businesses</span><span class="t-es">Ejecutar campañas reales y analizar el desempeño para negocios locales</span></li>
+          <li><span class="t-en">Work with AI tooling and no-code automation (Make.com)</span><span class="t-es">Trabajar con herramientas de IA y automatización no-code (Make.com)</span></li>
+        </ul>
+        <div><span class="tag">CRM</span><span class="tag"><span class="t-en">Automation</span><span class="t-es">Automatización</span></span><span class="tag"><span class="t-en">Analytics</span><span class="t-es">Analítica</span></span></div>
+      </div>
+      <div class="card track">
+        <span class="role"><span class="t-en">Business / International Business</span><span class="t-es">Negocios / Negocios Internacionales</span></span>
+        <h3><span class="t-en">Community &amp; Business Development</span><span class="t-es">Comunidad y Desarrollo de Negocios</span></h3>
+        <ul>
+          <li><span class="t-en">Help local businesses get found online and join the platform</span><span class="t-es">Ayudar a negocios locales a ser encontrados en línea y unirse a la plataforma</span></li>
+          <li><span class="t-en">Grow the subscriber community through events and programs</span><span class="t-es">Hacer crecer la comunidad de suscriptores con eventos y programas</span></li>
+          <li><span class="t-en">Practice bilingual, client-facing communication with a global team</span><span class="t-es">Practicar comunicación bilingüe de cara al cliente con un equipo global</span></li>
+        </ul>
+        <div><span class="tag"><span class="t-en">Sales</span><span class="t-es">Ventas</span></span><span class="tag"><span class="t-en">Bilingual</span><span class="t-es">Bilingüe</span></span><span class="tag"><span class="t-en">Community</span><span class="t-es">Comunidad</span></span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">What You'll Walk Away With</span><span class="t-es">Lo Que Te Llevarás</span></h2>
+    <div class="grid">
+      <div class="card"><h3><span class="t-en">Published Portfolio</span><span class="t-es">Portafolio Publicado</span></h3><p><span class="t-en">Real, bylined work and measurable results you can show any employer.</span><span class="t-es">Trabajo real con tu firma y resultados medibles que puedes mostrar a cualquier empleador.</span></p></div>
+      <div class="card"><h3><span class="t-en">Emerging-Tech Skills</span><span class="t-es">Habilidades en Tecnología Emergente</span></h3><p><span class="t-en">Practical fluency in AI tools, automation, and modern content production.</span><span class="t-es">Dominio práctico de herramientas de IA, automatización y producción de contenido moderna.</span></p></div>
+      <div class="card"><h3><span class="t-en">International Reference</span><span class="t-es">Referencia Internacional</span></h3><p><span class="t-en">A recommendation and experience with a U.S. company on your résumé.</span><span class="t-es">Una recomendación y experiencia con una empresa de EE. UU. en tu hoja de vida.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="t-en">How to Apply</span><span class="t-es">Cómo Aplicar</span></h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div><h3><span class="t-en">Apply</span><span class="t-es">Aplica</span></h3><p><span class="t-en">Submit the form with your EAFIT program, semester, and track of interest.</span><span class="t-es">Envía el formulario con tu programa de EAFIT, semestre y ruta de interés.</span></p></div></div>
+      <div class="step"><div class="n">2</div><div><h3><span class="t-en">Interview</span><span class="t-es">Entrevista</span></h3><p><span class="t-en">A short bilingual conversation about your goals and strengths.</span><span class="t-es">Una breve conversación bilingüe sobre tus metas y fortalezas.</span></p></div></div>
+      <div class="step"><div class="n">3</div><div><h3><span class="t-en">Onboard</span><span class="t-es">Incorpórate</span></h3><p><span class="t-en">Get certified on the platform and AI toolkit, aligned with your práctica requirements.</span><span class="t-es">Certifícate en la plataforma y el kit de IA, alineado con los requisitos de tu práctica.</span></p></div></div>
+      <div class="step"><div class="n">4</div><div><h3><span class="t-en">Build &amp; Graduate</span><span class="t-es">Construye y Gradúate</span></h3><p><span class="t-en">Deliver real projects, build your portfolio, and finish with experience that stands out.</span><span class="t-es">Entrega proyectos reales, construye tu portafolio y termina con experiencia que se destaca.</span></p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="apply">
+  <div class="wrap">
+    <h2><span class="t-en">Apply for an EAFIT Internship</span><span class="t-es">Aplica a una Práctica EAFIT</span></h2>
+    <p class="sub"><span class="t-en">Open to EAFIT students ready for international, AI-driven, media-industry experience.</span><span class="t-es">Abierto a estudiantes de EAFIT listos para una experiencia internacional, impulsada por IA, en la industria de medios.</span></p>
+    <form>
+      <label><span class="t-en">Full Name</span><span class="t-es">Nombre Completo</span></label>
+      <input type="text" data-en="Your name" data-es="Tu nombre" placeholder="Tu nombre" required>
+      <label><span class="t-en">Email</span><span class="t-es">Correo Electrónico</span></label>
+      <input type="email" data-en="you@email.com" data-es="tu@correo.com" placeholder="tu@correo.com" required>
+      <label><span class="t-en">EAFIT Program &amp; Semester</span><span class="t-es">Programa EAFIT y Semestre</span></label>
+      <input type="text" data-en="e.g., Communication, 8th semester" data-es="ej., Comunicación, 8º semestre" placeholder="ej., Comunicación, 8º semestre" required>
+      <label><span class="t-en">Track of Interest</span><span class="t-es">Ruta de Interés</span></label>
+      <select>
+        <option value="media">AI Media &amp; Content Creator</option>
+        <option value="growth">AI Growth &amp; Marketing Technology</option>
+        <option value="bizdev">Community &amp; Business Development</option>
+      </select>
+      <label><span class="t-en">Why you? (English level, portfolio, interests)</span><span class="t-es">¿Por qué tú? (nivel de inglés, portafolio, intereses)</span></label>
+      <textarea rows="4" data-en="Tell us about your skills, English level, and what excites you" data-es="Cuéntanos sobre tus habilidades, nivel de inglés y qué te emociona" placeholder="Cuéntanos sobre tus habilidades, nivel de inglés y qué te emociona"></textarea>
+      <button type="submit"><span class="t-en">Submit Application</span><span class="t-es">Enviar Aplicación</span></button>
+    </form>
+    <p class="note"><span class="t-en">Medellín Social is operated by EASE Association (USA). This page is for EAFIT students; opportunities follow each program's internship guidelines.</span><span class="t-es">Medellín Social es operada por EASE Association (EE. UU.). Esta página es para estudiantes de EAFIT; las oportunidades siguen las directrices de práctica de cada programa.</span></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 EASE Association · Medellín Social (Colombia) · Easy Street (USA)</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var pref = localStorage.getItem('eafit-lang-pref') || 'es';
+  setLang(pref);
+  document.getElementById('langToggle').addEventListener('click', function(){
+    setLang(document.documentElement.lang === 'en' ? 'es' : 'en');
+  });
+  function setLang(l){
+    document.documentElement.lang = l;
+    localStorage.setItem('eafit-lang-pref', l);
+    document.querySelectorAll('[data-en]').forEach(function(el){
+      el.placeholder = el.getAttribute('data-' + l);
+    });
+  }
+})();
+</script>
+</body>
+</html>

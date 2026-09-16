@@ -66,7 +66,7 @@ async def test_forgot_password_unknown_email(client):
         "/api/v1/auth/forgot-password",
         json={"email": "nobody_at_all@example.com"},
     )
-    # Always 200 to avoid email enumeration
+    # Always 200 to avoid email enumeration; token is never in the response (email-only)
     assert r.status_code == 200
     data = r.json()
-    assert data["reset_token"] is None
+    assert "reset_token" not in data

@@ -1,13 +1,14 @@
-from __future__ import annotations
-
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user
+from api.limiter import limiter
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -57,7 +58,8 @@ def _parse_presupuesto(text: str) -> tuple[Optional[int], Optional[int]]:
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
 @router.get("/perfil")
-async def get_perfil(current_user: dict = Depends(get_current_user)):
+@limiter.limit("100/minute")
+async def get_perfil(request: Request, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     row = await pool.fetchrow(
         "SELECT * FROM perfil_inversor WHERE usuario_id = $1 ORDER BY id DESC LIMIT 1",
@@ -69,7 +71,8 @@ async def get_perfil(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/onboarding", status_code=201)
-async def onboarding(req: OnboardingRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def onboarding(request: Request, req: OnboardingRequest, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
 
     pmin = req.presupuesto_min_cop
@@ -129,12 +132,14 @@ async def onboarding(req: OnboardingRequest, current_user: dict = Depends(get_cu
 
 
 @router.put("/perfil")
-async def update_perfil(req: OnboardingRequest, current_user: dict = Depends(get_current_user)):
-    return await onboarding(req, current_user)
+@limiter.limit("30/minute")
+async def update_perfil(request: Request, req: OnboardingRequest, current_user: dict = Depends(get_current_user)):
+    return await onboarding(request, req, current_user)
 
 
 @router.get("/configuracion_mapa")
-async def get_map_config(current_user: dict = Depends(get_current_user)):
+@limiter.limit("100/minute")
+async def get_map_config(request: Request, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     row = await pool.fetchrow(
         "SELECT * FROM configuracion_mapa WHERE usuario_id = $1", current_user["id"]
@@ -153,7 +158,8 @@ async def get_map_config(current_user: dict = Depends(get_current_user)):
 
 
 @router.put("/configuracion_mapa")
-async def update_map_config(req: MapConfigRequest, current_user: dict = Depends(get_current_user)):
+@limiter.limit("30/minute")
+async def update_map_config(request: Request, req: MapConfigRequest, current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     row = await pool.fetchrow(
         """
@@ -195,7 +201,8 @@ class SuscribirseOut(BaseModel):
 
 
 @router.post("/suscribirse", response_model=SuscribirseOut)
-async def suscribirse(body: SuscribirseIn, pool=Depends(get_pool)):
+@limiter.limit("5/minute")
+async def suscribirse(request: Request, body: SuscribirseIn, pool=Depends(get_pool)):
     try:
         existing = await pool.fetchrow(
             "SELECT id FROM public.usuarios WHERE email = $1", body.email
@@ -237,5 +244,6 @@ async def suscribirse(body: SuscribirseIn, pool=Depends(get_pool)):
             body.newsletter_activo, body.barrio_id, body.intereses,
         )
         return SuscribirseOut(success=True, nuevo=True, usuario_id=row["id"])
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")

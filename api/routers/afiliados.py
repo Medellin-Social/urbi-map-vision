@@ -1,12 +1,13 @@
-from __future__ import annotations
-
+import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
+from api.limiter import limiter
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -24,7 +25,8 @@ class AplicarOut(BaseModel):
 
 
 @router.post("/aplicar", response_model=AplicarOut)
-async def aplicar_afiliado(body: AplicarAfiliadoIn, pool=Depends(get_pool)):
+@limiter.limit("5/minute")
+async def aplicar_afiliado(request: Request, body: AplicarAfiliadoIn = Body(...), pool=Depends(get_pool)):
     try:
         row = await pool.fetchrow(
             """
@@ -35,8 +37,9 @@ async def aplicar_afiliado(body: AplicarAfiliadoIn, pool=Depends(get_pool)):
             """,
             body.nombre, body.email, body.telefono, body.canal,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return AplicarOut(
         ok=True,
         aplicacion_id=row["id"],

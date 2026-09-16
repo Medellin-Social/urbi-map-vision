@@ -50,6 +50,7 @@ export type UrbiUser = {
   primeraPropiedad?: boolean;
   wantsAgent?: boolean;
   plan?: 'free' | 'pro' | 'agente';
+  esAgente?: boolean;          // true si tiene fila activa en `agent` (agente o agencia)
   payments?: PaymentMethod[];
   favorites?: FavoriteBarrio[];
   history?: HistoryEntry[];

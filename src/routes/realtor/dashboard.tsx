@@ -2,6 +2,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, Inbox, MapPinned, Plus } from "lucide-react";
+import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -297,11 +298,14 @@ function InboxTab() {
 
         <div className="mt-3 overflow-hidden rounded-lg border border-border bg-surface">
           {visibles.length === 0 && (
-            <p className="px-4 py-10 text-center text-sm text-muted-foreground">
-              {filtro === "pool"
-                ? "El pool está vacío por ahora."
-                : "Sin leads en esta vista. Cuando un propietario publique en tu zona, aparecerá aquí."}
-            </p>
+            <div className="px-4 py-12 text-center">
+              <Inbox className="mx-auto h-5 w-5 text-muted-foreground/50" />
+              <p className="mx-auto mt-2 max-w-[220px] text-sm text-muted-foreground">
+                {filtro === "pool"
+                  ? "El pool está vacío por ahora."
+                  : "Sin leads en esta vista. Cuando un propietario publique en tu zona, aparecerá aquí."}
+              </p>
+            </div>
           )}
           {visibles.map((l, i) => (
             <LeadListRow
@@ -350,9 +354,10 @@ function LeadListRow({
   return (
     <button
       onClick={onClick}
-      className={`block w-full px-4 py-3 text-left transition ${
+      aria-current={active ? "true" : undefined}
+      className={`block w-full border-l-2 px-4 py-3 text-left transition ${
         first ? "" : "border-t border-border/70"
-      } ${active ? "bg-primary/5" : "hover:bg-muted/40"}`}
+      } ${active ? "border-l-primary bg-primary/5" : "border-l-transparent hover:bg-muted/40"}`}
     >
       <span className="flex items-baseline justify-between gap-2">
         <span className={`flex min-w-0 items-center gap-2 text-sm ${esNuevo ? "font-semibold" : "font-medium"} text-foreground`}>
@@ -840,28 +845,21 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
           <EmptyState msg="Nadie ha guardado tus listings todavía." />
         ) : (
           <>
-            <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-              <table className="w-full min-w-[520px] text-sm">
-                <thead>
-                  <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                    <th className="px-4 py-3 font-medium">Usuario</th>
-                    <th className="px-4 py-3 font-medium">Listing</th>
-                    <th className="px-4 py-3 text-right font-medium">Guardado</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {interesadosVis.map((p, i) => (
-                    <tr key={`${p.email}-${i}`} className="border-b border-border/60 last:border-0">
-                      <td className="px-4 py-3">
-                        <div className="font-medium text-foreground">{p.nombre ?? "Usuario"}</div>
-                        <div className="text-xs text-muted-foreground">{p.email}</div>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground">{p.listing_titulo}</td>
-                      <td className="px-4 py-3 text-right text-xs text-muted-foreground">{relativeTime(p.created_at)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="overflow-hidden rounded-lg border border-border bg-surface">
+              {interesadosVis.map((p, i) => (
+                <div
+                  key={`${p.email}-${i}`}
+                  className={`flex items-center justify-between gap-3 px-4 py-3 ${i === 0 ? "" : "border-t border-border/70"}`}
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium text-foreground">{p.nombre ?? "Usuario"}</div>
+                    <div className="truncate text-xs text-muted-foreground">
+                      {p.email} · guardó <span className="text-foreground">{p.listing_titulo}</span>
+                    </div>
+                  </div>
+                  <span className="shrink-0 text-xs text-muted-foreground">{relativeTime(p.created_at)}</span>
+                </div>
+              ))}
             </div>
             {data.interesados.length > LIMIT && (
               <button
@@ -1079,23 +1077,10 @@ function ListingsTab() {
       )}
 
       {!isLoading && !isError && visible.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-border bg-surface">
-          <table className="w-full min-w-[640px] text-sm">
-            <thead>
-              <tr className="border-b border-border text-left text-xs text-muted-foreground">
-                <th className="px-4 py-3 font-medium">Listing</th>
-                <th className="px-4 py-3 font-medium">Estado</th>
-                <th className="px-4 py-3 text-right font-medium">Precio</th>
-                <th className="px-4 py-3 text-right font-medium">Vistas 30 días</th>
-                <th className="px-4 py-3 text-right font-medium">Vistas totales</th>
-                <th className="px-4 py-3 text-right font-medium">Actualizado</th>
-                <th className="px-4 py-3" aria-label="Acciones" />
-              </tr>
-            </thead>
-            <tbody>
-              {visible.map((l) => <ListingTableRow key={l.id} listing={l} onEditar={() => setEditando(l)} />)}
-            </tbody>
-          </table>
+        <div className="overflow-hidden rounded-lg border border-border bg-surface">
+          {visible.map((l, i) => (
+            <ListingRow key={l.id} listing={l} first={i === 0} onEditar={() => setEditando(l)} />
+          ))}
         </div>
       )}
 
@@ -1110,51 +1095,62 @@ function ListingsTab() {
   );
 }
 
-function ListingTableRow({ listing: l, onEditar }: { listing: MiListing; onEditar: () => void }) {
-  const { label, dot } = ESTADO_META[l.estado];
+function ListingRow({ listing: l, first, onEditar }: { listing: MiListing; first: boolean; onEditar: () => void }) {
+  const estado = ESTADO_META[l.estado];
   return (
-    <tr className="border-b border-border/60 last:border-0 hover:bg-muted/30">
-      <td className="px-4 py-3">
-        <div className="max-w-[280px] truncate font-medium text-foreground">{l.titulo}</div>
-        <div className="text-xs capitalize text-muted-foreground">
+    <div
+      className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 ${
+        first ? "" : "border-t border-border/70"
+      }`}
+    >
+      <div className="min-w-0">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="truncate text-sm font-medium text-foreground">{l.titulo}</span>
+          <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
+            {estado.label}
+          </span>
+        </div>
+        <div className="mt-0.5 text-sm capitalize text-muted-foreground">
           {l.tipo_inmueble} · {l.operacion} · {l.barrio}
         </div>
-      </td>
-      <td className="px-4 py-3">
-        <span className="inline-flex items-center gap-1.5 text-xs text-foreground">
-          <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
-          {label}
-        </span>
-      </td>
-      <td className="px-4 py-3 text-right font-medium tabular-nums text-foreground">{formatCOP(l.precio)}</td>
-      <td className="px-4 py-3 text-right tabular-nums text-foreground">
-        {l.estado === "publicado" ? l.vistas_30d.toLocaleString("es-CO") : "—"}
-      </td>
-      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">
-        {l.vistas_total > 0 ? l.vistas_total.toLocaleString("es-CO") : "—"}
-      </td>
-      <td className="px-4 py-3 text-right text-xs text-muted-foreground">{relativeTime(l.updated_at)}</td>
-      <td className="px-4 py-3 text-right">
+        <div className="mt-0.5 text-xs text-muted-foreground">Actualizado {relativeTime(l.updated_at)}</div>
+      </div>
+
+      <div className="flex shrink-0 items-center gap-5 sm:gap-6">
+        <div className="text-right text-base font-semibold tabular-nums text-foreground">
+          {formatCOP(l.precio)}
+        </div>
+        {/* 30d en jerarquía fuerte, total como referencia — sin insinuar tendencia:
+           no hay serie histórica para saber si esto sube o baja. */}
+        <div className="text-right">
+          <div className="text-sm font-semibold tabular-nums text-foreground">
+            {l.estado === "publicado" ? l.vistas_30d.toLocaleString("es-CO") : "—"}
+            <span className="ml-1 text-xs font-normal text-muted-foreground">30d</span>
+          </div>
+          <div className="text-xs text-muted-foreground">
+            {l.vistas_total > 0 ? `${l.vistas_total.toLocaleString("es-CO")} totales` : "sin vistas aún"}
+          </div>
+        </div>
         {l.estado !== "cerrado" && (
           <button
             onClick={onEditar}
-            className="rounded-md border border-border px-2.5 py-1 text-xs font-medium text-muted-foreground transition hover:text-foreground"
+            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
           >
             Editar
           </button>
         )}
-      </td>
-    </tr>
+      </div>
+    </div>
   );
 }
 
-const ESTADO_META: Record<EstadoListing, { label: string; dot: string }> = {
-  publicado:   { label: "Publicado",   dot: "bg-success" },
-  en_revision: { label: "En revisión", dot: "bg-warning" },
-  borrador:    { label: "Borrador",    dot: "bg-muted-foreground" },
-  pausado:     { label: "Pausado",     dot: "bg-muted-foreground" },
-  rechazado:   { label: "Rechazado",   dot: "bg-danger" },
-  cerrado:     { label: "Cerrado",     dot: "bg-muted-foreground" },
+const ESTADO_META: Record<EstadoListing, { label: string; badge: string }> = {
+  publicado:   { label: "Publicado",   badge: "border-success/30 bg-success/10 text-success" },
+  en_revision: { label: "En revisión", badge: "border-warning/30 bg-warning/10 text-warning" },
+  borrador:    { label: "Borrador",    badge: "border-border bg-muted text-muted-foreground" },
+  pausado:     { label: "Pausado",     badge: "border-border bg-muted text-muted-foreground" },
+  rechazado:   { label: "Rechazado",   badge: "border-danger/30 bg-danger/10 text-danger" },
+  cerrado:     { label: "Cerrado",     badge: "border-border bg-muted text-muted-foreground" },
 };
 
 // ══ TAB 3: Desempeño ═══════════════════════════════════════════════════════════
@@ -1177,7 +1173,6 @@ function DesempenoTab() {
     return <SectionError msg="No se pudo cargar tu desempeño." />;
   }
 
-  const tasa = data.tasa_aceptacion != null ? `${Math.round(data.tasa_aceptacion * 100)}%` : "—";
   const mediana = data.mediana_horas_aceptar != null
     ? data.mediana_horas_aceptar < 48
       ? `${data.mediana_horas_aceptar} h`
@@ -1189,9 +1184,9 @@ function DesempenoTab() {
       <section>
         <SectionHeader title="Tu desempeño" sub="Últimos 90 días" />
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <StatTile
+          <RingStat
             label="Tasa de aceptación"
-            value={tasa}
+            percent={data.tasa_aceptacion != null ? Math.round(data.tasa_aceptacion * 100) : null}
             sub={`${data.aceptados_90d} de ${data.asignados_90d} asignados`}
           />
           <StatTile
@@ -1204,9 +1199,9 @@ function DesempenoTab() {
             value={data.vistas_30d.toLocaleString("es-CO")}
             sub={`${data.vistas_total.toLocaleString("es-CO")} históricas`}
           />
-          <StatTile
+          <RingStat
             label="Asistencia a visitas"
-            value={data.show_rate != null ? `${Math.round(data.show_rate * 100)}%` : "—"}
+            percent={data.show_rate != null ? Math.round(data.show_rate * 100) : null}
             sub={`${data.visitas_realizadas_90d} realizadas · ${data.visitas_no_show_90d} plantones`}
           />
           <StatTile
@@ -1245,6 +1240,33 @@ function StatTile({ label, value, sub }: { label: string; value: string | number
       <div className="text-xs text-muted-foreground">{label}</div>
       <div className="mt-1 text-2xl font-semibold tabular-nums text-foreground">{value}</div>
       <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+// unit: "%" para tasas reales 0–100 (asistencia, ocupación); "/100" para scores
+// (evita mostrar un score como si fuera un porcentaje — no es lo mismo).
+function RingStat({ label, percent, sub, unit = "%" }: { label: string; percent: number | null; sub: string; unit?: "%" | "/100" }) {
+  const value = percent ?? 0;
+  const data = [{ value }, { value: Math.max(0, 100 - value) }];
+
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface p-4">
+      <div className="relative h-14 w-14 shrink-0">
+        <PieChart width={56} height={56}>
+          <Pie data={data} dataKey="value" innerRadius={20} outerRadius={28} startAngle={90} endAngle={-270} stroke="none">
+            <Cell fill="#1D9E75" />
+            <Cell fill="var(--muted)" />
+          </Pie>
+        </PieChart>
+        <div className={`absolute inset-0 flex items-center justify-center font-semibold tabular-nums text-foreground ${unit === "/100" ? "text-[10px]" : "text-xs"}`}>
+          {percent != null ? `${percent}${unit}` : "—"}
+        </div>
+      </div>
+      <div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+        <div className="mt-0.5 text-xs text-muted-foreground">{sub}</div>
+      </div>
     </div>
   );
 }
@@ -1302,6 +1324,11 @@ function RoiZonaCard({ zona: z }: { zona: RoiZona }) {
 }
 
 // ══ TAB 4: Inteligencia ════════════════════════════════════════════════════════
+// Regla de visualización (consistente con Desempeño): scores y tasas acotados
+// 0–100 (score de inversión, liquidez, seguridad, ocupación, walk/transit score)
+// van en RingStat. Dinero, conteos, distancias y % no acotados (yields,
+// valorización) van en StatTile — un ring casi vacío para un yield del 6%
+// sería más confuso que informativo.
 
 function InteligenciaTab() {
   const { data: perfil } = useRealtorPerfil();
@@ -1363,26 +1390,26 @@ function InteligenciaTab() {
             <div className="space-y-6">
               <div className="rounded-lg border-l-4 pl-4" style={{ borderColor: intel.color_hex ?? "#888780" }}>
                 <IntelGroup title="Score de inversión por horizonte">
-                  <StatTile label="Corto plazo" value={intel.scores.corto != null ? `${intel.scores.corto} / 100` : "—"} sub={intel.scores.cat_corto ?? "Airbnb"} />
-                  <StatTile label="Mediano plazo" value={intel.scores.mediano != null ? `${intel.scores.mediano} / 100` : "—"} sub={intel.scores.cat_mediano ?? "renta media"} />
-                  <StatTile label="Largo plazo" value={intel.scores.largo != null ? `${intel.scores.largo} / 100` : "—"} sub={intel.scores.cat_largo ?? "renta larga"} />
+                  <RingStat label="Corto plazo" percent={intel.scores.corto} sub={intel.scores.cat_corto ?? "Airbnb"} unit="/100" />
+                  <RingStat label="Mediano plazo" percent={intel.scores.mediano} sub={intel.scores.cat_mediano ?? "renta media"} unit="/100" />
+                  <RingStat label="Largo plazo" percent={intel.scores.largo} sub={intel.scores.cat_largo ?? "renta larga"} unit="/100" />
                   <StatTile label="Perfil recomendado" value={intel.scores.perfil_recomendado ?? "—"} sub="mejor uso de la zona" />
                 </IntelGroup>
               </div>
 
               <IntelGroup title="Venta">
-                <StatTile label="Liquidez" value={`${intel.liquidez.score ?? "—"} / 100`} sub={intel.liquidez.categoria ?? "facilidad de venta"} />
+                <RingStat label="Liquidez" percent={intel.liquidez.score} sub={intel.liquidez.categoria ?? "facilidad de venta"} unit="/100" />
                 <StatTile label="Mediana m² venta" value={intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"} sub="precio por m²" />
                 <StatTile label="Tiempo estimado de venta" value={intel.liquidez.tiempo_estimado_venta ?? "—"} sub="en el mercado" />
               </IntelGroup>
 
-              <IntelGroup title="Renta larga">
+              <IntelGroup title="Renta larga" dense>
                 <StatTile label="Canon mediano" value={intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"} sub="COP / mes" />
                 <StatTile label="Yield bruto" value={intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"} sub="anual sobre precio" />
                 <StatTile label="Años de recupero" value={intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"} sub="capital vía arriendo" />
               </IntelGroup>
 
-              <IntelGroup title="Renta media (nómadas 1-3 meses)">
+              <IntelGroup title="Renta media (nómadas 1-3 meses)" dense>
                 <StatTile label="Precio mediano" value={intel.mercado.precio_renta_media_p50 ? formatCOP(intel.mercado.precio_renta_media_p50) : "—"} sub="COP / mes" />
                 <StatTile label="Yield renta media" value={intel.mercado.yield_renta_media_pct != null ? `${intel.mercado.yield_renta_media_pct.toFixed(1)}%` : "—"} sub="anual" />
                 <StatTile label="Listings activos" value={intel.mercado.n_listings_renta_media ?? "—"} sub="oferta actual" />
@@ -1390,26 +1417,26 @@ function InteligenciaTab() {
               </IntelGroup>
 
               <IntelGroup title="Renta corta (Airbnb)">
-                <StatTile label="Ocupación" value={intel.airbnb.ocupacion_pct != null ? `${intel.airbnb.ocupacion_pct.toFixed(0)}%` : "—"} sub="promedio zona" />
+                <RingStat label="Ocupación" percent={intel.airbnb.ocupacion_pct != null ? Math.round(intel.airbnb.ocupacion_pct) : null} sub="promedio zona" />
                 <StatTile label="Tarifa noche" value={intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"} sub="ADR promedio" />
                 <StatTile label="Yield Airbnb" value={intel.airbnb.yield_airbnb_pct != null ? `${intel.airbnb.yield_airbnb_pct.toFixed(1)}%` : "—"} sub="anual" />
                 <StatTile label="Listings activos" value={intel.airbnb.n_listings ?? "—"} sub="oferta actual" />
               </IntelGroup>
 
               <IntelGroup title="Seguridad">
-                <StatTile label="Score seguridad" value={intel.seguridad.score != null ? `${intel.seguridad.score} / 100` : "—"} sub={intel.seguridad.categoria ?? "percepción residente"} />
+                <RingStat label="Score seguridad" percent={intel.seguridad.score} sub={intel.seguridad.categoria ?? "percepción residente"} unit="/100" />
                 <StatTile label="Tendencia" value={intel.seguridad.tendencia ?? "—"} sub="últimos periodos" />
                 {intel.seguridad.nota && <StatTile label="Nota" value="" sub={intel.seguridad.nota} />}
               </IntelGroup>
 
               <IntelGroup title="Conectividad">
                 <StatTile label="Al metro" value={intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"} sub="distancia" />
-                <StatTile label="Caminabilidad" value={intel.conectividad.walk_score != null ? `${intel.conectividad.walk_score} / 100` : "—"} sub="walk score" />
-                <StatTile label="Transporte público" value={intel.conectividad.transit_score != null ? `${intel.conectividad.transit_score} / 100` : "—"} sub="transit score" />
+                <RingStat label="Caminabilidad" percent={intel.conectividad.walk_score} sub="walk score" unit="/100" />
+                <RingStat label="Transporte público" percent={intel.conectividad.transit_score} sub="transit score" unit="/100" />
                 <StatTile label="Colegios a 1km" value={intel.conectividad.n_colegios_1km ?? "—"} sub="cercanos" />
               </IntelGroup>
 
-              <IntelGroup title="Valorización">
+              <IntelGroup title="Valorización" dense>
                 <StatTile label="Variación anual" value={intel.valorizacion.var_anual_pct != null ? `${intel.valorizacion.var_anual_pct.toFixed(1)}%` : "—"} sub={intel.valorizacion.tendencia ?? "histórico"} />
                 <StatTile label="Proyección 3 años" value={intel.valorizacion.proyeccion_3anos_pct != null ? `${intel.valorizacion.proyeccion_3anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
                 <StatTile label="Proyección 5 años" value={intel.valorizacion.proyeccion_5anos_pct != null ? `${intel.valorizacion.proyeccion_5anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
@@ -1440,11 +1467,22 @@ function SectionHeader({ title, count, sub }: { title: string; count?: number; s
   );
 }
 
-function IntelGroup({ title, children }: { title: string; children: React.ReactNode }) {
+// dense=false (default) para grupos con algún RingStat: la tarjeta horizontal
+// (donut + texto) necesita más ancho que un StatTile — 3 columnas es la misma
+// densidad ya probada en Desempeño. dense=true para grupos solo de StatTile.
+function IntelGroup({
+  title,
+  dense = false,
+  children,
+}: {
+  title: string;
+  dense?: boolean;
+  children: React.ReactNode;
+}) {
   return (
     <div>
       <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
-      <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">{children}</div>
+      <div className={`grid grid-cols-2 gap-4 ${dense ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>{children}</div>
     </div>
   );
 }

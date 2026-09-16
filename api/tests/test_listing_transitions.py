@@ -33,6 +33,15 @@ def test_en_revision_to_publicado_sets_published_at():
     assert isinstance(l.published_at, datetime)
 
 
+def test_borrador_to_publicado_directo_sets_published_at():
+    """"Publica primero, verifica después" (commit 42267d3): borrador→publicado
+    es directo, sin pasar por en_revision."""
+    l = _l("borrador")
+    transition(l, "publicado")
+    assert l.estado == "publicado"
+    assert isinstance(l.published_at, datetime)
+
+
 def test_en_revision_to_rechazado():
     l = _l("en_revision")
     transition(l, "rechazado")
@@ -81,11 +90,6 @@ def test_published_at_not_overwritten_on_reactivation():
 
 # ── Invalid transitions ────────────────────────────────────────────────────────
 
-def test_borrador_to_publicado_invalid():
-    with pytest.raises(EstadoError):
-        transition(_l("borrador"), "publicado")
-
-
 def test_borrador_to_cerrado_invalid():
     with pytest.raises(EstadoError):
         transition(_l("borrador"), "cerrado")
@@ -108,5 +112,5 @@ def test_cerrado_is_terminal():
 
 
 def test_error_message_contains_states():
-    with pytest.raises(EstadoError, match="borrador.*publicado"):
-        transition(_l("borrador"), "publicado")
+    with pytest.raises(EstadoError, match="publicado.*borrador"):
+        transition(_l("publicado", datetime.now(timezone.utc)), "borrador")

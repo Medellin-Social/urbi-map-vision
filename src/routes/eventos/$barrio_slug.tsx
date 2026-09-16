@@ -264,7 +264,7 @@ function EventosPage() {
               </a>
             </div>
           ) : (
-            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 16 }}>
+            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
               {regular.map(e => <EventCardMini key={e.id} evento={e} />)}
             </div>
           )

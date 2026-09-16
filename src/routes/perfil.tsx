@@ -32,7 +32,7 @@ import {
   type Risk,
   type UrbiUser,
 } from "@/lib/auth";
-import { useUpdateAuthPerfil } from "@/hooks/useAuth";
+import { useUpdateAuthPerfil, logout } from "@/hooks/useAuth";
 import { useTarget } from "@/contexts/TargetContext";
 import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
 import {
@@ -348,7 +348,7 @@ function CuentaTab({ user }: { user: UrbiUser }) {
         <button
           onClick={() => {
             if (confirm("¿Cerrar sesión?")) {
-              auth.clear();
+              logout();
               navigate({ to: "/login" });
             }
           }}

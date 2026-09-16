@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Community Affiliate — Easy Street</title>
+<style>
+  :root { --blue:#27273E; --green:#458C1E; --light:#F4F6F1; --grey:#666; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Segoe UI', Arial, sans-serif; color:#222; line-height:1.6; }
+  html[lang="en"] .t-es { display:none; }
+  html[lang="es"] .t-en { display:none; }
+  .wrap { max-width:1080px; margin:0 auto; padding:0 24px; }
+  nav { background:var(--blue); color:#fff; padding:14px 0; position:sticky; top:0; z-index:10; }
+  nav .wrap { display:flex; justify-content:space-between; align-items:center; }
+  .brand { font-size:1.3rem; font-weight:800; }
+  .brand span { color:#9BD77A; }
+  #langToggle { background:var(--green); color:#fff; border:none; padding:8px 18px; border-radius:20px; font-weight:700; cursor:pointer; font-size:.9rem; }
+  header { background:linear-gradient(135deg, var(--blue) 0%, #3A3A5C 100%); color:#fff; padding:84px 0 72px; text-align:center; }
+  header h1 { font-size:2.6rem; line-height:1.2; margin-bottom:18px; }
+  header h1 em { color:#9BD77A; font-style:normal; }
+  header p.lead { font-size:1.25rem; max-width:760px; margin:0 auto 30px; color:#E8E8F0; }
+  .cta { display:inline-block; background:var(--green); color:#fff; text-decoration:none; font-weight:800; padding:16px 42px; border-radius:30px; font-size:1.1rem; }
+  .badge { display:inline-block; background:rgba(155,215,122,.18); border:1px solid #9BD77A; color:#9BD77A; padding:6px 16px; border-radius:18px; font-size:.85rem; font-weight:700; margin-bottom:22px; letter-spacing:.05em; }
+  section { padding:64px 0; }
+  section.alt { background:var(--light); }
+  h2 { color:var(--blue); font-size:2rem; text-align:center; margin-bottom:14px; }
+  .sub { text-align:center; color:var(--grey); max-width:720px; margin:0 auto 44px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(240px,1fr)); gap:22px; }
+  .card { background:#fff; border:1px solid #E2E6DC; border-radius:12px; padding:26px; box-shadow:0 2px 8px rgba(39,39,62,.06); }
+  .card h3 { color:var(--green); font-size:1.1rem; margin-bottom:10px; }
+  .card ul { padding-left:18px; color:#444; font-size:.95rem; }
+  .card li { margin-bottom:6px; }
+  table { width:100%; border-collapse:collapse; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 10px rgba(39,39,62,.08); }
+  th { background:var(--blue); color:#fff; padding:14px 16px; text-align:left; font-size:.95rem; }
+  td { padding:13px 16px; border-bottom:1px solid #EEE; font-size:.97rem; }
+  tr:last-child td { border-bottom:none; }
+  tr.hl td { background:#EAF4E2; font-weight:800; color:var(--blue); }
+  .note { font-size:.82rem; color:#888; margin-top:14px; text-align:center; }
+  .steps { counter-reset:step; max-width:740px; margin:0 auto; }
+  .step { display:flex; gap:18px; margin-bottom:26px; align-items:flex-start; }
+  .step .n { background:var(--green); color:#fff; min-width:42px; height:42px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:800; font-size:1.1rem; }
+  .step h3 { color:var(--blue); margin-bottom:4px; font-size:1.05rem; }
+  form { max-width:640px; margin:0 auto; background:#fff; padding:34px; border-radius:14px; box-shadow:0 4px 16px rgba(39,39,62,.1); }
+  form label { font-weight:700; color:var(--blue); display:block; margin:14px 0 6px; font-size:.92rem; }
+  form input, form select, form textarea { width:100%; padding:12px; border:1px solid #CCD3C4; border-radius:8px; font-size:1rem; font-family:inherit; }
+  form button { margin-top:24px; width:100%; background:var(--green); color:#fff; border:none; padding:16px; border-radius:30px; font-size:1.1rem; font-weight:800; cursor:pointer; }
+  footer { background:var(--blue); color:#B9B9CC; text-align:center; padding:28px 0; font-size:.85rem; }
+  .two-col { display:grid; grid-template-columns:1fr 1fr; gap:30px; align-items:start; }
+  @media (max-width:760px){ .two-col{grid-template-columns:1fr;} header h1{font-size:2rem;} }
+</style>
+</head>
+<body>
+<nav>
+  <div class="wrap">
+    <div class="brand">Easy <span>Street</span></div>
+    <button id="langToggle"><span class="t-en">Español</span><span class="t-es">English</span></button>
+  </div>
+</nav>
+
+<header>
+  <div class="wrap">
+    <div class="badge"><span class="t-en">COMMISSION ROLE · SELL WHAT YOUR NETWORK ALREADY NEEDS</span><span class="t-es">ROL POR COMISIÓN · VENDE LO QUE TU RED YA NECESITA</span></div>
+    <h1>
+      <span class="t-en">Turn Your Network Into <em>Recurring Income</em></span>
+      <span class="t-es">Convierte Tu Red en <em>Ingresos Recurrentes</em></span>
+    </h1>
+    <p class="lead">
+      <span class="t-en">The Community Affiliate is an independent sales partner who introduces local businesses to Easy Street. You bring the relationships; we build, deliver, and support everything else. You earn on every account — the first month and every month after.</span>
+      <span class="t-es">El Afiliado Comunitario es un socio de ventas independiente que presenta negocios locales a Easy Street. Tú aportas las relaciones; nosotros construimos, entregamos y damos soporte a todo lo demás. Ganas en cada cuenta — el primer mes y todos los meses siguientes.</span>
+    </p>
+    <a class="cta" href="#apply"><span class="t-en">Become an Affiliate</span><span class="t-es">Hazte Afiliado</span></a>
+  </div>
+</header>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">What You'll Do</span><span class="t-es">Qué Harás</span></h2>
+    <p class="sub"><span class="t-en">A turnkey sales partnership. You focus on conversations and introductions — the central team handles onboarding, fulfillment, and support.</span><span class="t-es">Una alianza de ventas llave en mano. Tú te enfocas en las conversaciones y presentaciones — el equipo central se encarga de la incorporación, el cumplimiento y el soporte.</span></p>
+    <div class="grid">
+      <div class="card">
+        <h3><span class="t-en">Sell Into Your Network</span><span class="t-es">Vende a Tu Red</span></h3>
+        <ul>
+          <li><span class="t-en">Introduce local businesses you already know to Easy Street</span><span class="t-es">Presenta a Easy Street los negocios locales que ya conoces</span></li>
+          <li><span class="t-en">Sign Featured Listings, Special Offers, Hotspots & Real Estate Category Experts</span><span class="t-es">Inscribe Listados Destacados, Ofertas Especiales, Hotspots y Expertos de Categoría Inmobiliaria</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">Use the Turnkey Toolkit</span><span class="t-es">Usa el Kit Llave en Mano</span></h3>
+        <ul>
+          <li><span class="t-en">Ready-made decks, demos, and sales assets</span><span class="t-es">Presentaciones, demos y materiales de venta listos para usar</span></li>
+          <li><span class="t-en">EASE AI tooling tracks your pipeline and commissions</span><span class="t-es">Las herramientas de EASE AI rastrean tu cartera y comisiones</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">We Handle Delivery</span><span class="t-es">Nosotros Entregamos</span></h3>
+        <ul>
+          <li><span class="t-en">The central team builds and runs every account</span><span class="t-es">El equipo central construye y opera cada cuenta</span></li>
+          <li><span class="t-en">No fulfillment, no support tickets, no overhead on you</span><span class="t-es">Sin cumplimiento, sin tickets de soporte, sin carga para ti</span></li>
+        </ul>
+      </div>
+      <div class="card">
+        <h3><span class="t-en">Keep the Relationship Warm</span><span class="t-es">Mantén la Relación Activa</span></h3>
+        <ul>
+          <li><span class="t-en">Light check-ins that drive renewals and referrals</span><span class="t-es">Seguimientos ligeros que impulsan renovaciones y referidos</span></li>
+          <li><span class="t-en">Every renewal keeps paying you, month after month</span><span class="t-es">Cada renovación te sigue pagando, mes tras mes</span></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="alt" id="earnings">
+  <div class="wrap">
+    <h2><span class="t-en">Your Earning Power</span><span class="t-es">Tu Potencial de Ingresos</span></h2>
+    <p class="sub">
+      <span class="t-en">Simple, uniform commission across every product: 50% of the first month's payment plus 10% recurring for as long as the account stays active. Illustration below: 12 new featured business listings per month at $500/mo.</span>
+      <span class="t-es">Comisión simple y uniforme en todos los productos: 50% del pago del primer mes más 10% recurrente mientras la cuenta siga activa. Ilustración abajo: 12 nuevos listados destacados por mes a $500/mes.</span>
+    </p>
+    <div class="two-col">
+      <table>
+        <tr><th><span class="t-en">Milestone</span><span class="t-es">Hito</span></th><th><span class="t-en">Monthly Income</span><span class="t-es">Ingreso Mensual</span></th></tr>
+        <tr><td><span class="t-en">Month 1</span><span class="t-es">Mes 1</span></td><td>$3,000</td></tr>
+        <tr><td><span class="t-en">Month 6</span><span class="t-es">Mes 6</span></td><td>$6,000</td></tr>
+        <tr><td><span class="t-en">Month 12</span><span class="t-es">Mes 12</span></td><td>$9,600</td></tr>
+        <tr class="hl"><td><span class="t-en">Year 1 Total</span><span class="t-es">Total Año 1</span></td><td>$75,600+</td></tr>
+      </table>
+      <div class="card">
+        <h3><span class="t-en">How the math works</span><span class="t-es">Cómo funciona la matemática</span></h3>
+        <ul>
+          <li><span class="t-en">12 sign-ups × $250 first-month commission = $3,000/mo in new-business commissions</span><span class="t-es">12 inscripciones × $250 de comisión del primer mes = $3,000/mes en comisiones por nuevos negocios</span></li>
+          <li><span class="t-en">Each monthly cohort adds $600/mo in recurring income (12 × $50)</span><span class="t-es">Cada cohorte mensual agrega $600/mes de ingreso recurrente (12 × $50)</span></li>
+          <li><span class="t-en">Your recurring book compounds every month you keep selling</span><span class="t-es">Tu libro recurrente se acumula cada mes que sigues vendiendo</span></li>
+          <li><span class="t-en">Higher-tier products (Real Estate Category Experts at $4,000–$6,000/yr) pay even more per deal</span><span class="t-es">Los productos de mayor nivel (Expertos de Categoría Inmobiliaria a $4,000–$6,000/año) pagan aún más por trato</span></li>
+        </ul>
+      </div>
+    </div>
+    <p class="note"><span class="t-en">Illustrative projection assuming $500/mo Featured accounts and full retention. Individual results vary with effort, network, and market.</span><span class="t-es">Proyección ilustrativa asumiendo cuentas Destacadas de $500/mes y retención total. Los resultados individuales varían según el esfuerzo, la red y el mercado.</span></p>
+  </div>
+</section>
+
+<section>
+  <div class="wrap">
+    <h2><span class="t-en">Why Affiliates Love It</span><span class="t-es">Por Qué Les Encanta a los Afiliados</span></h2>
+    <p class="sub"><span class="t-en">Built for connectors, consultants, and salespeople who already have trust in the local business community and want income that keeps paying.</span><span class="t-es">Diseñado para conectores, consultores y vendedores que ya tienen la confianza de la comunidad de negocios local y quieren ingresos que sigan pagando.</span></p>
+    <div class="grid">
+      <div class="card"><h3><span class="t-en">Recurring, Not One-Off</span><span class="t-es">Recurrente, No Puntual</span></h3><p><span class="t-en">Unlike a one-time finder's fee, your 10% recurring book keeps paying every month the account renews.</span><span class="t-es">A diferencia de una comisión única, tu libro recurrente del 10% sigue pagando cada mes que la cuenta se renueva.</span></p></div>
+      <div class="card"><h3><span class="t-en">Zero Fulfillment</span><span class="t-es">Cero Cumplimiento</span></h3><p><span class="t-en">You never build a website or run a campaign. You sell; the central team delivers and supports the client.</span><span class="t-es">Nunca construyes un sitio web ni gestionas una campaña. Tú vendes; el equipo central entrega y da soporte al cliente.</span></p></div>
+      <div class="card"><h3><span class="t-en">A Product You Believe In</span><span class="t-es">Un Producto en el Que Crees</span></h3><p><span class="t-en">You're connecting local businesses to real local visibility and community — an easy yes to recommend.</span><span class="t-es">Estás conectando negocios locales con visibilidad y comunidad reales — un sí fácil de recomendar.</span></p></div>
+    </div>
+  </div>
+</section>
+
+<section class="alt">
+  <div class="wrap">
+    <h2><span class="t-en">How It Works</span><span class="t-es">Cómo Funciona</span></h2>
+    <div class="steps">
+      <div class="step"><div class="n">1</div><div><h3><span class="t-en">Apply</span><span class="t-es">Aplica</span></h3><p><span class="t-en">Tell us about your network and the businesses you know.</span><span class="t-es">Cuéntanos sobre tu red y los negocios que conoces.</span></p></div></div>
+      <div class="step"><div class="n">2</div><div><h3><span class="t-en">Get Equipped</span><span class="t-es">Equípate</span></h3><p><span class="t-en">Get your sales toolkit, product training, and your tracking link.</span><span class="t-es">Recibe tu kit de ventas, capacitación de producto y tu enlace de seguimiento.</span></p></div></div>
+      <div class="step"><div class="n">3</div><div><h3><span class="t-en">Introduce & Sign</span><span class="t-es">Presenta e Inscribe</span></h3><p><span class="t-en">Connect businesses to Easy Street; we close, build, and onboard.</span><span class="t-es">Conecta negocios con Easy Street; nosotros cerramos, construimos e incorporamos.</span></p></div></div>
+      <div class="step"><div class="n">4</div><div><h3><span class="t-en">Earn & Compound</span><span class="t-es">Gana y Acumula</span></h3><p><span class="t-en">Collect your first-month and recurring commissions, month after month.</span><span class="t-es">Cobra tus comisiones del primer mes y recurrentes, mes tras mes.</span></p></div></div>
+    </div>
+  </div>
+</section>
+
+<section id="apply">
+  <div class="wrap">
+    <h2><span class="t-en">Apply to Become an Affiliate</span><span class="t-es">Aplica para Ser Afiliado</span></h2>
+    <p class="sub"><span class="t-en">Independent, commission-only, and unlimited. Sell where you already have relationships.</span><span class="t-es">Independiente, solo por comisión e ilimitado. Vende donde ya tienes relaciones.</span></p>
+    <form>
+      <label><span class="t-en">Full Name</span><span class="t-es">Nombre Completo</span></label>
+      <input type="text" data-en="Your name" data-es="Tu nombre" placeholder="Your name" required>
+      <label><span class="t-en">Email</span><span class="t-es">Correo Electrónico</span></label>
+      <input type="email" data-en="you@email.com" data-es="tu@correo.com" placeholder="you@email.com" required>
+      <label><span class="t-en">Phone</span><span class="t-es">Teléfono</span></label>
+      <input type="tel" data-en="Phone number" data-es="Número de teléfono" placeholder="Phone number">
+      <label><span class="t-en">City / Region you sell in</span><span class="t-es">Ciudad / Región donde vendes</span></label>
+      <input type="text" data-en="Where is your network?" data-es="¿Dónde está tu red?" placeholder="Where is your network?" required>
+      <label><span class="t-en">Tell us about your network &amp; sales background</span><span class="t-es">Cuéntanos sobre tu red y experiencia en ventas</span></label>
+      <textarea rows="4" data-en="Who do you know, and what have you sold before?" data-es="¿A quién conoces y qué has vendido antes?" placeholder="Who do you know, and what have you sold before?"></textarea>
+      <button type="submit"><span class="t-en">Submit Application</span><span class="t-es">Enviar Aplicación</span></button>
+    </form>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <p>© 2026 EASE Association · Easy Street (US) · Medellín Social (Colombia)</p>
+  </div>
+</footer>
+
+<script>
+(function(){
+  var pref = localStorage.getItem('es-lang-pref') || 'en';
+  setLang(pref);
+  document.getElementById('langToggle').addEventListener('click', function(){
+    setLang(document.documentElement.lang === 'en' ? 'es' : 'en');
+  });
+  function setLang(l){
+    document.documentElement.lang = l;
+    localStorage.setItem('es-lang-pref', l);
+    document.querySelectorAll('[data-en]').forEach(function(el){
+      el.placeholder = el.getAttribute('data-' + l);
+    });
+  }
+})();
+</script>
+</body>
+</html>

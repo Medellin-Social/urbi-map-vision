@@ -45,6 +45,7 @@ import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
+import { Route as AgentesRegistroRouteImport } from './routes/agentes.registro'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -227,11 +228,16 @@ const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
   path: '/eventos/$barrio_slug',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
+  id: '/registro',
+  path: '/registro',
+  getParentRoute: () => AgentesRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRoute
+  '/agentes': typeof AgentesRouteWithChildren
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -255,6 +261,7 @@ export interface FileRoutesByFullPath {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -269,7 +276,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRoute
+  '/agentes': typeof AgentesRouteWithChildren
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -293,6 +300,7 @@ export interface FileRoutesByTo {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -308,7 +316,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRoute
+  '/agentes': typeof AgentesRouteWithChildren
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -332,6 +340,7 @@ export interface FileRoutesById {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -372,6 +381,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -410,6 +420,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -448,6 +459,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -463,7 +475,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfiliadoRoute: typeof AfiliadoRoute
-  AgentesRoute: typeof AgentesRoute
+  AgentesRoute: typeof AgentesRouteWithChildren
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
   ComunidadRoute: typeof ComunidadRoute
@@ -753,13 +765,31 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosBarrio_slugRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agentes/registro': {
+      id: '/agentes/registro'
+      path: '/registro'
+      fullPath: '/agentes/registro'
+      preLoaderRoute: typeof AgentesRegistroRouteImport
+      parentRoute: typeof AgentesRoute
+    }
   }
 }
+
+interface AgentesRouteChildren {
+  AgentesRegistroRoute: typeof AgentesRegistroRoute
+}
+
+const AgentesRouteChildren: AgentesRouteChildren = {
+  AgentesRegistroRoute: AgentesRegistroRoute,
+}
+
+const AgentesRouteWithChildren =
+  AgentesRoute._addFileChildren(AgentesRouteChildren)
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfiliadoRoute: AfiliadoRoute,
-  AgentesRoute: AgentesRoute,
+  AgentesRoute: AgentesRouteWithChildren,
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
   ComunidadRoute: ComunidadRoute,

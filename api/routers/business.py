@@ -1,12 +1,15 @@
-from __future__ import annotations
-
+import logging
 from typing import Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, EmailStr
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
+from pydantic import BaseModel, EmailStr, field_validator
 
 from api.db import get_pool
+from api.dependencies import get_current_user
+from api.limiter import limiter
+from api.utils.urls import require_safe_url
 
+logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
@@ -36,8 +39,9 @@ async def get_planes(pool=Depends(get_pool)):
             "SELECT id, nombre, tipo, precio_usd, precio_cop, descripcion, features "
             "FROM public.planes_negocio WHERE activo = TRUE ORDER BY precio_usd ASC"
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return [
         PlanOut(
             id=r["id"], nombre=r["nombre"], tipo=r["tipo"],
@@ -68,7 +72,8 @@ class AplicarOut(BaseModel):
 
 
 @router.post("/aplicar", response_model=AplicarOut)
-async def aplicar_negocio(body: AplicarIn, pool=Depends(get_pool)):
+@limiter.limit("5/minute")
+async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=Depends(get_pool)):
     try:
         row = await pool.fetchrow(
             """
@@ -80,8 +85,9 @@ async def aplicar_negocio(body: AplicarIn, pool=Depends(get_pool)):
             body.nombre_negocio, body.email, body.telefono,
             body.categoria, body.barrio_id, body.plan_tipo, body.mensaje,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     return AplicarOut(
         ok=True,
         lead_id=row["id"],
@@ -154,8 +160,9 @@ async def get_deals(
 ):
     try:
         rows = await pool.fetch(_DEALS_QUERY, ciudad_id, barrio_id, municipio)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     deals = [
         DealOut(
             id=r["id"], tipo_deal=r["tipo_deal"], descripcion=r["descripcion"],
@@ -241,8 +248,9 @@ async def get_directorio(
 ):
     try:
         rows = await pool.fetch(_DIRECTORIO_QUERY, ciudad_id, barrio_id, _DIRECTORIO_CATEGORIAS, municipio)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=str(exc))
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
     negocios = [
         DirectorioOut(
             id=r["id"], nombre=r["nombre"], categoria=r["categoria"],
@@ -254,3 +262,55 @@ async def get_directorio(
         for r in rows
     ]
     return DirectorioResponse(ciudad_id=ciudad_id, total=len(negocios), negocios=negocios)
+
+
+# ── POST /mi-negocio — publicación de usuario, queda pendiente de aprobación ───
+
+class MiNegocioIn(BaseModel):
+    nombre: str
+    categoria: str
+    barrio_id: Optional[int] = None
+    descripcion: Optional[str] = None
+    direccion: Optional[str] = None
+    telefono: Optional[str] = None
+    whatsapp: Optional[str] = None
+    instagram: Optional[str] = None
+    website: Optional[str] = None
+    foto_url: Optional[str] = None
+
+    _validar_website = field_validator("website")(require_safe_url)
+    _validar_foto_url = field_validator("foto_url")(require_safe_url)
+
+
+class MiNegocioOut(BaseModel):
+    id: int
+    estado: str
+
+
+@router.post("/mi-negocio", response_model=MiNegocioOut, status_code=201)
+async def submit_negocio(
+    body: MiNegocioIn = Body(...),
+    current_user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Negocio subido por su dueño. Queda con activo=FALSE hasta que admin lo
+    apruebe (admin.py POST /admin/tiendas/{id}/aprobar) — el directorio público
+    y todas las queries de comunidad.py ya filtran activo=TRUE."""
+    try:
+        row = await pool.fetchrow(
+            """
+            INSERT INTO public.tiendas
+                (nombre, categoria, barrio_id, descripcion, direccion,
+                 telefono, whatsapp, instagram, website, foto_url,
+                 subido_por, activo, verificado)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, FALSE, FALSE)
+            RETURNING id
+            """,
+            body.nombre, body.categoria, body.barrio_id, body.descripcion, body.direccion,
+            body.telefono, body.whatsapp, body.instagram, body.website, body.foto_url,
+            current_user["id"],
+        )
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+    return MiNegocioOut(id=row["id"], estado="pendiente")

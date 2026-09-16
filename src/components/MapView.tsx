@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import mapboxgl, { Map as MapboxMap } from "mapbox-gl";
+import { pointOnFeature } from "@turf/turf";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { auth, MAP_STYLES } from "@/lib/auth";
@@ -70,9 +71,13 @@ type Props = {
   onListingDoubleClickFromMap?: (id: number) => void;
   activeBarrioName?: string | null;
   activeTab?: MapTab;
-  onBarrioClick?: (id: number, nombre: string, lat: number, lng: number, cdComuna: number | null) => void;
+  onBarrioClick?: (id: number, nombre: string, lat: number, lng: number, cdComuna: number | null, municipio: string | null) => void;
   flyToBarriosRef?: React.MutableRefObject<(() => void) | null>;
   cooperativeGestures?: boolean;
+  // Pixels of UI (overlay bar/card) covering the bottom of the map container.
+  // fitBounds/flyTo reserve this much extra bottom padding so the zoned
+  // comuna/barrio still lands visually centered in what's actually visible.
+  bottomInset?: number;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
@@ -248,6 +253,7 @@ export function MapView({
   onBarrioClick,
   flyToBarriosRef,
   cooperativeGestures = false,
+  bottomInset = 0,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -276,6 +282,9 @@ export function MapView({
   // Nivel de vista actual — ref para acceso dentro de closures de Mapbox
   const viewLevelRef = useRef<"comunas" | "barrios">("comunas");
   const activeComunaRef = useRef<{ cd: number; nombre: string; municipioFilter?: string | null } | null>(null);
+  const selectedComunaIdRef = useRef<number | null>(null);  // comuna con contorno resaltado (nivel barrio)
+  const lastComunaBoundsRef = useRef<mapboxgl.LngLatBounds | null>(null);  // última comuna clickeada — flyToBarrios entra ahí, no al centro fijo de la ciudad
+  const enteringBarriosRef = useRef(false);  // true mientras el fitBounds propio de entrar a nivel barrio está animando — evita que su propio zoomend dispare el auto-revert
 
   // Refs estables para callbacks (evita stale closures)
   const onViewLevelChangeRef = useRef(onViewLevelChange);
@@ -298,6 +307,8 @@ export function MapView({
   useEffect(() => { onAutoSelectComunaRef.current = onAutoSelectComuna; }, [onAutoSelectComuna]);
   const onBarrioClickRef = useRef(onBarrioClick);
   useEffect(() => { onBarrioClickRef.current = onBarrioClick; }, [onBarrioClick]);
+  const bottomInsetRef = useRef(bottomInset);
+  useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
 
 
   const riskRef = useRef(risk);
@@ -334,9 +345,19 @@ export function MapView({
     map.setLayoutProperty("comunas-fill",  "visibility", "visible");
     map.setLayoutProperty("comunas-line",  "visibility", "visible");
     map.setLayoutProperty("comunas-label", "visibility", "visible");
+    // Idempotente: oculta también los polígonos de barrio, sin importar quién
+    // llame esto (toggle de mapView, botón volver, o el auto-revert por zoom-out).
+    for (const id of ["barrios-mls-fill", "barrios-mls-line", "barrios-mls-label"]) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
+    }
     map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed: 0.9 });
     viewLevelRef.current = "comunas";
     activeComunaRef.current = null;
+    if (selectedComunaIdRef.current != null) {
+      map.setFeatureState({ source: "comunas", id: selectedComunaIdRef.current }, { selected: false });
+      selectedComunaIdRef.current = null;
+    }
+    lastComunaBoundsRef.current = null;
     onViewLevelChangeRef.current?.("comunas", null);
   }
 
@@ -353,7 +374,12 @@ export function MapView({
     // click would otherwise race the listings flatten-easeTo → off-center.
     flattenSkipRef.current = true;   // this fitBounds already flattens — don't let the toggle race it
     map.setTerrain(null);
-    map.fitBounds(bounds, { padding: 40, maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, duration: 450 });
+    enteringBarriosRef.current = true;
+    setTimeout(() => { enteringBarriosRef.current = false; }, 600);
+    map.fitBounds(bounds, {
+      padding: { top: 40, bottom: 40 + bottomInsetRef.current, left: 40, right: 40 },
+      maxZoom: POLYGON_TIER_ZOOM - 1, pitch: 0, bearing: 0, duration: 450,
+    });
     viewLevelRef.current = "barrios";
     activeComunaRef.current = { cd, nombre, municipioFilter };
     onViewLevelChangeRef.current?.("barrios", nombre, municipioFilter ?? null, municipioFilter ? null : cd);
@@ -399,7 +425,19 @@ export function MapView({
       setVis("comunas-fill", "none");
       setVis("comunas-label", "none");
 
-      map.flyTo({ center: [-75.5812, 6.2442], zoom: POLYGON_TIER_ZOOM + 0.5, duration: 800 });
+      // Entra a la comuna ya clickeada (si hay una) — antes volaba siempre al
+      // centro fijo de la ciudad, ignorando cuál comuna se había elegido.
+      enteringBarriosRef.current = true;
+      setTimeout(() => { enteringBarriosRef.current = false; }, 950);
+      const bounds = lastComunaBoundsRef.current;
+      if (bounds) {
+        map.fitBounds(bounds, {
+          padding: { top: 40, bottom: 40 + bottomInsetRef.current, left: 40, right: 40 },
+          maxZoom: POLYGON_TIER_ZOOM - 1, duration: 800,
+        });
+      } else {
+        map.flyTo({ center: [-75.5812, 6.2442], zoom: POLYGON_TIER_ZOOM + 0.5, duration: 800 });
+      }
     };
   });
 
@@ -458,10 +496,10 @@ export function MapView({
               lid.includes("poi") ||
               lid.includes("airport") ||
               lid.includes("ferry") ||
-              lid.includes("neighborhood") ||
-              lid.includes("suburb") ||
-              lid.includes("district") ||
-              lid.includes("quarter");
+              // "settlement-major/minor/subdivision-label" (place_label source-layer)
+              // duplicate our own comuna/barrio name overlay — e.g. base map's
+              // "Bello" sits under our "BELLO" comuna label.
+              lid.includes("settlement");
             if (hide) map.setLayoutProperty(layer.id, "visibility", "none");
           }
           if (layer.type === "background") {
@@ -482,6 +520,13 @@ export function MapView({
 
       // ── CAPA 1: Comunas (vista inicial) ───────────────────────────────────
       map.addSource("comunas", { type: "geojson", data: EMPTY_FC });
+      // Fuente de puntos aparte para el label: un símbolo por polígono grande
+      // (como una comuna) se repite una vez por cada tile interno que genera
+      // el source GeoJSON al hacer zoom si el label lee del mismo source que
+      // el fill — de ahí el nombre duplicado al acercar. Un Point centrado
+      // (turf.pointOnFeature, cae dentro del polígono) vive en un solo tile
+      // siempre, sin importar el zoom.
+      map.addSource("comunas-labels", { type: "geojson", data: EMPTY_FC });
 
       map.addLayer({
         id: "comunas-fill",
@@ -502,26 +547,29 @@ export function MapView({
         type: "line",
         source: "comunas",
         paint: {
-          "line-color": "#002776",
-          "line-opacity": 0.6,
-          "line-width": 2,
+          "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#D85A30", "#002776"],
+          "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.95, 0.6],
+          "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.5, 2],
         },
       });
 
       map.addLayer({
         id: "comunas-label",
         type: "symbol",
-        source: "comunas",
+        source: "comunas-labels",
         layout: {
           "text-field": ["get", "nombre"],
-          "text-size": 13,
+          "text-size": isMobile ? 10 : 13,
           "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
           "text-letter-spacing": 0.08,
           "text-transform": "uppercase",
-          // Misma coordenada que el centroide de la burbuja de cluster (comuna) →
-          // sin offset el nombre tapaba el número. Sube el label sobre la burbuja.
-          "text-anchor": "bottom",
-          "text-offset": [0, -2.4],
+          // Sin offset por defecto (vista zonas/home): en municipios chicos y
+          // pegados (Sabaneta/Itagüí) un offset grande empuja el nombre fuera
+          // de su polígono y cae sobre el vecino. El toggle de mapView sube el
+          // offset solo en vista listings, donde hay que esquivar la burbuja
+          // con el número de conteo en la misma coordenada.
+          "text-anchor": "center",
+          "text-offset": [0, 0],
         },
         paint: {
           "text-color": "#1A1208",
@@ -574,6 +622,15 @@ export function MapView({
         // full source feature (by nombre) so we fit the WHOLE zone, not a fragment.
         const full = staticFeaturesRef.current?.find((sf) => (sf.properties?.nombre ?? "") === nombre);
         const bounds = featureBounds((full ?? f) as mapboxgl.MapboxGeoJSONFeature);
+        // Resalta el contorno de la comuna clickeada — usa f.id (no `cd`, que es
+        // undefined en municipios) para calzar con la key que usa el hover arriba.
+        const featureId = f.id as number;
+        if (selectedComunaIdRef.current != null && selectedComunaIdRef.current !== featureId) {
+          map.setFeatureState({ source: "comunas", id: selectedComunaIdRef.current }, { selected: false });
+        }
+        map.setFeatureState({ source: "comunas", id: featureId }, { selected: true });
+        selectedComunaIdRef.current = featureId;
+        lastComunaBoundsRef.current = bounds;
         switchToBarrios(map, cd, nombre, bounds, isMunicipio ? nombre : null);
       });
 
@@ -611,7 +668,7 @@ export function MapView({
         layout: {
           visibility: "none",
           "text-field": ["get", "nombre"],
-          "text-size": 11,
+          "text-size": isMobile ? 9 : 11,
           "text-font": ["DIN Pro Medium", "Arial Unicode MS Regular"],
           "text-transform": "uppercase",
           "text-letter-spacing": 0.05,
@@ -641,15 +698,19 @@ export function MapView({
       // Click en barrio → dirigir el mapa allí (la derivación por cámara lo selecciona).
       map.on("click", "barrios-mls-fill", (e) => {
         if (!e.features?.length) return;
-        map.fitBounds(featureBounds(e.features[0]), { padding: 60, maxZoom: 15, duration: 400 });
+        map.fitBounds(featureBounds(e.features[0]), {
+          padding: { top: 60, bottom: 60 + bottomInsetRef.current, left: 60, right: 60 },
+          maxZoom: 15, duration: 400,
+        });
         const feat = e.features[0];
         const barrioId = typeof feat.id === "number" ? feat.id : Number(feat.id);
         const nombre = (feat.properties?.nombre as string | null) ?? "";
         const cdComunaRaw = feat.properties?.cd_comuna;
         const cdComuna = cdComunaRaw != null ? Number(cdComunaRaw) : null;
+        const municipio = activeComunaRef.current?.municipioFilter ?? null;
         if (!isNaN(barrioId) && nombre) {
           const [lat, lng] = featureCentroid(feat);
-          onBarrioClickRef.current?.(barrioId, nombre, lat, lng, cdComuna);
+          onBarrioClickRef.current?.(barrioId, nombre, lat, lng, cdComuna, municipio);
         }
       });
 
@@ -853,6 +914,7 @@ export function MapView({
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current) return;
     const source = map.getSource("comunas") as mapboxgl.GeoJSONSource | undefined;
+    const labelSource = map.getSource("comunas-labels") as mapboxgl.GeoJSONSource | undefined;
     if (!source) return;
 
     const enrichAndRender = (features: GeoJSON.Feature[]) => {
@@ -868,6 +930,15 @@ export function MapView({
         };
       });
       source.setData({ type: "FeatureCollection", features: enriched } as GeoJSON.FeatureCollection);
+      if (labelSource) {
+        const labelPoints = features.map((feat) => ({
+          type: "Feature" as const,
+          id: (feat.properties?.cd_comuna as number | null) ?? feat.id,
+          geometry: pointOnFeature(feat as GeoJSON.Feature<GeoJSON.Polygon | GeoJSON.MultiPolygon>).geometry,
+          properties: { nombre: (feat.properties?.nombre as string) ?? "" },
+        }));
+        labelSource.setData({ type: "FeatureCollection", features: labelPoints } as GeoJSON.FeatureCollection);
+      }
     };
 
     if (staticFeaturesRef.current) {
@@ -907,6 +978,12 @@ export function MapView({
       for (const id of mlsLayers) {
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "visible");
       }
+      // Vista listings muestra la burbuja de conteo en la misma coordenada del
+      // polígono → sube el nombre sobre la burbuja para que no se tapen.
+      if (map.getLayer("comunas-label")) {
+        map.setLayoutProperty("comunas-label", "text-anchor", "bottom");
+        map.setLayoutProperty("comunas-label", "text-offset", [0, -2.4]);
+      }
       map.setTerrain(null);
       // Skip the flatten easeTo when a zone fitBounds is already driving the camera
       // (it would interrupt the fit mid-flight → zone ends off-center).
@@ -919,6 +996,10 @@ export function MapView({
         if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
       }
       (map.getSource("listings-mls") as mapboxgl.GeoJSONSource)?.setData(EMPTY_FC);
+      if (map.getLayer("comunas-label")) {
+        map.setLayoutProperty("comunas-label", "text-anchor", "center");
+        map.setLayoutProperty("comunas-label", "text-offset", [0, 0]);
+      }
       // restore comuna line (tier may have made it tenue)
       if (map.getLayer("comunas-line")) {
         map.setPaintProperty("comunas-line", "line-width", 2);
@@ -931,6 +1012,28 @@ export function MapView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView]);
+
+  // ── Vista 1 (zonas): zoom-out en nivel barrio vuelve a comunas ──────────────
+  // El toggle de arriba solo corre al cambiar `mapView` (una vez, en Home nunca
+  // cambia) — sin esto, una vez entrado a barrios (flyToBarriosRef o el click
+  // directo en una comuna) no había manera de volver: el zoom-out no hacía nada.
+  const RETURN_TO_COMUNAS_ZOOM = 11.8;
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !mapLoadedRef.current || mapView !== "zonas") return;
+    const onZoomEnd = () => {
+      if (
+        viewLevelRef.current === "barrios" &&
+        !enteringBarriosRef.current &&
+        map.getZoom() < RETURN_TO_COMUNAS_ZOOM
+      ) {
+        switchToComunas(map);
+      }
+    };
+    map.on("zoomend", onZoomEnd);
+    return () => { map.off("zoomend", onZoomEnd); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mapView, mapLoaded]);
 
   // ── Vista 2: actualizar datos GeoJSON cuando llegan listings ────────────────
   useEffect(() => {

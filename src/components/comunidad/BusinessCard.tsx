@@ -1,6 +1,7 @@
 export type { TiendaData } from '@/hooks/useTiendas'
 import type { TiendaData } from '@/hooks/useTiendas'
 import { CATEGORIA_LABELS, CATEGORIA_COLORS, CATEGORIA_EMOJI } from '@/lib/categorias_comunidad'
+import { safeHref } from '@/lib/utils'
 
 const K = {
   ink: '#14201d',
@@ -51,8 +52,9 @@ function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: bool
     : tienda.lat && tienda.lon
       ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(tienda.nombre + ' ' + (tienda.barrio_nombre ?? 'Medellín'))}`
       : null
+  const webHref = safeHref(tienda.website)
 
-  if (!wa && !mapsUrl && !tienda.website) return null
+  if (!wa && !mapsUrl && !webHref) return null
 
   return (
     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginTop: 8 }}>
@@ -68,8 +70,8 @@ function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: bool
           📍 Maps
         </a>
       )}
-      {tienda.website && (
-        <a href={tienda.website} target="_blank" rel="noopener noreferrer"
+      {webHref && (
+        <a href={webHref} target="_blank" rel="noopener noreferrer"
           style={{ ...btnBase, background: K.coralLight, color: K.coral }}>
           🌐 Web
         </a>
@@ -213,8 +215,8 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
               📍
             </a>
           )}
-          {!primaryBtn && !secondaryBtn && tienda.website && (
-            <a href={tienda.website} target="_blank" rel="noopener noreferrer" style={{
+          {!primaryBtn && !secondaryBtn && safeHref(tienda.website) && (
+            <a href={safeHref(tienda.website)} target="_blank" rel="noopener noreferrer" style={{
               flex: 1, textAlign: 'center', padding: '7px 0',
               background: '#f5f0e8', border: '1px solid #e9e4d8',
               borderRadius: 7, fontSize: 11, color: '#14201d',

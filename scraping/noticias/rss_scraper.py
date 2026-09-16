@@ -94,6 +94,26 @@ PALABRAS_NEGATIVAS = [
     "carestía", "escasez", "desabastecimiento",
     # Seguridad vial
     "volcamiento", "atropellado",
+    # Desapariciones (raíz cubre desapareció/desaparecer/desaparecido/desaparecieron)
+    "desaparec",
+    # Guerra y conflicto armado
+    "guerra", "guerras", "bélico", "invasión",
+    # Minería
+    "minería", "mineria", "minero", "minera",
+    # Feminicidio y violencia de género
+    "feminicidio", "feminicidios", "feminicida",
+    "femicidio", "femicidios",
+    "violencia de género", "violencia intrafamiliar",
+    "violencia doméstica", "violencia machista",
+    "violador", "violadores", "abuso sexual",
+    "abusador", "abusadores",
+    # Rescates y operativos
+    "rescate", "rescates", "rescatado", "rescatada",
+    "rescatados", "rescatadas", "rescataron", "rescatar",
+    "salvó", "salvaron", "salvamento", "salvar",
+    "operativo", "operativos", "allanamiento",
+    "redada", "evacuación", "evacuados", "evacuadas",
+    "socorro", "auxilio",
 ]
 
 KEYWORDS_POSITIVOS = [

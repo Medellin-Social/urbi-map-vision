@@ -1,11 +1,16 @@
 """GHL webhook receiver — skeleton only, esperando contrato de Talal.
 
-Dirección confirmada 2026-08-27 por entidad (no las 4 son bidireccionales):
-  - listing, deal: bidireccional -> este router los recibe, ghl_client.py
-    los envía.
-  - tienda, evento: SOLO salida (nosotros -> GHL) -> sin handler acá a
-    propósito; si GHL manda uno de estos igual, es contrato incumplido, no
-    un tipo faltante por implementar.
+Dirección por entidad:
+  - listing, deal: bidireccional (confirmado 2026-08-27) -> este router los
+    recibe, ghl_client.py los envía.
+  - evento: bidireccional (decisión 2026-08-28, reemplaza el "solo salida"
+    de 2026-08-27) -> el admin panel de eventos pasa a vivir en GHL, que va
+    a empujar hacia nuestra API. Handler todavía sin implementar acá abajo
+    — bloqueado por el mismo motivo que listing/deal: falta el contrato real
+    de Talal (firma del webhook, payload de ejemplo, nombres de campo).
+  - tienda: SOLO salida (nosotros -> GHL) -> sin handler acá a propósito;
+    si GHL manda uno de estos igual, es contrato incumplido, no un tipo
+    faltante por implementar.
 
 Todo lo que depende del contrato real (firma del webhook, nombres de campo
 del payload) está sin implementar a propósito — mejor un 501 explícito que
@@ -40,7 +45,7 @@ from api.utils import ghl_client
 
 router = APIRouter()
 
-_OUTBOUND_ONLY = {"tienda", "evento"}
+_OUTBOUND_ONLY = {"tienda"}
 
 
 async def _upsert_listing_from_ghl(payload: dict) -> None:
@@ -55,9 +60,18 @@ async def _upsert_deal_from_ghl(payload: dict) -> None:
     raise NotImplementedError("ghl_webhook: falta contrato de payload para deal")
 
 
+async def _upsert_evento_from_ghl(payload: dict) -> None:
+    """Target: public.eventos. Admin de eventos pasa a vivir en GHL (decisión
+    2026-08-28) — falta el contrato real: nombres de campo del lado GHL para
+    titulo/fecha_inicio/categoria/destacado_nivel/destacado_zona_codigo, y si
+    GHL identifica el evento por id interno o por su propio object id."""
+    raise NotImplementedError("ghl_webhook: falta contrato de payload para evento")
+
+
 _HANDLERS = {
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
+    "evento": _upsert_evento_from_ghl,
 }
 
 
