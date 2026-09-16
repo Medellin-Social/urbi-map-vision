@@ -181,3 +181,16 @@ async def health():
     except RuntimeError:
         db_ok = False
     return {"status": "ok", "version": "1.0.0", "db": db_ok}
+
+
+# TEMP diagnostic for rate-limit key_func fix — remove after confirming XFF
+# behavior behind Railway's edge. No side effects, read-only.
+@app.get("/_debug/whoami", include_in_schema=False)
+async def _debug_whoami(request: Request):
+    return {
+        "client_host": request.client.host if request.client else None,
+        "client_port": request.client.port if request.client else None,
+        "x_forwarded_for": request.headers.get("x-forwarded-for"),
+        "x_real_ip": request.headers.get("x-real-ip"),
+        "headers": dict(request.headers),
+    }
