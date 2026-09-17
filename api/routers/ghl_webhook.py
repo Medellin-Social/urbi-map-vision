@@ -3,14 +3,15 @@
 Dirección por entidad:
   - listing, deal: bidireccional (confirmado 2026-08-27) -> este router los
     recibe, ghl_client.py los envía.
-  - evento: bidireccional (decisión 2026-08-28, reemplaza el "solo salida"
-    de 2026-08-27) -> el admin panel de eventos pasa a vivir en GHL, que va
-    a empujar hacia nuestra API. Handler todavía sin implementar acá abajo
-    — bloqueado por el mismo motivo que listing/deal: falta el contrato real
-    de Talal (firma del webhook, payload de ejemplo, nombres de campo).
-  - tienda: SOLO salida (nosotros -> GHL) -> sin handler acá a propósito;
-    si GHL manda uno de estos igual, es contrato incumplido, no un tipo
-    faltante por implementar.
+  - evento, tienda: bidireccional (decisión 2026-08-28, reemplaza el "solo
+    salida" de 2026-08-27 para tienda) -> la administración de eventos y
+    negocios locales (destacados por alcance barrio/comuna/ciudad, migración
+    0079) pasa a vivir en GHL, que va a empujar hacia nuestra API. Handlers
+    todavía sin implementar acá abajo — bloqueado por el mismo motivo que
+    listing/deal: falta el contrato real de Talal (firma del webhook, payload
+    de ejemplo, nombres de campo). tienda ya tiene el push saliente
+    implementado y funcionando (push_tienda_to_ghl) — lo que falta acá es
+    solo la dirección de entrada.
 
 Todo lo que depende del contrato real (firma del webhook, nombres de campo
 del payload) está sin implementar a propósito — mejor un 501 explícito que
@@ -45,8 +46,6 @@ from api.utils import ghl_client
 
 router = APIRouter()
 
-_OUTBOUND_ONLY = {"tienda"}
-
 
 async def _upsert_listing_from_ghl(payload: dict) -> None:
     """Target: public.listing (uuid PK). Ver docs/GHL_DB_SCHEMA_FIELDS.pdf
@@ -68,10 +67,22 @@ async def _upsert_evento_from_ghl(payload: dict) -> None:
     raise NotImplementedError("ghl_webhook: falta contrato de payload para evento")
 
 
+async def _upsert_tienda_from_ghl(payload: dict) -> None:
+    """Target: public.tiendas. Admin de negocios locales pasa a vivir en GHL
+    (decisión 2026-08-28, mismo día que evento) — push_tienda_to_ghl ya existe
+    y funciona para la dirección de salida; esto es solo la entrada. Falta el
+    contrato real: nombres de campo del lado GHL, y si destacado_nivel/
+    destacado_zona_codigo (migración 0079) ya se agregaron como custom field
+    en el Business object allá — hoy push_tienda_to_ghl tampoco los manda
+    todavía, se escribió antes de esa migración."""
+    raise NotImplementedError("ghl_webhook: falta contrato de payload para tienda")
+
+
 _HANDLERS = {
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
     "evento": _upsert_evento_from_ghl,
+    "tienda": _upsert_tienda_from_ghl,
 }
 
 
@@ -86,11 +97,6 @@ async def recibir_webhook_ghl(request: Request):
         raise HTTPException(status_code=400, detail=str(e))
 
     object_type = event.get("object_type")
-    if object_type in _OUTBOUND_ONLY:
-        raise HTTPException(
-            status_code=400,
-            detail=f"{object_type} es solo outbound (nosotros -> GHL), no se recibe desde GHL",
-        )
     handler = _HANDLERS.get(object_type)
     if handler is None:
         raise HTTPException(status_code=400, detail=f"object_type desconocido: {object_type!r}")

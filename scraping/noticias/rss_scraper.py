@@ -114,6 +114,17 @@ PALABRAS_NEGATIVAS = [
     "operativo", "operativos", "allanamiento",
     "redada", "evacuación", "evacuados", "evacuadas",
     "socorro", "auxilio",
+    # Política adicional
+    "asamblea", "concejo municipal", "curul", "veto",
+    # Economía (toda mención, no solo negativa)
+    "economía", "económic", "dólar", "impuesto", "impuestos",
+    "arancel", "aranceles", "pib", "bolsa de valores",
+    "tasa de cambio", "salario mínimo",
+    # Otros países (blindaje extra; el query RSS ya exige "medellín")
+    # nota: se excluyen "chile"/"china" por choque con gastronomía/uso común
+    "estados unidos", "venezuela", "ecuador", "perú",
+    "argentina", "brasil", "méxico", "rusia", "ucrania",
+    "israel", "palestina", "europa", "españa",
 ]
 
 KEYWORDS_POSITIVOS = [

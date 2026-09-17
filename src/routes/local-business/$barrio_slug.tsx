@@ -11,6 +11,8 @@ import { GRUPOS_TIENDAS } from '@/lib/categorias_comunidad'
 import { MAPBOX_TOKEN } from '@/lib/mapboxToken'
 import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from '@/lib/apiClient'
+import { useIsMobile } from '@/hooks/use-mobile'
+import { List, Map as MapIcon } from 'lucide-react'
 
 export const Route = createFileRoute('/local-business/$barrio_slug')({
   component: LocalBusinessRoot,
@@ -87,6 +89,14 @@ const CD_COMUNA_SLUG: Record<number, string> = {
   6: 'doce-de-octubre', 7: 'robledo', 8: 'villa-hermosa', 9: 'buenos-aires',
   10: 'la-candelaria', 11: 'laureles', 13: 'san-javier', 14: 'el-poblado',
   15: 'guayabal', 16: 'belen',
+}
+
+// Slug de BARRIOS (BarrioContext) para la comuna/municipio clickeado en el mapa —
+// mismo criterio de resolución que `scope` más abajo, pero devuelve el slug de
+// ruta (no barrio_id/municipio_nombre) para poder navegar.
+function slugForComuna(cd: number, municipio: string, barrios: Barrio[]): string | undefined {
+  if (municipio.toUpperCase() === 'MEDELLIN') return CD_COMUNA_SLUG[cd]
+  return barrios.find(b => b.municipio_nombre?.toUpperCase() === municipio.toUpperCase())?.slug
 }
 
 function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] }) {
@@ -360,6 +370,13 @@ function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] })
       const cd = f.properties?.cd_comuna as number
       const nombre = (f.properties?.nombre ?? '') as string
       const municipio = (f.properties?.municipio ?? '') as string
+      // Comuna distinta a la actual → navega (mismo mecanismo que el <select> de la
+      // barra): actualiza header, lista y filtros de la página, no solo el mapa.
+      const slug = slugForComuna(cd, municipio, barrios)
+      if (slug && slug !== barrio.slug) {
+        window.location.href = `/local-business/${slug}`
+        return
+      }
       const full = staticFeaturesRef.current.find(sf => sf.properties?.nombre === nombre) ?? f
       openComuna(map, cd, nombre, municipio, full.geometry)
     })
@@ -485,6 +502,8 @@ const PANEL_H = 'calc(100vh - 210px)'
 function LocalBusinessPage() {
   const { barrio, barrios, lang } = useBarrio()
   const t = (es: string, en: string) => lang === 'es' ? es : en
+  const isMobile = useIsMobile()
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('list')
 
   const [grupo,       setGrupo]       = useState<string | null>(null)
   const [categoria,   setCategoria]   = useState<string | undefined>(undefined)
@@ -675,10 +694,15 @@ function LocalBusinessPage() {
       </div>
 
       {/* ── Lista + Mapa ── */}
-      <div className="negocios-panel" style={{ display: 'flex', height: PANEL_H, overflow: 'hidden' }}>
+      <div className="negocios-panel" style={{ display: 'flex', justifyContent: 'center', height: PANEL_H, overflow: 'hidden' }}>
+       <div style={{ display: 'flex', width: '100%', maxWidth: 1440 }}>
 
-        {/* Lista — izquierda, scrollable */}
-        <div className="negocios-lista" style={{ flex: '0 0 400px', overflowY: 'auto', borderRight: `0.5px solid ${K.line}`, background: '#fff' }}>
+        {/* Lista — izquierda, scrollable (móvil: pantalla completa, toggle con el mapa) */}
+        <div className="negocios-lista" style={isMobile ? {
+          display: mobileView === 'list' ? 'block' : 'none', width: '100%', overflowY: 'auto', background: K.surface,
+        } : {
+          flex: '0 0 480px', overflowY: 'auto', borderRight: `0.5px solid ${K.line}`, background: K.surface,
+        }}>
           {isLoading && (
             <p style={{ color: K.muted, padding: '2rem' }}>{t('Cargando…', 'Loading…')}</p>
           )}
@@ -702,14 +726,14 @@ function LocalBusinessPage() {
 
           {!isLoading && hasArea && tiendas.length > 0 && (
             <>
-              <div style={{ padding: '10px 16px', borderBottom: `0.5px solid ${K.line}`, fontSize: 12, color: K.muted, background: '#FAF7F2' }}>
+              <div style={{ padding: '12px 16px', fontSize: 12, color: K.muted, fontWeight: 600 }}>
                 {tiendas.length} {t('de', 'of')} {total} {t('negocios', 'businesses')}
               </div>
-              {tiendas.map(neg => (
-                <div key={neg.id} style={{ borderBottom: `0.5px solid ${K.line}`, padding: '0 14px' }}>
-                  <BusinessCardList tienda={neg} />
-                </div>
-              ))}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 14px 14px' }}>
+                {tiendas.map(neg => (
+                  <BusinessCardList key={neg.id} tienda={neg} />
+                ))}
+              </div>
               {pages > 1 && (
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '1.25rem' }}>
                   <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{
@@ -733,11 +757,34 @@ function LocalBusinessPage() {
           )}
         </div>
 
-        {/* Mapa — derecha */}
-        <div className="negocios-mapa" style={{ flex: 1, padding: 12, background: K.surface }}>
+        {/* Mapa — derecha, llena el resto del ancho compartido (mismo borde de 1440 que el resto de la página, sin hueco muerto). Móvil: pantalla completa, toggle con la lista. */}
+        <div className="negocios-mapa" style={isMobile ? {
+          display: mobileView === 'map' ? 'block' : 'none', width: '100%', padding: 8, background: K.surface,
+        } : {
+          flex: 1, padding: 12, background: K.surface,
+        }}>
           <NegociosMap barrio={barrio} barrios={barrios} />
         </div>
 
+       </div>
+
+       {/* Toggle Lista ⟷ Mapa — solo móvil, estilo Zillow igual a /map */}
+       {isMobile && (
+         <button
+           onClick={() => setMobileView(v => (v === 'list' ? 'map' : 'list'))}
+           style={{
+             position: 'fixed', bottom: 20, left: '50%', transform: 'translateX(-50%)', zIndex: 30,
+             display: 'flex', alignItems: 'center', gap: 8,
+             background: K.ink, color: '#fff', fontWeight: 700, fontSize: 14,
+             padding: '10px 20px', borderRadius: 999, border: 'none', cursor: 'pointer',
+             boxShadow: '0 4px 16px rgba(0,0,0,.3)',
+           }}
+         >
+           {mobileView === 'list'
+             ? (<><MapIcon size={16} /> {t('Mapa', 'Map')}</>)
+             : (<><List size={16} /> {t('Lista', 'List')}</>)}
+         </button>
+       )}
       </div>
     </>
   )

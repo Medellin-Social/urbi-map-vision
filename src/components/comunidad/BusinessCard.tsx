@@ -232,32 +232,75 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
 }
 
 export function BusinessCardList({ tienda }: { tienda: TiendaData }) {
-  const bg = tienda.foto_url
-    ? `url('${tienda.foto_url}')`
-    : `linear-gradient(135deg, ${K.teal}, ${K.tealDeep})`
+  const catLabel = tienda.categoria ? (CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria) : null
+  const catColor = tienda.categoria ? (CATEGORIA_COLORS[tienda.categoria] ?? K.line) : K.line
+  const catEmoji = tienda.categoria ? (CATEGORIA_EMOJI[tienda.categoria] ?? '⭐') : '⭐'
 
   return (
-    <div style={{ display: 'flex', gap: 16, padding: '16px 0', borderBottom: `1px solid ${K.line}`, alignItems: 'flex-start' }}>
+    <div style={{
+      display: 'flex', gap: 14, padding: 14,
+      background: '#fff', border: `1px solid ${K.line}`, borderRadius: 12,
+      boxShadow: '0 1px 3px rgba(20,32,29,.05)',
+      transition: 'box-shadow .15s, border-color .15s',
+    }}>
+      {/* Foto */}
       <div style={{
-        width: 68, height: 68, borderRadius: 12, flexShrink: 0,
-        backgroundImage: bg, backgroundSize: 'cover', backgroundPosition: 'center',
-      }} />
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <h4 style={{ fontFamily: K.serif, fontWeight: 600, fontSize: '1rem', margin: '0 0 2px', color: K.ink }}>
+        width: 108, height: 108, borderRadius: 10, flexShrink: 0, position: 'relative',
+        background: catColor, overflow: 'hidden',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        {tienda.foto_url ? (
+          <img
+            src={tienda.foto_url} alt={tienda.nombre} loading="lazy"
+            style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            onError={e => { e.currentTarget.style.display = 'none' }}
+          />
+        ) : (
+          <span style={{ fontSize: 32 }}>{catEmoji}</span>
+        )}
+        {tienda.verificado && (
+          <span title="Negocio verificado" style={{
+            position: 'absolute', top: 6, right: 6, width: 20, height: 20, borderRadius: '50%',
+            background: K.teal, color: '#fff', fontSize: 11, fontWeight: 700,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: '0 1px 4px rgba(0,0,0,.25)',
+          }}>
+            ✓
+          </span>
+        )}
+      </div>
+
+      {/* Contenido */}
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+        <h4 style={{
+          fontFamily: K.serif, fontWeight: 700, fontSize: 15, margin: 0, color: K.ink, lineHeight: 1.3,
+          display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+        }}>
           {tienda.nombre}
         </h4>
-        <div style={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 4 }}>
-          {tienda.categoria && (
-            <div style={{ fontSize: '.68rem', color: K.tealDeep, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.5px' }}>
-              {CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria}
-            </div>
-          )}
-        </div>
-        {tienda.direccion && (
-          <div style={{ fontSize: '.76rem', color: K.muted, marginTop: 3 }}>{tienda.direccion}</div>
+
+        {catLabel && (
+          <span style={{
+            fontSize: 10, fontWeight: 700, color: K.tealDeep, textTransform: 'uppercase',
+            letterSpacing: '.5px', marginTop: 4,
+          }}>
+            {catEmoji} {catLabel}
+          </span>
         )}
+
         <Stars rating={tienda.rating_google} />
-        <ActionButtons tienda={tienda} />
+
+        {tienda.direccion && (
+          <p style={{
+            fontSize: 12, color: K.muted, margin: '4px 0 0', lineHeight: 1.35,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            📍 {tienda.direccion}
+          </p>
+        )}
+
+        <div style={{ flex: 1, minHeight: 6 }} />
+        <ActionButtons tienda={tienda} compact />
       </div>
     </div>
   )
