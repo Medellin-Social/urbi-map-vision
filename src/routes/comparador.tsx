@@ -11,7 +11,7 @@ import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useBarriosRaw, useCompararRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
-import { useIsPro } from "@/components/LockedField";
+import { useIsPro, useIsAgente } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
@@ -40,6 +40,10 @@ export const Route = createFileRoute("/comparador")({
     if (!raw) {
       localStorage.setItem("registro_origen", "mls");
       throw redirect({ to: "/login" });
+    }
+    const u = JSON.parse(raw);
+    if (u.plan !== "agente" && u.esAgente !== true) {
+      throw redirect({ to: "/planes", search: { audiencia: "agente" } });
     }
   },
   component: ComparadorPage,
@@ -322,9 +326,10 @@ function TabBarrios({
                 setIds((prev) => prev.map((v, idx) => (idx === i ? Number(e.target.value) : v)))
               }
               className="bg-transparent text-sm outline-none"
+              style={{ color: "#1A1208" }}
             >
               {barrios.map((n) => (
-                <option key={n.id} value={n.id} className="bg-surface">
+                <option key={n.id} value={n.id} className="bg-surface" style={{ color: "#1A1208" }}>
                   {titleCase(n.nombre)}
                 </option>
               ))}
@@ -930,8 +935,14 @@ function TabInmuebles({
 
 function ComparadorPage() {
   const isPro = useIsPro();
+  const isAgente = useIsAgente();
   const search = Route.useSearch();
   const navigate = useNavigate();
+  // Distinguishes "haven't checked yet" (matches SSR/first paint) from a
+  // confirmed non-agent — without it, the redirect effect below and
+  // useIsAgente's own internal effect race on the same mount commit and can
+  // fire a false-positive redirect before isAgente resolves to its real value.
+  const [agentChecked, setAgentChecked] = useState(false);
 
   const [forcedBarrioIds, setForcedBarrioIds] = useState<number[] | undefined>();
   const [forcedBarrioFiltro, setForcedBarrioFiltro] = useState<string | null>(null);
@@ -955,6 +966,14 @@ function ComparadorPage() {
     }
   }, [urlListingIds?.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // beforeLoad only runs server-side/on SPA nav — on a hard refresh the guard
+  // doesn't fire, so this is the real backstop against a non-agent seeing content.
+  useEffect(() => { setAgentChecked(true); }, []);
+  useEffect(() => {
+    if (agentChecked && !isAgente) navigate({ to: "/planes", search: { audiencia: "agente" } });
+  }, [agentChecked, isAgente, navigate]);
+  if (agentChecked && !isAgente) return null;
+
   return (
     <div className="paper-theme relative min-h-screen bg-background pb-20">
       <MapNavbar activeTab="comparador" onTabChange={() => {}} />
@@ -966,7 +985,7 @@ function ComparadorPage() {
           <ArrowLeft className="h-3 w-3" /> Volver al dashboard
         </Link>
 
-        <h1 className="mt-4 font-display text-3xl font-semibold">Comparador</h1>
+        <h1 className="mt-4 font-display text-3xl font-semibold text-[#1A1208]">Comparador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Compara barrios o inmuebles específicos lado a lado
         </p>
@@ -1056,7 +1075,7 @@ function Row({
     <tr>
       <td className="py-2.5 text-xs uppercase tracking-widest text-muted-foreground">{label}</td>
       {items.map((b) => (
-        <td key={b.barrio_id} className="py-2.5 pl-3 font-medium">
+        <td key={b.barrio_id} className="py-2.5 pl-3 font-medium text-[#1A1208]">
           {render(b)}
         </td>
       ))}

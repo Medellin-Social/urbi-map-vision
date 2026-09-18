@@ -9,6 +9,12 @@ describe("formatCOP", () => {
   it("formats zero without crashing", () => {
     expect(() => formatCOP(0)).not.toThrow();
   });
+
+  it("puts the minus sign before the $, not after it", () => {
+    expect(formatCOP(-344_400)).toBe("-$344K COP");
+    expect(formatCOP(-2_500_000)).toBe("-$3M COP");
+    expect(formatCOP(-500)).toBe("-$500 COP");
+  });
 });
 
 describe("formatPct", () => {

@@ -1,12 +1,14 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, ArrowLeft, Menu, X } from "lucide-react";
-import { useState } from "react";
+import { LogOut, ArrowLeft, Menu, X, ChevronDown } from "lucide-react";
+import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { auth } from "@/lib/auth";
 import { logout } from "@/hooks/useAuth";
 import { useIsAgente } from "@/components/LockedField";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { useUnit } from "@/hooks/useUnit";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Wordmark, BrandBadge } from "@/components/Wordmark";
 import type { Neighborhood } from "@/lib/adapters";
 
 export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
@@ -51,15 +53,31 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
   const isMobile = useIsMobile();
   const isAgente = useIsAgente();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountBtnRef = useRef<HTMLButtonElement>(null);
+  const [accountPos, setAccountPos] = useState({ top: 0, right: 0 });
+  const [toolsOpen, setToolsOpen] = useState(false);
+  const toolsBtnRef = useRef<HTMLButtonElement>(null);
+  const [toolsPos, setToolsPos] = useState({ top: 0, left: 0 });
   const user = typeof window !== "undefined" ? auth.get() : null;
   const TABS = isAgente ? [...BASE_TABS, ...AGENTE_TABS] : BASE_TABS;
+  const activeTool = AGENTE_TABS.find((t) => t.id === activeTab);
 
-  const initials = (user?.name ?? "U")
-    .split(/\s+/)
-    .map((s) => s[0])
-    .slice(0, 2)
-    .join("")
-    .toUpperCase();
+  const toggleTools = () => {
+    if (!toolsOpen && toolsBtnRef.current) {
+      const r = toolsBtnRef.current.getBoundingClientRect();
+      setToolsPos({ top: r.bottom + 4, left: r.left });
+    }
+    setToolsOpen((o) => !o);
+  };
+
+  const toggleAccount = () => {
+    if (!accountOpen && accountBtnRef.current) {
+      const r = accountBtnRef.current.getBoundingClientRect();
+      setAccountPos({ top: r.bottom + 6, right: window.innerWidth - r.right });
+    }
+    setAccountOpen((o) => !o);
+  };
 
   // ── Mobile: logo + Comprar/Arrendar segmented + hamburger (rest in a menu) ──
   if (isMobile) {
@@ -79,9 +97,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         }}
       >
         <Link to="/" style={{ textDecoration: "none", flexShrink: 0 }}>
-          <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1rem", color: C.ink, letterSpacing: "-0.5px" }}>
-            M<span style={{ color: C.teal }}>S</span><span style={{ color: C.amarillo }}>.</span>
-          </span>
+          <BrandBadge size={32} coral={C.coral} amarillo={C.amarillo} />
         </Link>
 
         {/* Comprar / Arrendar — the two tabs that stay on /map */}
@@ -205,14 +221,15 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         background: C.paper,
         borderBottom: `1px solid ${C.border}`,
         display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "stretch",
+        columnGap: 16,
         padding: "0 16px", height: 52,
         boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
       {/* Left: tabs + MLS back breadcrumb */}
       <div style={{ display: "flex", alignItems: "stretch", gap: 12, minWidth: 0, overflow: "hidden" }}>
-      <nav style={{ display: "flex", alignItems: "stretch" }}>
-        {TABS.map((tab) => {
+      <nav className="map-nav-tabs" style={{ display: "flex", alignItems: "stretch", minWidth: 0, overflowX: "auto", overflowY: "hidden" }}>
+        {BASE_TABS.map((tab) => {
           const active = activeTab === tab.id;
 
           if (tab.route) {
@@ -221,7 +238,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 key={tab.id}
                 onClick={() => navigate({ to: tab.route as any })}
                 style={{
-                  background: "none", border: "none", padding: "0 14px",
+                  background: "none", border: "none", padding: "0 11px",
                   borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
                   color: active ? C.tealDeep : C.muted,
                   fontWeight: active ? 700 : 500,
@@ -250,7 +267,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 }
               }}
               style={{
-                background: "none", border: "none", padding: "0 14px",
+                background: "none", border: "none", padding: "0 11px",
                 borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
                 color: active ? C.tealDeep : C.muted,
                 fontWeight: active ? 700 : 500,
@@ -266,7 +283,58 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             </button>
           );
         })}
+
+        {isAgente && (
+          <button
+            ref={toolsBtnRef}
+            onClick={toggleTools}
+            style={{
+              background: "none", border: "none", padding: "0 11px",
+              borderBottom: activeTool ? `2px solid ${C.teal}` : "2px solid transparent",
+              color: activeTool ? C.tealDeep : C.muted,
+              fontWeight: activeTool ? 700 : 500,
+              fontSize: 13, cursor: "pointer",
+              letterSpacing: "0.1px",
+              flexShrink: 0,
+              display: "flex", alignItems: "center", gap: 4,
+            }}
+          >
+            {activeTool ? activeTool.label : "Herramientas"}
+            <ChevronDown size={13} style={{ transform: toolsOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
+          </button>
+        )}
       </nav>
+
+      {isAgente && toolsOpen && createPortal(
+        <>
+          <div onClick={() => setToolsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9998 }} />
+          <div
+            style={{
+              position: "fixed", top: toolsPos.top, left: toolsPos.left, zIndex: 9999,
+              background: C.paper, border: `1px solid ${C.border}`, borderRadius: 8,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.15)", minWidth: 140, overflow: "hidden",
+            }}
+          >
+            {AGENTE_TABS.map((t) => (
+              <button
+                key={t.id}
+                onClick={() => { setToolsOpen(false); navigate({ to: t.route as any }); }}
+                style={{
+                  display: "block", width: "100%", textAlign: "left",
+                  background: activeTab === t.id ? "rgba(29,158,117,0.1)" : "none",
+                  border: "none", padding: "9px 14px", fontSize: 13,
+                  fontWeight: activeTab === t.id ? 700 : 500,
+                  color: activeTab === t.id ? C.tealDeep : C.ink,
+                  cursor: "pointer",
+                }}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </>,
+        document.body
+      )}
 
       {/* MLS back breadcrumb */}
       {mlsBarrio && (
@@ -304,91 +372,149 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         }}
       >
         <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: C.ink, letterSpacing: "-0.5px" }}>
-          Medellín <span style={{ color: C.teal }}>Social</span>
-          <span style={{ color: C.amarillo }}>.</span>
+          <Wordmark teal={C.teal} amarillo={C.amarillo} />
         </span>
       </Link>
 
       {/* Right controls */}
-      <div style={{ display: "flex", alignItems: "center", gap: 14, justifySelf: "end", flexShrink: 0 }}>
-        {/* Language */}
-        <div style={{ display: "flex", gap: 4 }}>
-          {(["es", "en"] as const).map((l) => (
-            <button
-              key={l}
-              onClick={() => lang !== l && toggle()}
-              title={l === "es" ? "Español (Colombia)" : "English (USA)"}
-              style={{
-                border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
-                background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
-                borderRadius: 999,
-                padding: "3px 8px",
-                cursor: lang === l ? "default" : "pointer",
-                display: "flex", alignItems: "center",
-              }}
-            >
-              {l === "es" ? <FlagCO /> : <FlagUS />}
-            </button>
-          ))}
-        </div>
-
-        {/* Unidad de área */}
-        <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden" }}>
-          {(["m2", "sqft"] as const).map((u) => (
-            <button
-              key={u}
-              onClick={() => u !== unit && toggleUnit()}
-              style={{
-                border: "none",
-                background: unit === u ? C.teal : "transparent",
-                color: unit === u ? "#fff" : C.muted,
-                padding: "3px 9px", fontWeight: 700,
-                cursor: "pointer", fontSize: 11,
-              }}
-            >
-              {u === "m2" ? "M²" : "FT²"}
-            </button>
-          ))}
-        </div>
-
+      <div style={{ display: "flex", alignItems: "center", gap: 10, justifySelf: "end", flexShrink: 0 }}>
         {user ? (
-          <>
-            {/* Avatar */}
-            <Link to="/perfil" style={{ textDecoration: "none", display: "flex", alignItems: "center", gap: 7 }}>
-              <div style={{
-                width: 27, height: 27, borderRadius: "50%",
-                background: `linear-gradient(135deg, ${C.teal}, #085041)`,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 10, fontWeight: 800, color: "#fff", overflow: "hidden", flexShrink: 0,
-              }}>
-                {user.avatar
-                  ? <img src={user.avatar} alt="avatar" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  : initials}
-              </div>
+          <div style={{ position: "relative" }}>
+            <button
+              ref={accountBtnRef}
+              onClick={toggleAccount}
+              style={{
+                background: "none", border: "none", padding: "2px 4px 2px 2px", borderRadius: 999,
+                cursor: "pointer", display: "flex", alignItems: "center", gap: 7,
+              }}
+            >
               <span style={{
                 fontSize: 12, color: C.muted, fontWeight: 600,
                 maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {user.name}
               </span>
-            </Link>
-
-            {/* Logout */}
-            <button
-              onClick={() => { logout(); navigate({ to: "/login" }); }}
-              title="Salir"
-              style={{
-                background: "none", border: "none", color: C.muted,
-                cursor: "pointer", display: "flex", alignItems: "center", padding: 0,
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = C.coral)}
-              onMouseLeave={(e) => (e.currentTarget.style.color = C.muted)}
-            >
-              <LogOut size={15} />
+              <ChevronDown size={13} color={C.muted} style={{ transform: accountOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
             </button>
-          </>
+
+            {accountOpen && createPortal(
+              <>
+                <div onClick={() => setAccountOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9998 }} />
+                <div
+                  style={{
+                    position: "fixed", top: accountPos.top, right: accountPos.right, zIndex: 9999,
+                    background: C.paper, border: `1px solid ${C.border}`, borderRadius: 10,
+                    boxShadow: "0 8px 24px rgba(0,0,0,0.15)", minWidth: 200, overflow: "hidden",
+                  }}
+                >
+                  <div style={{ padding: "10px 14px", borderBottom: `1px solid ${C.border}` }}>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: C.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.name}</div>
+                    <div style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{user.email}</div>
+                  </div>
+
+                  <Link to="/perfil" onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mi perfil</Link>
+                  <Link to="/perfil" search={{ tab: "favoritos" }} onClick={() => setAccountOpen(false)} style={accountItemStyle}>Favoritos</Link>
+                  <Link to="/mis-propiedades" onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mis propiedades</Link>
+                  {isAgente && (
+                    <Link to="/realtor/dashboard" onClick={() => setAccountOpen(false)} style={accountItemStyle}>Panel de agente</Link>
+                  )}
+                  <Link to="/planes" search={{ audiencia: isAgente ? "agente" : undefined }} onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mi plan</Link>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderTop: `1px solid ${C.border}` }}>
+                    <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>Idioma</span>
+                    <div style={{ display: "flex", gap: 4 }}>
+                      {(["es", "en"] as const).map((l) => (
+                        <button
+                          key={l}
+                          onClick={() => lang !== l && toggle()}
+                          title={l === "es" ? "Español (Colombia)" : "English (USA)"}
+                          style={{
+                            border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
+                            background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                            borderRadius: 999, padding: "3px 8px",
+                            cursor: lang === l ? "default" : "pointer", display: "flex", alignItems: "center",
+                          }}
+                        >
+                          {l === "es" ? <FlagCO /> : <FlagUS />}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px" }}>
+                    <span style={{ fontSize: 12, color: C.muted, fontWeight: 600 }}>Unidades</span>
+                    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden" }}>
+                      {(["m2", "sqft"] as const).map((u) => (
+                        <button
+                          key={u}
+                          onClick={() => u !== unit && toggleUnit()}
+                          style={{
+                            border: "none",
+                            background: unit === u ? C.teal : "transparent",
+                            color: unit === u ? "#fff" : C.muted,
+                            padding: "3px 9px", fontWeight: 700,
+                            cursor: "pointer", fontSize: 11,
+                          }}
+                        >
+                          {u === "m2" ? "M²" : "FT²"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <button
+                    onClick={() => { setAccountOpen(false); logout(); navigate({ to: "/login" }); }}
+                    style={{ ...accountItemStyle, width: "100%", textAlign: "left", color: C.coral, display: "flex", alignItems: "center", gap: 8, borderTop: `1px solid ${C.border}` }}
+                  >
+                    <LogOut size={14} /> Cerrar sesión
+                  </button>
+                </div>
+              </>,
+              document.body
+            )}
+          </div>
         ) : (
           <>
+            {/* Language */}
+            <div style={{ display: "flex", gap: 4 }}>
+              {(["es", "en"] as const).map((l) => (
+                <button
+                  key={l}
+                  onClick={() => lang !== l && toggle()}
+                  title={l === "es" ? "Español (Colombia)" : "English (USA)"}
+                  style={{
+                    border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
+                    background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                    borderRadius: 999,
+                    padding: "3px 8px",
+                    cursor: lang === l ? "default" : "pointer",
+                    display: "flex", alignItems: "center",
+                  }}
+                >
+                  {l === "es" ? <FlagCO /> : <FlagUS />}
+                </button>
+              ))}
+            </div>
+
+            {/* Unidad de área */}
+            <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden" }}>
+              {(["m2", "sqft"] as const).map((u) => (
+                <button
+                  key={u}
+                  onClick={() => u !== unit && toggleUnit()}
+                  style={{
+                    border: "none",
+                    background: unit === u ? C.teal : "transparent",
+                    color: unit === u ? "#fff" : C.muted,
+                    padding: "3px 9px", fontWeight: 700,
+                    cursor: "pointer", fontSize: 11,
+                  }}
+                >
+                  {u === "m2" ? "M²" : "FT²"}
+                </button>
+              ))}
+            </div>
+
             <Link
               to="/login"
               style={{
@@ -415,3 +541,9 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
     </header>
   );
 }
+
+const accountItemStyle: React.CSSProperties = {
+  display: "block", padding: "9px 14px", fontSize: 13, fontWeight: 500,
+  color: C.ink, textDecoration: "none", cursor: "pointer",
+  background: "none", border: "none",
+};

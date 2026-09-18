@@ -1,8 +1,9 @@
 export function formatCOP(n: number): string {
-  const m = Math.round(n / 1_000_000);
-  if (n >= 1_000_000) return `$${m.toLocaleString("es-CO")}M COP`;
-  if (n >= 1_000) return `$${(n / 1_000).toFixed(0)}K COP`;
-  return `$${n.toLocaleString("es-CO")} COP`;
+  const sign = n < 0 ? "-" : "";
+  const abs = Math.abs(n);
+  if (abs >= 1_000_000) return `${sign}$${Math.round(abs / 1_000_000).toLocaleString("es-CO")}M COP`;
+  if (abs >= 1_000) return `${sign}$${(abs / 1_000).toFixed(0)}K COP`;
+  return `${sign}$${abs.toLocaleString("es-CO")} COP`;
 }
 
 export function formatPct(n: number | null | undefined): string {
@@ -11,11 +12,11 @@ export function formatPct(n: number | null | undefined): string {
 }
 
 export function yieldColor(y: number | null | undefined): string {
-  if (y == null) return "#6b7280";
-  if (y > 10) return "#10b981";
-  if (y >= 7) return "#00d4ff";
-  if (y >= 5) return "#f59e0b";
-  return "#ef4444";
+  if (y == null) return "#9B8B75";
+  if (y > 10) return "#1D9E75";
+  if (y >= 7) return "#085041";
+  if (y >= 5) return "#BA7517";
+  return "#D85A30";
 }
 
 export function yieldLabel(y: number | null | undefined): string {

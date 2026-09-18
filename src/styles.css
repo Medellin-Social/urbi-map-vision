@@ -227,6 +227,10 @@ body {
 /* ── Responsive: Comunidad Navbar ──────────────────────────────────────── */
 .filtros-tabs::-webkit-scrollbar { display: none; }
 
+/* ── Map navbar tabs: scroll instead of colliding with the centered logo on laptop widths ── */
+.map-nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
+.map-nav-tabs::-webkit-scrollbar { display: none; }
+
 @media (max-width: 768px) {
   .footer-grid {
     grid-template-columns: 1fr 1fr !important;

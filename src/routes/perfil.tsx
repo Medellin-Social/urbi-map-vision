@@ -41,7 +41,6 @@ import {
   setActivePalette,
   type ScorePaletteId,
 } from "@/config/mapColors";
-import { Navbar } from "@/components/Navbar";
 import { formatCOP } from "@/lib/format";
 
 export const Route = createFileRoute("/perfil")({
@@ -66,7 +65,11 @@ const TABS: { id: Tab; label: string; Icon: typeof UserIcon }[] = [
 ];
 
 function PerfilPage() {
-  const [tab, setTab] = useState<Tab>("cuenta");
+  const [tab, setTab] = useState<Tab>(() => {
+    if (typeof window === "undefined") return "cuenta";
+    const t = new URLSearchParams(window.location.search).get("tab");
+    return (TABS.some((x) => x.id === t) ? t : "cuenta") as Tab;
+  });
   const [user, setUser] = useState<UrbiUser | null>(() => auth.get());
 
   useEffect(() => {
@@ -79,10 +82,7 @@ function PerfilPage() {
 
   return (
     <div className="relative min-h-screen bg-[#FAF7F2]">
-      <Navbar />
-      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-24 bg-gradient-to-b from-[#FAF7F2]/80 to-transparent" />
-
-      <main className="perfil-light mx-auto max-w-6xl px-4 pb-16 pt-24 sm:px-6">
+      <main className="perfil-light mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6">
         <Link
           to="/map"
           className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground transition hover:text-primary"

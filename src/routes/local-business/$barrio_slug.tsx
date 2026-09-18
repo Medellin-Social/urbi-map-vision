@@ -99,7 +99,7 @@ function slugForComuna(cd: number, municipio: string, barrios: Barrio[]): string
   return barrios.find(b => b.municipio_nombre?.toUpperCase() === municipio.toUpperCase())?.slug
 }
 
-function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] }) {
+function NegociosMap({ barrio, barrios, visible = true }: { barrio: Barrio; barrios: Barrio[]; visible?: boolean }) {
   const containerRef      = useRef<HTMLDivElement>(null)
   const mapRef            = useRef<mapboxgl.Map | null>(null)
   const staticFeaturesRef = useRef<GeoJSON.Feature[]>([])
@@ -307,18 +307,18 @@ function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] })
             ? `https://www.google.com/maps/place/?q=place_id:${p.google_place_id}`
             : `https://www.google.com/maps/search/?api=1&query=${p.lat},${p.lon}`
           const wa = p.whatsapp || p.telefono
-          new mapboxgl.Popup({ offset: 12, closeButton: false, maxWidth: '240px' })
+          new mapboxgl.Popup({ offset: 12, closeButton: true, maxWidth: 'min(220px, 78vw)' })
             .setLngLat(e.lngLat)
-            .setHTML(`<div style="font-family:system-ui;padding:4px 2px">
-                ${p.foto_url ? `<img src="${p.foto_url}" alt="${p.nombre}" style="width:100%;height:80px;object-fit:cover;border-radius:8px;margin-bottom:8px" />` : ''}
-                <strong style="font-size:.9rem;color:${K.ink}">${p.nombre}</strong>
-                ${p.categoria ? `<div style="font-size:.68rem;color:${K.tealDeep};font-weight:700;text-transform:uppercase;margin:2px 0">${p.categoria}</div>` : ''}
-                ${p.rating_google ? `<div style="color:${K.amarillo};font-size:.82rem">★ ${Number(p.rating_google).toFixed(1)}</div>` : ''}
-                ${p.direccion ? `<div style="font-size:.72rem;color:${K.muted};margin-top:4px">${p.direccion}</div>` : ''}
-                <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">
-                  ${wa ? `<a href="https://wa.me/${String(wa).replace(/\D/g, '')}" target="_blank" style="background:#25D366;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">💬 WA</a>` : ''}
-                  <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:#fff;padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">📍 Maps</a>
-                  ${p.website ? `<a href="${p.website}" target="_blank" style="background:${K.coralLight};color:${K.coral};padding:4px 10px;border-radius:999px;text-decoration:none;font-size:.7rem;font-weight:700">🌐 Web</a>` : ''}
+            .setHTML(`<div style="font-family:system-ui;padding:2px">
+                ${p.foto_url ? `<img src="${p.foto_url}" alt="${p.nombre}" style="width:100%;height:60px;object-fit:cover;border-radius:8px;margin-bottom:6px" />` : ''}
+                <strong style="font-size:.82rem;line-height:1.25;color:${K.ink}">${p.nombre}</strong>
+                ${p.categoria ? `<div style="font-size:.62rem;color:${K.tealDeep};font-weight:700;text-transform:uppercase;margin:2px 0">${p.categoria}</div>` : ''}
+                ${p.rating_google ? `<div style="color:${K.amarillo};font-size:.75rem">★ ${Number(p.rating_google).toFixed(1)}</div>` : ''}
+                ${p.direccion ? `<div style="font-size:.66rem;color:${K.muted};margin-top:3px;line-height:1.3">${p.direccion}</div>` : ''}
+                <div style="display:flex;gap:5px;margin-top:6px;flex-wrap:wrap">
+                  ${wa ? `<a href="https://wa.me/${String(wa).replace(/\D/g, '')}" target="_blank" style="background:#25D366;color:#fff;padding:3px 8px;border-radius:999px;text-decoration:none;font-size:.62rem;font-weight:700">💬 WA</a>` : ''}
+                  <a href="${mapsUrl}" target="_blank" style="background:#4285F4;color:#fff;padding:3px 8px;border-radius:999px;text-decoration:none;font-size:.62rem;font-weight:700">📍 Maps</a>
+                  ${p.website ? `<a href="${p.website}" target="_blank" style="background:${K.coralLight};color:${K.coral};padding:3px 8px;border-radius:999px;text-decoration:none;font-size:.62rem;font-weight:700">🌐 Web</a>` : ''}
                 </div></div>`)
             .addTo(map)
         })
@@ -453,6 +453,15 @@ function NegociosMap({ barrio, barrios }: { barrio: Barrio; barrios: Barrio[] })
     src.setData({ type: 'FeatureCollection', features: feats })
   }, [zonaTiendas, mapReady])
 
+  // El contenedor puede estar en display:none (toggle Lista/Mapa en móvil) cuando
+  // Mapbox mide el tamaño inicial → canvas queda a 0×0 y el mapa se ve roto/gris
+  // hasta que se le avisa explícitamente. resize() al volverse visible lo arregla.
+  useEffect(() => {
+    if (!visible) return
+    const raf = requestAnimationFrame(() => mapRef.current?.resize())
+    return () => cancelAnimationFrame(raf)
+  }, [visible])
+
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
       <div ref={containerRef} style={{ width: '100%', height: '100%', borderRadius: 12, overflow: 'hidden', border: `1px solid ${K.line}` }} />
@@ -503,7 +512,7 @@ function LocalBusinessPage() {
   const { barrio, barrios, lang } = useBarrio()
   const t = (es: string, en: string) => lang === 'es' ? es : en
   const isMobile = useIsMobile()
-  const [mobileView, setMobileView] = useState<'list' | 'map'>('list')
+  const [mobileView, setMobileView] = useState<'list' | 'map'>('map')
 
   const [grupo,       setGrupo]       = useState<string | null>(null)
   const [categoria,   setCategoria]   = useState<string | undefined>(undefined)
@@ -763,7 +772,7 @@ function LocalBusinessPage() {
         } : {
           flex: 1, padding: 12, background: K.surface,
         }}>
-          <NegociosMap barrio={barrio} barrios={barrios} />
+          <NegociosMap barrio={barrio} barrios={barrios} visible={!isMobile || mobileView === 'map'} />
         </div>
 
        </div>

@@ -43,7 +43,7 @@ import {
   type ComparativoModalidad,
   type AlternativaListing,
 } from "@/hooks/useCalculadora";
-import { useIsPro } from "@/components/LockedField";
+import { useIsPro, useIsAgente } from "@/components/LockedField";
 
 const searchSchema = z.object({
   listing_id: z.coerce.number().optional(),
@@ -69,6 +69,10 @@ export const Route = createFileRoute("/simulador")({
     if (!raw) {
       localStorage.setItem("registro_origen", "mls");
       throw redirect({ to: "/login" });
+    }
+    const u = JSON.parse(raw);
+    if (u.plan !== "agente" && u.esAgente !== true) {
+      throw redirect({ to: "/planes", search: { audiencia: "agente" } });
     }
   },
   component: SimuladorPage,
@@ -127,6 +131,12 @@ function SimuladorPage() {
   const navigate = useNavigate();
   const search = useSearch({ from: "/simulador" });
   const isPro = useIsPro();
+  const isAgente = useIsAgente();
+  // Distinguishes "haven't checked yet" (matches SSR/first paint) from a
+  // confirmed non-agent — without it, the redirect effect below and
+  // useIsAgente's own internal effect race on the same mount commit and can
+  // fire a false-positive redirect before isAgente resolves to its real value.
+  const [agentChecked, setAgentChecked] = useState(false);
 
   // Zone/barrio
   const [comunaKey, setComunaKey] = useState<string | null>(null);
@@ -332,6 +342,14 @@ function SimuladorPage() {
     : null;
 
   const canCalcular = barrioId !== 0 && presupuesto > 0;
+
+  // beforeLoad only runs server-side/on SPA nav — on a hard refresh the guard
+  // doesn't fire, so this is the real backstop against a non-agent seeing content.
+  useEffect(() => { setAgentChecked(true); }, []);
+  useEffect(() => {
+    if (agentChecked && !isAgente) navigate({ to: "/planes", search: { audiencia: "agente" } });
+  }, [agentChecked, isAgente, navigate]);
+  if (agentChecked && !isAgente) return null;
 
   // ── Locked preview for free users ─────────────────────────────────────────
   if (!isPro) {
@@ -1059,7 +1077,7 @@ function ProyeccionChart({ r, horizonte, presupuestoMill }: { r: SimulacionRespo
         <ResponsiveContainer width="100%" height="100%">
           <LineChart
             data={puntos}
-            margin={{ top: 8, right: 12, bottom: 0, left: 4 }}
+            margin={{ top: 8, right: 12, bottom: 0, left: 16 }}
             onMouseMove={(e: any) => { if (e?.activeTooltipIndex !== undefined) setActiveIdx(e.activeTooltipIndex); }}
             onMouseLeave={() => setActiveIdx(null)}
           >

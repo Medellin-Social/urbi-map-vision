@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
+import { Wordmark } from '../Wordmark'
 
 const K = {
   ink:      '#14201d',
@@ -200,7 +201,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
         <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
           <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
             <div className="masthead-logo" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
-              Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+              <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
             </div>
           </a>
           <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
@@ -227,7 +228,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             {compact ? (
               <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
-                Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+                <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
               </a>
             ) : (
               <>

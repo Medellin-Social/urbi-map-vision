@@ -354,3 +354,25 @@ sería inventar estructura que no aporta nada del lado de su CRM.
     guardarlo en el Contact?
 11. Firma del webhook para agent/owner/agency, si se confirma inbound como
     con evento (hoy no hay ni siquiera stub de esta dirección).
+
+**Usuarios (registro web) / Leads de marketing — auditado 2026-09-16, no
+estaba en ningún contrato hasta ahora:**
+
+Hoy `usuarios` (registro directo en `/register`, `/login`, `/auth/google`) y
+los leads que entran a GHL por landing/funnel de ads son **dos pools sin
+ningún puente**, en ninguna dirección. `usuarios.ghl_contact_id` (migración
+0077) y `usuarios.customer_type`/`ghl_account_mapping` (migración 0084) son
+columnas ya reservadas para esto pero sin código que las use — ver
+[[project_ghl_integration]] para el detalle completo.
+
+12. **Website → GHL (crear Contact):** el handoff de 18 endpoints solo valida
+    `GET`/`PUT` sobre un Contact que **ya existe** (§13) — cero `POST
+    /contacts` probado. Mismo bloqueo circular que Agent/Owner arriba: para
+    mandar un registro nuevo hace falta crear el Contact, y eso no está en el
+    contrato confirmado.
+13. **GHL → nuestra DB (traer leads de ads):** ¿el contrato incluye un
+    endpoint de List/Search Contacts (filtrable por tag/funnel de origen), o
+    solo GET por ID ya conocido? Si es solo GET-por-ID, no hay forma de
+    *descubrir* leads nuevos sin (a) la firma del webhook (bloqueador #1, ya
+    pendiente arriba) o (b) ese endpoint de listado — ninguno de los dos está
+    confirmado hoy.
