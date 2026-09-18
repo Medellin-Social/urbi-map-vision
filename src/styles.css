@@ -266,22 +266,6 @@ body {
   .real-estate-grid {
     grid-template-columns: 1fr !important;
   }
-  .negocios-panel {
-    flex-direction: column !important;
-    height: auto !important;
-    overflow: visible !important;
-  }
-  .negocios-lista {
-    flex: none !important;
-    width: 100% !important;
-    height: 60vh !important;
-    border-right: none !important;
-    border-bottom: 0.5px solid #E8E0D0 !important;
-  }
-  .negocios-mapa {
-    flex: none !important;
-    height: 300px !important;
-  }
   .filtros-tabs {
     flex-wrap: nowrap !important;
     overflow-x: auto !important;
