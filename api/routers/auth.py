@@ -8,7 +8,7 @@ import httpx
 from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import jwt
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import JWT_ALGORITHM, JWT_SECRET, get_current_user
@@ -25,17 +25,25 @@ JWT_EXPIRY_DAYS = 30
 
 # ── Models ────────────────────────────────────────────────────────────────────
 
+def _normalizar_email(v: str) -> str:
+    return v.strip().lower()
+
+
 class RegisterRequest(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(min_length=8)
     nombre: Optional[str] = None
     apellido: Optional[str] = None
     origen: Optional[str] = None  # 'mls' | 'comunidad'
+
+    _normalizar_email = field_validator("email")(_normalizar_email)
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+    _normalizar_email = field_validator("email")(_normalizar_email)
 
 
 class GoogleAuthRequest(BaseModel):
@@ -202,7 +210,7 @@ async def google_login(request: Request, req: GoogleAuthRequest = Body(...)):
     """Login or auto-register via Google Sign-In. Google already verified the
     email, so accounts created/matched here are trusted (email_verificado=TRUE)."""
     claims = await _verify_google_id_token(req.id_token)
-    email = claims["email"]
+    email = _normalizar_email(claims["email"])
     pool = get_pool()
 
     row = await pool.fetchrow(
@@ -364,10 +372,12 @@ async def verify_email(token: str):
 class ForgotPasswordRequest(BaseModel):
     email: EmailStr
 
+    _normalizar_email = field_validator("email")(_normalizar_email)
+
 
 class ResetPasswordRequest(BaseModel):
     token: str
-    new_password: str
+    new_password: str = Field(min_length=8)
 
 
 @router.post("/forgot-password", status_code=200)

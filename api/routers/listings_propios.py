@@ -169,7 +169,6 @@ async def otp_enviar(req: OtpEnviarRequest, current_user: dict = Depends(get_cur
         )
     except Exception:
         logger.exception("OTP: fallo enviando email a %s", current_user["email"])
-    logger.info("OTP para owner %s: %s", owner_id, codigo)  # dev: visible en logs locales
     return {"enviado": True, "canal": "email"}
 
 

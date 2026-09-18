@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -188,10 +188,15 @@ async def update_map_config(request: Request, req: MapConfigRequest, current_use
 class SuscribirseIn(BaseModel):
     nombre: str
     apellido: Optional[str] = None
-    email: str
+    email: EmailStr
     barrio_id: Optional[int] = None
     intereses: Optional[str] = None
     newsletter_activo: bool = True
+
+    @field_validator("email")
+    @classmethod
+    def _normalizar_email(cls, v: str) -> str:
+        return v.strip().lower()
 
 
 class SuscribirseOut(BaseModel):
