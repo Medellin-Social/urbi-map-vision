@@ -54,7 +54,7 @@ type Props = {
     areaMin: number | null;
     areaMax: number | null;
     estrato: number[] | null;
-    tipoInmueble: string | null;
+    tipoInmueble: string[] | null;
     diasMercado: string | null;
     busqueda: string | null;
     amenidades: string[] | null;
@@ -1068,7 +1068,7 @@ export function MapView({
       if (f?.areaMin != null) params.set("area_min", String(f.areaMin));
       if (f?.areaMax != null) params.set("area_max", String(f.areaMax));
       if (f?.estrato?.length) for (const e of f.estrato) params.append("estrato", String(e));
-      if (f?.tipoInmueble) params.set("tipo_inmueble", f.tipoInmueble);
+      if (f?.tipoInmueble?.length) for (const t of f.tipoInmueble) params.append("tipo_inmueble", t);
       if (f?.diasMercado) params.set("dias_mercado", f.diasMercado);
       if (f?.busqueda?.trim()) params.set("busqueda", f.busqueda.trim());
       if (f?.amenidades?.length) for (const a of f.amenidades) params.append("amenidades", a);
@@ -1082,7 +1082,7 @@ export function MapView({
       // step even though clusters-mode data is identical the whole way, which
       // is what made a single comuna click cascade into 4-7 sequential requests.
       const hasGeo = mlsBarrioId != null || mlsCdComuna != null || !!mlsMunicipio;
-      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}|${f?.estadoInmueble}|${f?.pisoMin}`;
+      const filterKey = `${f?.habitaciones}|${f?.banos}|${f?.areaMin}|${f?.areaMax}|${f?.estrato?.join(",")}|${f?.tipoInmueble?.join(",")}|${f?.diasMercado}|${f?.busqueda}|${f?.amenidades?.join(",")}|${f?.estadoInmueble}|${f?.pisoMin}`;
       const zoomMode = map.getZoom() >= POLYGON_TIER_ZOOM ? "points" : "clusters";
       const dedupKey = hasGeo
         ? `${zoomMode}|${mlsBarrioId}|${mlsCdComuna}|${mlsMunicipio}|${mlsTipoOp}|${mlsPrecioMin}|${mlsPrecioMax}|${mlsAmoblado}|${filterKey}`
@@ -1150,7 +1150,7 @@ export function MapView({
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mapView, mlsBarrioId, mlsCdComuna, mlsMunicipio, mlsTipoOp, mlsPrecioMin, mlsPrecioMax, mlsAmoblado,
       mlsFilters?.habitaciones, mlsFilters?.banos, mlsFilters?.areaMin, mlsFilters?.areaMax,
-      mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble, mlsFilters?.diasMercado, mlsFilters?.busqueda,
+      mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble?.join(","), mlsFilters?.diasMercado, mlsFilters?.busqueda,
       mlsFilters?.amenidades?.join(",")]);
 
   // ── FIX 1c: polígono tier (comuna↔barrio por zoom) + auto-select por cámara ──

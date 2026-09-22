@@ -5,6 +5,9 @@
 2 gaps nuevos encontrados hoy (Deal/Convenio y Referidor/Afiliado/Embajador),
 más precios y el dato de cuenta que faltaba.*
 
+*Actualizado 2026-09-20: agregado punto #14 (login unificado por magic
+link) — ver §2.*
+
 ---
 
 ## 1. Cuenta / conexión (bloquea todo lo demás)
@@ -34,9 +37,10 @@ más precios y el dato de cuenta que faltaba.*
 | Tienda (negocio local) | Salida funcionando, entrada bloqueada | ídem §0b |
 | Agent / Owner / Agency | Propuesta de mapeo a Contact/Business, sin confirmar | ídem §1-4 |
 | Usuarios (registro web) / Leads de ads | Sin puente en ninguna dirección, ni siquiera diseñado | ídem, sección final (#12-13) |
+| Login unificado (magic link) | **Nuestro lado ya construido y testeado (2026-09-20)** — falta que Talal confirme que el webhook de Contact puede mandar el email | ídem, sección final (#14) |
 
 Preguntas puntuales pendientes de cada una: ver la sección "Pendiente de
-Talal" al final de `GHL_REALTOR_AGENCY_CONTRATO_PROPUESTO.md` (11 puntos ya
+Talal" al final de `GHL_REALTOR_AGENCY_CONTRATO_PROPUESTO.md` (14 puntos ya
 listados ahí).
 
 ---
@@ -164,7 +168,10 @@ Orden sugerido si hay que priorizar (lo más barato de confirmar primero):
 
 1. Cuenta (§1) — sin esto no se puede probar nada, ni siquiera lo que ya
    está implementado (`push_tienda_to_ghl` deployado pero inerte).
-2. Firma del webhook — desbloquea *todo* lo inbound de una sola vez.
+2. Firma del webhook — desbloquea *todo* lo inbound de una sola vez,
+   **incluido login unificado (#14) que ya no necesita nada más de nuestro
+   lado** — es la pieza más barata de todo este documento una vez exista
+   la firma: un solo campo (email) y un handler de 10 líneas.
 3. Deal/Convenio (§3) — es lo que se está discutiendo activamente ahora.
 4. Referidor (§4) — scope nuevo, decidir dónde vive antes de proponer campos.
 5. Resto (evento, tienda, agent/owner/agency, usuarios) — ya tienen propuesta

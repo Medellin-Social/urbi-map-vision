@@ -123,13 +123,19 @@ function MapPageInner() {
 
   // API-level filters derived from sharedFilters — trigger refetch when changed
   const apiFilters = useMemo<ListingsApiFilters>(() => ({
-    area_min:   sharedFilters.areaMin,
-    area_max:   sharedFilters.areaMax,
-    banos:      sharedFilters.banos,
-    antiguedad: sharedFilters.antiguedad,
-    amenidades: sharedFilters.amenidades,
-    amoblado:   sharedFilters.amoblado,
-  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad, sharedFilters.amenidades, sharedFilters.amoblado]);
+    area_min:     sharedFilters.areaMin,
+    area_max:     sharedFilters.areaMax,
+    banos:        sharedFilters.banos,
+    antiguedad:   sharedFilters.antiguedad,
+    amenidades:   sharedFilters.amenidades,
+    amoblado:     sharedFilters.amoblado,
+    precio_min:   sharedFilters.precioMin,
+    precio_max:   sharedFilters.precioMax,
+    habitaciones: sharedFilters.habitaciones,
+    tipo_inmueble: sharedFilters.tipoInmueble,
+  }), [sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad,
+       sharedFilters.amenidades, sharedFilters.amoblado, sharedFilters.precioMin, sharedFilters.precioMax,
+       sharedFilters.habitaciones, sharedFilters.tipoInmueble]);
 
   // Remaining shared filters applied server-side in /viewport (map + panel single source).
   const mlsFilters = useMemo(() => ({

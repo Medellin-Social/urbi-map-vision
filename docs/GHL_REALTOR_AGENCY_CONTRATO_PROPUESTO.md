@@ -376,3 +376,21 @@ columnas ya reservadas para esto pero sin código que las use — ver
     *descubrir* leads nuevos sin (a) la firma del webhook (bloqueador #1, ya
     pendiente arriba) o (b) ese endpoint de listado — ninguno de los dos está
     confirmado hoy.
+14. **Login unificado (magic link ↔ Contact) — agregado 2026-09-20, ya
+    tenemos el lado nuestro construido:** login sin contraseña por email
+    (`POST /auth/magic-link` + `/auth/magic-link/verificar`) está en
+    producción-ready de nuestro lado — auto-registra si el email no existe
+    todavía en `usuarios`. Esto le da un destino concreto a #13: si un
+    Contact se crea en GHL (form/funnel), con solo su email ya podemos
+    darle acceso a Medellín Social sin que pise `/register`. Falta de
+    Talal:
+    - ¿El Workflow "Contact Created" (o el que corresponda al
+      funnel/form específico) puede disparar el webhook de #13 con el
+      email del Contact en el payload? No necesitamos más campos que ese
+      para este flujo — es el caso más simple de los 14 puntos de esta
+      lista.
+    - `object_type: "contact"` no existe todavía en nuestro `_HANDLERS`
+      (`api/routers/ghl_webhook.py`) — lo agregamos apenas Talal confirme
+      el payload, no es trabajo pesado.
+    - Sigue bloqueado por lo mismo de siempre: `GHL_WEBHOOK_SECRET` sin
+      configurar (§1 arriba).

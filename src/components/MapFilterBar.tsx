@@ -22,7 +22,7 @@ export type SharedFilters = {
   precioMin: number | null;
   precioMax: number | null;
   habitaciones: number | null;
-  tipoInmueble: string | null;
+  tipoInmueble: string[] | null;
   areaMin: number | null;
   areaMax: number | null;
   banos: number | null;
@@ -234,7 +234,7 @@ function countActive(f: SharedFilters): number {
   if (f.precioMax !== null || f.precioMin !== null) n++;
   if (f.habitaciones !== null) n++;
   if (f.banos !== null) n++;
-  if (f.tipoInmueble !== null) n++;
+  if (f.tipoInmueble !== null && f.tipoInmueble.length > 0) n++;
   if (f.areaMin !== null || f.areaMax !== null) n++;
   if (f.antiguedad !== null) n++;
   if (f.estrato !== null && f.estrato.length > 0) n++;
@@ -343,7 +343,10 @@ function habLabel(f: SharedFilters): string {
 }
 
 function tipoLabel(f: SharedFilters): string {
-  return TIPO_OPTIONS.find((o) => o.value === f.tipoInmueble)?.label ?? "Tipo";
+  const sel = f.tipoInmueble ?? [];
+  if (sel.length === 0) return "Tipo";
+  if (sel.length === 1) return TIPO_OPTIONS.find((o) => o.value === sel[0])?.label ?? "Tipo";
+  return `Tipo (${sel.length})`;
 }
 
 // areaMin/areaMax en SharedFilters siempre están en m² (canónico para la API);
@@ -815,20 +818,27 @@ function TipoPanel({
   filters: SharedFilters;
   onChange: (f: Partial<SharedFilters>) => void;
 }) {
-  const OPTS = [{ value: null as string | null, label: "Todos" }, ...TIPO_OPTIONS];
+  const sel = filters.tipoInmueble ?? [];
+  const toggle = (value: string) => {
+    const next = sel.includes(value) ? sel.filter((v) => v !== value) : [...sel, value];
+    onChange({ tipoInmueble: next.length === 0 ? null : next });
+  };
   return (
     <div style={{ ...panelBase, minWidth: 200, padding: "12px 8px" }}>
       <span style={{ ...labelSm, padding: "0 8px" }}>Tipo de inmueble</span>
       <div style={{ display: "flex", flexDirection: "column", gap: 2, marginTop: 8 }}>
-        {OPTS.map((opt) => {
-          const active = filters.tipoInmueble === opt.value;
+        {TIPO_OPTIONS.map((opt) => {
+          const active = sel.includes(opt.value);
           return (
-            <button
-              key={String(opt.value)}
-              onClick={() => onChange({ tipoInmueble: opt.value })}
+            <div
+              key={opt.value}
+              role="checkbox"
+              aria-checked={active}
+              onClick={() => toggle(opt.value)}
               style={{
-                width: "100%", textAlign: "left", padding: "8px 10px", borderRadius: 7,
-                border: "none", cursor: "pointer", fontSize: 13,
+                display: "flex", alignItems: "center", gap: 8,
+                width: "100%", padding: "8px 10px", borderRadius: 7,
+                cursor: "pointer", fontSize: 13, userSelect: "none",
                 background: active ? C.teal : "transparent",
                 color: active ? "#fff" : C.ink,
                 fontWeight: active ? 600 : 400,
@@ -836,11 +846,33 @@ function TipoPanel({
               onMouseEnter={(e) => { if (!active) e.currentTarget.style.background = C.surface; }}
               onMouseLeave={(e) => { if (!active) e.currentTarget.style.background = "transparent"; }}
             >
+              <span style={{
+                width: 16, height: 16, borderRadius: 4, flexShrink: 0,
+                border: `2px solid ${active ? "#fff" : C.border}`,
+                background: active ? "rgba(255,255,255,0.2)" : "transparent",
+                display: "flex", alignItems: "center", justifyContent: "center",
+              }}>
+                {active && (
+                  <svg width="9" height="7" viewBox="0 0 10 8" fill="none">
+                    <path d="M1 4L3.5 6.5L9 1" stroke="#fff" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </span>
               {opt.label}
-            </button>
+            </div>
           );
         })}
       </div>
+      {sel.length > 0 && (
+        <div style={{ marginTop: 8, paddingTop: 8, borderTop: `1px solid ${C.border}`, display: "flex", justifyContent: "flex-end" }}>
+          <button
+            onClick={() => onChange({ tipoInmueble: null })}
+            style={{ fontSize: 12, color: C.muted, background: "none", border: "none", cursor: "pointer", padding: "0 8px" }}
+          >
+            Limpiar
+          </button>
+        </div>
+      )}
     </div>
   );
 }
@@ -1074,7 +1106,7 @@ export function MapFilterBar({
   const activeCount = countActive(filters);
   const precioActive     = filters.precioMax !== null || filters.precioMin !== null;
   const habActive        = filters.habitaciones !== null;
-  const tipoActive       = filters.tipoInmueble !== null;
+  const tipoActive       = (filters.tipoInmueble?.length ?? 0) > 0;
   const banosActive      = filters.banos !== null;
 
   // ── Sell tab: barrio selector ──────────────────────────────────────────────
@@ -1361,21 +1393,28 @@ export function MapFilterBar({
         <div style={{ marginBottom: 20 }}>
           <span style={labelSm}>Tipo de inmueble</span>
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            {[{ value: null, label: "Todos" }, ...TIPO_OPTIONS].map((opt) => (
-              <button
-                key={String(opt.value)}
-                onClick={() => onFiltersChange({ tipoInmueble: opt.value })}
-                style={{
-                  padding: "6px 12px", borderRadius: 8, fontSize: 12,
-                  border: `1px solid ${filters.tipoInmueble === opt.value ? C.teal : C.border}`,
-                  background: filters.tipoInmueble === opt.value ? C.teal : C.white,
-                  color: filters.tipoInmueble === opt.value ? "#fff" : C.ink,
-                  cursor: "pointer",
-                }}
-              >
-                {opt.label}
-              </button>
-            ))}
+            {TIPO_OPTIONS.map((opt) => {
+              const active = (filters.tipoInmueble ?? []).includes(opt.value);
+              return (
+                <button
+                  key={opt.value}
+                  onClick={() => {
+                    const sel = filters.tipoInmueble ?? [];
+                    const next = active ? sel.filter((v) => v !== opt.value) : [...sel, opt.value];
+                    onFiltersChange({ tipoInmueble: next.length === 0 ? null : next });
+                  }}
+                  style={{
+                    padding: "6px 12px", borderRadius: 8, fontSize: 12,
+                    border: `1px solid ${active ? C.teal : C.border}`,
+                    background: active ? C.teal : C.white,
+                    color: active ? "#fff" : C.ink,
+                    cursor: "pointer",
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 

@@ -289,7 +289,9 @@ LEFT JOIN (
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text    IS NULL OR l.tipo_operacion = $3)
-  AND ($4::text    IS NULL OR LOWER(l.tipo_inmueble) LIKE '%' || LOWER($4) || '%')
+  AND ($4::text[]  IS NULL OR EXISTS (
+      SELECT 1 FROM unnest($4::text[]) _ti WHERE LOWER(l.tipo_inmueble) LIKE '%' || LOWER(_ti) || '%'
+  ))
   AND ($5::bigint  IS NULL OR l.precio >= $5)
   AND ($6::bigint  IS NULL OR l.precio <= $6)
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
@@ -336,7 +338,9 @@ _ALLCITY_CTE_CLOSE = (
 )
 _ALLCITY_CTE_REPLACEMENT = """      AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
       AND ($3::text    IS NULL OR tipo_operacion = $3)
-      AND ($4::text    IS NULL OR LOWER(tipo_inmueble) LIKE '%' || LOWER($4) || '%')
+      AND ($4::text[]  IS NULL OR EXISTS (
+          SELECT 1 FROM unnest($4::text[]) _ti WHERE LOWER(tipo_inmueble) LIKE '%' || LOWER(_ti) || '%'
+      ))
       AND ($5::bigint  IS NULL OR precio_cop >= $5)
       AND ($6::bigint  IS NULL OR precio_cop <= $6)
       AND ($7::float8  IS NULL OR area_m2 >= $7)
@@ -377,7 +381,9 @@ LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
   AND ($3::text   IS NULL OR l.tipo_operacion = $3)
-  AND ($4::text   IS NULL OR LOWER(l.tipo_inmueble) LIKE '%' || LOWER($4) || '%')
+  AND ($4::text[] IS NULL OR EXISTS (
+      SELECT 1 FROM unnest($4::text[]) _ti WHERE LOWER(l.tipo_inmueble) LIKE '%' || LOWER(_ti) || '%'
+  ))
   AND ($5::bigint IS NULL OR l.precio >= $5)
   AND ($6::bigint IS NULL OR l.precio <= $6)
   AND ($7::float8 IS NULL OR l.area_m2 >= $7)
@@ -557,7 +563,7 @@ async def get_all_listings(
     barrio_id: Optional[int] = Query(default=None),
     only_premium: bool = Query(default=False),
     tipo_operacion: Optional[str] = Query(default=None),
-    tipo_inmueble: Optional[str] = Query(default=None),
+    tipo_inmueble: Optional[list[str]] = Query(default=None),
     precio_min: Optional[int] = Query(default=None),
     precio_max: Optional[int] = Query(default=None),
     area_min: Optional[float] = Query(default=None),
@@ -607,9 +613,10 @@ async def get_all_listings(
     am_clauses, am_extra = _build_amenidades_sql(amenidades or [])
     _eff_count_sql    = _COUNT_SQL_TMPL.format(amenidades_filter=am_clauses)
     _eff_listings_sql = _LISTINGS_SQL_TMPL.format(amenidades_filter=am_clauses)
+    tipo_inmueble_arg = tipo_inmueble if tipo_inmueble else None
 
     def _args(tipo_op: Optional[str]) -> tuple:
-        return (municipio, barrio_ids, tipo_op, tipo_inmueble,
+        return (municipio, barrio_ids, tipo_op, tipo_inmueble_arg,
                 precio_min, precio_max, area_min, habitaciones, only_premium,
                 area_max, banos, cd_comuna, estrato_real, antiguedad, amoblado) + tuple(am_extra)
 
@@ -926,7 +933,7 @@ _VIEWPORT_PANEL_CAP = 200
 # active so the whole zone shows), $5 tipo_op, $6 precio_min, $7 precio_max,
 # $8 barrio_ids int[] (neighbor-expanded), $9 cd_comuna, $10 municipio,
 # $11 amoblado, $12 habitaciones (>=), $13 banos (>=), $14 area_min, $15 area_max,
-# $16 estrato int[], $17 tipo_inmueble (substring), $18 dias_mercado bucket,
+# $16 estrato int[], $17 tipo_inmueble text[] (substring, OR), $18 dias_mercado bucket,
 # $19 busqueda (ILIKE direccion), $20 amenidades ILIKE patterns text[] (OR match,
 # strict on NULL), $21 estado_inmueble ("Nuevo"|"Usado", metrocuadrado only),
 # $22 piso_min (>=, metrocuadrado only). Clusters group by comuna/municipio —
@@ -949,7 +956,8 @@ _VIEWPORT_EXTRA_WHERE = """\
   AND ($14::float8 IS NULL OR l.area_m2 >= $14)
   AND ($15::float8 IS NULL OR l.area_m2 <= $15)
   AND ($16::int[]  IS NULL OR g.estrato_real = ANY($16))
-  AND ($17::text   IS NULL OR l.tipo_inmueble ILIKE '%' || $17 || '%')
+  AND ($17::text[] IS NULL OR EXISTS (
+        SELECT 1 FROM unnest($17::text[]) _ti WHERE l.tipo_inmueble ILIKE '%' || _ti || '%'))
   AND ($18::text   IS NULL OR CASE $18
         WHEN 'nuevo'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 7
         WHEN 'reciente' THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 30
@@ -1132,7 +1140,7 @@ async def get_listings_viewport(
     area_min: Optional[float] = Query(default=None),
     area_max: Optional[float] = Query(default=None),
     estrato: Optional[list[int]] = Query(default=None),
-    tipo_inmueble: Optional[str] = Query(default=None),
+    tipo_inmueble: Optional[list[str]] = Query(default=None),
     dias_mercado: Optional[str] = Query(default=None),
     busqueda: Optional[str] = Query(default=None),
     amenidades: Optional[list[str]] = Query(default=None),
@@ -1154,9 +1162,10 @@ async def get_listings_viewport(
     bbox = (None, None, None, None) if has_geo else (min_lng, min_lat, max_lng, max_lat)
     # estrato [] → None so the ANY() guard short-circuits instead of matching nothing.
     estrato_arg = estrato if estrato else None
+    tipo_inmueble_arg = tipo_inmueble if tipo_inmueble else None
     args = (
         *bbox, tipo_operacion, precio_min, precio_max, barrio_ids, cd_comuna, municipio, amoblado,
-        habitaciones, banos, area_min, area_max, estrato_arg, tipo_inmueble,
+        habitaciones, banos, area_min, area_max, estrato_arg, tipo_inmueble_arg,
         (dias_mercado or None), (busqueda.strip() if busqueda and busqueda.strip() else None),
         _amenidad_like_patterns(amenidades),
         estado_inmueble, piso_min,

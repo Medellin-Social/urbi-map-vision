@@ -549,6 +549,10 @@ export type ListingsApiFilters = {
   antiguedad?: string | null;
   amenidades?: string[] | null;
   amoblado?: boolean | null;
+  precio_min?: number | null;
+  precio_max?: number | null;
+  habitaciones?: number | null;
+  tipo_inmueble?: string[] | null;
 };
 
 export function useListings(
@@ -580,6 +584,12 @@ export function useListings(
         for (const a of extraFilters.amenidades) params.append("amenidades", a);
       }
       if (extraFilters?.amoblado != null) params.set("amoblado", String(extraFilters.amoblado));
+      if (extraFilters?.precio_min != null) params.set("precio_min", String(extraFilters.precio_min));
+      if (extraFilters?.precio_max != null) params.set("precio_max", String(extraFilters.precio_max));
+      if (extraFilters?.habitaciones != null) params.set("habitaciones", String(extraFilters.habitaciones));
+      if (extraFilters?.tipo_inmueble?.length) {
+        for (const t of extraFilters.tipo_inmueble) params.append("tipo_inmueble", t);
+      }
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
     enabled: forceEnabled || barrioId != null || cdComuna != null || !!municipioNombre,
