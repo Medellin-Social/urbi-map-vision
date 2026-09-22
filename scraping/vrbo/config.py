@@ -46,6 +46,31 @@ CREATE INDEX IF NOT EXISTS idx_lp_barrio_id      ON raw.listings_premium(barrio_
 CREATE INDEX IF NOT EXISTS idx_lp_fuente         ON raw.listings_premium(fuente);
 CREATE INDEX IF NOT EXISTS idx_lp_tipo_operacion ON raw.listings_premium(tipo_operacion);
 CREATE INDEX IF NOT EXISTS idx_lp_precio_cop     ON raw.listings_premium(precio_cop);
+
+-- historial de precio, mismo patrón que raw.fn_track_precio_cambio() (alembic 0018)
+-- pero sobre precio_cop en vez de precio.
+CREATE OR REPLACE FUNCTION raw.fn_track_precio_cambio_premium()
+RETURNS trigger LANGUAGE plpgsql AS $BODY$
+BEGIN
+    IF OLD.precio_cop IS DISTINCT FROM NEW.precio_cop
+       AND OLD.precio_cop IS NOT NULL
+       AND NEW.precio_cop IS NOT NULL
+       AND NEW.precio_cop > 0
+    THEN
+        INSERT INTO raw.listings_precio_historial
+            (listing_url, fuente, precio_anterior, precio_nuevo, fecha_cambio)
+        VALUES
+            (NEW.url, NEW.fuente, OLD.precio_cop, NEW.precio_cop, CURRENT_DATE)
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$BODY$;
+
+DROP TRIGGER IF EXISTS trg_precio_cambio_premium ON raw.listings_premium;
+CREATE TRIGGER trg_precio_cambio_premium
+    BEFORE UPDATE OF precio_cop ON raw.listings_premium
+    FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio_premium();
 """
 
 UPSERT_SQL = """

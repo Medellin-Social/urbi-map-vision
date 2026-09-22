@@ -49,6 +49,31 @@ CREATE INDEX IF NOT EXISTS idx_lrm_fuente    ON raw.listings_renta_media(fuente)
 ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS descripcion  TEXT;
 ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS fotos        TEXT[];
 ALTER TABLE raw.listings_renta_media ADD COLUMN IF NOT EXISTS amenidades   TEXT[];
+
+-- historial de precio, mismo patrón que raw.fn_track_precio_cambio() (alembic 0018)
+-- pero sobre precio_mes_cop en vez de precio.
+CREATE OR REPLACE FUNCTION raw.fn_track_precio_cambio_renta_media()
+RETURNS trigger LANGUAGE plpgsql AS $BODY$
+BEGIN
+    IF OLD.precio_mes_cop IS DISTINCT FROM NEW.precio_mes_cop
+       AND OLD.precio_mes_cop IS NOT NULL
+       AND NEW.precio_mes_cop IS NOT NULL
+       AND NEW.precio_mes_cop > 0
+    THEN
+        INSERT INTO raw.listings_precio_historial
+            (listing_url, fuente, precio_anterior, precio_nuevo, fecha_cambio)
+        VALUES
+            (NEW.url, NEW.fuente, OLD.precio_mes_cop, NEW.precio_mes_cop, CURRENT_DATE)
+        ON CONFLICT DO NOTHING;
+    END IF;
+    RETURN NEW;
+END;
+$BODY$;
+
+DROP TRIGGER IF EXISTS trg_precio_cambio_renta_media ON raw.listings_renta_media;
+CREATE TRIGGER trg_precio_cambio_renta_media
+    BEFORE UPDATE OF precio_mes_cop ON raw.listings_renta_media
+    FOR EACH ROW EXECUTE FUNCTION raw.fn_track_precio_cambio_renta_media();
 """
 
 
