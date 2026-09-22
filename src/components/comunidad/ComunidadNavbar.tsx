@@ -3,6 +3,7 @@ import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
+import { auth } from '../../lib/auth'
 
 const K = {
   ink:      '#14201d',
@@ -84,6 +85,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const logged = !!auth.get()
 
   function setLang(l: 'es' | 'en') {
     setBarrioLang(l)
@@ -279,8 +281,14 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             ))}
           </div>
 
-          {/* RIGHT: subscribe + ES/EN — desktop only */}
+          {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
           <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+            <a
+              href={logged ? '/mis-propiedades' : '/login'}
+              style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
+            >
+              {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
+            </a>
             <a
               href="/suscribirse"
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
@@ -385,6 +393,17 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                 {link.label}
               </a>
             ))}
+
+            <a
+              href={logged ? '/mis-propiedades' : '/login'}
+              onClick={() => setMenuAbierto(false)}
+              style={{
+                display: 'block', color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 500,
+                textDecoration: 'none', padding: '10px 0', borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+              }}
+            >
+              {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
+            </a>
 
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
               <a
