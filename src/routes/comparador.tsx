@@ -144,11 +144,9 @@ function HistorialSection({
 
   const deleteMut = useMutation({
     mutationFn: (id: number) =>
-      fetch(API_ENDPOINTS.comparadorHistorialItem(id), {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("medellin-social.token") ?? ""}` },
-      }),
+      apiFetch(API_ENDPOINTS.comparadorHistorialItem(id), { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["comparador-historial"] }),
+    onError: () => toast.error("No se pudo eliminar la comparación"),
   });
 
   if (!isPro) return null;
@@ -250,15 +248,20 @@ function TabBarrios({
   const [filtroInversion, setFiltroInversion] = useState<InversionFiltro>(
     (forcedFiltro as InversionFiltro) ?? null
   );
+  const [nombre, setNombre] = useState("");
   const qc = useQueryClient();
 
   const saveMut = useMutation({
-    mutationFn: (data: { tipo: string; items: number[]; filtro_inversion?: string | null }) =>
+    mutationFn: (data: { tipo: string; items: number[]; filtro_inversion?: string | null; nombre?: string }) =>
       apiFetch(API_ENDPOINTS.comparadorHistorial, {
         method: "POST",
         body: JSON.stringify(data),
       }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["comparador-historial"] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["comparador-historial"] });
+      toast.success("Comparación guardada");
+    },
+    onError: () => toast.error("No se pudo guardar la comparación"),
   });
 
   useEffect(() => {
@@ -357,21 +360,31 @@ function TabBarrios({
 
         {/* Guardar comparación */}
         {items.length >= 2 && (
-          <button
-            onClick={() => {
-              saveMut.mutate({
-                tipo: "barrios",
-                items: ids,
-                filtro_inversion: filtroInversion,
-              });
-              toast.success("Comparación guardada");
-            }}
-            disabled={saveMut.isPending}
-            className="inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
-          >
-            Guardar
-          </button>
+          <>
+            <input
+              value={nombre}
+              onChange={(e) => setNombre(e.target.value)}
+              placeholder="Nombre (opcional)"
+              className="rounded-md px-2 py-1 text-xs outline-none"
+              style={{ border: "0.5px solid #E8E0D0", color: "#1A1208", background: "#FFFFFF", width: 140 }}
+            />
+            <button
+              onClick={() => {
+                saveMut.mutate({
+                  tipo: "barrios",
+                  items: ids,
+                  filtro_inversion: filtroInversion,
+                  nombre: nombre.trim() || undefined,
+                });
+                setNombre("");
+              }}
+              disabled={saveMut.isPending}
+              className="inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium text-white transition hover:opacity-90"
+              style={{ background: "#1D9E75" }}
+            >
+              Guardar
+            </button>
+          </>
         )}
       </div>
 
@@ -676,6 +689,7 @@ function TabInmuebles({
   }, [Array.isArray(initialIds) ? initialIds.join(",") : String(initialIds ?? ""), storeListings.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const userGoal = auth.get()?.goal;
+  const [nombre, setNombre] = useState("");
 
   const { data: listings = [], isLoading } = useQuery<ComparadorListing[]>({
     queryKey: ["comparador-listings", ids.join(",")],
@@ -688,12 +702,14 @@ function TabInmuebles({
     mutationFn: () =>
       apiFetch(API_ENDPOINTS.comparadorHistorial, {
         method: "POST",
-        body: JSON.stringify({ tipo: "listings", items: ids }),
+        body: JSON.stringify({ tipo: "listings", items: ids, nombre: nombre.trim() || undefined }),
       }),
     onSuccess: () => {
+      setNombre("");
       qc.invalidateQueries({ queryKey: ["comparador-historial"] });
       toast.success("Comparación guardada");
     },
+    onError: () => toast.error("No se pudo guardar la comparación"),
   });
 
   if (!isPro) {
@@ -768,14 +784,23 @@ function TabInmuebles({
         </p>
         <div className="flex gap-2">
           {listings.length >= 2 && (
-            <button
-              onClick={() => saveMut.mutate()}
-              disabled={saveMut.isPending}
-              className="rounded-xl px-4 py-1.5 text-xs font-semibold text-[#085041] transition hover:bg-[#E1F5EE]"
-              style={{ border: "0.5px solid #1D9E75" }}
-            >
-              Guardar comparación
-            </button>
+            <>
+              <input
+                value={nombre}
+                onChange={(e) => setNombre(e.target.value)}
+                placeholder="Nombre (opcional)"
+                className="rounded-xl px-3 py-1.5 text-xs outline-none"
+                style={{ border: "0.5px solid #E8E0D0", color: "#1A1208", background: "#FFFFFF", width: 140 }}
+              />
+              <button
+                onClick={() => saveMut.mutate()}
+                disabled={saveMut.isPending}
+                className="rounded-xl px-4 py-1.5 text-xs font-semibold text-[#085041] transition hover:bg-[#E1F5EE]"
+                style={{ border: "0.5px solid #1D9E75" }}
+              >
+                Guardar comparación
+              </button>
+            </>
           )}
           <button
             onClick={() => { clearAll(); setIds([]); }}
@@ -979,10 +1004,10 @@ function ComparadorPage() {
       <MapNavbar activeTab="comparador" onTabChange={() => {}} />
       <main className="mx-auto max-w-6xl px-4 pt-24 sm:px-6">
         <Link
-          to="/realtor/dashboard"
+          to="/map"
           className="inline-flex items-center gap-1 text-xs uppercase tracking-widest text-muted-foreground transition hover:text-primary"
         >
-          <ArrowLeft className="h-3 w-3" /> Volver al dashboard
+          <ArrowLeft className="h-3 w-3" /> Volver al mapa
         </Link>
 
         <h1 className="mt-4 font-display text-3xl font-semibold text-[#1A1208]">Comparador</h1>

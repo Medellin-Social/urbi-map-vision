@@ -1715,6 +1715,7 @@ export function MapFilterBar({
     <>
       <div
         ref={barRef}
+        data-tour="filters"
         style={{
           position: "fixed", top: 52, left: 0, right: 0, zIndex: 40,
           background: C.white,

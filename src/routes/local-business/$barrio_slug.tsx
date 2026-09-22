@@ -99,7 +99,7 @@ function slugForComuna(cd: number, municipio: string, barrios: Barrio[]): string
   return barrios.find(b => b.municipio_nombre?.toUpperCase() === municipio.toUpperCase())?.slug
 }
 
-function NegociosMap({ barrio, barrios, visible = true }: { barrio: Barrio; barrios: Barrio[]; visible?: boolean }) {
+function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Barrio; barrios: Barrio[]; visible?: boolean; isMobile?: boolean }) {
   const containerRef      = useRef<HTMLDivElement>(null)
   const mapRef            = useRef<mapboxgl.Map | null>(null)
   const staticFeaturesRef = useRef<GeoJSON.Feature[]>([])
@@ -460,7 +460,11 @@ function NegociosMap({ barrio, barrios, visible = true }: { barrio: Barrio; barr
     if (!visible) return
     const raf = requestAnimationFrame(() => mapRef.current?.resize())
     return () => cancelAnimationFrame(raf)
-  }, [visible])
+    // isMobile pasa de undefined → true/false en el primer tick (useIsMobile mide
+    // window en un efecto), lo que cambia el layout del contenedor (flex desktop
+    // 480px+1fr, que en una pantalla angosta mide 0, → bloque mobile 100%) sin que
+    // `visible` cambie de valor — hay que re-medir aunque `visible` se mantenga igual.
+  }, [visible, isMobile])
 
   return (
     <div style={{ position: 'relative', width: '100%', height: '100%' }}>
@@ -772,7 +776,7 @@ function LocalBusinessPage() {
         } : {
           flex: 1, padding: 12, background: K.surface,
         }}>
-          <NegociosMap barrio={barrio} barrios={barrios} visible={!isMobile || mobileView === 'map'} />
+          <NegociosMap barrio={barrio} barrios={barrios} visible={!isMobile || mobileView === 'map'} isMobile={isMobile} />
         </div>
 
        </div>

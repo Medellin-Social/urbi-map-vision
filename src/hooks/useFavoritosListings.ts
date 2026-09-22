@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback } from "react";
+import { toast } from "sonner";
 import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 
@@ -7,6 +8,7 @@ const BASE = API_ENDPOINTS.favoritos + "/listings";
 export function useFavoritosListings() {
   const [favUrls, setFavUrls] = useState<Set<string>>(new Set());
   const [loaded, setLoaded] = useState(false);
+  const [pending, setPending] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!getToken()) return;
@@ -22,20 +24,33 @@ export function useFavoritosListings() {
     return !!url && favUrls.has(url);
   }, [favUrls]);
 
-  const toggle = useCallback(async (url: string | null | undefined, barrioId?: number | null) => {
-    if (!url || !getToken()) return;
-    if (favUrls.has(url)) {
-      await apiFetch(`${BASE}?url=${encodeURIComponent(url)}`, { method: "DELETE" }).catch(() => {});
-      setFavUrls((prev) => { const n = new Set(prev); n.delete(url); return n; });
-    } else {
-      await apiFetch(BASE, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url, barrio_id: barrioId ?? null }),
-      }).catch(() => {});
-      setFavUrls((prev) => new Set([...prev, url]));
-    }
-  }, [favUrls]);
+  const isPending = useCallback((url: string | null | undefined): boolean => {
+    return !!url && pending.has(url);
+  }, [pending]);
 
-  return { isFav, toggle, loaded };
+  const toggle = useCallback(async (url: string | null | undefined, barrioId?: number | null) => {
+    if (!url || !getToken() || pending.has(url)) return;
+    const removing = favUrls.has(url);
+    setPending((prev) => new Set(prev).add(url));
+    try {
+      if (removing) {
+        await apiFetch(`${BASE}?url=${encodeURIComponent(url)}`, { method: "DELETE" });
+        setFavUrls((prev) => { const n = new Set(prev); n.delete(url); return n; });
+      } else {
+        await apiFetch(BASE, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ url, barrio_id: barrioId ?? null }),
+        });
+        setFavUrls((prev) => new Set(prev).add(url));
+      }
+    } catch {
+      // Estado local NO se toca — si la request falló, el corazón se queda como estaba.
+      toast.error(removing ? "No se pudo quitar de favoritos" : "No se pudo guardar en favoritos");
+    } finally {
+      setPending((prev) => { const n = new Set(prev); n.delete(url); return n; });
+    }
+  }, [favUrls, pending]);
+
+  return { isFav, toggle, loaded, isPending };
 }

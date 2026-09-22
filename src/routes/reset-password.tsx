@@ -29,7 +29,7 @@ function ResetPasswordPage() {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!token) { setError("Ingresa el token de recuperación."); return; }
-    if (password.length < 6) { setError("La contraseña debe tener mínimo 6 caracteres."); return; }
+    if (password.length < 8) { setError("La contraseña debe tener mínimo 8 caracteres."); return; }
     if (password !== confirm) { setError("Las contraseñas no coinciden."); return; }
     setError("");
     setLoading(true);
@@ -82,7 +82,7 @@ function ResetPasswordPage() {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             className="mt-1 w-full rounded-md border border-border bg-background/40 px-3 py-2.5 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-            placeholder="Mínimo 6 caracteres"
+            placeholder="Mínimo 8 caracteres"
           />
         </div>
         <div>

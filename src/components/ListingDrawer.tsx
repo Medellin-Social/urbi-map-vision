@@ -1431,6 +1431,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               />
               <motion.div
                 key="listing-drawer-mobile"
+                data-tour="listing-drawer"
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 32, stiffness: 300 }}
                 className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl shadow-2xl"
@@ -1588,6 +1589,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               exit={{ scale: 0.95, opacity: 0 }}
               transition={{ duration: 0.2, ease: "easeOut" }}
               transformTemplate={(_, generated) => `translate(-50%, -50%) ${generated}`}
+              data-tour="listing-drawer"
               className="fixed z-50 flex flex-col overflow-hidden rounded-2xl shadow-2xl"
               style={{
                 top: "50%",

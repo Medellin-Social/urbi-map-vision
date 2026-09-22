@@ -729,8 +729,9 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
           </div>
           <button
             onClick={toggleFav}
+            disabled={addFav.isPending || removeFav.isPending}
             title={fav ? "Quitar de favoritos" : "Guardar en favoritos"}
-            className={`grid h-9 w-9 place-items-center rounded-full border transition ${
+            className={`grid h-9 w-9 place-items-center rounded-full border transition disabled:opacity-50 ${
               fav ? "border-warning/60 bg-warning/15 text-warning" : "border-border bg-background/40 text-muted-foreground hover:text-warning"
             }`}
           >

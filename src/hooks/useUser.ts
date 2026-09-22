@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { getToken } from "@/lib/apiClient";
@@ -59,12 +60,14 @@ export function useToggleFavorito() {
         body: JSON.stringify({ barrio_id: barrioId }),
       }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["favoritos"] }),
+    onError: () => toast.error("No se pudo guardar en favoritos"),
   });
 
   const remove = useMutation({
     mutationFn: (barrioId: number) =>
       apiFetch<void>(`${API_ENDPOINTS.favoritos}/${barrioId}`, { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["favoritos"] }),
+    onError: () => toast.error("No se pudo quitar de favoritos"),
   });
 
   return { add, remove };

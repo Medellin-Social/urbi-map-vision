@@ -8,13 +8,6 @@ export type SimulacionRequest = {
   tipo_inversion: "airbnb" | "renta_larga" | "renta_media";
   perfil_riesgo?: "conservador" | "moderado" | "agresivo";
   horizonte_anos?: number;
-  // Legacy profile fields
-  n_unidades?: string;
-  tipo_gestion?: string;
-  target_inquilino?: string;
-  amoblado?: string;
-  tipo_pago?: string;
-  horizonte_inversion?: string;
   // Fine-grained expense overrides
   administracion_mes?: number | null;
   vacancia_pct?: number | null;
@@ -98,20 +91,8 @@ export type SimulacionResponse = {
   datos_insuficientes: boolean;
   zona_score?: number | null;
   zona_categoria?: string | null;
-  ingreso_bruto_mensual?: number | null;
-  costo_gestion_mensual?: number | null;
-  ingreso_neto_gestion_mensual?: number | null;
-  n_unidades_efectivo?: number | null;
-  down_payment_cop?: number | null;
-  monto_credito_cop?: number | null;
-  cuota_mensual?: number | null;
-  flujo_neto_mensual?: number | null;
-  yield_coc_pct?: number | null;
-  recupero_credito_anos?: number | null;
-  nota_hipoteca?: string | null;
-  costo_amoblado?: number | null;
-  presupuesto_efectivo?: number | null;
-  valor_20anos_cop?: number | null;
+  seguridad_score?: number | null;
+  liquidez_score?: number | null;
   // New fields
   flujo_caja_desglose?: FlujoCajaDesglose | null;
   comparativo_modalidades?: ComparativoModalidad[] | null;
@@ -131,6 +112,9 @@ export type ListingSimuladorData = {
   administracion: number | null;
   tipo_inmueble: string | null;
   tipo_operacion: string | null;
+  uso_suelo_pot: string | null;
+  estrato_manzana: number | null;
+  uso_suelo_flag: boolean;
 };
 
 export type AlternativaListing = {

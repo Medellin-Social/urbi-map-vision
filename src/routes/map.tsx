@@ -20,8 +20,10 @@ import { ListingDrawer } from "@/components/ListingDrawer";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ListingPopup } from "@/components/listing-popup/ListingPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
+import { MapTourModal } from "@/components/MapTourModal";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { List, Map as MapIcon } from "lucide-react";
+import { AnimatePresence } from "framer-motion";
 
 export const Route = createFileRoute("/map")({
   component: MapPage,
@@ -187,7 +189,7 @@ function MapPageInner() {
   const [activeComuna, setActiveComuna] = useState<string | null>(null);
   const [activeComunaCd, setActiveComunaCd] = useState<number | null>(null);
   const [activeMunicipio, setActiveMunicipio] = useState<string | null>(null);
-  const returnToComunasRef = useRef<(() => void) | null>(null);
+  const returnToComunasRef = useRef<((speed?: number) => void) | null>(null);
   const [comunaBarriosList, setComunaBarriosList] = useState<ComunaBarrioItem[]>([]);
 
   useEffect(() => {
@@ -333,6 +335,30 @@ function MapPageInner() {
 
   function handleBack() {
     returnToComunasRef.current?.();
+  }
+
+  // Guía del mapa, paso "Volver a comunas" — a diferencia del botón real
+  // (solo resetea estado), acá también se pide el zoom-out lento de cámara
+  // para que se vea "limpio como al empezar". Escalonado: primero arranca el
+  // zoom-out (lento) y solo después quita la lista/panel, para que ambos se
+  // sientan lentos en vez de un corte instantáneo.
+  const backToComunasTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  function handleTourBackToComunas() {
+    if (backToComunasTimerRef.current) clearTimeout(backToComunasTimerRef.current);
+    closeListingDetail();
+    returnToComunasRef.current?.(0.3);
+    backToComunasTimerRef.current = setTimeout(() => {
+      handleBackToZonas();
+      backToComunasTimerRef.current = null;
+    }, 1500);
+  }
+  // Si el usuario navega (adelante/atrás) antes de que dispare, cancela el
+  // reset pendiente — si no, revienta el estado que el paso actual ya armó.
+  function cancelTourBackToComunas() {
+    if (backToComunasTimerRef.current) {
+      clearTimeout(backToComunasTimerRef.current);
+      backToComunasTimerRef.current = null;
+    }
   }
 
   // Tab click — switches target, resets filters, handles SELL/AGENT special cases
@@ -516,7 +542,7 @@ function MapPageInner() {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-background">
-      <div className="absolute inset-0 z-0">
+      <div className="absolute inset-0 z-0" data-tour="map-canvas">
         <MapView
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
@@ -611,9 +637,14 @@ function MapPageInner() {
         </>
       )}
 
-      {/* Vista 2: panel de listings — desktop siempre; móvil solo en vista 'list' */}
-      {mapView === "listings" && panelBarrio && (!isMobile || mobileView === "list") && (
+      {/* Vista 2: panel de listings — desktop siempre; móvil solo en vista 'list'.
+          AnimatePresence acá (no solo dentro de MLSPanel) para que el exit
+          realmente juegue: al vivir en un && del padre, sin esto React
+          desmonta el panel entero antes de que su animación interna corra. */}
+      <AnimatePresence>
+        {mapView === "listings" && panelBarrio && (!isMobile || mobileView === "list") && (
         <MLSPanel
+          key="mls-panel"
           barrio={panelBarrio}
           listings={mergedListings}
           total={realTotal}
@@ -639,12 +670,14 @@ function MapPageInner() {
           onBackToComuna={handleBackToCommune}
           onSelectBarrioInComune={handleSelectBarrioInComune}
         />
-      )}
+        )}
+      </AnimatePresence>
 
       {/* Toggle mapa ⟷ lista (solo móvil, en modo listings) — estilo Zillow */}
       {isMobile && mapView === "listings" && panelBarrio && (
         <button
           onClick={() => setMobileView((v) => (v === "map" ? "list" : "map"))}
+          data-tour="mobile-toggle-view"
           className="fixed left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg"
           style={{ bottom: 24, background: "#1A1208" }}
         >
@@ -682,6 +715,29 @@ function MapPageInner() {
 
       {/* Comparador floating badge */}
       <ComparadorBadge />
+
+      <MapTourModal
+        isMobile={isMobile}
+        dataReady={allBarrioOptions.length > 0}
+        activeComunaName={activeComuna ? activeComuna.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : null}
+        onDemoZoom={() => {
+          flyToListingRef.current?.(6.2442, -75.5812, 14.5);
+          setTimeout(() => flyToListingRef.current?.(6.2442, -75.5812, 11.5), 1600);
+        }}
+        onZoomToBarrio={() => {
+          const barrio = allBarrioOptions.find((o) => o.cd_comuna === activeComunaCd);
+          if (barrio) flyToListingRef.current?.(barrio.lat, barrio.lng, 14.5);
+        }}
+        onCloseListingDetail={closeListingDetail}
+        onBackToComunas={handleTourBackToComunas}
+        onCancelBackToComunas={cancelTourBackToComunas}
+        onSelectLaureles={() => {
+          const laureles = allBarrioOptions.find((o) => o.comuna?.toLowerCase().includes("laureles"));
+          if (laureles?.cd_comuna != null) handleComunaSelect(laureles.cd_comuna, laureles.comuna);
+        }}
+        onShowMobileList={() => setMobileView("list")}
+        onShowMobileMap={() => setMobileView("map")}
+      />
     </div>
   );
 }

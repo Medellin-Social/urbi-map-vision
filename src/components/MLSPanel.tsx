@@ -193,6 +193,7 @@ function ListingCard({
       <div
         ref={cardRef}
         onClick={(e) => onSelect(e)}
+        data-tour="listing-card"
         className="cursor-pointer rounded-lg border overflow-hidden"
         style={highlighted
           ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
@@ -243,6 +244,7 @@ function ListingCard({
     <div
       ref={cardRef}
       onClick={(e) => onSelect(e)}
+      data-tour="listing-card"
       className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F5F0E8]"
       style={highlighted
         ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
@@ -640,6 +642,7 @@ export function MLSPanel({
             <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
               <button
                 onClick={onBack}
+                data-tour="breadcrumb-back"
                 className="font-medium text-primary transition hover:underline"
               >
                 Medellín
@@ -722,7 +725,7 @@ export function MLSPanel({
         )}
 
         {/* Lista */}
-        <div ref={listContainerRef} className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
+        <div ref={listContainerRef} data-tour="listing-panel" className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
           {isLoading && (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
@@ -777,12 +780,16 @@ export function MLSPanel({
   // The map.tsx toggle button swaps between this and the full-screen map.
   if (isMobile) {
     return (
-      <div
+      <motion.div
+        initial={{ x: "100%" }}
+        animate={{ x: 0 }}
+        exit={{ x: "100%" }}
+        transition={{ type: "spring", damping: 30, stiffness: 280 }}
         className="fixed inset-x-0 bottom-0 z-20 flex flex-col"
         style={{ top: 100, background: '#FAF7F2', ...panelVars }}
       >
         {body}
-      </div>
+      </motion.div>
     );
   }
 

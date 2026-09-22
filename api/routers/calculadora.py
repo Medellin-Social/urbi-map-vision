@@ -12,15 +12,6 @@ from api.dependencies import get_optional_user, get_current_user
 
 router = APIRouter()
 
-_NOTA_HIPOTECA = (
-    "Tasa referencial 14% EA. "
-    "Consulta con tu banco — puede variar según perfil crediticio y entidad."
-)
-
-# Loan-to-value estándar Colombia (Ley 546 / reglamentación Superfinanciera).
-# Bancos financian hasta 70% para vivienda NO VIS; comprador aporta mínimo 30%.
-_LTV = 0.70
-
 # Opex como % del ingreso bruto anual (no del valor del inmueble — evita absurdos de escala).
 # Incluye todo: predial proporcional, admin edificio, seguros, mantenimiento, vacancia.
 _OPEX: dict[str, float] = {
@@ -61,11 +52,14 @@ _SQL = """
         bar.ingresos_anuales_p50_cop   AS ingreso_anual_airbnb_real_cop,
         bar.n_listings_airbnb          AS n_listings_airbnb_real,
         bar.adr_p50_cop                AS adr_real_noche_cop,
-        ipvn.variacion_anual_pct       AS ipvn_variacion_anual
+        ipvn.variacion_anual_pct       AS ipvn_variacion_anual,
+        ctx.seguridad_score,
+        ctx.liquidez_score
     FROM analytics.barrios_score_consolidado sc
     JOIN  analytics.barrios_mercado          bm   ON sc.barrio_id = bm.barrio_id
     LEFT JOIN analytics.score_largo_plazo    sl   ON sc.barrio_id = sl.barrio_id
     LEFT JOIN analytics.barrios_airbnb_real  bar  ON sc.barrio_id = bar.barrio_id
+    LEFT JOIN analytics.barrios_contexto     ctx  ON sc.barrio_id = ctx.barrio_id
     LEFT JOIN LATERAL (
         SELECT variacion_anual_pct
         FROM raw.indices_precio_vivienda
@@ -86,13 +80,6 @@ class SimulacionRequest(BaseModel):
     tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"]
     perfil_riesgo: Literal["conservador", "moderado", "agresivo"] = "moderado"
     horizonte_anos: int = 5
-    # Extended profile fields (all optional)
-    n_unidades: Optional[str] = None
-    tipo_gestion: Optional[str] = None
-    target_inquilino: Optional[str] = None
-    amoblado: Optional[str] = None
-    tipo_pago: Optional[str] = None
-    horizonte_inversion: Optional[str] = None
     # Fine-grained expense overrides (when provided → skip flat OPEX)
     administracion_mes: Optional[float] = None
     vacancia_pct: Optional[float] = None
@@ -198,23 +185,9 @@ class SimulacionResponse(BaseModel):
     # Zona quality — the barrio's score for this investment type (separate from yield rating)
     zona_score: Optional[int] = None
     zona_categoria: Optional[str] = None
+    seguridad_score: Optional[int] = None
+    liquidez_score: Optional[int] = None
 
-    # Profile desglose (optional — only present when profile fields sent)
-    ingreso_bruto_mensual: Optional[float] = None
-    costo_gestion_mensual: Optional[float] = None
-    ingreso_neto_gestion_mensual: Optional[float] = None
-    n_unidades_efectivo: Optional[int] = None
-    # Crédito hipotecario (legacy profile-based)
-    down_payment_cop: Optional[float] = None
-    monto_credito_cop: Optional[float] = None
-    cuota_mensual: Optional[float] = None
-    flujo_neto_mensual: Optional[float] = None
-    yield_coc_pct: Optional[float] = None
-    recupero_credito_anos: Optional[float] = None
-    nota_hipoteca: Optional[str] = None
-    costo_amoblado: Optional[float] = None
-    presupuesto_efectivo: Optional[float] = None
-    valor_20anos_cop: Optional[float] = None
     # New fine-grained simulation fields
     flujo_caja_desglose: Optional[FlujoCajaDesglose] = None
     comparativo_modalidades: Optional[list[ComparativoModalidad]] = None
@@ -408,91 +381,6 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
     # Financial params from DB (not hardcoded)
     tca = parametros.get("USD_TO_COP")
 
-    # ── Profile-specific adjustments ─────────────────────────────────────────
-    ingreso_bruto_mensual: Optional[float] = None
-    costo_gestion_mensual: Optional[float] = None
-    ingreso_neto_gestion_mensual: Optional[float] = None
-    n_unidades_efectivo: Optional[int] = None
-    down_payment_val: Optional[float] = None
-    monto_credito_val: Optional[float] = None
-    cuota_mensual_val: Optional[float] = None
-    flujo_neto_mensual_val: Optional[float] = None
-    yield_coc_val: Optional[float] = None
-    recupero_credito_val: Optional[float] = None
-    nota_hipoteca_val: Optional[str] = None
-    costo_amoblado_val: Optional[float] = None
-    presupuesto_efectivo_val: Optional[float] = None
-
-    if req.tipo_inversion == "airbnb":
-        n_raw = (req.n_unidades or "").lower()
-        mult = 3 if "2-5" in n_raw else (6 if "5+" in n_raw else 1)
-        # FIX 4: only multiply when ≥20 verified real listings exist — scraper counts
-        # (barrios_mercado.airbnb_n_listings) can include area-wide noise; real data
-        # from barrios_airbnb_real is the reliable signal for per-unit income.
-        n_listings_real_fix4 = int(data.get("n_listings_airbnb_real") or 0)
-        if mult > 1 and n_listings_real_fix4 < 20:
-            alertas.append(
-                f"Simulación para múltiples unidades no disponible — "
-                f"muestra verificada insuficiente ({n_listings_real_fix4} listings reales)"
-            )
-            mult = 1
-        if mult > 1:
-            n_unidades_efectivo = mult
-            ingreso_mensual = round(ingreso_mensual * mult)
-            alertas.append(f"Simulación para {mult} unidades")
-        gestion_raw = (req.tipo_gestion or "").lower()
-        if "manager" in gestion_raw:
-            ingreso_bruto_mensual = float(ingreso_mensual)
-            costo_gestion_mensual = round(ingreso_mensual * 0.25)
-            ingreso_neto_gestion_mensual = round(ingreso_mensual * 0.75)
-            ingreso_mensual = ingreso_neto_gestion_mensual
-
-    elif req.tipo_inversion == "renta_media":
-        amoblado_raw = (req.amoblado or "").lower()
-        if "furnished" in amoblado_raw or "fully" in amoblado_raw:
-            costo_amoblado_val = round(area_m2 * 200_000)
-            presupuesto_efectivo_val = round(presupuesto - costo_amoblado_val)
-            alertas.append(
-                f"Presupuesto para amoblar: ${costo_amoblado_val / 1_000_000:.1f}M COP (~$200k/m²)"
-            )
-
-    elif req.tipo_inversion == "renta_larga":
-        pago_raw = (req.tipo_pago or "").lower()
-        if "mortgage" in pago_raw or "financing" in pago_raw:
-            horizonte_raw = (req.horizonte_inversion or "").lower()
-            plazo_meses = (
-                240 if "20" in horizonte_raw
-                else (60 if ("5" in horizonte_raw and "10" not in horizonte_raw) else 120)
-            )
-            # Colombia estándar: banco financia _LTV (70%), comprador aporta (1-_LTV) (30%)
-            down_payment_val = round(presupuesto * (1 - _LTV))
-            monto_credito_val = round(presupuesto * _LTV)
-            tasa_mensual = 0.012  # 1.2%/mes ≈ 14.4% EA referencial
-            cuota = monto_credito_val * tasa_mensual / (1 - (1 + tasa_mensual) ** -plazo_meses)
-            cuota_mensual_val = round(cuota)
-            # Flujo usa arriendo neto (−10% vacancia/admin) para ser conservador
-            arriendo_neto_mensual = round(ingreso_mensual * 0.90)
-            flujo_neto_mensual_val = arriendo_neto_mensual - cuota_mensual_val
-            # Cash-on-cash: retorno anual sobre el capital propio aportado
-            if flujo_neto_mensual_val > 0 and down_payment_val > 0:
-                yield_coc_val = _r2((flujo_neto_mensual_val * 12) / down_payment_val * 100)
-                recupero_credito_val = _r2(down_payment_val / (flujo_neto_mensual_val * 12))
-            else:
-                yield_coc_val = _r2(0.0)
-                recupero_credito_val = 999.0
-            nota_hipoteca_val = _NOTA_HIPOTECA
-            alertas.append(
-                f"Estructura: 30% entrada ({down_payment_val / 1_000_000:.0f}M COP) "
-                f"+ 70% crédito hipotecario ({monto_credito_val / 1_000_000:.0f}M COP)"
-            )
-            msg = (
-                f"Flujo neto con crédito: +${flujo_neto_mensual_val / 1_000_000:.2f}M/mes"
-                if flujo_neto_mensual_val >= 0
-                else f"Flujo negativo con crédito: necesitas aportar ${abs(flujo_neto_mensual_val) / 1_000_000:.2f}M/mes"
-            )
-            alertas.append(msg)
-    # ─────────────────────────────────────────────────────────────────────────
-
     ingreso_anual = ingreso_mensual * 12
     yield_bruto = _r2(ingreso_anual / presupuesto * 100)
 
@@ -598,7 +486,6 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
 
     valor_3 = round(presupuesto * (1 + var_anual / 100) ** 3)
     valor_5 = round(presupuesto * (1 + var_anual / 100) ** 5)
-    valor_20 = round(presupuesto * (1 + var_anual / 100) ** 20)
     ganancia_5 = valor_5 - presupuesto
     retorno_total_5 = ganancia_5 + round(ingreso_neto_anual * 5)
 
@@ -724,20 +611,8 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
         resumen=resumen,
         alertas=alertas,
         datos_insuficientes=datos_insuficientes,
-        ingreso_bruto_mensual=ingreso_bruto_mensual,
-        costo_gestion_mensual=float(costo_gestion_mensual) if costo_gestion_mensual is not None else None,
-        ingreso_neto_gestion_mensual=float(ingreso_neto_gestion_mensual) if ingreso_neto_gestion_mensual is not None else None,
-        n_unidades_efectivo=n_unidades_efectivo,
-        down_payment_cop=float(down_payment_val) if down_payment_val is not None else None,
-        monto_credito_cop=float(monto_credito_val) if monto_credito_val is not None else None,
-        cuota_mensual=float(cuota_mensual_val) if cuota_mensual_val is not None else None,
-        flujo_neto_mensual=float(flujo_neto_mensual_val) if flujo_neto_mensual_val is not None else None,
-        yield_coc_pct=float(yield_coc_val) if yield_coc_val is not None else None,
-        recupero_credito_anos=float(recupero_credito_val) if recupero_credito_val is not None else None,
-        nota_hipoteca=nota_hipoteca_val,
-        costo_amoblado=float(costo_amoblado_val) if costo_amoblado_val is not None else None,
-        presupuesto_efectivo=float(presupuesto_efectivo_val) if presupuesto_efectivo_val is not None else None,
-        valor_20anos_cop=float(valor_20),
+        seguridad_score=data.get("seguridad_score"),
+        liquidez_score=data.get("liquidez_score"),
         flujo_caja_desglose=desglose_val,
         comparativo_modalidades=comparativo_list,
         cuota_credito_mes=float(cuota_credito_val) if cuota_credito_val is not None else None,
@@ -751,17 +626,25 @@ async def simular(req: SimulacionRequest, current_user: Optional[dict] = Depends
 
 _LISTING_SIMUL_SQL = """
     SELECT
-        ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
-        precio_cop::bigint AS precio,
-        barrio_id,
-        area_m2::float8,
-        NULL::numeric AS administracion,
-        tipo_inmueble,
-        tipo_operacion
-    FROM staging.stg_listings_unificado
-    WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1::bigint
+        ('x'||substr(md5(l.url),1,8))::bit(32)::int AS id,
+        l.precio_cop::bigint AS precio,
+        l.barrio_id,
+        l.area_m2::float8,
+        l.administracion::float8,
+        l.tipo_inmueble,
+        l.tipo_operacion,
+        g.uso_suelo_pot,
+        g.estrato_manzana
+    FROM staging.stg_listings_unificado l
+    LEFT JOIN analytics.listings_georef g ON g.url = l.url
+    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1::bigint
     LIMIT 1
 """
+
+# Categorías POT donde un listing residencial/inversión es anómalo —
+# señal de calidad de dato a verificar, no una prohibición legal (no tenemos
+# el mapeo jurídico de qué usos permite cada categoría de mixtura).
+_POT_FLAG = {"Uso Dotacional", "Espacio Público Existente", "Espacio Público Proyectado"}
 
 _BARRIO_NAME_SQL = """
     SELECT nombre, municipio FROM raw.barrios WHERE id = $1
@@ -818,6 +701,9 @@ async def listing_simulador_data(
         "administracion": d["administracion"],
         "tipo_inmueble": d["tipo_inmueble"],
         "tipo_operacion": d["tipo_operacion"],
+        "uso_suelo_pot": d["uso_suelo_pot"],
+        "estrato_manzana": d["estrato_manzana"],
+        "uso_suelo_flag": d["uso_suelo_pot"] in _POT_FLAG if d["uso_suelo_pot"] else False,
     }
 
 

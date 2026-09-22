@@ -34,7 +34,7 @@ type Props = {
   mostrarOportunidades?: boolean;
   budgetRange?: [number, number] | null;
   onViewLevelChange?: (level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null, cdComuna?: number | null) => void;
-  returnToComunasRef?: React.MutableRefObject<(() => void) | null>;
+  returnToComunasRef?: React.MutableRefObject<((speed?: number) => void) | null>;
   onGoToMLS?: (n: Neighborhood) => void;
   // Vista 2 — MLS
   mapView?: "zonas" | "listings";
@@ -341,7 +341,7 @@ export function MapView({
 
   // ── Helpers de navegación ────────────────────────────────────────────────────
 
-  function switchToComunas(map: MapboxMap) {
+  function switchToComunas(map: MapboxMap, speed = 0.9) {
     map.setLayoutProperty("comunas-fill",  "visibility", "visible");
     map.setLayoutProperty("comunas-line",  "visibility", "visible");
     map.setLayoutProperty("comunas-label", "visibility", "visible");
@@ -350,7 +350,7 @@ export function MapView({
     for (const id of ["barrios-mls-fill", "barrios-mls-line", "barrios-mls-label"]) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
     }
-    map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed: 0.9 });
+    map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed });
     viewLevelRef.current = "comunas";
     activeComunaRef.current = null;
     if (selectedComunaIdRef.current != null) {
@@ -388,9 +388,9 @@ export function MapView({
   // Exponer goToComunas al padre via ref
   useEffect(() => {
     if (!returnToComunasRef) return;
-    returnToComunasRef.current = () => {
+    returnToComunasRef.current = (speed) => {
       const map = mapRef.current;
-      if (map && mapLoadedRef.current) switchToComunas(map);
+      if (map && mapLoadedRef.current) switchToComunas(map, speed);
     };
   });
 
@@ -1333,7 +1333,7 @@ export function MapView({
   ];
 
   const legendPanel = (
-    <div style={{
+    <div data-tour="legend" style={{
       background: "#FFFFFF", border: "1px solid #EAE3D6",
       borderRadius: 14, padding: "12px 14px", width: 200,
       boxShadow: "0 8px 24px rgba(26,18,8,0.12)",
@@ -1377,6 +1377,7 @@ export function MapView({
           ) : (
             <button
               onClick={() => setLegendOpen(true)}
+              data-tour="legend"
               aria-label="Ver leyenda de tipos"
               style={{
                 display: "flex", alignItems: "center", gap: 7,

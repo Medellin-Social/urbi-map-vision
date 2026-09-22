@@ -4,7 +4,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { motion, AnimatePresence } from "framer-motion";
 import { API_ENDPOINTS } from "@/config/api";
-import { getToken } from "@/lib/apiClient";
+import { apiFetch, getToken } from "@/lib/apiClient";
 import { auth } from "@/lib/auth";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
@@ -1007,21 +1007,13 @@ function OtpTelefono({ telefono }: { telefono: string }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
-  const authHeaders = (): Record<string, string> => {
-    const t = getToken();
-    return t
-      ? { Authorization: `Bearer ${t}`, "Content-Type": "application/json" }
-      : { "Content-Type": "application/json" };
-  };
-
   const enviar = async () => {
     if (!telefono.trim()) { setErr("Escribe tu teléfono primero"); return; }
     setBusy(true); setErr(null);
     try {
-      const r = await fetch(API_ENDPOINTS.listingsPropiosOtpEnviar, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ telefono }),
+      await apiFetch(API_ENDPOINTS.listingsPropiosOtpEnviar, {
+        method: "POST", body: JSON.stringify({ telefono }),
       });
-      if (!r.ok) throw new Error();
       setFase("enviado");
     } catch {
       setErr("No se pudo enviar el código. Intenta de nuevo.");
@@ -1031,13 +1023,9 @@ function OtpTelefono({ telefono }: { telefono: string }) {
   const confirmar = async () => {
     setBusy(true); setErr(null);
     try {
-      const r = await fetch(API_ENDPOINTS.listingsPropiosOtpConfirmar, {
-        method: "POST", headers: authHeaders(), body: JSON.stringify({ codigo }),
+      await apiFetch(API_ENDPOINTS.listingsPropiosOtpConfirmar, {
+        method: "POST", body: JSON.stringify({ codigo }),
       });
-      if (!r.ok) {
-        const b = await r.json().catch(() => ({}));
-        throw new Error((b as { detail?: string }).detail ?? "Código inválido");
-      }
       setFase("ok");
     } catch (e) {
       setErr(e instanceof Error && e.message ? e.message : "Código inválido o vencido");
@@ -1420,7 +1408,7 @@ function StepperBar({ step }: { step: number }) {
                   fontSize: 10, marginTop: 4,
                   color: current ? K.tealDeep : done ? K.teal : K.muted,
                   fontWeight: current ? 700 : 500,
-                  whiteSpace: "nowrap",
+                  whiteSpace: "normal",
                   maxWidth: 70,
                   textAlign: "center",
                   lineHeight: 1.2,
@@ -1500,13 +1488,9 @@ function PublicarPage() {
   // Fetch agente status once logged in
   useEffect(() => {
     if (!user) return;
-    const token = typeof window !== "undefined" ? localStorage.getItem("medellin-social.token") : null;
-    if (!token) return;
-    fetch(API_ENDPOINTS.listingsPropiosMe, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then((r) => r.json())
-      .then((d: { es_agente?: boolean; nombre?: string; email?: string }) => {
+    if (!getToken()) return;
+    apiFetch<{ es_agente?: boolean; nombre?: string; email?: string }>(API_ENDPOINTS.listingsPropiosMe)
+      .then((d) => {
         setEsAgente(d.es_agente ?? false);
         if (d.nombre) setData({ nombre_contacto: d.nombre });
         if (d.email)  setData({ email_contacto: d.email });

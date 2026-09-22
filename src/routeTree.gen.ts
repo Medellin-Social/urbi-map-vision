@@ -45,7 +45,7 @@ import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
-import { Route as AgentesRegistroRouteImport } from './routes/agentes.registro'
+import { Route as AgentesRegistroRouteImport } from './routes/agentes_.registro'
 
 const VerifyEmailRoute = VerifyEmailRouteImport.update({
   id: '/verify-email',
@@ -229,15 +229,15 @@ const EventosBarrio_slugRoute = EventosBarrio_slugRouteImport.update({
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
-  id: '/registro',
-  path: '/registro',
-  getParentRoute: () => AgentesRoute,
+  id: '/agentes_/registro',
+  path: '/agentes/registro',
+  getParentRoute: () => rootRouteImport,
 } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRouteWithChildren
+  '/agentes': typeof AgentesRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -276,7 +276,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRouteWithChildren
+  '/agentes': typeof AgentesRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -316,7 +316,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
-  '/agentes': typeof AgentesRouteWithChildren
+  '/agentes': typeof AgentesRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -340,7 +340,7 @@ export interface FileRoutesById {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
-  '/agentes/registro': typeof AgentesRegistroRoute
+  '/agentes_/registro': typeof AgentesRegistroRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
@@ -459,7 +459,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
-    | '/agentes/registro'
+    | '/agentes_/registro'
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
@@ -475,7 +475,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfiliadoRoute: typeof AfiliadoRoute
-  AgentesRoute: typeof AgentesRouteWithChildren
+  AgentesRoute: typeof AgentesRoute
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
   ComunidadRoute: typeof ComunidadRoute
@@ -499,6 +499,7 @@ export interface RootRouteChildren {
   SuscribirseRoute: typeof SuscribirseRoute
   VenderRoute: typeof VenderRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  AgentesRegistroRoute: typeof AgentesRegistroRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
@@ -765,31 +766,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof EventosBarrio_slugRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/agentes/registro': {
-      id: '/agentes/registro'
-      path: '/registro'
+    '/agentes_/registro': {
+      id: '/agentes_/registro'
+      path: '/agentes/registro'
       fullPath: '/agentes/registro'
       preLoaderRoute: typeof AgentesRegistroRouteImport
-      parentRoute: typeof AgentesRoute
+      parentRoute: typeof rootRouteImport
     }
   }
 }
 
-interface AgentesRouteChildren {
-  AgentesRegistroRoute: typeof AgentesRegistroRoute
-}
-
-const AgentesRouteChildren: AgentesRouteChildren = {
-  AgentesRegistroRoute: AgentesRegistroRoute,
-}
-
-const AgentesRouteWithChildren =
-  AgentesRoute._addFileChildren(AgentesRouteChildren)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfiliadoRoute: AfiliadoRoute,
-  AgentesRoute: AgentesRouteWithChildren,
+  AgentesRoute: AgentesRoute,
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
   ComunidadRoute: ComunidadRoute,
@@ -813,6 +803,7 @@ const rootRouteChildren: RootRouteChildren = {
   SuscribirseRoute: SuscribirseRoute,
   VenderRoute: VenderRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  AgentesRegistroRoute: AgentesRegistroRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,

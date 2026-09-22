@@ -46,7 +46,8 @@ with todas_fuentes as (
         null::boolean   as amoblado,      -- fincaraiz no trae este campo
         antiguedad,
         amenidades,
-        null::boolean   as verificado
+        null::boolean   as verificado,
+        administracion
     from {{ source('fincaraiz', 'listings_fincaraiz') }}
     where activo = true
       and precio > 0
@@ -80,7 +81,8 @@ with todas_fuentes as (
         null::boolean   as amoblado,      -- habi no trae este campo
         antiguedad::text,
         amenidades,
-        null::boolean   as verificado
+        null::boolean   as verificado,
+        administracion
     from {{ source('habi', 'listings_habi') }}
     where activo = true
       and precio > 0
@@ -114,7 +116,8 @@ with todas_fuentes as (
         null::boolean   as amoblado,      -- metrocuadrado no trae este campo
         antiguedad,
         amenidades,
-        null::boolean   as verificado
+        null::boolean   as verificado,
+        administracion
     from {{ source('metrocuadrado', 'listings_metrocuadrado') }}
     where activo = true
       and precio > 0
@@ -148,7 +151,8 @@ with todas_fuentes as (
         amoblado,
         null::text      as antiguedad,    -- premium no trae este campo
         amenidades,
-        null::boolean   as verificado
+        null::boolean   as verificado,
+        null::numeric   as administracion -- premium no trae este campo
     from {{ source('premium', 'listings_premium') }}
     where precio_cop > 0
       and area_m2 > 0
@@ -184,7 +188,8 @@ with todas_fuentes as (
         amoblado,
         null::text              as antiguedad,  -- renta_media no trae este campo
         amenidades,
-        null::boolean           as verificado
+        null::boolean           as verificado,
+        null::numeric           as administracion -- renta_media no trae este campo
     from {{ source('renta_media', 'listings_renta_media') }}
     where precio_mes_cop > 0
       and area_m2 > 0
@@ -203,7 +208,7 @@ con_geo as (
         barrio_raw, barrio_id,
         direccion_raw, lat, lon, geom,
         url, fotos, fecha_scraping, estrato_real,
-        amoblado, antiguedad, amenidades, verificado,
+        amoblado, antiguedad, amenidades, verificado, administracion,
 
         min(precio_cop) over (partition by
             round(lat::numeric, 3),
@@ -264,7 +269,7 @@ sin_geo as (
         barrio_raw, barrio_id,
         direccion_raw, lat, lon, geom,
         url, fotos, fecha_scraping, estrato_real,
-        amoblado, antiguedad, amenidades, verificado,
+        amoblado, antiguedad, amenidades, verificado, administracion,
 
         precio_cop as precio_min_cluster,
         precio_cop as precio_max_cluster,
@@ -338,7 +343,8 @@ select
     amoblado,
     antiguedad,
     amenidades,
-    verificado
+    verificado,
+    administracion
 from con_geo
 where _rn = 1
 
@@ -373,6 +379,7 @@ select
     amoblado,
     antiguedad,
     amenidades,
-    verificado
+    verificado,
+    administracion
 from sin_geo
 where _rn = 1

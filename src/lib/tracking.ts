@@ -1,3 +1,5 @@
+import { API_ENDPOINTS } from "@/config/api"
+
 const SESSION_ID = crypto.randomUUID()
 
 interface TrackData {
@@ -10,7 +12,7 @@ interface TrackData {
 
 export async function track(event_type: string, data: TrackData = {}): Promise<void> {
   try {
-    await fetch('/api/v1/track', {
+    await fetch(API_ENDPOINTS.track, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: SESSION_ID, event_type, ...data }),

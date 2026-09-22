@@ -45,7 +45,7 @@ _ZONAS_SQL = """
 _VISTAS_JOIN = "e.event_type = 'listing_view' AND e.entity_id IN (l.id::text, l.slug)"
 
 
-async def _agent_del_usuario(user: dict, pool) -> SimpleNamespace:
+async def _agent_del_usuario(user: dict, pool, exigir_activo: bool = True) -> SimpleNamespace:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             "SELECT id, estado, usuario_id, nombre, foto_url FROM agent WHERE usuario_id = $1",
@@ -53,12 +53,14 @@ async def _agent_del_usuario(user: dict, pool) -> SimpleNamespace:
         )
     if not row:
         raise HTTPException(status_code=403, detail="El usuario no es un agente")
+    if exigir_activo and row["estado"] != "activo":
+        raise HTTPException(status_code=403, detail="agente_no_activo")
     return SimpleNamespace(**dict(row))
 
 
 @router.get("/me")
 async def perfil(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    agent = await _agent_del_usuario(user, pool)
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
     async with pool.acquire() as conn:
         zonas = await conn.fetch(_ZONAS_SQL, agent.id)
     return {

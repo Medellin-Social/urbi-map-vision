@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { realtorApi, type ItemPool, type ZonaNivel } from "@/lib/realtorApi";
 
 export function useRealtorPerfil() {
@@ -37,6 +38,7 @@ export function useTomarDelPool() {
     },
     onError: (_, __, ctx) => {
       if (ctx?.prev) qc.setQueryData(["realtor", "pool"], ctx.prev);
+      toast.error("No se pudo tomar el inmueble");
     },
     onSettled: () => qc.invalidateQueries({ queryKey: ["realtor", "pool"] }),
   });
@@ -58,6 +60,7 @@ export function usePublicarAsignado() {
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
       qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
     },
+    onError: () => toast.error("No se pudo publicar el listing"),
   });
 }
 
@@ -69,6 +72,7 @@ export function useAceptarAsignado() {
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
       qc.invalidateQueries({ queryKey: ["realtor", "desempeno"] });
     },
+    onError: () => toast.error("No se pudo aceptar el inmueble"),
   });
 }
 
@@ -100,6 +104,7 @@ export function useActualizarVisita() {
       qc.invalidateQueries({ queryKey: ["realtor", "agenda"] });
       qc.invalidateQueries({ queryKey: ["realtor", "desempeno"] });
     },
+    onError: () => toast.error("No se pudo actualizar la visita"),
   });
 }
 
@@ -121,6 +126,7 @@ export function useVerificarDDItem(intakeId: string) {
       qc.invalidateQueries({ queryKey: ["realtor", "dd", intakeId] });
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
     },
+    onError: () => toast.error("No se pudo guardar la verificación"),
   });
 }
 
@@ -139,6 +145,7 @@ export function useEditarListing() {
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
       qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
     },
+    onError: () => toast.error("No se pudo guardar la ficha"),
   });
 }
 

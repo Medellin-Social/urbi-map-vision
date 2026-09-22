@@ -30,7 +30,7 @@ function AcceptInvitePage() {
     if (!token) { setStep("error"); setErrMsg("Token inválido"); return; }
     apiFetch<InviteInfo>(`${API_BASE_URL}/agency/invite/${token}`)
       .then((d) => { setInvite(d); setStep("info"); })
-      .catch((e) => { setStep("error"); setErrMsg((e as Error).message || "Invitación no encontrada"); });
+      .catch(() => { setStep("error"); setErrMsg("Invitación no encontrada o expirada"); });
   }, [token]);
 
   const isLoggedIn = () => {
@@ -47,9 +47,9 @@ function AcceptInvitePage() {
       );
       setYaMiembro(r.ya_miembro);
       setStep("done");
-    } catch (e) {
+    } catch {
       setStep("error");
-      setErrMsg((e as Error).message || "No se pudo aceptar la invitación");
+      setErrMsg("No se pudo aceptar la invitación. Intenta de nuevo.");
     }
   };
 

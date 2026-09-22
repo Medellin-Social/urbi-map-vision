@@ -35,6 +35,7 @@ export const API_ENDPOINTS = {
   agenteResenas: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/resenas`,
   listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
   visitas: `${API_BASE_URL}/visitas`,
+  track: `${API_BASE_URL}/track`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,

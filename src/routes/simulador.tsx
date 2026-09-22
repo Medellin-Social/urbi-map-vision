@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect, useNavigate, useSearch } from "@tanstack/react-router";
+import { createFileRoute, redirect, useNavigate, useSearch } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
@@ -9,7 +9,6 @@ import {
   Calculator,
   ChevronDown,
   ChevronUp,
-  Lock,
   Loader2,
   RotateCcw,
   Share2,
@@ -33,6 +32,7 @@ import { formatCOP, formatPct } from "@/lib/format";
 import { auth } from "@/lib/auth";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
+import { toast } from "sonner";
 import { useBarriosComunas, useBarriosPorComuna } from "@/hooks/useBarrios";
 import {
   useSimular,
@@ -44,6 +44,7 @@ import {
   type AlternativaListing,
 } from "@/hooks/useCalculadora";
 import { useIsPro, useIsAgente } from "@/components/LockedField";
+import { useTrm } from "@/hooks/useTrm";
 
 const searchSchema = z.object({
   listing_id: z.coerce.number().optional(),
@@ -53,6 +54,13 @@ const searchSchema = z.object({
   uid:        z.string().optional(),
   fuente:     z.string().optional(),
   url_listing: z.string().optional(),
+  // Share-link params — reproduce a calculated scenario when opened
+  tipo:          z.enum(["airbnb", "media", "larga"]).optional(),
+  horizonte:     z.coerce.number().optional(),
+  credito:       z.enum(["contado", "credito"]).optional(),
+  cuota_inicial: z.coerce.number().optional(),
+  tasa:          z.coerce.number().optional(),
+  plazo:         z.coerce.number().optional(),
 });
 
 export const Route = createFileRoute("/simulador")({
@@ -82,7 +90,6 @@ type Tipo = "airbnb" | "larga" | "media";
 type Horizonte = 3 | 5 | 10 | 20;
 type TipoCompra = "contado" | "credito";
 
-const USD_RATE = 4100;
 const PRESETS = [200, 350, 500, 800, 1000];
 
 const TIPO_OPTIONS = [
@@ -150,14 +157,15 @@ function SimuladorPage() {
   const [presupuestoStr, setPresupuestoStr] = useState<string>(String(initPresupuesto));
 
   // Tipo
-  const [tipo, setTipo] = useState<Tipo>("airbnb");
-  const [horizonte, setHorizonte] = useState<Horizonte>(5);
+  const [tipo, setTipo] = useState<Tipo>(search.tipo ?? "airbnb");
+  const [horizonte, setHorizonte] = useState<Horizonte>((search.horizonte as Horizonte) ?? 5);
 
   // Tipo de compra
-  const [tipoCompra, setTipoCompra] = useState<TipoCompra>("contado");
-  const [cuotaInicial, setCuotaInicial] = useState(30);
-  const [tasaAnual, setTasaAnual] = useState(13);
-  const [plazoAnos, setPlazoAnos] = useState<10 | 15 | 20>(15);
+  const [tipoCompra, setTipoCompra] = useState<TipoCompra>(search.credito ?? "contado");
+  const [cuotaInicial, setCuotaInicial] = useState(search.cuota_inicial ?? 30);
+  const [tasaAnual, setTasaAnual] = useState(search.tasa ?? 13);
+  const [plazoAnos, setPlazoAnos] = useState<10 | 15 | 20>((search.plazo as 10 | 15 | 20) ?? 15);
+  const usdRate = useTrm();
 
   // Gastos
   const [showGastos, setShowGastos] = useState(false);
@@ -234,7 +242,7 @@ function SimuladorPage() {
     setPresupuesto(p);
     setPresupuestoStr(String(p));
     setBarrioId(listingData.barrio_id);
-    if (listingData.administracion) setAdminMes(String(listingData.administracion));
+    if (listingData.administracion) setAdminMes(String(Math.round(listingData.administracion)));
     apiFetch<{ id: number; nombre: string; municipio: string; comuna: string | null }>(
       API_ENDPOINTS.barrioInfo(listingData.barrio_id),
     )
@@ -351,45 +359,6 @@ function SimuladorPage() {
   }, [agentChecked, isAgente, navigate]);
   if (agentChecked && !isAgente) return null;
 
-  // ── Locked preview for free users ─────────────────────────────────────────
-  if (!isPro) {
-    return (
-      <div className="paper-theme relative min-h-screen w-full bg-background">
-        <MapNavbar activeTab="simulator" onTabChange={() => {}} />
-        <main className="relative z-10 mx-auto max-w-5xl px-4 pb-20 pt-24 sm:px-6">
-          <div className="relative overflow-hidden rounded-2xl border border-border bg-surface/70 p-8">
-            {/* Blurred form preview */}
-            <div className="pointer-events-none select-none blur-sm opacity-40 space-y-4">
-              <div className="h-8 w-48 rounded-lg bg-foreground/10" />
-              <div className="grid grid-cols-2 gap-3">
-                {[1,2,3,4].map(i => <div key={i} className="h-24 rounded-xl bg-foreground/10" />)}
-              </div>
-              <div className="h-12 rounded-xl bg-primary/30" />
-            </div>
-            {/* Overlay */}
-            <div className="absolute inset-0 flex flex-col items-center justify-center gap-5 bg-background/60 backdrop-blur-sm rounded-2xl p-8 text-center">
-              <div className="rounded-full border border-primary/30 bg-primary/10 p-4">
-                <Lock className="h-8 w-8 text-primary" />
-              </div>
-              <div>
-                <h2 className="font-display text-2xl font-bold">El Simulador de Inversión es exclusivo de MLS Pro</h2>
-                <p className="mt-2 text-sm text-muted-foreground max-w-md mx-auto">
-                  Calcula el yield real, flujo de caja y ROI de cualquier propiedad en el Valle de Aburrá con datos reales del mercado.
-                </p>
-              </div>
-              <Link
-                to="/planes"
-                className="inline-flex items-center gap-2 rounded-xl bg-primary px-6 py-3 text-sm font-semibold text-primary-foreground transition hover:bg-primary/90"
-              >
-                Suscribirse a MLS Pro → Desde $79,000 COP/mes
-              </Link>
-            </div>
-          </div>
-        </main>
-      </div>
-    );
-  }
-
   return (
     <div className="paper-theme relative min-h-screen w-full overflow-x-hidden bg-background">
       <MapNavbar activeTab="simulator" onTabChange={() => {}} />
@@ -403,36 +372,53 @@ function SimuladorPage() {
 
         {/* Listing banner — Flujo B */}
         {listingId && (
-          <div className="mb-4 flex items-center justify-between rounded-xl border border-primary/30 bg-primary/8 px-4 py-3">
-            {listingLoading ? (
-              <span className="text-xs text-muted-foreground flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" /> Cargando propiedad...
-              </span>
-            ) : listingData ? (
-              <span className="text-xs text-primary font-medium">
-                Simulando:{" "}
-                <span className="font-semibold">
-                  {titleCase(listingData.tipo_inmueble ?? "Inmueble")} en{" "}
-                  {titleCase(listingData.barrio_nombre ?? "")}
+          <div className="mb-4 rounded-xl border border-primary/30 bg-primary/8 px-4 py-3">
+            <div className="flex items-center justify-between">
+              {listingLoading ? (
+                <span className="text-xs text-muted-foreground flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Cargando propiedad...
                 </span>
-                {" · "}
-                {formatCOP(listingData.precio)} COP
-              </span>
-            ) : (
-              <span className="text-xs text-warning">
-                {listingError instanceof Error ? listingError.message : "Propiedad no encontrada"}
-              </span>
+              ) : listingData ? (
+                <span className="text-xs text-primary font-medium">
+                  Simulando:{" "}
+                  <span className="font-semibold">
+                    {titleCase(listingData.tipo_inmueble ?? "Inmueble")} en{" "}
+                    {titleCase(listingData.barrio_nombre ?? "")}
+                  </span>
+                  {" · "}
+                  {formatCOP(listingData.precio)} COP
+                  {listingData.administracion ? ` · Admin: ${formatCOP(listingData.administracion)}/mes` : ""}
+                </span>
+              ) : (
+                <span className="text-xs text-warning">
+                  {listingError instanceof Error ? listingError.message : "Propiedad no encontrada"}
+                </span>
+              )}
+              <button
+                onClick={() => {
+                  navigate({ to: "/simulador" });
+                  reset();
+                  setCalcDone(false);
+                }}
+                className="ml-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition"
+              >
+                <X className="h-3 w-3" /> Cambiar propiedad
+              </button>
+            </div>
+            {listingData && (
+              <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                {listingData.uso_suelo_pot
+                  ? <span>Uso de suelo (POT): {listingData.uso_suelo_pot}</span>
+                  : <span>Uso de suelo (POT): no disponible{listingData.municipio && listingData.municipio !== "MEDELLIN" ? ` — solo cubre Medellín (este predio está en ${titleCase(listingData.municipio)})` : ""}</span>
+                }
+                {listingData.estrato_manzana != null && <span>· Estrato manzana: {listingData.estrato_manzana}</span>}
+                {listingData.uso_suelo_flag && (
+                  <span className="flex items-center gap-1 text-warning">
+                    <AlertTriangle className="h-3 w-3" /> Verifica este predio — clasificación POT atípica para un inmueble residencial/inversión
+                  </span>
+                )}
+              </div>
             )}
-            <button
-              onClick={() => {
-                navigate({ to: "/simulador" });
-                reset();
-                setCalcDone(false);
-              }}
-              className="ml-4 flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition"
-            >
-              <X className="h-3 w-3" /> Cambiar propiedad
-            </button>
           </div>
         )}
 
@@ -525,7 +511,7 @@ function SimuladorPage() {
                 />
                 <span className="text-xs text-[#6B5B45]">M COP</span>
                 <span className="ml-auto text-xs text-[#6B5B45]">
-                  ≈ ${((presupuesto * 1_000_000) / USD_RATE).toLocaleString("en-US", { maximumFractionDigits: 0 })} USD
+                  ≈ ${((presupuesto * 1_000_000) / usdRate).toLocaleString("en-US", { maximumFractionDigits: 0 })} USD
                 </span>
               </div>
               <input
@@ -785,6 +771,16 @@ function SimuladorPage() {
                   horizonte={horizonte}
                   presupuestoMill={presupuesto}
                   tipo={tipo}
+                  shareSearch={{
+                    barrio: barrioId,
+                    precio: presupuesto * 1_000_000,
+                    tipo,
+                    horizonte,
+                    credito: tipoCompra,
+                    cuota_inicial: cuotaInicial,
+                    tasa: tasaAnual,
+                    plazo: plazoAnos,
+                  }}
                 />
               ) : (
                 <motion.div
@@ -829,12 +825,22 @@ function SimuladorPage() {
 // ── Results panel ─────────────────────────────────────────────────────────────
 
 function ResultsPanel({
-  r, horizonte, presupuestoMill, tipo,
+  r, horizonte, presupuestoMill, tipo, shareSearch,
 }: {
   r: SimulacionResponse;
   horizonte: Horizonte;
   presupuestoMill: number;
   tipo: Tipo;
+  shareSearch: {
+    barrio: number;
+    precio: number;
+    tipo: Tipo;
+    horizonte: Horizonte;
+    credito: TipoCompra;
+    cuota_inicial: number;
+    tasa: number;
+    plazo: number;
+  };
 }) {
   const navigate = useNavigate();
   const { stars, bg, border, color } = scoreToRating(r.score_oportunidad);
@@ -874,6 +880,22 @@ function ResultsPanel({
             <span className="font-semibold">{r.zona_categoria ?? "—"}</span>
             <span className="opacity-50">·</span>
             <span className="opacity-70">score {r.zona_score}</span>
+          </div>
+        )}
+        {(r.seguridad_score != null || r.liquidez_score != null) && (
+          <div className="mt-2 flex flex-wrap items-center gap-3 rounded-md px-2.5 py-1.5 text-[11px]" style={{ border: `1px solid ${border}60`, background: "rgba(255,255,255,0.3)" }}>
+            {r.seguridad_score != null && (
+              <span>
+                <span className="font-medium uppercase tracking-wider opacity-60">Seguridad</span>{" "}
+                <span className="opacity-80">{r.seguridad_score}/100</span>
+              </span>
+            )}
+            {r.liquidez_score != null && (
+              <span>
+                <span className="font-medium uppercase tracking-wider opacity-60">Liquidez</span>{" "}
+                <span className="opacity-80">{r.liquidez_score}/100</span>
+              </span>
+            )}
           </div>
         )}
       </div>
@@ -967,10 +989,21 @@ function ResultsPanel({
         </button>
         <button
           onClick={() => {
+            const qs = new URLSearchParams({
+              barrio: String(shareSearch.barrio),
+              precio: String(shareSearch.precio),
+              tipo: shareSearch.tipo,
+              horizonte: String(shareSearch.horizonte),
+              credito: shareSearch.credito,
+              cuota_inicial: String(shareSearch.cuota_inicial),
+              tasa: String(shareSearch.tasa),
+              plazo: String(shareSearch.plazo),
+            });
+            const url = `${window.location.origin}${window.location.pathname}?${qs}`;
             if (typeof navigator !== "undefined" && navigator.share) {
-              navigator.share({ title: "Simulación Medellin Social", url: window.location.href }).catch(() => {});
+              navigator.share({ title: "Simulación Medellin Social", url }).catch(() => {});
             } else if (typeof navigator !== "undefined") {
-              navigator.clipboard?.writeText(window.location.href);
+              navigator.clipboard?.writeText(url);
             }
           }}
           className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background/40 py-2.5 text-xs font-semibold text-[#1A1208] transition hover:border-primary/40"
@@ -1327,11 +1360,9 @@ function SimuladorHistorialSection({
 
   const deleteMut = useMutation({
     mutationFn: (id: number) =>
-      fetch(API_ENDPOINTS.simuladorHistorialItem(id), {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${localStorage.getItem("medellin-social.token") ?? ""}` },
-      }),
+      apiFetch(API_ENDPOINTS.simuladorHistorialItem(id), { method: "DELETE" }),
     onSuccess: () => qc.invalidateQueries({ queryKey: ["simulador-historial"] }),
+    onError: () => toast.error("No se pudo eliminar la simulación"),
   });
 
   if (!isPro) return null;

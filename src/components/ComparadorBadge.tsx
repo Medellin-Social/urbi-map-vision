@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { X } from "lucide-react";
 import { useComparadorStore, MAX_COMPARADOR } from "@/hooks/useComparadorStore";
-import { useIsPro } from "@/components/LockedField";
+import { useIsAgente } from "@/components/LockedField";
 import type { ApiListing } from "@/lib/adapters";
 
 const LS_EXPLAINED = "comparador_explicado";
@@ -138,7 +138,7 @@ function Thumb({ listing }: { listing: ApiListing }) {
 // ─── Badge flotante principal ─────────────────────────────────────────────────
 
 export function ComparadorBadge() {
-  const isPro = useIsPro();
+  const isAgente = useIsAgente();
   const navigate = useNavigate();
   const { listings, clearAll } = useComparadorStore();
 
@@ -160,7 +160,7 @@ export function ComparadorBadge() {
     setPrevCount(listings.length);
   }, [listings.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!isPro || listings.length === 0) return null;
+  if (!isAgente || listings.length === 0) return null;
 
   const slots = Array.from({ length: MAX_COMPARADOR });
 

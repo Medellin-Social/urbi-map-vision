@@ -92,6 +92,17 @@ async def _get_agente_id(pool, user_id: int) -> Optional[int]:
     return row["id"] if row else None
 
 
+async def _es_agente_activo(pool, user_id: int) -> bool:
+    """True si es agente aprobado en el sistema legacy (`agentes`) o activo en
+    el sistema nuevo (`agent`) — dos tablas de agente que no se sincronizan
+    entre sí (ver realtor.py/admin_agentes.py para el sistema nuevo)."""
+    return await pool.fetchval(
+        """SELECT EXISTS(SELECT 1 FROM agentes WHERE usuario_id = $1 AND estado = 'aprobado')
+                OR EXISTS(SELECT 1 FROM agent WHERE usuario_id = $1 AND estado = 'activo')""",
+        user_id,
+    )
+
+
 # ── GET /barrios-form ──────────────────────────────────────────────────────────
 
 @router.get("/barrios-form")
@@ -123,7 +134,7 @@ async def my_tipo(current_user: dict = Depends(get_current_user)):
     pool = get_pool()
     agente_id = await _get_agente_id(pool, current_user["id"])
     return {
-        "es_agente": agente_id is not None,
+        "es_agente": await _es_agente_activo(pool, current_user["id"]),
         "agente_id": agente_id,
         "nombre": f"{current_user.get('nombre', '')} {current_user.get('apellido', '')}".strip(),
         "email": current_user.get("email", ""),
@@ -251,7 +262,7 @@ async def crear_listing(
     _validar_declaraciones(operacion, declaraciones_obj)
 
     agente_id = await _get_agente_id(pool, current_user["id"])
-    es_agente = agente_id is not None
+    es_agente = await _es_agente_activo(pool, current_user["id"])
     owner_id = await get_or_create_owner(current_user, pool)
 
     # Anti-spam (equivalente a la llamada de verificación de Zillow FSBO):

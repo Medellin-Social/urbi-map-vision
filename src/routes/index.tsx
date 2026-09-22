@@ -762,7 +762,7 @@ function HomeContent() {
                     {t('Arriendos desde', 'Rentals from')}
                   </div>
                   <div style={{ fontFamily: K.serif, fontSize: 'clamp(2rem, 4.5vw, 2.8rem)', fontWeight: 900, color: K.tealDeep, letterSpacing: '-1.5px', lineHeight: 1, fontVariantNumeric: 'tabular-nums' }}>
-                    $1.400<span style={{ fontSize: '1rem', fontWeight: 500, color: K.muted, letterSpacing: 0 }}>/mes</span>
+                    $1.4M<span style={{ fontSize: '1rem', fontWeight: 500, color: K.muted, letterSpacing: 0 }}>/mes</span>
                   </div>
                 </div>
                 <div style={{ flex: 1, paddingLeft: 22 }}>

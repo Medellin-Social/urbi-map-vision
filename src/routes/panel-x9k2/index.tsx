@@ -562,7 +562,8 @@ function RealtorsTab() {
                     <Check className="h-3.5 w-3.5" /> Aprobar
                   </button>
                   <button onClick={() => accion.mutate({ url: API_ENDPOINTS.adminAgenteRechazar(a.id), body: { motivo: "Rechazado desde panel admin" } })}
-                    className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold" style={{ borderColor: K.coral, color: K.coral }}>
+                    disabled={accion.isPending}
+                    className="inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: K.coral, color: K.coral }}>
                     <X className="h-3.5 w-3.5" /> Rechazar
                   </button>
                 </>
@@ -646,7 +647,7 @@ function ZonasManager({ agentId }: { agentId: string }) {
               style={{ borderColor: K.line, background: "#FFF", color: K.ink }}>
               <MapPinned className="h-3 w-3" style={{ color: z.zona_nivel === "comuna" ? K.teal : K.amber }} />
               {z.nombre ?? z.zona_codigo} <span style={{ color: K.muted }}>({z.zona_nivel})</span>
-              <button onClick={() => quitar.mutate(z.id)} title="Quitar" className="ml-0.5" style={{ color: K.coral }}>
+              <button onClick={() => quitar.mutate(z.id)} disabled={quitar.isPending} title="Quitar" className="ml-0.5 disabled:opacity-50" style={{ color: K.coral }}>
                 <Trash2 className="h-3 w-3" />
               </button>
             </span>

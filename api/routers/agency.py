@@ -39,6 +39,8 @@ async def _agency_owner(user: dict, pool) -> tuple[SimpleNamespace, SimpleNamesp
         )
     if not row:
         raise HTTPException(status_code=403, detail="El usuario no es owner de ninguna agencia")
+    if row["estado"] != "activo":
+        raise HTTPException(status_code=403, detail="agente_no_activo")
     return (
         SimpleNamespace(id=row["agent_id"], estado=row["estado"]),
         SimpleNamespace(id=row["agency_id"], nombre=row["agency_nombre"], tipo=row["agency_tipo"]),
@@ -329,6 +331,8 @@ async def aceptar_invite(
             raise HTTPException(status_code=410, detail=f"Invitación {invite['estado']}")
         if invite["expires_at"] < datetime.datetime.now(datetime.timezone.utc):
             raise HTTPException(status_code=410, detail="Invitación vencida")
+        if invite["email"].strip().lower() != user["email"].strip().lower():
+            raise HTTPException(status_code=403, detail="Esta invitación es para otro correo")
 
         # Buscar o crear el agent del usuario autenticado
         agent_row = await conn.fetchrow(

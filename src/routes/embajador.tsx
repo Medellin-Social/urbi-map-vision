@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { BARRIOS } from '@/components/comunidad/BarrioContext'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
+import { useIsMobile } from '@/hooks/use-mobile'
 
 export const Route = createFileRoute('/embajador')({
   component: EmbajadorPage,
@@ -78,6 +79,7 @@ const KPIS = [
 ]
 
 function EmbajadorPage() {
+  const isMobile = useIsMobile()
   const [nombre, setNombre] = useState('')
   const [apellido, setApellido] = useState('')
   const [email, setEmail] = useState('')
@@ -153,7 +155,7 @@ function EmbajadorPage() {
           linear-gradient(180deg, #fff 0%, ${K.paper} 100%)`,
         padding: '72px 26px 56px', borderBottom: `1px solid ${K.line}`,
       }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 56, alignItems: 'center' }}>
+        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
           <div>
             <span style={{
               display: 'inline-block', background: `rgba(29,158,117,.12)`, color: K.tealDeep,

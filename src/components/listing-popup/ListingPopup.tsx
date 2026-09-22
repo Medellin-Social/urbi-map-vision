@@ -103,6 +103,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         aria-modal="true"
         aria-label={`Detalle de listing en ${ubicacion || "el mapa"}`}
         tabIndex={-1}
+        data-tour="listing-popup"
         className="fixed z-50 flex flex-col overflow-hidden shadow-2xl outline-none rounded-2xl"
         style={{
           ...posStyle,
@@ -206,6 +207,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
           <button
             type="button"
             onClick={() => onViewMore(listing.id)}
+            data-tour="listing-popup-viewmore"
             className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
             style={{ background: "#1D9E75" }}
           >

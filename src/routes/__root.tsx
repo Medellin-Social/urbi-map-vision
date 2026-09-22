@@ -27,21 +27,76 @@ const queryClient = new QueryClient({
 
 import appCss from "../styles.css?url";
 
+const NF = {
+  ink: "#1A1208",
+  muted: "#6B5B45",
+  teal: "#1D9E75",
+  tealDeep: "#085041",
+  tealLight: "#E8F5F0",
+  coral: "#D85A30",
+  serif: "'Fraunces', Georgia, serif" as const,
+};
+
 function NotFoundComponent() {
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background px-4">
-      <div className="max-w-md text-center">
-        <h1 className="text-7xl font-bold text-foreground">404</h1>
-        <h2 className="mt-4 text-xl font-semibold">Página no encontrada</h2>
-        <p className="mt-2 text-sm text-muted-foreground">
-          This page doesn't exist on Medellín Social.
+    <div
+      className="paper-theme"
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#FAF7F2",
+        padding: 20,
+      }}
+    >
+      <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
+        <svg
+          viewBox="0 0 20 28"
+          style={{ width: 72, height: 100, margin: "0 auto 16px" }}
+          aria-hidden="true"
+        >
+          <path
+            d="M10 2 C4 2 1 6 1 11 C1 17 10 26 10 26 C10 26 19 17 19 11 C19 6 16 2 10 2 Z"
+            fill={NF.coral}
+          />
+          <text x="10" y="15.5" textAnchor="middle" fontSize="8" fontWeight={900} fill="#FAF7F2" fontFamily={NF.serif}>
+            ?
+          </text>
+        </svg>
+
+        <h1 style={{ fontFamily: NF.serif, fontSize: "3rem", fontWeight: 900, color: NF.ink, margin: 0, letterSpacing: "-1px" }}>
+          404
+        </h1>
+        <h2 style={{ fontFamily: NF.serif, fontSize: "1.25rem", fontWeight: 700, color: NF.ink, marginTop: 8 }}>
+          Esta página no existe
+        </h2>
+        <p style={{ color: NF.muted, fontSize: 15, lineHeight: 1.7, marginTop: 10, marginBottom: 32 }}>
+          Puede que el enlace esté roto o la página se haya movido. Vuelve al mapa para seguir explorando Medellín.
         </p>
-        <div className="mt-6">
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <Link
+            to="/map"
+            style={{
+              background: NF.teal, color: "#fff",
+              padding: "13px 24px", borderRadius: 8,
+              fontWeight: 700, fontSize: 14, textDecoration: "none",
+              display: "block",
+            }}
+          >
+            Ir al mapa →
+          </Link>
           <Link
             to="/"
-            className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
+            style={{
+              background: NF.tealLight, color: NF.tealDeep,
+              padding: "11px 24px", borderRadius: 8,
+              fontWeight: 700, fontSize: 13, textDecoration: "none",
+              display: "block",
+            }}
           >
-            Ir al inicio
+            Volver al inicio
           </Link>
         </div>
       </div>

@@ -8,7 +8,7 @@ import { useIsAgente } from "@/components/LockedField";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { useUnit } from "@/hooks/useUnit";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Wordmark, BrandBadge } from "@/components/Wordmark";
+import { Wordmark } from "@/components/Wordmark";
 import type { Neighborhood } from "@/lib/adapters";
 
 export type MapTab = "buy" | "rent" | "sell" | "agent" | "simulator" | "comparador";
@@ -96,12 +96,8 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
         }}
       >
-        <Link to="/" style={{ textDecoration: "none", flexShrink: 0 }}>
-          <BrandBadge size={32} coral={C.coral} amarillo={C.amarillo} />
-        </Link>
-
         {/* Comprar / Arrendar — the two tabs that stay on /map */}
-        <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
           {(["buy", "rent"] as const).map((id) => {
             const active = activeTab === id;
             return (
@@ -214,6 +210,61 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
     );
   }
 
+  const renderTab = (tab: (typeof BASE_TABS)[number]) => {
+    const active = activeTab === tab.id;
+
+    if (tab.route) {
+      return (
+        <button
+          key={tab.id}
+          onClick={() => navigate({ to: tab.route as any })}
+          style={{
+            background: "none", border: "none", padding: "0 11px",
+            borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
+            color: active ? C.tealDeep : C.muted,
+            fontWeight: active ? 700 : 500,
+            fontSize: 13, cursor: "pointer",
+            transition: "color 0.15s",
+            letterSpacing: "0.1px",
+            flexShrink: 0,
+            display: "flex", alignItems: "center", gap: 4,
+          }}
+          onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
+          onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.tealDeep : C.muted; }}
+        >
+          {tab.label}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        key={tab.id}
+        onClick={() => {
+          if (activeTab === "simulator" || activeTab === "comparador") {
+            navigate({ to: "/map" });
+          } else {
+            onTabChange(tab.id);
+          }
+        }}
+        style={{
+          background: "none", border: "none", padding: "0 11px",
+          borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
+          color: active ? C.tealDeep : C.muted,
+          fontWeight: active ? 700 : 500,
+          fontSize: 13, cursor: "pointer",
+          transition: "color 0.15s",
+          letterSpacing: "0.1px",
+          flexShrink: 0,
+        }}
+        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
+        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = C.muted; }}
+      >
+        {tab.label}
+      </button>
+    );
+  };
+
   return (
     <header
       style={{
@@ -229,60 +280,10 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
       {/* Left: tabs + MLS back breadcrumb */}
       <div style={{ display: "flex", alignItems: "stretch", gap: 12, minWidth: 0, overflow: "hidden" }}>
       <nav className="map-nav-tabs" style={{ display: "flex", alignItems: "stretch", minWidth: 0, overflowX: "auto", overflowY: "hidden" }}>
-        {BASE_TABS.map((tab) => {
-          const active = activeTab === tab.id;
-
-          if (tab.route) {
-            return (
-              <button
-                key={tab.id}
-                onClick={() => navigate({ to: tab.route as any })}
-                style={{
-                  background: "none", border: "none", padding: "0 11px",
-                  borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
-                  color: active ? C.tealDeep : C.muted,
-                  fontWeight: active ? 700 : 500,
-                  fontSize: 13, cursor: "pointer",
-                  transition: "color 0.15s",
-                  letterSpacing: "0.1px",
-                  flexShrink: 0,
-                  display: "flex", alignItems: "center", gap: 4,
-                }}
-                onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
-                onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.tealDeep : C.muted; }}
-              >
-                {tab.label}
-              </button>
-            );
-          }
-
-          return (
-            <button
-              key={tab.id}
-              onClick={() => {
-                if (activeTab === "simulator" || activeTab === "comparador") {
-                  navigate({ to: "/map" });
-                } else {
-                  onTabChange(tab.id);
-                }
-              }}
-              style={{
-                background: "none", border: "none", padding: "0 11px",
-                borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
-                color: active ? C.tealDeep : C.muted,
-                fontWeight: active ? 700 : 500,
-                fontSize: 13, cursor: "pointer",
-                transition: "color 0.15s",
-                letterSpacing: "0.1px",
-                flexShrink: 0,
-              }}
-              onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
-              onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = C.muted; }}
-            >
-              {tab.label}
-            </button>
-          );
-        })}
+        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", alignItems: "stretch" }}>
+          {BASE_TABS.slice(0, 2).map(renderTab)}
+        </div>
+        {BASE_TABS.slice(2).map(renderTab)}
 
         {isAgente && (
           <button
