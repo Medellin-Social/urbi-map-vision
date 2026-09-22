@@ -1,8 +1,8 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
-import { useLogin } from "@/hooks/useAuth";
+import { useLogin, useMagicLinkRequest } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
-import { AlertCircle } from "lucide-react";
+import { AlertCircle, Mail } from "lucide-react";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export const Route = createFileRoute("/login")({
@@ -28,9 +28,12 @@ const K = {
 function LoginPage() {
   const navigate = useNavigate();
   const login = useLogin();
+  const magicLink = useMagicLinkRequest();
+  const [mode, setMode] = useState<"password" | "magic">("password");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
+  const [magicSent, setMagicSent] = useState(false);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -46,6 +49,75 @@ function LoginPage() {
       setError(err instanceof Error ? err.message : "Credenciales inválidas.");
     }
   };
+
+  const submitMagicLink = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!email) {
+      setError("Ingresa tu correo.");
+      return;
+    }
+    setError("");
+    try {
+      await magicLink.mutateAsync({ email });
+      setMagicSent(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "No se pudo enviar el link.");
+    }
+  };
+
+  if (mode === "magic") {
+    return (
+      <AuthShell
+        title="Ingresa sin contraseña"
+        subtitle="Te mandamos un link a tu correo — un clic y entras"
+        editorial={"Tu ciudad, tus datos,\ntus decisiones."}
+      >
+        {magicSent ? (
+          <div style={{ display: "flex", flexDirection: "column", gap: 16, textAlign: "center" }}>
+            <div style={{ display: "flex", justifyContent: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Mail style={{ width: 22, height: 22, color: K.teal }} />
+              </div>
+            </div>
+            <p style={{ fontFamily: K.manrope, fontSize: 14, color: K.ink, margin: 0 }}>
+              Revisa <strong>{email}</strong>. El link es válido por 15 minutos y funciona una sola vez.
+            </p>
+            <button
+              onClick={() => { setMagicSent(false); setMode("password"); }}
+              style={{ background: "none", border: "none", color: K.teal, fontFamily: K.manrope, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              ← Volver
+            </button>
+          </div>
+        ) : (
+          <form onSubmit={submitMagicLink} style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <Field label="Correo">
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="auth-input"
+                style={inputStyle}
+                placeholder="tu@correo.com"
+                autoFocus
+              />
+            </Field>
+            {error && <ErrorBanner message={error} />}
+            <AuthButton disabled={magicLink.isPending}>
+              {magicLink.isPending ? "Enviando…" : "Enviarme el link"}
+            </AuthButton>
+            <button
+              type="button"
+              onClick={() => { setError(""); setMode("password"); }}
+              style={{ background: "none", border: "none", color: K.muted, fontFamily: K.manrope, fontSize: 13, fontWeight: 600, cursor: "pointer" }}
+            >
+              ← Ingresar con contraseña
+            </button>
+          </form>
+        )}
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell
@@ -74,7 +146,14 @@ function LoginPage() {
             placeholder="••••••••"
           />
         </Field>
-        <div style={{ display: "flex", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", justifyContent: "space-between" }}>
+          <button
+            type="button"
+            onClick={() => { setError(""); setMode("magic"); }}
+            style={{ background: "none", border: "none", padding: 0, color: K.teal, fontSize: 13, fontFamily: K.manrope, fontWeight: 600, cursor: "pointer" }}
+          >
+            Ingresar sin contraseña
+          </button>
           <Link
             to="/forgot-password"
             style={{ color: K.teal, fontSize: 13, fontFamily: K.manrope, fontWeight: 600, textDecoration: "none" }}
@@ -145,7 +224,7 @@ export function AuthShell({
         >
           {/* Photo */}
           <img
-            src="https://images.unsplash.com/photo-1611271689035-e01d1e8e87a2?auto=format&fit=crop&w=1200&q=80"
+            src="https://images.unsplash.com/photo-1697082390861-9f5186b44431?auto=format&fit=crop&w=1200&q=80"
             alt="Medellín"
             style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
           />

@@ -5,7 +5,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { AuthShell } from "./login";
 
-export const Route = createFileRoute("/agentes/registro")({
+export const Route = createFileRoute("/agentes_/registro")({
   beforeLoad: () => {
     if (typeof window === "undefined") return;
     if (!localStorage.getItem("medellin-social.user")) {

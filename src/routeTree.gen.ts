@@ -42,6 +42,7 @@ import { Route as RealtorDashboardRouteImport } from './routes/realtor/dashboard
 import { Route as RealtorAgencyDashboardRouteImport } from './routes/realtor/agency-dashboard'
 import { Route as RealtorAcceptInviteRouteImport } from './routes/realtor/accept-invite'
 import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
+import { Route as LoginVerificarRouteImport } from './routes/login_.verificar'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
 import { Route as ListingIdRouteImport } from './routes/listing.$id'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
@@ -212,6 +213,11 @@ const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
   path: '/negocios/unirse',
   getParentRoute: () => rootRouteImport,
 } as any)
+const LoginVerificarRoute = LoginVerificarRouteImport.update({
+  id: '/login_/verificar',
+  path: '/login/verificar',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LocalBusinessBarrio_slugRoute =
   LocalBusinessBarrio_slugRouteImport.update({
     id: '/local-business/$barrio_slug',
@@ -265,6 +271,7 @@ export interface FileRoutesByFullPath {
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/login/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
@@ -304,6 +311,7 @@ export interface FileRoutesByTo {
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/login/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
@@ -344,6 +352,7 @@ export interface FileRoutesById {
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
   '/listing/$id': typeof ListingIdRoute
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
+  '/login_/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
@@ -385,6 +394,7 @@ export interface FileRouteTypes {
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/login/verificar'
     | '/negocios/unirse'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
@@ -424,6 +434,7 @@ export interface FileRouteTypes {
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/login/verificar'
     | '/negocios/unirse'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
@@ -463,6 +474,7 @@ export interface FileRouteTypes {
     | '/eventos/$barrio_slug'
     | '/listing/$id'
     | '/local-business/$barrio_slug'
+    | '/login_/verificar'
     | '/negocios/unirse'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
@@ -503,6 +515,7 @@ export interface RootRouteChildren {
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
   ListingIdRoute: typeof ListingIdRoute
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
+  LoginVerificarRoute: typeof LoginVerificarRoute
   NegociosUnirseRoute: typeof NegociosUnirseRoute
   RealtorAcceptInviteRoute: typeof RealtorAcceptInviteRoute
   RealtorAgencyDashboardRoute: typeof RealtorAgencyDashboardRoute
@@ -745,6 +758,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof NegociosUnirseRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/login_/verificar': {
+      id: '/login_/verificar'
+      path: '/login/verificar'
+      fullPath: '/login/verificar'
+      preLoaderRoute: typeof LoginVerificarRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/local-business/$barrio_slug': {
       id: '/local-business/$barrio_slug'
       path: '/local-business/$barrio_slug'
@@ -807,6 +827,7 @@ const rootRouteChildren: RootRouteChildren = {
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,
   ListingIdRoute: ListingIdRoute,
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
+  LoginVerificarRoute: LoginVerificarRoute,
   NegociosUnirseRoute: NegociosUnirseRoute,
   RealtorAcceptInviteRoute: RealtorAcceptInviteRoute,
   RealtorAgencyDashboardRoute: RealtorAgencyDashboardRoute,

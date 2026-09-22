@@ -18,6 +18,8 @@ export const API_ENDPOINTS = {
   refreshToken: `${API_BASE_URL}/auth/refresh`,
   forgotPassword: `${API_BASE_URL}/auth/forgot-password`,
   resetPassword: `${API_BASE_URL}/auth/reset-password`,
+  magicLink: `${API_BASE_URL}/auth/magic-link`,
+  magicLinkVerify: `${API_BASE_URL}/auth/magic-link/verificar`,
 
   // Barrios
   barrios: `${API_BASE_URL}/barrios`,

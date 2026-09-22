@@ -441,3 +441,105 @@ async def reset_password(request: Request, req: ResetPasswordRequest = Body(...)
             )
 
     return {"message": "Contraseña actualizada correctamente"}
+
+
+# ── Magic link (passwordless login) ─────────────────────────────────────────
+
+class MagicLinkRequest(BaseModel):
+    email: EmailStr
+
+    _normalizar_email = field_validator("email")(_normalizar_email)
+
+
+class MagicLinkVerifyRequest(BaseModel):
+    token: str
+
+
+@router.post("/magic-link", status_code=200)
+@limiter.limit("3/minute")
+async def request_magic_link(request: Request, req: MagicLinkRequest = Body(...)):
+    """Send a one-click login link. Works whether or not the email is already
+    registered — verifying it auto-creates the account, same trust model as
+    Google Sign-In (a clicked link from their inbox proves email ownership)."""
+    from api.utils.email import send_magic_link
+
+    pool = get_pool()
+    token = secrets.token_urlsafe(32)
+    expires = datetime.now(timezone.utc) + timedelta(minutes=15)
+    await pool.execute(
+        """INSERT INTO magic_link_tokens (email, token, expires_at)
+           VALUES ($1, $2, $3)
+           ON CONFLICT (email) DO UPDATE
+               SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
+        req.email, token, expires,
+    )
+    login_url = f"{_APP_URL}/login/verificar?token={token}"
+    try:
+        await send_magic_link(to=req.email, login_url=login_url)
+    except Exception:
+        pass  # ponytail: silent — token in DB, user can retry
+
+    return {"message": "Si el correo existe o es válido, recibirás un link para ingresar."}
+
+
+@router.post("/magic-link/verificar", response_model=AuthResponse)
+@limiter.limit("10/minute")
+async def verify_magic_link(request: Request, req: MagicLinkVerifyRequest = Body(...)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "SELECT email, expires_at, used FROM magic_link_tokens WHERE token = $1",
+        req.token,
+    )
+    if row is None or row["used"]:
+        raise HTTPException(status_code=400, detail="Link inválido o ya utilizado")
+    if row["expires_at"] < datetime.now(timezone.utc):
+        raise HTTPException(status_code=400, detail="Link expirado. Solicita uno nuevo.")
+
+    email = row["email"]
+    user = await pool.fetchrow(
+        """SELECT id, email, nombre, apellido, activo, plan,
+                  perfil_busqueda, onboarding_completado, origen_registro,
+                  EXISTS(SELECT 1 FROM agent a
+                         WHERE a.usuario_id = usuarios.id
+                           AND a.estado = 'activo') AS es_agente
+           FROM usuarios WHERE email = $1""",
+        email,
+    )
+    if user is None:
+        password_hash = _hash_password(secrets.token_urlsafe(32))
+        user_id = await pool.fetchval(
+            """
+            INSERT INTO usuarios (email, password_hash, origen_registro, email_verificado)
+            VALUES ($1, $2, 'magic_link', TRUE)
+            RETURNING id
+            """,
+            email, password_hash,
+        )
+        user = await pool.fetchrow(
+            """SELECT id, email, nombre, apellido, activo, plan,
+                      perfil_busqueda, onboarding_completado, origen_registro,
+                      EXISTS(SELECT 1 FROM agent a
+                             WHERE a.usuario_id = usuarios.id
+                               AND a.estado = 'activo') AS es_agente
+               FROM usuarios WHERE id = $1""",
+            user_id,
+        )
+    elif not user["activo"]:
+        raise HTTPException(status_code=403, detail="Cuenta desactivada")
+
+    await pool.execute("UPDATE magic_link_tokens SET used = TRUE WHERE token = $1", req.token)
+    await pool.execute(
+        "UPDATE usuarios SET last_login = NOW(), email_verificado = TRUE WHERE id = $1", user["id"]
+    )
+    token = _make_token(user["id"])
+    perfil = await _get_perfil(pool, user["id"])
+    return AuthResponse(
+        token=token,
+        user=UserBasic(
+            id=user["id"], email=user["email"], nombre=user["nombre"], apellido=user["apellido"],
+            plan=user["plan"], es_agente=user["es_agente"], perfil_busqueda=user["perfil_busqueda"],
+            onboarding_completado=user["onboarding_completado"],
+            origen_registro=user["origen_registro"],
+        ),
+        perfil_inversor=perfil,
+    )

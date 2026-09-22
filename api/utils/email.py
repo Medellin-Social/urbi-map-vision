@@ -150,6 +150,23 @@ async def send_reset_password(to: str, nombre: str, reset_url: str) -> None:
     await send_email(to, "Restablecer contraseña · Medellín Social", html)
 
 
+async def send_magic_link(to: str, login_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Tu link para ingresar</h3>
+      <p>Haz clic en el botón para entrar a Medellín Social — sin contraseña:</p>
+      <div style="margin-top:24px">
+        <a href="{login_url}"
+           style="background:#1D9E75;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600;font-size:15px">
+          Ingresar a Medellín Social
+        </a>
+      </div>
+      <p style="margin-top:20px;font-size:12px;color:#999">
+        Este enlace es válido por 15 minutos y funciona una sola vez. Si no lo pediste tú, ignora este mensaje.
+      </p>
+    """)
+    await send_email(to, "Tu link para ingresar · Medellín Social", html)
+
+
 async def send_invite_agencia(to: str, agency_nombre: str, invitado_por, invite_url: str) -> None:
     html = _wrap(f"""
       <h3 style="color:#1D9E75">Te invitan a unirte a {agency_nombre}</h3>

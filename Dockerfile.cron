@@ -48,20 +48,20 @@ COPY dbt/ ./dbt/
 #     11:00 diario         fetch_usd_rate.py          (parametros_diario)
 #     11:15 lunes          fetch_trm.py               (trm_semanal)
 RUN printf '%s\n' \
-    "0 3 * * * root cd /app && python scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
-    "0 */6 * * * root cd /app && python scraping/run_comunidad.py >> /var/log/comunidad.log 2>&1" \
-    "0 4 * * 0 root cd /app && python scripts/validate_listings_urls.py --batch 3000 >> /var/log/validate.log 2>&1" \
-    "0 8 */3 * * root cd /app && python scripts/run_listings_metrocuadrado.py >> /var/log/listings_m2.log 2>&1" \
-    "0 9 */3 * * root cd /app && python scripts/run_renta_corta.py >> /var/log/renta_corta.log 2>&1" \
-    "0 7 * * * root cd /app && python scripts/run_analytics_usuarios.py >> /var/log/analytics_usuarios.log 2>&1" \
-    "0 8 * * 0 root cd /app && python scripts/run_airbnb_semanal.py >> /var/log/airbnb_semanal.log 2>&1" \
-    "30 7 * * 1 root cd /app && python scripts/run_dbt_full_refresh.py >> /var/log/dbt_full_refresh.log 2>&1" \
-    "0 10 * * 3 root cd /app && python scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/remates_dbt.log 2>&1" \
-    "30 3 1 * * root cd /app && python scripts/load_barrios.py >> /var/log/ingest_barrios.log 2>&1" \
-    "0 4 * * 1 root cd /app && python scripts/load_pois.py --build-analytics >> /var/log/ingest_pois.log 2>&1" \
-    "0 12 1 * * root cd /app && python scripts/run_seguridad_mensual.py >> /var/log/seguridad_mensual.log 2>&1" \
-    "0 11 * * * root cd /app && python scripts/fetch_usd_rate.py >> /var/log/parametros_diario.log 2>&1" \
-    "15 11 * * 1 root cd /app && python scripts/fetch_trm.py >> /var/log/trm_semanal.log 2>&1" \
+    "0 3 * * * root cd /app && python3 scripts/refresh_data.py >> /var/log/refresh.log 2>&1" \
+    "0 */6 * * * root cd /app && python3 scraping/run_comunidad.py >> /var/log/comunidad.log 2>&1" \
+    "0 4 * * 0 root cd /app && python3 scripts/validate_listings_urls.py --batch 3000 >> /var/log/validate.log 2>&1" \
+    "0 8 */3 * * root cd /app && python3 scripts/run_listings_metrocuadrado.py >> /var/log/listings_m2.log 2>&1" \
+    "0 9 */3 * * root cd /app && python3 scripts/run_renta_corta.py >> /var/log/renta_corta.log 2>&1" \
+    "0 7 * * * root cd /app && python3 scripts/run_analytics_usuarios.py >> /var/log/analytics_usuarios.log 2>&1" \
+    "0 8 * * 0 root cd /app && python3 scripts/run_airbnb_semanal.py >> /var/log/airbnb_semanal.log 2>&1" \
+    "30 7 * * 1 root cd /app && python3 scripts/run_dbt_full_refresh.py >> /var/log/dbt_full_refresh.log 2>&1" \
+    "0 10 * * 3 root cd /app && python3 scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/remates_dbt.log 2>&1" \
+    "30 3 1 * * root cd /app && python3 scripts/load_barrios.py >> /var/log/ingest_barrios.log 2>&1" \
+    "0 4 * * 1 root cd /app && python3 scripts/load_pois.py --build-analytics >> /var/log/ingest_pois.log 2>&1" \
+    "0 12 1 * * root cd /app && python3 scripts/run_seguridad_mensual.py >> /var/log/seguridad_mensual.log 2>&1" \
+    "0 11 * * * root cd /app && python3 scripts/fetch_usd_rate.py >> /var/log/parametros_diario.log 2>&1" \
+    "15 11 * * 1 root cd /app && python3 scripts/fetch_trm.py >> /var/log/trm_semanal.log 2>&1" \
     > /etc/cron.d/urbidata \
     && chmod 0644 /etc/cron.d/urbidata \
     && crontab /etc/cron.d/urbidata

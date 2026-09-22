@@ -85,6 +85,32 @@ export function useGoogleLogin() {
   });
 }
 
+export function useMagicLinkRequest() {
+  return useMutation({
+    mutationFn: async (data: { email: string }) => {
+      return apiFetch<{ message: string }>(API_ENDPOINTS.magicLink, {
+        method: "POST",
+        body: JSON.stringify(data),
+        skipAuth: true,
+      });
+    },
+  });
+}
+
+export function useMagicLinkVerify() {
+  return useMutation({
+    mutationFn: async (data: { token: string }) => {
+      const res = await apiFetch<AuthResponse>(API_ENDPOINTS.magicLinkVerify, {
+        method: "POST",
+        body: JSON.stringify(data),
+        skipAuth: true,
+      });
+      storeAuth(res);
+      return res;
+    },
+  });
+}
+
 export function useMe() {
   return useQuery({
     queryKey: ["me"],
