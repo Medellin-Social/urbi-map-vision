@@ -20,18 +20,25 @@ function loadingLabel(path: string): string | undefined {
 // Muestra el veil durante la carga inicial de la página. Se oculta cuando NO
 // hay fetch en vuelo (useIsFetching) Y ya pasó un mínimo visible (~750ms), para
 // que TODA página lo muestre — incluso las que casi no fetchean (agentes,
-// vender, planes, home) — no solo las de datos pesados.
+// vender, planes, home) — no solo las de datos pesados. Tope duro MAX_VISIBLE_MS
+// para que el backend lento/caído (fetching nunca llega a 0) no deje el veil pegado.
 const MIN_VISIBLE_MS = 750
+const MAX_VISIBLE_MS = 4000
 function useBooting(path: string): boolean {
   const fetching = useIsFetching()
   const [booting, setBooting] = useState(true)
   const startRef = useRef(0)
 
-  // Reinicia el veil al navegar a otra sección.
-  useEffect(() => { setBooting(true); startRef.current = performance.now() }, [path])
+  // Reinicia el veil al navegar a otra sección + tope duro por si nunca settlea.
+  useEffect(() => {
+    setBooting(true)
+    startRef.current = performance.now()
+    const cap = setTimeout(() => setBooting(false), MAX_VISIBLE_MS)
+    return () => clearTimeout(cap)
+  }, [path])
 
   useEffect(() => {
-    if (fetching > 0) return // sigue cargando → mantén el veil
+    if (fetching > 0) return // sigue cargando → mantén el veil (hasta el tope duro)
     const elapsed = performance.now() - startRef.current
     const wait = Math.max(150, MIN_VISIBLE_MS - elapsed)
     const t = setTimeout(() => setBooting(false), wait)

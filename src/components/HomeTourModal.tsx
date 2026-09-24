@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { X, GraduationCap } from "lucide-react";
+import { useLang } from "@/lib/i18n";
 
 const LS_KEY = "home_tour_seen";
 const PAD = 8; // spotlight ring padding around target rect
 const FIND_TIMEOUT_MS = 2500;
 
+type LocStr = { es: string; en: string };
 type TourStep = {
-  title: string;
-  body: string;
+  title: LocStr;
+  body: LocStr;
   selector?: string; // CSS selector for the real element to spotlight — best-effort
   icon?: string;      // shown when there's no live target to point at
   mobileOnly?: boolean;
@@ -17,65 +19,89 @@ type TourStep = {
 
 const ALL_STEPS: TourStep[] = [
   {
-    title: "Bienvenido a Medellín Social",
-    body: "Un recorrido rápido por el sitio: sus páginas, el mapa de inicio y cómo navegar tu barrio.",
+    title: { es: "Bienvenido a Medellín Social", en: "Welcome to Medellín Social" },
+    body: {
+      es: "Un recorrido rápido por el sitio: sus páginas, el mapa de inicio y cómo navegar tu barrio.",
+      en: "A quick tour of the site: its pages, the home map, and how to navigate your barrio.",
+    },
     icon: "🏠",
   },
   {
-    title: "Menú de navegación",
-    body: "Desde aquí vas a Eventos, Negocios, Real Estate y Blog de tu barrio.",
+    title: { es: "Menú de navegación", en: "Navigation menu" },
+    body: {
+      es: "Desde aquí vas a Eventos, Negocios, Real Estate y Blog de tu barrio.",
+      en: "From here you reach Events, Businesses, Real Estate and Blog for your barrio.",
+    },
     selector: '[data-tour="nav-links"]',
     desktopOnly: true,
   },
   {
-    title: "Menú de navegación",
-    body: "Toca el ☰ para ver Eventos, Negocios, Real Estate y Blog.",
+    title: { es: "Menú de navegación", en: "Navigation menu" },
+    body: {
+      es: "Toca el ☰ para ver Eventos, Negocios, Real Estate y Blog.",
+      en: "Tap ☰ to see Events, Businesses, Real Estate and Blog.",
+    },
     selector: '[data-tour="nav-hamburger"]',
     mobileOnly: true,
   },
   {
-    title: "Elige tu barrio",
-    body: "Este selector filtra toda la página — noticias, eventos y negocios — por el barrio que elijas.",
+    title: { es: "Elige tu barrio", en: "Choose your barrio" },
+    body: {
+      es: "Este selector filtra toda la página — noticias, eventos y negocios — por el barrio que elijas.",
+      en: "This selector filters the whole page — news, events and businesses — by the barrio you pick.",
+    },
     selector: '[data-tour="barrio-select"]',
   },
   {
-    title: "El mapa de inicio",
-    body: "Haz click en el mapa para elegir entre ver Barrios (inmuebles) o Comunidad (eventos y negocios) de una zona.",
+    title: { es: "El mapa de inicio", en: "The home map" },
+    body: {
+      es: "Haz click en el mapa para elegir entre ver Barrios (inmuebles) o Comunidad (eventos y negocios) de una zona.",
+      en: "Click the map to choose between Barrios (real estate) or Community (events and businesses) for an area.",
+    },
     selector: '[data-tour="home-hero-map"]',
   },
   {
-    title: "Trending en tu barrio",
-    body: "Noticias y eventos destacados del barrio seleccionado, siempre a la vista.",
+    title: { es: "Trending en tu barrio", en: "Trending in your barrio" },
+    body: {
+      es: "Noticias y eventos destacados del barrio seleccionado, siempre a la vista.",
+      en: "Top news and events for the selected barrio, always in view.",
+    },
     selector: '[data-tour="home-trending"]',
   },
   {
-    title: "Lo último del barrio",
-    body: "Noticias recientes de tu zona.",
+    title: { es: "Lo último del barrio", en: "Latest from the barrio" },
+    body: { es: "Noticias recientes de tu zona.", en: "Recent news from your area." },
     selector: '[data-tour="home-noticias"]',
   },
   {
-    title: "Qué hacer esta semana",
-    body: "La agenda de eventos de la semana en tu barrio.",
+    title: { es: "Qué hacer esta semana", en: "What to do this week" },
+    body: { es: "La agenda de eventos de la semana en tu barrio.", en: "This week's event agenda for your barrio." },
     selector: '[data-tour="home-eventos-semana"]',
   },
   {
-    title: "Hotspots & Deals",
-    body: "Promociones exclusivas de negocios locales.",
+    title: { es: "Hotspots & Deals", en: "Hotspots & Deals" },
+    body: { es: "Promociones exclusivas de negocios locales.", en: "Exclusive deals from local businesses." },
     selector: '[data-tour="home-deals"]',
   },
   {
-    title: "Directorio 5 Estrellas",
-    body: "Los negocios mejor calificados por categoría.",
+    title: { es: "Directorio 5 Estrellas", en: "5-Star Directory" },
+    body: { es: "Los negocios mejor calificados por categoría.", en: "The top-rated businesses by category." },
     selector: '[data-tour="home-directorio"]',
   },
   {
-    title: "Mapa de inversión",
-    body: "Aquí entras al mapa completo de inmuebles, con filtros de precio, tipo y más — ese mapa tiene su propio tutorial.",
+    title: { es: "Mapa de inversión", en: "Investment map" },
+    body: {
+      es: "Aquí entras al mapa completo de inmuebles, con filtros de precio, tipo y más — ese mapa tiene su propio tutorial.",
+      en: "Here you enter the full real-estate map, with filters for price, type and more — that map has its own tutorial.",
+    },
     selector: '[data-tour="home-realestate"]',
   },
   {
-    title: "¿Necesitas repasar esto?",
-    body: "Puedes volver a ver esta guía cuando quieras con este botón.",
+    title: { es: "¿Necesitas repasar esto?", en: "Need to review this?" },
+    body: {
+      es: "Puedes volver a ver esta guía cuando quieras con este botón.",
+      en: "You can replay this guide anytime with this button.",
+    },
     selector: '[data-tour="tour-replay-home"]',
   },
 ];
@@ -85,6 +111,9 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
   const [show, setShow] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
+  const { lang } = useLang();
+  const tr = (o: LocStr) => (lang === "es" ? o.es : o.en);
+  const tt = (es: string, en: string) => (lang === "es" ? es : en);
 
   const STEPS = ALL_STEPS.filter((s) => (!s.mobileOnly || isMobile) && (!s.desktopOnly || !isMobile));
 
@@ -165,7 +194,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
     >
       <button
         onClick={finish}
-        aria-label="Cerrar guía"
+        aria-label={tt("Cerrar guía", "Close guide")}
         className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#6B5B45] transition hover:bg-[#E8E0D0] hover:text-[#1A1208]"
       >
         <X className="h-3.5 w-3.5" />
@@ -176,8 +205,8 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
           <div className="h-full rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: "#1D9E75" }} />
         </div>
 
-        <h2 className="mt-3 font-display text-lg font-semibold leading-tight text-[#1A1208]">{s.title}</h2>
-        <p className="mt-1.5 text-sm text-[#6B5B45]">{s.body}</p>
+        <h2 data-i18n-skip className="mt-3 font-display text-lg font-semibold leading-tight text-[#1A1208]">{tr(s.title)}</h2>
+        <p data-i18n-skip className="mt-1.5 text-sm text-[#6B5B45]">{tr(s.body)}</p>
         {s.icon && <div className="mt-3 text-center text-3xl">{s.icon}</div>}
 
         <div className="mt-4 flex items-center justify-between">
@@ -185,7 +214,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
             onClick={finish}
             className="text-xs font-medium text-[#6B5B45] transition hover:text-[#1A1208] hover:underline"
           >
-            Saltar recorrido
+            {tt("Saltar recorrido", "Skip tour")}
           </button>
           <div className="flex gap-2">
             {step > 0 && (
@@ -193,7 +222,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
                 onClick={() => setStep((n) => n - 1)}
                 className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#6B5B45] transition hover:bg-[#E8E0D0]"
               >
-                Atrás
+                {tt("Atrás", "Back")}
               </button>
             )}
             <button
@@ -201,7 +230,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
               className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
               style={{ background: "#1D9E75" }}
             >
-              {isLast ? "Entendido" : "Siguiente"}
+              {isLast ? tt("Entendido", "Got it") : tt("Siguiente", "Next")}
             </button>
           </div>
         </div>
@@ -213,13 +242,13 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
     <>
       <button
         onClick={replay}
-        aria-label="Tutorial del sitio"
+        aria-label={tt("Tutorial del sitio", "Site tutorial")}
         data-tour="tour-replay-home"
         className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
         style={{ bottom: 20, right: 20, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }}
       >
         <GraduationCap size={14} />
-        Tutorial del sitio
+        {tt("Tutorial del sitio", "Site tutorial")}
       </button>
 
       <AnimatePresence>
