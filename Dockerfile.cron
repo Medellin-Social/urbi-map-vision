@@ -16,6 +16,23 @@ COPY scraping/requirements.txt /tmp/scraping-requirements.txt
 RUN pip install --no-cache-dir -r /tmp/scraping-requirements.txt \
     && playwright install chromium --with-deps
 
+# Traducción offline bidireccional es<->en (Opus-MT + CTranslate2). torch se usa
+# SOLO en build para convertir los modelos a CT2 int8; el runtime traduce con
+# ctranslate2 (torch queda instalado sin usarse — bloat aceptable en cron).
+# langdetect elige la dirección. Modelos + tokenizers bakeados -> 100% offline.
+# ponytail: descarga HF sin token (rate-limit posible en build); si molesta, HF_TOKEN.
+RUN pip install --no-cache-dir ctranslate2 transformers sentencepiece sacremoses langdetect \
+      torch --extra-index-url https://download.pytorch.org/whl/cpu \
+ && ct2-transformers-converter --model Helsinki-NLP/opus-mt-es-en \
+      --output_dir /app/models/opus-es-en-ct2 --quantization int8 \
+ && ct2-transformers-converter --model Helsinki-NLP/opus-mt-en-es \
+      --output_dir /app/models/opus-en-es-ct2 --quantization int8 \
+ && python3 -c "from transformers import AutoTokenizer as A; A.from_pretrained('Helsinki-NLP/opus-mt-es-en').save_pretrained('/app/models/opus-es-en-tok'); A.from_pretrained('Helsinki-NLP/opus-mt-en-es').save_pretrained('/app/models/opus-en-es-tok')"
+ENV TRANSLATE_MODEL_ES_EN=/app/models/opus-es-en-ct2
+ENV TRANSLATE_TOK_ES_EN=/app/models/opus-es-en-tok
+ENV TRANSLATE_MODEL_EN_ES=/app/models/opus-en-es-ct2
+ENV TRANSLATE_TOK_EN_ES=/app/models/opus-en-es-tok
+
 COPY scripts/ ./scripts/
 COPY api/ ./api/
 COPY scraping/ ./scraping/
@@ -53,6 +70,7 @@ RUN printf '%s\n' \
     "0 4 * * 0 root cd /app && python3 scripts/validate_listings_urls.py --batch 3000 >> /var/log/validate.log 2>&1" \
     "0 8 */3 * * root cd /app && python3 scripts/run_listings_metrocuadrado.py >> /var/log/listings_m2.log 2>&1" \
     "0 9 */3 * * root cd /app && python3 scripts/run_renta_corta.py >> /var/log/renta_corta.log 2>&1" \
+    "30 5 * * * root cd /app && python3 scripts/translate_descripciones.py >> /var/log/translate.log 2>&1" \
     "0 7 * * * root cd /app && python3 scripts/run_analytics_usuarios.py >> /var/log/analytics_usuarios.log 2>&1" \
     "0 8 * * 0 root cd /app && python3 scripts/run_airbnb_semanal.py >> /var/log/airbnb_semanal.log 2>&1" \
     "30 7 * * 1 root cd /app && python3 scripts/run_dbt_full_refresh.py >> /var/log/dbt_full_refresh.log 2>&1" \

@@ -118,6 +118,10 @@ class PrecioHistorialItem(BaseModel):
 
 class ListingDetail(ListingFull):
     descripcion: Optional[str] = None
+    # Traducción offline bidireccional (raw.descripcion_traduccion): trad = texto en
+    # el idioma opuesto a src_lang; el front elige source o trad según el idioma.
+    descripcion_trad: Optional[str] = None
+    descripcion_src_lang: Optional[str] = None
     arriendo_p50_barrio: Optional[int] = None
     yield_estimado: Optional[float] = None
     vistas: Optional[int] = None
@@ -175,6 +179,7 @@ WITH lraw AS (
            precio_cop                                  AS precio,
            area_m2, NULLIF(habitaciones, -1) AS habitaciones, banos,
            direccion_raw, barrio_raw, barrio_id, url, fecha_scraping,
+           lat, lon,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
                WHEN area_m2 > 0 AND precio_cop::float8 / area_m2 < 2147483647
@@ -186,6 +191,7 @@ WITH lraw AS (
            COALESCE(verificado, FALSE) AS verificado
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
+      AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
@@ -210,8 +216,8 @@ SELECT
     l.banos::float8,
     l.direccion_raw,
     l.url,
-    g.lat,
-    g.lon,
+    l.lat,
+    l.lon,
     l.barrio_id,
     b.nombre                           AS barrio_nombre,
     INITCAP(LOWER(b.nombre))           AS barrio_display,
@@ -267,8 +273,8 @@ SELECT
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
     COALESCE(mm.portada_r2, l.foto_principal) AS foto_principal
 FROM lraw l
-JOIN raw.barrios b                    ON b.id = l.barrio_id
-JOIN analytics.listings_georef g      ON g.url = l.url
+LEFT JOIN raw.barrios b                ON b.id = l.barrio_id
+LEFT JOIN analytics.listings_georef g  ON g.url = l.url
 LEFT JOIN raw.listing_media_mirror mm ON mm.url = l.url AND mm.activa
 LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
                AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
@@ -348,10 +354,6 @@ _ALLCITY_CTE_REPLACEMENT = """      AND NOT (tipo_operacion = 'venta'    AND pre
       AND ($8::int     IS NULL OR (CASE WHEN $8 >= 4 THEN NULLIF(habitaciones, -1) >= $8 ELSE NULLIF(habitaciones, -1) = $8 END))
       AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN banos >= $11 ELSE banos = $11 END))
       AND ($15::boolean IS NULL OR amoblado = $15)
-      -- Los INNER JOIN (georef, barrios) del query base filtran; requerirlos aquí
-      -- para que los 700 candidatos coincidan con el set efectivo del slow path.
-      AND EXISTS (SELECT 1 FROM analytics.listings_georef _g WHERE _g.url = staging.stg_listings_unificado.url)
-      AND EXISTS (SELECT 1 FROM raw.barrios _b WHERE _b.id = staging.stg_listings_unificado.barrio_id)
     ORDER BY CASE WHEN tier IN ('agente_premium', 'agencia_premium') OR fuente = 'propio' THEN 0 ELSE 1 END,
              CASE WHEN fuente = 'medellinliving' THEN 0 ELSE 1 END,
              precio_cop ASC NULLS LAST
@@ -370,13 +372,14 @@ WITH lraw AS (
            banos, barrio_id, url, amoblado
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
+      AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
 SELECT COUNT(*)
 FROM lraw l
-JOIN raw.barrios b               ON b.id = l.barrio_id
-JOIN analytics.listings_georef g ON g.url = l.url
+LEFT JOIN raw.barrios b               ON b.id = l.barrio_id
+LEFT JOIN analytics.listings_georef g ON g.url = l.url
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
@@ -793,6 +796,8 @@ SELECT
         ELSE NULL
     END AS yield_estimado,
     COALESCE(lm.descripcion, lf.descripcion, lp.descripcion) AS descripcion,
+    dt.descripcion_trad                AS descripcion_trad,
+    dt.src_lang                        AS descripcion_src_lang,
     (CURRENT_DATE - lm.fecha_primera_vez::date)::int
                                        AS dias_en_mercado,
     l.fecha_publicacion::text,
@@ -851,16 +856,20 @@ LEFT JOIN (
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN raw.listings_fincaraiz lf ON lf.url = l.url AND l.fuente = 'fincaraiz'
 LEFT JOIN raw.listings_premium lp ON lp.url = l.url
-LEFT JOIN (
-    SELECT url, COUNT(*)::int AS favoritos_count
-    FROM raw.favoritos_listings GROUP BY url
-) _fav ON _fav.url = l.url
-LEFT JOIN (
-    SELECT entity_id, COUNT(*)::int AS vistas
+LEFT JOIN raw.descripcion_traduccion dt ON dt.url = l.url
+-- Query de listing único (LIMIT 1): correlacionar por l.url en vez de agregar
+-- toda la tabla y unir 1 fila (era GROUP BY sobre user_events/favoritos_listings
+-- completas en cada apertura del drawer).
+LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS favoritos_count
+    FROM raw.favoritos_listings WHERE url = l.url
+) _fav ON TRUE
+LEFT JOIN LATERAL (
+    SELECT COUNT(*)::int AS vistas
     FROM public.user_events
     WHERE event_type = 'listing_view' AND entity_type = 'listing'
-    GROUP BY entity_id
-) _vistas ON _vistas.entity_id = l.url
+      AND entity_id = l.url
+) _vistas ON TRUE
 LEFT JOIN (
     SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url
     FROM public.listing lo
@@ -1064,9 +1073,11 @@ WITH lraw AS (
     SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop AS precio, area_m2, precio_m2, NULLIF(habitaciones, -1) AS habitaciones,
-           banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, amenidades, fotos[1] AS foto_principal
+           banos, direccion_raw, barrio_id, url, fecha_scraping, amoblado, amenidades, fotos[1] AS foto_principal,
+           lat, lon
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
+      AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
       AND NOT (tipo_operacion = 'arriendo' AND precio_cop > 50000000)
       AND NOT (tipo_operacion = 'venta'    AND precio_cop > 50000000000)
 )
@@ -1083,13 +1094,13 @@ SELECT
     (l.precio / {usd})::bigint   AS precio_usd,
     l.area_m2::float8, round(l.precio_m2)::bigint AS precio_m2, l.habitaciones, l.banos::float8,
     l.direccion_raw, l.url, l.foto_principal,
-    g.lat, g.lon, l.barrio_id,
+    l.lat, l.lon, l.barrio_id,
     b.nombre                     AS barrio_nombre,
     b.municipio                  AS municipio,
     g.estrato_real
 FROM lraw l
-JOIN analytics.listings_georef g  ON g.url = l.url
-JOIN raw.barrios b                ON b.id = l.barrio_id
+LEFT JOIN analytics.listings_georef g  ON g.url = l.url
+LEFT JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 {dm_join}
 LEFT JOIN (
@@ -1098,10 +1109,10 @@ LEFT JOIN (
     JOIN public.owner o ON o.id = lo.owner_id
     JOIN public.usuarios u ON u.id = o.usuario_id
 ) _lp ON _lp.lp_url = l.url AND l.fuente = 'propio'
-WHERE ($1::float8 IS NULL OR g.lon >= $1)
-  AND ($2::float8 IS NULL OR g.lat >= $2)
-  AND ($3::float8 IS NULL OR g.lon <= $3)
-  AND ($4::float8 IS NULL OR g.lat <= $4)
+WHERE ($1::float8 IS NULL OR l.lon >= $1)
+  AND ($2::float8 IS NULL OR l.lat >= $2)
+  AND ($3::float8 IS NULL OR l.lon <= $3)
+  AND ($4::float8 IS NULL OR l.lat <= $4)
   AND ($5::text   IS NULL OR l.tipo_operacion = $5)
   AND ($6::bigint IS NULL OR l.precio >= $6)
   AND ($7::bigint IS NULL OR l.precio <= $7)

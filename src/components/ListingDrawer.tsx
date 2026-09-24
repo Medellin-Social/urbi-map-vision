@@ -114,7 +114,8 @@ function CollapsibleDescription({ text }: { text: string }) {
   const needsTruncate = text.length > LIMIT;
   return (
     <div className="space-y-1.5">
-      <p className="whitespace-pre-line text-sm leading-relaxed text-[#1A1208]">
+      {/* data-i18n-skip: our hook owns this text; keep the dict translator out (no Spanglish) */}
+      <p data-i18n-skip className="whitespace-pre-line text-sm leading-relaxed text-[#1A1208]">
         {!expanded && needsTruncate ? text.slice(0, LIMIT) + "…" : text}
       </p>
       {needsTruncate && (
@@ -1183,7 +1184,13 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {listing.descripcion && (
         <div className="space-y-2">
           <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
-          <CollapsibleDescription text={cleanDescripcion(listing.descripcion)} />
+          {/* Traducción offline bidireccional: si el idioma del source != idioma
+              elegido y hay traducción, muéstrala; si no, el source (limpio). */}
+          <CollapsibleDescription
+            text={listing.descripcion_src_lang && listing.descripcion_src_lang !== lang && listing.descripcion_trad
+              ? listing.descripcion_trad
+              : cleanDescripcion(listing.descripcion)}
+          />
         </div>
       )}
 

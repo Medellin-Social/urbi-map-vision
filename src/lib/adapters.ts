@@ -314,6 +314,9 @@ export type ApiListing = {
 export type ApiListingDetail = ApiListing & {
   estrato_real?: number | null;
   descripcion?: string | null;
+  // Traducción offline bidireccional (raw.descripcion_traduccion):
+  descripcion_trad?: string | null;      // texto en el idioma opuesto a src
+  descripcion_src_lang?: string | null;  // 'es' | 'en' — idioma del source
   tour_url?: string | null;   // tour 3D/360 (Matterport, Kuula…)
   video_url?: string | null;  // video (YouTube, Vimeo)
   arriendo_p50_barrio?: number | null;

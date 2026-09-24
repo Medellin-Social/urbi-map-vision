@@ -9,6 +9,9 @@ const KEY = "medellin-social.lang";
  * case-insensitively at word boundaries; cased keys match exactly.
  */
 const PHRASES: Array<[string, string]> = [
+  ["Tutorial de la página", "Page tutorial"],
+  ["NEGOCIOS", "BUSINESSES"],
+  ["EVENTOS", "EVENTS"],
   // ── Realtor dashboard (frases largas primero) ──────────────────────────────
   ["No hay solicitudes con este filtro. Cuando alguien agende una visita desde el mapa, aparecerá aquí.", "No requests with this filter. When someone books a visit from the map, it will appear here."],
   ["¡Zona adquirida! Ya patrocinas esa zona.", "Zone acquired! You now sponsor that zone."],
@@ -269,6 +272,7 @@ const PHRASES: Array<[string, string]> = [
   ["Nueva contraseña", "New password"],
   ["Contraseña", "Password"],
   ["Correo", "Email"],
+  ["Teléfono", "Phone"],
   ["Nombre completo", "Full name"],
   ["Nombre", "Name"],
   ["Entrar", "Enter"],
@@ -2295,6 +2299,12 @@ const PHRASES: Array<[string, string]> = [
   ["Metro cercano", "Metro close by"],
   ["Metro lejos", "Metro far"],
   ["a 1 km", "within 1 km"],
+  // Tráfico — variantes largas ANTES de la palabra suelta (el motor reemplaza substrings)
+  ["Tráfico moderado", "Moderate traffic"],
+  ["Tráfico pesado", "Heavy traffic"],
+  ["Vías fluidas", "Free-flowing"],
+  ["Tráfico", "Traffic"],
+  ["Qué tiene", "Amenities"],
   // Historial de precio
   ["Historial de precio", "Price history"],
   ["Publicado en venta", "Listed for sale"],
@@ -2554,14 +2564,22 @@ const PROTECT = new Set([
 // Sort once, longest phrases first so substrings don't pre-empt phrases.
 const SORTED_PHRASES = [...PHRASES].sort((a, b) => b[0].length - a[0].length);
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Word-boundary matching (Unicode-aware) — a plain substring match would
+// mangle proper nouns that happen to contain a short phrase, e.g. DB-cased
+// "BUENOS AIRES" contains "BUENO" → would become "GOODS AIRES".
+const PHRASE_REGEXES = SORTED_PHRASES
+  .filter(([es]) => !PROTECT.has(es))
+  .map(([es, en]) => [new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(es)}(?![\\p{L}\\p{N}])`, "gu"), en] as const);
+
 export function translateString(input: string): string {
   if (!input) return input;
   let out = input;
-  for (const [es, en] of SORTED_PHRASES) {
-    if (PROTECT.has(es)) continue;
-    if (out.includes(es)) {
-      out = out.split(es).join(en);
-    }
+  for (const [re, en] of PHRASE_REGEXES) {
+    out = out.replace(re, en);
   }
   return out;
 }
@@ -2707,7 +2725,15 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
   const setLang = useCallback((l: Lang) => {
     setLangState(l);
-    if (typeof window !== "undefined") localStorage.setItem(KEY, l);
+    if (typeof window !== "undefined") {
+      localStorage.setItem(KEY, l);
+      // La unidad de área sigue al idioma: es->m², en->ft² (el toggle manual de
+      // useUnit queda como override hasta el próximo cambio de idioma). Se dispara
+      // el mismo evento que escucha useUnit para actualizar en vivo. Claves
+      // hardcodeadas a propósito (mismo patrón sin-contexto que lang/unit).
+      localStorage.setItem("medellin-social.unit", l === "en" ? "sqft" : "m2");
+      window.dispatchEvent(new Event("medellin-social:unit-change"));
+    }
   }, []);
   const toggle = useCallback(() => setLang(lang === "es" ? "en" : "es"), [lang, setLang]);
   const t = useCallback((s: string) => (lang === "en" ? translateString(s) : s), [lang]);
@@ -2717,6 +2743,61 @@ export function LanguageProvider({ children }: { children: React.ReactNode }) {
 
 export function useLang() {
   return useContext(LangCtx);
+}
+
+// ── Free on-device translation for free-text (listing descriptions) ──────────
+// The dict translator (translateString) only swaps known phrases → free text
+// comes out half-translated ("Spanglish"). For unbounded text we use the browser
+// Translator API (Chrome/Edge 138+): on-device model, no key, no server, no cost.
+// Everywhere the API is absent (Firefox/Safari/old Chrome) we return the original
+// Spanish unchanged — never Spanglish. Wrap the text node in data-i18n-skip so the
+// dict translator leaves it to us.
+// ponytail: single es→en translator + Map cache; add per-pair translators only if
+// we ever translate more than the two app languages.
+const _mtCache = new Map<string, string>();
+let _translatorP: Promise<{ translate: (t: string) => Promise<string> } | null> | null = null;
+
+function getTranslator() {
+  if (typeof self === "undefined" || !("Translator" in self)) return null;
+  if (!_translatorP) {
+    _translatorP = (self as unknown as { Translator: { create: (o: object) => Promise<{ translate: (t: string) => Promise<string> }> } })
+      .Translator.create({ sourceLanguage: "es", targetLanguage: "en" })
+      .catch(() => null);
+  }
+  return _translatorP;
+}
+
+/** Returns `text` translated to EN via the on-device model when lang==="en" and
+ *  the API exists; otherwise returns `text` verbatim (Spanish). */
+export function useAutoTranslate(text: string): string {
+  const { lang } = useLang();
+  const [out, setOut] = useState(text);
+  useEffect(() => {
+    if (lang !== "en" || !text) { setOut(text); return; }
+    const cached = _mtCache.get(text);
+    if (cached != null) { setOut(cached); return; }
+    const tp = getTranslator();
+    if (!tp) { setOut(text); return; }
+    let alive = true;
+    tp.then((t) => (t ? t.translate(text) : text))
+      .then((en) => {
+        if (!alive) return;
+        const val = en || text;
+        _mtCache.set(text, val);
+        setOut(val);
+      })
+      .catch(() => { if (alive) setOut(text); });
+    return () => { alive = false; };
+  }, [text, lang]);
+  return out;
+}
+
+/** Inline free-text auto-translated (Chrome/Edge Translator API) when EN, else the
+ *  original Spanish. data-i18n-skip keeps the dict translator out (no Spanglish).
+ *  Use for scraped/user free text (listing descriptions) — NOT names/titles. */
+export function AutoTranslate({ text }: { text: string }) {
+  const t = useAutoTranslate(text);
+  return <span data-i18n-skip>{t}</span>;
 }
 
 // Inline SVG flags — flag emoji (🇨🇴/🇺🇸) fall back to plain "CO"/"US" text on
