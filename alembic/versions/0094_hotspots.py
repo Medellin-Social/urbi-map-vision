@@ -1,13 +1,13 @@
 """feat: hotspots — lugares curados por experiencia (rooftop, salsa, cocteles), separado de deals
 
-Revision ID: 0093
-Revises: 0092
+Revision ID: 0094
+Revises: 0093
 Create Date: 2026-09-23
 """
 from alembic import op
 
-revision = "0093"
-down_revision = "0092"
+revision = "0094"
+down_revision = "0093"
 branch_labels = None
 depends_on = None
 

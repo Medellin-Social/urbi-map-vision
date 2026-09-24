@@ -1,7 +1,7 @@
 """Noticias: barrio_id para filtro futuro por comuna/barrio
 
-Revision ID: 0091
-Revises: 0090
+Revision ID: 0092
+Revises: 0091
 Create Date: 2026-09-22
 
 NULL = sin tag de ubicación (caso actual, todas las noticias son city-wide vía
@@ -11,8 +11,8 @@ El filtro en API/frontend no se construye acá, solo el hook de esquema.
 """
 from alembic import op
 
-revision = "0091"
-down_revision = "0090"
+revision = "0092"
+down_revision = "0091"
 branch_labels = None
 depends_on = None
 

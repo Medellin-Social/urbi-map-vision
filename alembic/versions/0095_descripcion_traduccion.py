@@ -8,14 +8,14 @@ descripcion_trad = traducción al idioma OPUESTO (el front muestra source o
 traducción según el idioma elegido). src_hash detecta cambios de la fuente para
 retraducir. La llena scripts/translate_descripciones.py desde el cron.
 
-Revision ID: 0094
-Revises: 0093
+Revision ID: 0095
+Revises: 0094
 Create Date: 2026-09-24
 """
 from alembic import op
 
-revision = "0094"
-down_revision = "0093"
+revision = "0095"
+down_revision = "0094"
 branch_labels = None
 depends_on = None
 
