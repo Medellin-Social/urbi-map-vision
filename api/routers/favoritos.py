@@ -1,3 +1,4 @@
+import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -6,6 +7,8 @@ from pydantic import BaseModel
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -110,8 +113,9 @@ async def add_favorito(request: Request, req: FavoritoRequest, current_user: dic
             """,
             current_user["id"], req.barrio_id, req.nota,
         )
-    except Exception as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception:
+        log.exception("add_favorito failed")
+        raise HTTPException(status_code=400, detail="No se pudo guardar el favorito")
     return dict(row)
 
 

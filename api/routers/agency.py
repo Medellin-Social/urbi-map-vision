@@ -140,10 +140,12 @@ async def delegar_visita(
             """
             UPDATE visita_solicitud SET agent_id = $1::uuid, updated_at = NOW()
             WHERE id = $2::uuid
+              AND listing_url IN (SELECT id::text FROM listing WHERE agency_id = $3)
             RETURNING id
             """,
             req.agent_id,
             visita_id,
+            agency.id,
         )
         if not updated:
             raise HTTPException(status_code=404, detail="Visita no encontrada")

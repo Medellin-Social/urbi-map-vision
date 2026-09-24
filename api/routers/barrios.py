@@ -561,6 +561,26 @@ _BARRIO_SQL = """
 """
 
 
+# ── List-path variant: sin el LATERAL de mercado_real ────────────────────────
+# El choropleth (~600 barrios, en cada carga del mapa vía useBarrios) NO consume
+# mercado_real — solo el drawer lo pinta, vía get_barrio(id). El LATERAL real
+# recomputa la mediana de compraventas del municipio por CADA barrio (N+1 dentro
+# del SQL), así que en la lista se reemplaza por un stub NULL (mercado_real → None).
+_MR_STUB = (
+    "    LEFT JOIN LATERAL (\n"
+    "        SELECT NULL::int AS anio_dato, NULL::bigint AS n_transacciones_anual,\n"
+    "               NULL::bigint AS valor_mediana_anual, NULL::numeric AS var_anual_pct,\n"
+    "               NULL::numeric AS ipvn_dane_pct, NULL::numeric AS meses_inventario,\n"
+    "               NULL::text AS clasificacion_mercado, NULL::numeric AS ratio_cierre_pedido_pct\n"
+    "    ) mr ON TRUE"
+)
+_lat_start = _BARRIO_SQL.index("    LEFT JOIN LATERAL (")
+_lat_end = _BARRIO_SQL.index(") mr ON TRUE", _lat_start) + len(") mr ON TRUE")
+_BARRIO_LIST_SQL = _BARRIO_SQL[:_lat_start] + _MR_STUB + _BARRIO_SQL[_lat_end:]
+assert "compraventas_municipio_stats" not in _BARRIO_LIST_SQL, \
+    "barrios: el LATERAL de mercado_real no se stubbeó (¿cambió _BARRIO_SQL?)"
+
+
 def _f(row: dict, key: str) -> Optional[float]:
     v = row.get(key)
     return float(v) if v is not None else None
@@ -835,7 +855,7 @@ async def list_barrios(
             perfil_full = dict(prow)
 
     score_col = get_score_col(effective_perfil)
-    base_sql = _BARRIO_MAP_SQL if fields == "map" else _BARRIO_SQL
+    base_sql = _BARRIO_MAP_SQL if fields == "map" else _BARRIO_LIST_SQL
 
     sql = base_sql + f"""
         WHERE ($1::text IS NULL OR upper(b.municipio) = upper($1))

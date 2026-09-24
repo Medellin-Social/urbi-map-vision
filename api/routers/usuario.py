@@ -222,8 +222,10 @@ async def suscribirse(request: Request, body: SuscribirseIn, pool=Depends(get_po
                                                THEN ARRAY[$4::text]
                                                ELSE newsletter_intereses END,
                     fecha_suscripcion    = COALESCE(fecha_suscripcion, NOW()),
-                    nombre               = COALESCE($5, nombre),
-                    apellido             = COALESCE($6, apellido)
+                    -- fill-only: este endpoint es público/sin auth, no debe pisar
+                    -- nombre/apellido de una cuenta ya existente (overwrite anónimo).
+                    nombre               = COALESCE(nombre, $5),
+                    apellido             = COALESCE(apellido, $6)
                 WHERE id = $1
                 """,
                 existing["id"], body.newsletter_activo, body.barrio_id,

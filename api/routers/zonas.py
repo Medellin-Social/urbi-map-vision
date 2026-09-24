@@ -28,6 +28,13 @@ def _gateway_configurado() -> bool:
     return bool(os.getenv("STRIPE_SECRET_KEY"))
 
 
+def _simulacion_habilitada() -> bool:
+    # /confirmar-simulado asigna una zona de PAGO sin cobrar → atajo solo-dev.
+    # Debe habilitarse explícitamente; NUNCA inferir "dev" de la ausencia de
+    # STRIPE_SECRET_KEY (si esa var falta en prod, el atajo quedaría abierto).
+    return os.getenv("ENABLE_SIMULATED_PAYMENTS", "").lower() in ("1", "true", "yes")
+
+
 async def _agente_activo(user: dict, pool) -> str:
     async with pool.acquire() as conn:
         row = await conn.fetchrow("SELECT id, estado::text AS estado FROM agent WHERE usuario_id = $1", user.get("id"))
@@ -116,8 +123,8 @@ async def checkout(body: ZonaCheckout, user: dict = Depends(get_current_user), p
 async def confirmar_simulado(body: ZonaCheckout, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     """DEV: simula el webhook de pago aprobado → asigna la zona. Deshabilitado
     cuando hay pasarela real configurada (ahí manda el webhook)."""
-    if _gateway_configurado():
-        raise HTTPException(status_code=403, detail="Pasarela real activa — el pago se confirma por webhook")
+    if _gateway_configurado() or not _simulacion_habilitada():
+        raise HTTPException(status_code=403, detail="Confirmación simulada deshabilitada")
     agent_id = await _agente_activo(user, pool)
     try:
         sid = await procesar_pago_zona(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses)

@@ -108,11 +108,25 @@ async def log_requests(request: Request, call_next):
     )
     return response
 
+
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    # Cheap hardening: headers only, no behavior change. HSTS is meaningful over
+    # HTTPS (Railway edge); nosniff/Referrer-Policy apply to JSON, X-Frame-Options
+    # protects the /admin SPA served from this app against clickjacking.
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "strict-origin-when-cross-origin")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    response.headers.setdefault("Permissions-Policy", "geolocation=(), camera=(), microphone=()")
+    return response
+
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_origins(),
-    allow_origin_regex=r"https://.*\.(lovable\.app|lovableproject\.com|up\.railway\.app)",
+    allow_origin_regex=r"https://.*\.(lovable\.app|lovableproject\.com|up\.railway\.app)$",
     # No cookie/session auth anywhere (Bearer JWT only, checked api/dependencies.py) —
     # allow_credentials=True bought nothing but let any subdomain of these shared,
     # publicly-registrable platforms make credentialed cross-origin calls.

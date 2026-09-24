@@ -116,8 +116,6 @@ ON CONFLICT (barrio_id) DO UPDATE SET
     refreshed_at      = EXCLUDED.refreshed_at
 """
 
-_TRUNCATE_STG_LISTINGS = "TRUNCATE staging.stg_listings_unificado"
-
 _REFRESH_STG_LISTINGS = """
 INSERT INTO staging.stg_listings_unificado
     (listing_uid, fuente, tier, tipo_operacion, tipo_inmueble,
@@ -364,34 +362,50 @@ async def refresh_listings_cache(pool: Any) -> None:
                 # verificado: flag del modelo unificado (listing). Solo las filas
                 # '_ls' lo llevan; el resto de fuentes queda FALSE. ADD COLUMN
                 # idempotente sobrevive a un recreate de la tabla por dbt/migración.
+                # verificado: flag del modelo unificado (listing). Solo las filas
+                # '_ls' lo llevan; el resto de fuentes queda FALSE. ADD COLUMN
+                # idempotente sobrevive a un recreate de la tabla por dbt/migración.
                 await conn.execute(
                     "ALTER TABLE staging.stg_listings_unificado "
                     "ADD COLUMN IF NOT EXISTS verificado BOOLEAN DEFAULT FALSE"
                 )
+                # Swap-table (mismo patrón que listings_georef abajo). Antes: TRUNCATE+
+                # INSERT tomaba ACCESS EXCLUSIVE y dejaba /listings + /viewport sin
+                # responder durante TODO el rebuild (window fns + subquery espacial por
+                # fila = minutos; ver feedback_truncate_insert_lock). Ahora se llena una
+                # tabla nueva ya indexada y el RENAME final es ~instantáneo; los lectores
+                # golpean la tabla vieja (poblada) hasta el swap.
+                await conn.execute("DROP TABLE IF EXISTS staging.stg_listings_unificado_new")
+                await conn.execute(
+                    "CREATE TABLE staging.stg_listings_unificado_new "
+                    "(LIKE staging.stg_listings_unificado INCLUDING DEFAULTS)"
+                )
+                await conn.execute(
+                    _REFRESH_STG_LISTINGS.replace(
+                        "INSERT INTO staging.stg_listings_unificado",
+                        "INSERT INTO staging.stg_listings_unificado_new", 1),
+                    timeout=heavy_timeout,
+                )
+                # Propagar verificado a las filas de publicación directa (_ls).
+                await conn.execute(
+                    "UPDATE staging.stg_listings_unificado_new s SET verificado = l.verificado "
+                    "FROM listing l WHERE s.listing_uid = l.id::text || '_ls'"
+                )
+                # Índices en la tabla NUEVA antes del swap (sin nombre → Postgres los
+                # auto-nombra único: sin colisión ni bloat entre swaps). url para el
+                # JOIN de /viewport (g.url=l.url); barrio_id para el path de zona
+                # seleccionada (l.barrio_id = ANY($8)).
+                await conn.execute("CREATE INDEX ON staging.stg_listings_unificado_new (url)")
+                await conn.execute("CREATE INDEX ON staging.stg_listings_unificado_new (barrio_id)")
                 async with conn.transaction():
-                    await conn.execute(_TRUNCATE_STG_LISTINGS)
-                    await conn.execute(_REFRESH_STG_LISTINGS, timeout=heavy_timeout)
-                    # Propagar verificado a las filas de publicación directa (_ls).
                     await conn.execute(
-                        "UPDATE staging.stg_listings_unificado s SET verificado = l.verificado "
-                        "FROM listing l WHERE s.listing_uid = l.id::text || '_ls'"
+                        "ALTER TABLE staging.stg_listings_unificado RENAME TO stg_listings_unificado_old"
                     )
-                # Index on url for the /viewport JOIN (g.url = l.url) — was a 54k-row
-                # seq scan. TRUNCATE preserves it; IF NOT EXISTS makes it a no-op after
-                # the first run and survives any dbt recreate of the table.
-                await conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_stg_listings_url "
-                    "ON staging.stg_listings_unificado (url)"
-                )
-                # barrio_id: the zona-seleccionada path (l.barrio_id = ANY($8)) was a
-                # 98k-row seq scan — confirmed via EXPLAIN this index turns it into
-                # an Index Scan (25ms vs seq scan baseline). Same TRUNCATE-survives
-                # pattern as idx_stg_listings_url above.
-                await conn.execute(
-                    "CREATE INDEX IF NOT EXISTS idx_stg_listings_barrio "
-                    "ON staging.stg_listings_unificado (barrio_id)"
-                )
-                logger.info("[cache] stg_listings_unificado refreshed")
+                    await conn.execute(
+                        "ALTER TABLE staging.stg_listings_unificado_new RENAME TO stg_listings_unificado"
+                    )
+                await conn.execute("DROP TABLE staging.stg_listings_unificado_old")
+                logger.info("[cache] stg_listings_unificado refreshed (swap)")
 
                 # barrios_medianas queries stg_listings_unificado — only run when stg exists
                 async with conn.transaction():
@@ -441,9 +455,23 @@ async def refresh_listings_cache(pool: Any) -> None:
             logger.error("[cache] no se pudo enviar alerta de fallo de cache", exc_info=True)
 
 
+async def _cleanup_token_blacklist(pool: Any) -> None:
+    # token_blacklist crece con cada logout/refresh; a los 30 días (JWT_EXPIRY_DAYS)
+    # el token ya expiró por sí solo → la fila es inútil. Purga en la tarea horaria.
+    try:
+        async with pool.acquire() as conn:
+            res = await conn.execute(
+                "DELETE FROM token_blacklist WHERE created_at < NOW() - INTERVAL '30 days'"
+            )
+        logger.info("[cache] token_blacklist cleanup: %s", res)
+    except Exception:
+        logger.error("[cache] token_blacklist cleanup failed", exc_info=True)
+
+
 async def run_periodic_cache_refresh(pool: Any) -> None:
     """Background task: refresh listings cache every hour."""
     while True:
         await asyncio.sleep(_CACHE_REFRESH_INTERVAL)
         logger.info("[cache] periodic refresh starting")
         await refresh_listings_cache(pool)
+        await _cleanup_token_blacklist(pool)
