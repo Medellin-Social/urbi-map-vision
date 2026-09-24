@@ -3,32 +3,41 @@
 // Tamaño sigue el font-size heredado del contenedor (unidades em), un solo
 // componente para los 3 sitios que repetían este wordmark (MapNavbar,
 // ComunidadNavbar x2).
-export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", amarillo = "#ffc928", paper = "#FAF7F2" }: {
+// pinTop: offset vertical del pin sobre la "i". El valor visual cambia según el
+// contexto (line-height) donde vive el wordmark, por eso el veil de carga lo
+// sube por su cuenta (pinTop propio) y los logos usan el default. Van separados.
+export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2", pinTop = "0.1em" }: {
   teal?: string
   coral?: string
   amarillo?: string
   paper?: string
+  pinTop?: string
 }) {
-  const pin = (
+  // "i" normal (stem via glifo sin punto ı), el punto es un pin de mapa chico.
+  const pinDot = (
     <svg
-      viewBox="0 0 20 28"
-      style={{ width: "0.34em", height: "0.48em", display: "inline-block", verticalAlign: "-0.02em" }}
+      viewBox="0 0 20 20"
+      style={{ width: "0.28em", height: "0.28em", display: "inline-block", position: "absolute", left: "50%", top: pinTop, transform: "translateX(-50%)" }}
       aria-hidden="true"
     >
       <path
-        d="M10 2 C4 2 1 6 1 11 C1 17 10 26 10 26 C10 26 19 17 19 11 C19 6 16 2 10 2 Z"
+        d="M10 1 C6 1 3.5 3.5 3.5 7 C3.5 11.5 10 18 10 18 C10 18 16.5 11.5 16.5 7 C16.5 3.5 13.5 1 10 1 Z"
         fill={coral}
       />
-      <circle cx="10" cy="11" r="3.5" fill={paper} />
+      <circle cx="10" cy="7" r="2.2" fill={paper} />
     </svg>
+  )
+  const i = (
+    <span style={{ position: "relative", display: "inline-block" }}>
+      ı{pinDot}
+    </span>
   )
   return (
     <>
       Medellín{" "}
       <span style={{ color: teal }}>
-        Soc{pin}al
+        Soc{i}al
       </span>
-      <span style={{ color: amarillo }}>.</span>
     </>
   )
 }

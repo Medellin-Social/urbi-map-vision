@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { API_ENDPOINTS } from "@/config/api";
 import { useTarget, type Target } from "@/contexts/TargetContext";
 import { ProfileChipMobile } from "@/components/Navbar";
-import { MapNavbar, type MapTab } from "@/components/MapNavbar";
+import type { MapTab } from "@/components/MapNavbar";
+import { ComunidadNavbar } from "@/components/comunidad/ComunidadNavbar";
+import { BarrioProvider } from "@/components/comunidad/BarrioContext";
 import { MapFilterBar, EMPTY_SHARED_FILTERS, TAB_TIPO_OP, type SharedFilters } from "@/components/MapFilterBar";
 import { MapView } from "@/components/MapView";
 import { FloatingPanel } from "@/components/FloatingPanel";
@@ -52,7 +54,11 @@ type ComunaBarrioItem = {
 
 // ─── Map page ──────────────────────────────────────────────────────────────────
 function MapPage() {
-  return <MapPageInner />;
+  return (
+    <BarrioProvider>
+      <MapPageInner />
+    </BarrioProvider>
+  );
 }
 
 const TAB_TO_TARGET: Record<MapTab, Target | null> = {
@@ -66,6 +72,21 @@ const TAB_TO_TARGET: Record<MapTab, Target | null> = {
 
 function MapPageInner() {
   const { setTarget } = useTarget();
+  // Header ahora es ComunidadNavbar completo (masthead con logo fluido +
+  // nav + ticker) — alto variable por viewport, no un número fijo como
+  // antes. Se mide en vivo y se publica como --map-header-h para que
+  // MapFilterBar/MapTourModal/el botón "Buscar en el Valle" (que viven en
+  // otros archivos) posicionen relativo a eso en vez de un top hardcodeado.
+  const headerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = headerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(() => {
+      document.documentElement.style.setProperty("--map-header-h", `${el.offsetHeight}px`);
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
   const [activeTab, setActiveTab] = useState<MapTab>(() => {
     if (typeof window === "undefined") return "buy";
     const op = new URLSearchParams(window.location.search).get("tipo_operacion");
@@ -316,6 +337,9 @@ function MapPageInner() {
   }
 
   function handleViewLevelChange(level: "comunas" | "barrios", comunaNombre: string | null, municipioFilter?: string | null, cdComuna?: number | null) {
+    // Drilling into a zone by camera click exits "toda la ciudad" mode — else
+    // globalSearch stays true and cdComunaQuery/mergedListings ignore the comuna.
+    setGlobalSearch(false);
     setViewLevel(level);
     if (level === "comunas") {
       setActiveComuna(null);
@@ -596,15 +620,16 @@ function MapPageInner() {
         </button>
       )}
 
-      <MapNavbar
-        activeTab={activeTab}
-        onTabChange={handleTabChange}
-        mlsBarrio={mlsBarrio}
-        mlsTotal={mlsTotal}
-        onBack={handleBackToZonas}
-      />
+      {/* ponytail: MLS-navbar quitado temporal (Comprar/Arrendar, cuenta, M²/FT²)
+          al traer ComunidadNavbar como plantilla — se reintegra en el siguiente paso.
+          z-index propio: el canvas del mapa (absolute, z-0) pinta por encima de
+          elementos static sin esto — el ticker quedaba tapado. */}
+      <div ref={headerRef} style={{ position: "relative", zIndex: 41 }}>
+        <ComunidadNavbar compact hideTicker />
+      </div>
       <MapFilterBar
         activeTab={activeTab}
+        onTabChange={handleTabChange}
         filters={sharedFilters}
         onFiltersChange={handleFiltersChange}
         onResetAll={handleResetFilters}
@@ -624,7 +649,7 @@ function MapPageInner() {
         <button
           onClick={() => { setGlobalSearch(true); setMapView("listings"); }}
           style={{
-            position: "absolute", top: 108, left: "50%", transform: "translateX(-50%)",
+            position: "absolute", top: "calc(var(--map-header-h, 53px) + 56px)", left: "50%", transform: "translateX(-50%)",
             zIndex: 24, background: "#1e3a5f", color: "#FAF7F2",
             borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 600,
             border: "none", cursor: "pointer", whiteSpace: "nowrap",

@@ -43,7 +43,7 @@ import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { useTarget, TARGET_OPTIONS } from "@/contexts/TargetContext";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { useLang } from "@/lib/i18n";
+import { useLang, AutoTranslate } from "@/lib/i18n";
 import { useTrm } from "@/hooks/useTrm";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
 import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
@@ -2131,7 +2131,7 @@ function OpportunityBanner({ n }: { n: Neighborhood }) {
         {tipo}
       </div>
       {apiOpp.descripcion && (
-        <p className="mt-1 text-xs leading-relaxed text-foreground/90">"{apiOpp.descripcion}"</p>
+        <p className="mt-1 text-xs leading-relaxed text-foreground/90">"<AutoTranslate text={apiOpp.descripcion} />"</p>
       )}
     </motion.div>
   );

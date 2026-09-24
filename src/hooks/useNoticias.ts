@@ -9,11 +9,14 @@ export interface NoticiaData {
   fecha_publicacion: string | null
 }
 
-export function useNoticias(limit = 4) {
+export function useNoticias(limit = 4, barrio_id?: number | null, municipio?: string) {
   return useQuery<NoticiaData[]>({
-    queryKey: ['noticias', limit],
+    queryKey: ['noticias', limit, barrio_id ?? null, municipio ?? null],
     queryFn: async () => {
-      const res = await fetch(`${API_BASE_URL}/comunidad/noticias?limit=${limit}`)
+      const sp = new URLSearchParams({ limit: String(limit) })
+      if (barrio_id) sp.set('barrio_id', String(barrio_id))
+      else if (municipio) sp.set('municipio', municipio)
+      const res = await fetch(`${API_BASE_URL}/comunidad/noticias?${sp}`)
       if (!res.ok) return []
       const data = await res.json()
       return data.noticias ?? []

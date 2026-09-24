@@ -104,11 +104,12 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         aria-label={`Detalle de listing en ${ubicacion || "el mapa"}`}
         tabIndex={-1}
         data-tour="listing-popup"
-        className="fixed z-50 flex flex-col overflow-hidden shadow-2xl outline-none rounded-2xl"
+        className="fixed z-50 flex flex-col overflow-hidden outline-none rounded-2xl"
         style={{
           ...posStyle,
           background: "#FAF7F2",
           border: "0.5px solid #E8E0D0",
+          boxShadow: "0 2px 6px rgba(26,18,8,0.10), 0 24px 48px -20px rgba(26,18,8,0.45)",
         }}
         onClick={(e) => e.stopPropagation()}
       >

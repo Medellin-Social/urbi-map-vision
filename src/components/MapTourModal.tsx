@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X } from "lucide-react";
+import { X, GraduationCap } from "lucide-react";
 import { SCORE_PALETTES } from "@/config/mapColors";
 
 const LS_KEY = "map_tour_seen";
@@ -311,15 +311,16 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
     <>
       <button
         onClick={replay}
-        aria-label="Ver guía del mapa"
+        aria-label="Tutorial de la página"
         data-tour="tour-replay"
-        className="fixed z-[45] grid h-9 w-9 place-items-center rounded-full text-sm font-bold shadow-md transition hover:opacity-90"
+        className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
         // En móvil left:16 choca con el botón "volver a comunas" (mismo lugar) — a la derecha en móvil.
         style={isMobile
-          ? { top: 108, right: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }
-          : { top: 108, left: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }}
+          ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }
+          : { top: "calc(var(--map-header-h, 53px) + 56px)", left: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }}
       >
-        ?
+        <GraduationCap size={14} />
+        Tutorial de la página
       </button>
 
       <AnimatePresence>

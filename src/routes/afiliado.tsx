@@ -56,11 +56,11 @@ const COMP_CARDS = [
   {
     tier: 'Ejemplo · Recurrente mensual',
     titulo: 'Featured Business',
-    price: '~$820K COP/mes · Exclusividad de categoría',
+    price: '~$410K COP/mes* · Exclusividad de categoría',
     items: [
-      '$123K COP único el mes que firman',
-      '$41K COP/mes recurrente cada mes que renuevan',
-      'Valor a 12 meses por cuenta: ~$574K COP',
+      '$61.5K COP único el mes que firman',
+      '$20.5K COP/mes recurrente cada mes que renuevan',
+      'Valor a 12 meses por cuenta: ~$287K COP',
     ],
   },
   {
@@ -80,16 +80,16 @@ const COMP_CARDS = [
     items: [
       'Cuantos más negocios firmes, mayor tu cartera recurrente',
       'Especialízate por categoría: restaurantes, salud, servicios profesionales',
-      'Al Año 1: cartera de 104 clientes te paga $4.2M COP/mes passivo',
+      'Al Año 1: cartera de 104 clientes te paga $2.1M COP/mes passivo',
     ],
   },
 ]
 
 const MATH = {
-  left: { label: '8.67 clientes nuevos/mes\n× 15% × $820K COP', value: '$1.07M COP' },
-  right: { label: '95 clientes recurrentes\n× 5% × $820K COP', value: '$3.9M COP' },
-  result: { label: 'Ingresos mensuales Mes 12', value: '~$5M COP' },
-  foot: 'Con 2 negocios/semana, tus ingresos totales del Año 1 = ~$32M COP. Cartera recurrente al final del Año 1 = $4.2M COP/mes — eso es $50M COP/año en ingresos pasivos incluso si dejaras de firmar nuevos. Sigue firmando y el Año 2 arranca con $6M+/mes.',
+  left: { label: '8.67 clientes nuevos/mes\n× 15% × $410K COP', value: '$535K COP' },
+  right: { label: '95 clientes recurrentes\n× 5% × $410K COP', value: '$1.95M COP' },
+  result: { label: 'Ingresos mensuales Mes 12', value: '~$2.5M COP' },
+  foot: 'Con 2 negocios/semana, tus ingresos totales del Año 1 = ~$16M COP. Cartera recurrente al final del Año 1 = $2.1M COP/mes — eso es $25M COP/año en ingresos pasivos incluso si dejaras de firmar nuevos. Sigue firmando y el Año 2 arranca con $3M+/mes.',
 }
 
 const WHO_TILES = [
@@ -254,18 +254,21 @@ function AfiliadoPage() {
               </span>
             </div>
             <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '2.4rem', color: K.teal, letterSpacing: '-1px', marginBottom: 4 }}>
-              ~$5M COP / mes
+              ~$2.5M COP / mes
             </div>
             <div style={{ fontSize: '.8rem', color: K.muted, marginBottom: 20 }}>
-              Mes 12 con 2 cuentas/semana · $32M COP acumulados Año 1 · $4.2M COP/mes de cartera recurrente pura al final del Año 1
+              Mes 12 con 2 cuentas/semana · $16M COP acumulados Año 1 · $2.1M COP/mes de cartera recurrente pura al final del Año 1
+            </div>
+            <div style={{ fontSize: '.7rem', color: K.coral, marginBottom: 4, fontWeight: 600 }}>
+              *Cifras ilustrativas — precio de Featured Business aún por confirmar.
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {[
-                { label: 'Mes 1 — 8.67 clientes nuevos', sub: '15% × 8.67 × $820K COP', am: '~$1.07M' },
-                { label: 'Mes 3 — 8.67 nuevas + 17 recurrentes', sub: '$1.07M primer mes + $700K recurrente', am: '~$1.77M' },
-                { label: 'Mes 6 — 8.67 nuevas + 43 recurrentes', sub: '$1.07M primer mes + $1.77M recurrente', am: '~$2.8M' },
-                { label: 'Mes 9 — 8.67 nuevas + 69 recurrentes', sub: '$1.07M primer mes + $2.8M recurrente', am: '~$3.8M' },
-                { label: 'Mes 12 — 8.67 nuevas + 95 recurrentes', sub: '$1.07M primer mes + $3.9M recurrente', am: '~$5M' },
+                { label: 'Mes 1 — 8.67 clientes nuevos', sub: '15% × 8.67 × $410K COP', am: '~$535K' },
+                { label: 'Mes 3 — 8.67 nuevas + 17 recurrentes', sub: '$535K primer mes + $350K recurrente', am: '~$885K' },
+                { label: 'Mes 6 — 8.67 nuevas + 43 recurrentes', sub: '$535K primer mes + $885K recurrente', am: '~$1.4M' },
+                { label: 'Mes 9 — 8.67 nuevas + 69 recurrentes', sub: '$535K primer mes + $1.4M recurrente', am: '~$1.9M' },
+                { label: 'Mes 12 — 8.67 nuevas + 95 recurrentes', sub: '$535K primer mes + $1.95M recurrente', am: '~$2.5M' },
               ].map(row => (
                 <div key={row.label} style={{
                   display: 'flex', justifyContent: 'space-between', alignItems: 'center',
@@ -280,7 +283,7 @@ function AfiliadoPage() {
               ))}
             </div>
             <p style={{ fontSize: '.72rem', color: K.muted, marginTop: 14, lineHeight: 1.4 }}>
-              Basado en Featured Business <strong>$820K COP/mes</strong> · <strong>15% primer mes + 5% recurrente</strong> (24 meses, luego 2.5%) · 2 nuevas cuentas/semana.
+              Basado en Featured Business <strong>$410K COP/mes</strong> · <strong>15% primer mes + 5% recurrente</strong> (24 meses, luego 2.5%) · 2 nuevas cuentas/semana.
             </p>
           </div>
         </div>
@@ -318,6 +321,9 @@ function AfiliadoPage() {
           </h2>
           <p style={{ color: 'rgba(255,255,255,.8)', fontSize: '1.05rem', maxWidth: 640, margin: '0 0 40px' }}>
             Transparente, recurrente, sin contracargos si el cliente sigue activo.
+            <span style={{ display: 'block', fontSize: '.8rem', color: K.amarillo, marginTop: 8, fontWeight: 600 }}>
+              *Precio de Featured Business ilustrativo, aún por confirmar — el % de comisión sí está definido.
+            </span>
           </p>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 18 }}>
             {COMP_CARDS.map(c => (
@@ -351,7 +357,7 @@ function AfiliadoPage() {
             La cuenta, simplificada
           </h2>
           <p style={{ color: K.muted, fontSize: '1.05rem', maxWidth: 600, margin: '0 0 36px' }}>
-            Cómo se ve tu mes 12 en estado estable con 2 cuentas nuevas/semana.
+            Cómo se ve tu mes 12 en estado estable con 2 cuentas nuevas/semana. *Con precio de Featured Business ilustrativo, por confirmar.
           </p>
           <div style={{
             background: '#fff', borderRadius: 16, padding: '36px 32px',

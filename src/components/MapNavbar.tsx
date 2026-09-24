@@ -26,6 +26,16 @@ const AGENTE_TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "comparador", label: "Comparar", route: "/comparador" },
 ];
 
+// Mismos links/hrefs que ComunidadNavbar (home) — <a> plano igual que allá,
+// no <Link> tipado (evita fricción con rutas dinámicas $barrio_slug).
+const SITE_LINKS: { label: string; href: string }[] = [
+  { label: "HOME",        href: "/" },
+  { label: "EVENTOS",     href: "/eventos/todos" },
+  { label: "NEGOCIOS",    href: "/local-business/todos" },
+  { label: "REAL ESTATE", href: "/real-estate" },
+  { label: "BLOG",        href: "/#blog" },
+];
+
 type MapNavbarProps = {
   activeTab: MapTab;
   onTabChange: (tab: MapTab) => void;
@@ -44,6 +54,17 @@ const C = {
   coral:    "#D85A30",
   amarillo: "#ffc928",
   serif:    "'Fraunces', Georgia, serif" as const,
+};
+
+// Chrome del navbar en sí (barra + menú móvil) — mismo ink oscuro que
+// ComunidadNavbar para que el header se vea igual en todas las páginas.
+// Los dropdowns flotantes de escritorio (herramientas/cuenta) se quedan
+// claros — son popovers sobre el mapa, no "el header".
+const NAV = {
+  bg:     "#14201d",
+  border: "rgba(255,255,255,0.08)",
+  text:   "rgba(255,255,255,0.85)",
+  muted:  "rgba(255,255,255,0.55)",
 };
 
 export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack }: MapNavbarProps) {
@@ -84,20 +105,19 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
     const menuTabs = TABS.filter((t) => t.route);
     const itemStyle: React.CSSProperties = {
       background: "none", border: "none", textAlign: "left", padding: "12px 16px",
-      fontSize: 14, fontWeight: 600, color: C.ink, cursor: "pointer",
-      borderBottom: `1px solid ${C.border}`, textDecoration: "none", display: "block",
+      fontSize: 14, fontWeight: 600, color: NAV.text, cursor: "pointer",
+      borderBottom: `1px solid ${NAV.border}`, textDecoration: "none", display: "block",
     };
     return (
       <header
         style={{
           position: "absolute", inset: "0 0 auto 0", zIndex: 40,
-          background: C.paper, borderBottom: `1px solid ${C.border}`,
+          background: NAV.bg, borderBottom: `1px solid ${NAV.border}`,
           display: "flex", alignItems: "center", padding: "0 12px", height: 52, gap: 8,
-          boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
         }}
       >
         {/* Comprar / Arrendar — the two tabs that stay on /map */}
-        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${NAV.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
           {(["buy", "rent"] as const).map((id) => {
             const active = activeTab === id;
             return (
@@ -106,7 +126,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 onClick={() => { if (activeTab === "simulator" || activeTab === "comparador") navigate({ to: "/map" }); else onTabChange(id); }}
                 style={{
                   border: "none", background: active ? C.teal : "transparent",
-                  color: active ? "#fff" : C.muted, padding: "6px 16px",
+                  color: active ? "#fff" : NAV.muted, padding: "6px 16px",
                   fontSize: 13, fontWeight: 700, cursor: "pointer",
                 }}
               >
@@ -122,9 +142,9 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           onClick={() => setMenuOpen((o) => !o)}
           aria-label="Menú"
           style={{
-            background: "none", border: `1px solid ${C.border}`, borderRadius: 8,
+            background: "none", border: `1px solid ${NAV.border}`, borderRadius: 8,
             width: 36, height: 34, display: "flex", alignItems: "center", justifyContent: "center",
-            color: C.ink, cursor: "pointer", flexShrink: 0,
+            color: NAV.text, cursor: "pointer", flexShrink: 0,
           }}
         >
           {menuOpen ? <X size={18} /> : <Menu size={18} />}
@@ -136,19 +156,25 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             <div
               style={{
                 position: "fixed", top: 56, right: 12, zIndex: 50,
-                background: C.paper, border: `1px solid ${C.border}`, borderRadius: 12,
+                background: NAV.bg, border: `1px solid ${NAV.border}`, borderRadius: 12,
                 boxShadow: "0 8px 28px rgba(0,0,0,0.18)", minWidth: 200, overflow: "hidden",
                 display: "flex", flexDirection: "column",
               }}
             >
+              {SITE_LINKS.map((link) => (
+                <a key={link.href} href={link.href} style={itemStyle}>
+                  {link.label}
+                </a>
+              ))}
+
               {menuTabs.map((tab) => (
                 <button key={tab.id} onClick={() => { setMenuOpen(false); navigate({ to: tab.route as any }); }} style={itemStyle}>
                   {tab.label}
                 </button>
               ))}
 
-              <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Idioma</span>
+              <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${NAV.border}`, alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: NAV.muted, fontWeight: 600 }}>Idioma</span>
                 <div style={{ display: "flex", gap: 6, marginLeft: "auto" }}>
                   {(["es", "en"] as const).map((l) => (
                     <button
@@ -156,8 +182,8 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                       onClick={() => lang !== l && toggle()}
                       title={l === "es" ? "Español (Colombia)" : "English (USA)"}
                       style={{
-                        border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
-                        background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                        border: `1.5px solid ${lang === l ? C.teal : "rgba(255,255,255,0.25)"}`,
+                        background: lang === l ? "rgba(29,158,117,0.2)" : "rgba(255,255,255,0.05)",
                         borderRadius: 999,
                         padding: "3px 8px",
                         cursor: lang === l ? "default" : "pointer",
@@ -170,14 +196,14 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${C.border}`, alignItems: "center" }}>
-                <span style={{ fontSize: 13, color: C.muted, fontWeight: 600 }}>Unidad</span>
-                <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", marginLeft: "auto" }}>
+              <div style={{ display: "flex", gap: 8, padding: "12px 16px", borderBottom: `1px solid ${NAV.border}`, alignItems: "center" }}>
+                <span style={{ fontSize: 13, color: NAV.muted, fontWeight: 600 }}>Unidad</span>
+                <div style={{ display: "flex", border: `1px solid ${NAV.border}`, borderRadius: 999, overflow: "hidden", marginLeft: "auto" }}>
                   {(["m2", "sqft"] as const).map((u) => (
                     <button
                       key={u}
                       onClick={() => u !== unit && toggleUnit()}
-                      style={{ border: "none", background: unit === u ? C.teal : "transparent", color: unit === u ? "#fff" : C.muted, padding: "3px 10px", fontWeight: 700, cursor: "pointer", fontSize: 11 }}
+                      style={{ border: "none", background: unit === u ? C.teal : "transparent", color: unit === u ? "#fff" : NAV.muted, padding: "3px 10px", fontWeight: 700, cursor: "pointer", fontSize: 11 }}
                     >
                       {u === "m2" ? "M²" : "FT²"}
                     </button>
@@ -221,7 +247,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           style={{
             background: "none", border: "none", padding: "0 11px",
             borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
-            color: active ? C.tealDeep : C.muted,
+            color: active ? C.amarillo : NAV.text,
             fontWeight: active ? 700 : 500,
             fontSize: 13, cursor: "pointer",
             transition: "color 0.15s",
@@ -229,8 +255,8 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             flexShrink: 0,
             display: "flex", alignItems: "center", gap: 4,
           }}
-          onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
-          onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.tealDeep : C.muted; }}
+          onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "#fff"; }}
+          onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.amarillo : NAV.text; }}
         >
           {tab.label}
         </button>
@@ -250,15 +276,15 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         style={{
           background: "none", border: "none", padding: "0 11px",
           borderBottom: active ? `2px solid ${C.teal}` : "2px solid transparent",
-          color: active ? C.tealDeep : C.muted,
+          color: active ? C.amarillo : NAV.text,
           fontWeight: active ? 700 : 500,
           fontSize: 13, cursor: "pointer",
           transition: "color 0.15s",
           letterSpacing: "0.1px",
           flexShrink: 0,
         }}
-        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = C.ink; }}
-        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = C.muted; }}
+        onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "#fff"; }}
+        onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = active ? C.amarillo : NAV.text; }}
       >
         {tab.label}
       </button>
@@ -269,17 +295,33 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
     <header
       style={{
         position: "absolute", inset: "0 0 auto 0", zIndex: 40,
-        background: C.paper,
-        borderBottom: `1px solid ${C.border}`,
+        background: NAV.bg,
+        borderBottom: `1px solid ${NAV.border}`,
         display: "grid", gridTemplateColumns: "1fr auto 1fr", alignItems: "stretch",
         columnGap: 16,
         padding: "0 16px", height: 52,
-        boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
       }}
     >
       {/* Left: tabs + MLS back breadcrumb */}
       <div style={{ display: "flex", alignItems: "stretch", gap: 12, minWidth: 0, overflow: "hidden" }}>
       <nav className="map-nav-tabs" style={{ display: "flex", alignItems: "stretch", minWidth: 0, overflowX: "auto", overflowY: "hidden" }}>
+        {SITE_LINKS.map((link) => (
+          <a
+            key={link.href}
+            href={link.href}
+            style={{
+              display: "flex", alignItems: "center",
+              padding: "0 11px", borderBottom: "2px solid transparent",
+              color: NAV.text, fontWeight: 500, fontSize: 13,
+              textDecoration: "none", letterSpacing: "0.1px", flexShrink: 0,
+            }}
+            onMouseEnter={(e) => { e.currentTarget.style.color = "#fff"; }}
+            onMouseLeave={(e) => { e.currentTarget.style.color = NAV.text; }}
+          >
+            {link.label}
+          </a>
+        ))}
+        <div style={{ width: 1, alignSelf: "center", height: 20, background: NAV.border, margin: "0 6px", flexShrink: 0 }} />
         <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", alignItems: "stretch" }}>
           {BASE_TABS.slice(0, 2).map(renderTab)}
         </div>
@@ -292,7 +334,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             style={{
               background: "none", border: "none", padding: "0 11px",
               borderBottom: activeTool ? `2px solid ${C.teal}` : "2px solid transparent",
-              color: activeTool ? C.tealDeep : C.muted,
+              color: activeTool ? C.amarillo : NAV.text,
               fontWeight: activeTool ? 700 : 500,
               fontSize: 13, cursor: "pointer",
               letterSpacing: "0.1px",
@@ -343,14 +385,14 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           onClick={onBack}
           style={{
             display: "flex", alignItems: "center", gap: 6,
-            background: "none", border: `1px solid ${C.border}`,
+            background: "none", border: `1px solid ${NAV.border}`,
             borderRadius: 8, padding: "4px 12px", alignSelf: "center",
-            color: C.muted, fontSize: 12, fontWeight: 600,
+            color: NAV.text, fontSize: 12, fontWeight: 600,
             cursor: "pointer", flexShrink: 0,
           }}
         >
           <ArrowLeft size={13} />
-          <span>{mlsBarrio.nombre}</span>
+          <span data-i18n-skip>{mlsBarrio.nombre}</span>
           {mlsTotal != null && mlsTotal > 0 && (
             <span style={{
               background: C.teal, color: "#fff",
@@ -372,7 +414,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           justifySelf: "center", flexShrink: 0,
         }}
       >
-        <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: C.ink, letterSpacing: "-0.5px" }}>
+        <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: "#fff", letterSpacing: "-0.5px" }}>
           <Wordmark teal={C.teal} amarillo={C.amarillo} />
         </span>
       </Link>
@@ -390,12 +432,12 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
               }}
             >
               <span style={{
-                fontSize: 12, color: C.muted, fontWeight: 600,
+                fontSize: 12, color: NAV.text, fontWeight: 600,
                 maxWidth: 90, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
               }}>
                 {user.name}
               </span>
-              <ChevronDown size={13} color={C.muted} style={{ transform: accountOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
+              <ChevronDown size={13} color={NAV.muted} style={{ transform: accountOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
             </button>
 
             {accountOpen && createPortal(
@@ -484,8 +526,8 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                   onClick={() => lang !== l && toggle()}
                   title={l === "es" ? "Español (Colombia)" : "English (USA)"}
                   style={{
-                    border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
-                    background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
+                    border: `1.5px solid ${lang === l ? C.teal : "rgba(255,255,255,0.25)"}`,
+                    background: lang === l ? "rgba(29,158,117,0.2)" : "rgba(255,255,255,0.05)",
                     borderRadius: 999,
                     padding: "3px 8px",
                     cursor: lang === l ? "default" : "pointer",
@@ -498,7 +540,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             </div>
 
             {/* Unidad de área */}
-            <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden" }}>
+            <div style={{ display: "flex", border: `1px solid ${NAV.border}`, borderRadius: 999, overflow: "hidden" }}>
               {(["m2", "sqft"] as const).map((u) => (
                 <button
                   key={u}
@@ -506,7 +548,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                   style={{
                     border: "none",
                     background: unit === u ? C.teal : "transparent",
-                    color: unit === u ? "#fff" : C.muted,
+                    color: unit === u ? "#fff" : NAV.muted,
                     padding: "3px 9px", fontWeight: 700,
                     cursor: "pointer", fontSize: 11,
                   }}
@@ -519,7 +561,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
             <Link
               to="/login"
               style={{
-                fontSize: 12, color: C.muted, fontWeight: 600,
+                fontSize: 12, color: NAV.text, fontWeight: 600,
                 textDecoration: "none", padding: "4px 8px",
               }}
             >

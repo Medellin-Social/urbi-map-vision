@@ -6,6 +6,7 @@ import type { Neighborhood } from "@/lib/adapters";
 import { useOportunidades } from "@/hooks/useOportunidades";
 import { useBarriosRaw } from "@/hooks/useBarrios";
 import { barrioToNeighborhood } from "@/lib/adapters";
+import { AutoTranslate } from "@/lib/i18n";
 
 type Props = {
   onSelect: (n: Neighborhood) => void;
@@ -78,7 +79,7 @@ export function OpportunitiesPanel({ onSelect, perfil, mostrarOportunidades = fa
                     >
                       {opp.tipo}
                     </div>
-                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">"{opp.descripcion}"</p>
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted-foreground">"<AutoTranslate text={opp.descripcion} />"</p>
                     <div className="mt-2 flex items-center gap-2 text-[11px] text-muted-foreground">
                       <span>
                         Score <span className="font-semibold text-foreground">{opp.score}</span>

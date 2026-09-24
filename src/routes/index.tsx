@@ -10,6 +10,7 @@ import { useNoticias } from '@/hooks/useNoticias'
 import { useEventosTop } from '@/hooks/useEventosTop'
 import { useEventosSemana } from '@/hooks/useEventosSemana'
 import { EventCardRow } from '@/components/comunidad/EventCard'
+import { HomeTourModal } from '@/components/HomeTourModal'
 import { API_ENDPOINTS } from '@/config/api'
 import { safeHref } from '@/lib/utils'
 
@@ -341,7 +342,7 @@ function HomeContent() {
   const barrioFilter = isTodos ? null : (barrio.barrio_id ?? null)
   const municipioFilter = isTodos ? undefined : barrio.municipio_nombre
 
-  const { data: noticias   = [] }                          = useNoticias(4)
+  const { data: noticias   = [] }                          = useNoticias(4, barrioFilter, municipioFilter)
   const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter, municipioFilter)
   const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter, municipioFilter)
   const { data: eventosTop = [] }                           = useEventosTop(barrioFilter, municipioFilter, 3)
@@ -349,10 +350,13 @@ function HomeContent() {
 
   return (
     <>
+      <HomeTourModal isMobile={isMobile} />
+
       {/* ── HERO — mapa /map (comunas → barrios, sin listings) + Trading en tu barrio ── */}
       <section style={{ padding: isMobile ? '20px 16px' : '32px 26px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', display: 'flex', flexDirection: isMobile ? 'column' : 'row', justifyContent: 'center', gap: 24 }}>
           <div
+            data-tour="home-hero-map"
             style={{
               position: 'relative', overflow: 'hidden', borderRadius: 16,
               width: isMobile ? '100%' : '60%', height: isMobile ? '42vh' : '58vh', minHeight: isMobile ? 280 : 380,
@@ -372,6 +376,12 @@ function HomeContent() {
               // que la tarjeta de barrio_action (la más alta) no tape la zona
               // recién centrada. Si el overlay crece mucho, medir con ResizeObserver.
               bottomInset={isMobile ? 180 : 140}
+              // fitBounds Bello↔La Estrella (simétrico) + mapa PLANO: pitch/bearing 0
+              // → los polígonos extremos quedan equidistantes del borde y el valle
+              // siempre centrado, sin distorsión del tilt.
+              fitValle
+              pitch={0}
+              bearing={0}
             />
             {mapPhase !== null && (
               <HeroOverlay
@@ -383,13 +393,13 @@ function HomeContent() {
             )}
           </div>
 
-          <div style={{
+          <div data-tour="home-trending" style={{
             width: isMobile ? '100%' : '40%', minWidth: 0, height: isMobile ? 'auto' : '58vh', minHeight: isMobile ? 200 : 380,
             border: `1px solid ${K.line}`, borderRadius: 16, padding: '20px 22px',
             background: K.paper, display: 'flex', flexDirection: 'column', overflowY: 'auto',
           }}>
             <h2 style={{ fontFamily: K.serif, fontWeight: 800, fontSize: '1.15rem', color: K.ink, margin: '0 0 4px' }}>
-              {t('Trading en tu barrio', 'Trading in your barrio')}
+              {t('Trending en tu barrio', 'Trending in your barrio')}
             </h2>
             <p style={{ color: K.muted, fontSize: '.88rem', margin: '0 0 16px' }}>
               {t(`Lo más importante en ${barrio.nombre} ahora mismo.`, `The most important thing in ${barrio.nombre} right now.`)}
@@ -428,7 +438,7 @@ function HomeContent() {
       )}
 
       {/* ── SECCIÓN 1 — LO ÚLTIMO DEL BARRIO ─────────── */}
-      <section className="section-padding" style={{ padding: isMobile ? '28px 16px 20px' : '72px 26px 56px', borderBottom: `1px solid ${K.line}` }}>
+      <section data-tour="home-noticias" className="section-padding" style={{ padding: isMobile ? '28px 16px 20px' : '72px 26px 56px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link="/blog" linkLabel={t('Todas las noticias →', 'All news →')}>
             {t('Lo último del barrio', 'Latest from the Barrio')}
@@ -477,7 +487,7 @@ function HomeContent() {
       </section>
 
       {/* ── QUÉ HACER ESTA SEMANA ─────────────────────── */}
-      <section style={{ padding: isMobile ? '24px 16px' : '48px 26px' }}>
+      <section data-tour="home-eventos-semana" style={{ padding: isMobile ? '24px 16px' : '48px 26px' }}>
         <div style={{
           maxWidth: 1200, margin: '0 auto',
           background: `linear-gradient(125deg, ${K.tealDeep}, ${K.teal})`, color: '#fff',
@@ -533,7 +543,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 2 — HOTSPOTS & DEALS ─────────────── */}
-      <section className="section-padding" style={{ padding: '72px 26px 56px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+      <section data-tour="home-deals" className="section-padding" style={{ padding: '72px 26px 56px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
             {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
@@ -607,7 +617,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 3 — DIRECTORIO 5 ESTRELLAS ───────── */}
-      <section className="section-padding" style={{ padding: '72px 26px', borderBottom: `1px solid ${K.line}` }}>
+      <section data-tour="home-directorio" className="section-padding" style={{ padding: '72px 26px', borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todo →', 'Browse all →')}>
             {t('Directorio 5 Estrellas', '5-Star Directory')}
@@ -739,7 +749,7 @@ function HomeContent() {
       {/* ── REAL ESTATE ───────────────────────────────── */}
       <section className="section-padding" style={{ padding: '72px 26px' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-          <div className="real-estate-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: K.paper, borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 40px rgba(20,32,29,.12)' }}>
+          <div data-tour="home-realestate" className="real-estate-grid" style={{ display: 'grid', gridTemplateColumns: '1.1fr 1fr', background: K.paper, borderRadius: 20, overflow: 'hidden', boxShadow: '0 8px 40px rgba(20,32,29,.12)' }}>
             <div style={{ minHeight: 340, backgroundImage: `url('https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=900&q=80'), linear-gradient(145deg, #0D1F1A 0%, #1A2B22 100%)`, backgroundSize: 'cover', backgroundPosition: 'center' }} />
             <div style={{ padding: 'clamp(24px, 5vw, 48px)', display: 'flex', flexDirection: 'column', justifyContent: 'center', background: K.paper }}>
               <span style={{ display: 'inline-block', fontFamily: K.manrope, background: K.coralLight, color: K.coral, fontWeight: 800, fontSize: '.68rem', letterSpacing: '1.4px', textTransform: 'uppercase', padding: '6px 13px', borderRadius: 999, alignSelf: 'flex-start', marginBottom: 16 }}>

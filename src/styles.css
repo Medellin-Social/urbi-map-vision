@@ -37,7 +37,7 @@
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
-  --font-display: "Space Grotesk", system-ui, sans-serif;
+  --font-display: "Fraunces", Georgia, serif;
   --font-sans: "Inter", system-ui, sans-serif;
 }
 
@@ -230,6 +230,30 @@ body {
 /* ── Map navbar tabs: scroll instead of colliding with the centered logo on laptop widths ── */
 .map-nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
 .map-nav-tabs::-webkit-scrollbar { display: none; }
+
+/* Map filter pills — resting bg/border set inline; !important lifts only inactive pills on hover */
+.map-filter-pill:not([data-active]):hover {
+  background: #FBF9F4 !important;
+  border-color: #D3C7AF !important;
+}
+
+/* Loading veil — indeterminate teal bar (LoadingVeil component) */
+.load-bar {
+  width: 132px; height: 3px; border-radius: 2px;
+  background: rgba(20, 32, 29, 0.10); overflow: hidden; position: relative;
+}
+.load-bar::before {
+  content: ""; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px;
+  background: linear-gradient(90deg, #1D9E75, #085041);
+  animation: load-bar-slide 1.1s ease-in-out infinite;
+}
+@keyframes load-bar-slide {
+  0% { transform: translateX(-130%); }
+  100% { transform: translateX(330%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .load-bar::before { animation: none; width: 100%; opacity: 0.5; }
+}
 
 @media (max-width: 768px) {
   .footer-grid {

@@ -11,6 +11,7 @@ import type { ApiListing } from "@/lib/adapters";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import type { MapTab } from "@/components/MapNavbar";
+import { LoadingVeil } from "@/components/LoadingVeil";
 
 type ViewportResponse = {
   mode: "clusters" | "points";
@@ -78,9 +79,31 @@ type Props = {
   // fitBounds/flyTo reserve this much extra bottom padding so the zoned
   // comuna/barrio still lands visually centered in what's actually visible.
   bottomInset?: number;
+  // Camera tilt for the comunas-level view. Defaults to the 3D look (35°/-10°
+  // desktop, flat on mobile). A short/wide container (e.g. the home hero
+  // preview) has little vertical room to absorb the tilt's perspective
+  // compression, which visually pushes the valley toward the bottom of the
+  // box — pass 0/0 there to keep it flat and centered.
+  pitch?: number;
+  bearing?: number;
+  // Encuadra el valle completo con fitBounds (responsivo a cualquier tamaño
+  // de contenedor) en vez del center+zoom fijo pensado para la página /map
+  // a pantalla completa.
+  fitValle?: boolean;
 };
 
 const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", features: [] };
+// Valle de Aburrá completo (Barbosa → Caldas). Usado con fitBounds en vez de
+// center+zoom fijo para que instancias pequeñas/responsivas (hero del home)
+// encuadren el valle entero sea cual sea el tamaño real del contenedor —
+// un zoom fijo asumía una caja alta como la de /map y en cajas cortas
+// terminaba mostrando solo el norte, con el valle corrido hacia abajo.
+// Home hero: encuadra Bello (extremo norte, lat 6.3623) ↔ La Estrella (extremo
+// sur, lat 6.106) con padding SIMÉTRICO y mapa PLANO (pitch 0). Así ambos
+// polígonos quedan a la misma distancia del borde → el valle queda centrado sea
+// cual sea el alto de pantalla. Con tilt 3D, "misma distancia" es imposible
+// (la perspectiva distorsiona), por eso el hero va plano.
+const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.68, 6.106], [-75.51, 6.3623]];
 // Zoom at which the polygon tier flips comuna → barrio (matches cluster→points). Knob.
 const POLYGON_TIER_ZOOM = 13;
 // Synthetic barrio ids (non-API fallback) live at/above this — excluded from the layer.
@@ -209,7 +232,7 @@ function buildListingPopupHTML(
   return `
 <div style="font-family:system-ui,sans-serif;min-width:220px;max-width:290px;color:#1A1208;">
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tipoBadge}${inmBadge}</div>
-  <div style="color:#9B8B75;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
+  <div data-i18n-skip style="color:#9B8B75;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
   ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#1A1208;">${_fmtCOP(precio_cop)} COP</div>` : ""}
   ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
   ${specs       ? `<div style="font-size:12px;color:#6B5B45;margin:6px 0;">${specs}</div>` : ""}
@@ -254,6 +277,9 @@ export function MapView({
   flyToBarriosRef,
   cooperativeGestures = false,
   bottomInset = 0,
+  pitch,
+  bearing,
+  fitValle = false,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<MapboxMap | null>(null);
@@ -309,6 +335,12 @@ export function MapView({
   useEffect(() => { onBarrioClickRef.current = onBarrioClick; }, [onBarrioClick]);
   const bottomInsetRef = useRef(bottomInset);
   useEffect(() => { bottomInsetRef.current = bottomInset; }, [bottomInset]);
+  const pitchRef = useRef(pitch);
+  useEffect(() => { pitchRef.current = pitch; }, [pitch]);
+  const bearingRef = useRef(bearing);
+  useEffect(() => { bearingRef.current = bearing; }, [bearing]);
+  const fitValleRef = useRef(fitValle);
+  useEffect(() => { fitValleRef.current = fitValle; }, [fitValle]);
 
 
   const riskRef = useRef(risk);
@@ -350,7 +382,16 @@ export function MapView({
     for (const id of ["barrios-mls-fill", "barrios-mls-line", "barrios-mls-label"]) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
     }
-    map.flyTo({ center: [-75.5812, 6.2442], zoom: 11.5, pitch: isMobileRef.current ? 0 : 35, bearing: isMobileRef.current ? 0 : -10, speed });
+    if (fitValleRef.current) {
+      map.fitBounds(VALLE_BOUNDS, { padding: 28, pitch: 0, bearing: 0, speed });
+    } else {
+      map.flyTo({
+        center: [-75.5812, 6.2442], zoom: 11.5,
+        pitch: pitchRef.current ?? (isMobileRef.current ? 0 : 35),
+        bearing: bearingRef.current ?? (isMobileRef.current ? 0 : -10),
+        speed,
+      });
+    }
     viewLevelRef.current = "comunas";
     activeComunaRef.current = null;
     if (selectedComunaIdRef.current != null) {
@@ -450,15 +491,25 @@ export function MapView({
     const styleId = auth.get()?.mapStyle ?? "monochrome";
     const isMobile = window.innerWidth < 768;
     isMobileRef.current = isMobile;
+    const initPitch = pitchRef.current ?? (isMobile ? 0 : 35);
+    const initBearing = bearingRef.current ?? (isMobile ? 0 : -10);
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/streets-v12",
-      center: [-75.5812, 6.2442],
-      zoom: 10,
-      minZoom: 11,
+      // fitValle (home hero): fitBounds Bello↔La Estrella, plano y simétrico → el
+      // valle queda centrado (polígonos extremos equidistantes del borde). El
+      // container ya NO usa min-h-screen, así fitBounds mide la caja real y no
+      // recorta el sur. Se re-encuadra en 'load' con el tamaño ya asentado.
+      ...(fitValleRef.current
+        ? {
+            bounds: VALLE_BOUNDS,
+            fitBoundsOptions: { padding: 28, pitch: 0, bearing: 0 },
+          }
+        : { center: [-75.5812, 6.2442] as [number, number], zoom: 10 }),
+      minZoom: fitValleRef.current ? 9 : 11,
       maxBounds: [[-75.72, 6.05], [-75.42, 6.45]],
-      pitch: isMobile ? 0 : 35,
-      bearing: isMobile ? 0 : -10,
+      pitch: initPitch,
+      bearing: initBearing,
       antialias: true,
       cooperativeGestures,
     });
@@ -477,6 +528,11 @@ export function MapView({
 
     map.on("load", () => {
       map.resize();
+      // Re-encuadra con el tamaño REAL del contenedor (el fitBounds del
+      // constructor corre antes de que el layout flex asiente → recorta el sur).
+      if (fitValleRef.current) {
+        map.fitBounds(VALLE_BOUNDS, { padding: 28, pitch: 0, bearing: 0, animate: false });
+      }
       mapLoadedRef.current = true;
       setMapLoaded(true);
 
@@ -595,7 +651,7 @@ export function MapView({
         const nombre = f.properties?.nombre ?? "";
         comunaPopup
           .setLngLat(e.lngLat)
-          .setHTML(`<span>${nombre}</span>`)
+          .setHTML(`<span data-i18n-skip>${nombre}</span>`)
           .addTo(map);
       });
 
@@ -1367,7 +1423,11 @@ export function MapView({
 
   return (
     <>
-      <div ref={containerRef} className="absolute inset-0 z-0 min-h-screen" />
+      <div ref={containerRef} className="absolute inset-0 z-0" />
+
+      {/* Loading veil — claro (matchea el mapa cargado, no un void negro), fade-out
+          al estar listo. z-[1] → bajo el navbar/filtros (chrome queda visible). */}
+      <LoadingVeil label="el mapa" show={!mapLoaded} className="absolute z-[1]" />
 
       {/* Leyenda tipos de inmueble — pill que despliega la card (desktop + móvil) */}
       {mapView === "listings" && (

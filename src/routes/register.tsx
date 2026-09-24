@@ -27,6 +27,7 @@ function RegisterPage() {
   const register = useRegister();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [telefono, setTelefono] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [origen, setOrigen] = useState<"mls" | "comunidad">("comunidad");
@@ -37,13 +38,13 @@ function RegisterPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !email || !password) {
+    if (!name || !email || !telefono || !password) {
       setError("Completa todos los campos.");
       return;
     }
     setError("");
     try {
-      await register.mutateAsync({ email, password, nombre: name, origen });
+      await register.mutateAsync({ email, password, nombre: name, telefono, origen });
       localStorage.removeItem("registro_origen");
       localStorage.removeItem("onboarding_complete");
       localStorage.setItem("onboarding_origen", origen);
@@ -78,6 +79,16 @@ function RegisterPage() {
             className="auth-input"
             style={inputStyle}
             placeholder="tu@correo.com"
+          />
+        </Field>
+        <Field label="Teléfono">
+          <input
+            type="tel"
+            value={telefono}
+            onChange={(e) => setTelefono(e.target.value)}
+            className="auth-input"
+            style={inputStyle}
+            placeholder="300 123 4567"
           />
         </Field>
         <Field label="Contraseña">

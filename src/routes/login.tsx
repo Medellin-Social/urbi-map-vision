@@ -282,7 +282,7 @@ export function AuthShell({
           {/* Mobile logo */}
           <div className="lg:hidden" style={{ marginBottom: 28, textAlign: "center" }}>
             <span style={{ fontFamily: K.serif, fontSize: "1.7rem", fontWeight: 900, color: K.ink }}>
-              Medellín Social.
+              Medellín Social
             </span>
           </div>
 

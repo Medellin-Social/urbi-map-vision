@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
 import { auth } from '../../lib/auth'
+import { useIsAgente } from '../LockedField'
 
 const K = {
   ink:      '#14201d',
@@ -79,12 +80,14 @@ const FALLBACK_ITEMS_EN = [
   { tipo: 'noticia' as const, titulo: '🌸 Medellín Social · Your city, your barrio, your story', link: '/', fecha: null },
 ]
 
-export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
+export function ComunidadNavbar({ compact = false, hideTicker = false }: { compact?: boolean; hideTicker?: boolean }) {
   const { barrio, barrios, lang, setLang: setBarrioLang, setBarrioSlug } = useBarrio()
   const { setLang: setGlobalLang } = useLang()
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
+  const [reOpen,      setReOpen]      = useState(false)
+  const isAgente = useIsAgente()
   const logged = !!auth.get()
 
   function setLang(l: 'es' | 'en') {
@@ -96,13 +99,13 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
 
   useEffect(() => {
     const handleClick = (e: MouseEvent) => {
-      if (menuAbierto && !(e.target as Element).closest('nav')) {
-        setMenuAbierto(false)
-      }
+      const el = e.target as Element
+      if (menuAbierto && !el.closest('nav')) setMenuAbierto(false)
+      if (reOpen && !el.closest('[data-re-dropdown]')) setReOpen(false)
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [menuAbierto])
+  }, [menuAbierto, reOpen])
 
   const { data: apiItems = [] } = useTicker(1)
 
@@ -153,13 +156,32 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
   const medellin   = barrios.filter(b => b.grupo === 'Medellín')
   const valleAbura = barrios.filter(b => b.grupo === 'Valle de Aburrá')
 
-  const links = [
+  const links: { href: string; label: string; re?: boolean }[] = [
     { href: '/',                              label: t('HOME', 'HOME') },
     { href: `/eventos/${barrio.slug}`,         label: t('EVENTOS', 'EVENTS') },
     { href: `/local-business/${barrio.slug}`,  label: t('NEGOCIOS', 'BUSINESSES') },
-    { href: '/real-estate',                    label: 'REAL ESTATE' },
+    { href: '/real-estate',                    label: 'REAL ESTATE', re: true },
     { href: '#blog',                           label: 'BLOG' },
   ]
+
+  // "REAL ESTATE ▾" hub — destinos que navegan FUERA del mapa (no filtros).
+  // Herramientas solo para agentes (gating heredado del MapNavbar viejo).
+  const reItems = [
+    { href: '/map',         label: t('Mapa', 'Map') },
+    { href: '/vender',      label: t('Vender o arrendar tu inmueble', 'Sell or rent your property') },
+    { href: '/agentes',     label: t('Encuentra un agente', 'Find an agent') },
+  ]
+  const reTools = [
+    { href: '/simulador',  label: t('Simulador', 'Simulator') },
+    { href: '/comparador', label: t('Comparador', 'Comparison') },
+    { href: '/calculadora', label: t('Calculadora', 'Calculator') },
+  ]
+  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes', '/simulador', '/comparador', '/calculadora']
+    .some(h => path === h || path.startsWith(h + '/'))
+  const reItemStyle: CSSProperties = {
+    display: 'block', padding: '9px 12px', borderRadius: 7,
+    fontSize: 14, color: K.ink, textDecoration: 'none', fontWeight: 500,
+  }
 
   return (
     <>
@@ -186,6 +208,8 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           white-space: nowrap;
         }
         .k-nav-link:hover { background: rgba(255,255,255,0.1); }
+        .k-subscribe:hover { background: #17875f; }
+        .re-item:hover { background: rgba(29,158,117,0.10); }
         @media (max-width: 768px) {
           .mobile-menu-btn { display: flex !important; align-items: center; justify-content: center; }
           .desktop-nav-links { display: none !important; }
@@ -238,6 +262,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
                   {today}
                 </span>
                 <select
+                  data-tour="barrio-select"
                   value={barrio.slug}
                   onChange={e => handleBarrioChange(e.target.value)}
                   style={{
@@ -268,15 +293,57 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           </div>
 
           {/* CENTER: nav links — desktop only */}
-          <div className="desktop-nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {links.map(({ href, label }) => (
+          <div className="desktop-nav-links" data-tour="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {links.map((lnk) => lnk.re ? (
+              <div key="re" data-re-dropdown style={{ position: 'relative' }}>
+                <button
+                  className="k-nav-link"
+                  aria-expanded={reOpen}
+                  aria-haspopup="menu"
+                  onClick={() => setReOpen(o => !o)}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
+                    background: reOpen ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    color: (reOpen || reActive) ? K.amarillo : 'rgba(255,255,255,0.85)',
+                    font: 'inherit', fontWeight: 700, fontSize: 13, letterSpacing: '0.6px', textTransform: 'uppercase',
+                  }}
+                >
+                  {lnk.label}
+                  <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: reOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
+                    <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </button>
+                {reOpen && (
+                  <div role="menu" style={{
+                    position: 'absolute', top: 'calc(100% + 10px)', left: 0,
+                    background: K.paper, border: `1px solid ${K.line}`, borderRadius: 10,
+                    boxShadow: '0 14px 34px rgba(20,32,29,.20)', minWidth: 236, overflow: 'hidden', zIndex: 60, padding: 6,
+                  }}>
+                    {reItems.map(it => (
+                      <a key={it.href} href={it.href} className="re-item" style={reItemStyle}>{it.label}</a>
+                    ))}
+                    {isAgente && (
+                      <>
+                        <div style={{ height: 1, background: K.line, margin: '6px 8px' }} />
+                        <div style={{ padding: '3px 12px 4px', fontSize: 11, letterSpacing: '.09em', textTransform: 'uppercase', color: K.muted, fontWeight: 700 }}>
+                          {t('Herramientas', 'Tools')}
+                        </div>
+                        {reTools.map(it => (
+                          <a key={it.href} href={it.href} className="re-item" style={reItemStyle}>{it.label}</a>
+                        ))}
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
               <a
-                key={label}
-                href={href}
+                key={lnk.label}
+                href={lnk.href}
                 className="k-nav-link"
-                style={{ color: isActive(href) ? K.amarillo : 'rgba(255,255,255,0.85)' }}
+                style={{ color: isActive(lnk.href) ? K.amarillo : 'rgba(255,255,255,0.85)' }}
               >
-                {label}
+                {lnk.label}
               </a>
             ))}
           </div>
@@ -291,7 +358,13 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
             </a>
             <a
               href="/suscribirse"
-              style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
+              className="k-subscribe"
+              style={{
+                background: K.teal, color: '#fff', fontSize: 13, fontWeight: 700,
+                textDecoration: 'none', letterSpacing: '.3px',
+                padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                transition: 'background 0.15s',
+              }}
             >
               {t('Suscríbete', 'Subscribe')}
             </a>
@@ -318,6 +391,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           <button
             onClick={() => setMenuAbierto(prev => !prev)}
             className="mobile-menu-btn"
+            data-tour="nav-hamburger"
             aria-label="Menú"
             style={{
               background: 'transparent',
@@ -375,7 +449,23 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
               </select>
             )}
 
-            {links.map(link => (
+            {links.map(link => link.re ? (
+              <div key="re-m">
+                <div style={{ color: 'rgba(255,255,255,0.85)', padding: '10px 0 4px', fontSize: 15, fontWeight: 700, borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
+                  {link.label}
+                </div>
+                {[...reItems, ...(isAgente ? reTools : [])].map(it => (
+                  <a
+                    key={it.href}
+                    href={it.href}
+                    onClick={() => setMenuAbierto(false)}
+                    style={{ display: 'block', color: 'rgba(255,255,255,0.72)', padding: '9px 0 9px 14px', fontSize: 14, fontWeight: 500, textDecoration: 'none', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}
+                  >
+                    {it.label}
+                  </a>
+                ))}
+              </div>
+            ) : (
               <a
                 key={link.href}
                 href={link.href}
@@ -437,6 +527,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
       </nav>
 
       {/* ── Ticker ───────────────────────────────────── */}
+      {!hideTicker && (
       <div style={{ background: K.rojo, color: '#fff', overflow: 'hidden', fontSize: '.82rem' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 0 0 26px', display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
           <span style={{
@@ -475,6 +566,7 @@ export function ComunidadNavbar({ compact = false }: { compact?: boolean }) {
           </div>
         </div>
       </div>
+      )}
     </>
   )
 }

@@ -70,6 +70,7 @@ export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
 
 type MapFilterBarProps = {
   activeTab: MapTab;
+  onTabChange?: (tab: MapTab) => void;
   filters: SharedFilters;
   onFiltersChange: (f: Partial<SharedFilters>) => void;
   onResetAll?: () => void;
@@ -261,13 +262,15 @@ function FilterPill({
   return (
     <button
       onClick={(e) => onClick(e.currentTarget.getBoundingClientRect())}
+      className="map-filter-pill"
+      {...(active ? { "data-active": "1" } : {})}
       style={{
         display: "flex", alignItems: "center", gap: 4,
         background: active ? C.teal : C.white,
         color: active ? "#fff" : C.ink,
         border: `1px solid ${active ? C.teal : C.border}`,
         borderRadius: 8, padding: "0 10px",
-        height: 32, fontSize: 12, fontWeight: 500,
+        height: 32, fontSize: 12, fontWeight: 600,
         cursor: "pointer", whiteSpace: "nowrap",
         outline: isOpen && !active ? `2px solid ${C.teal}` : "none",
         outlineOffset: 1,
@@ -1027,7 +1030,7 @@ function AmenidadesPanel({
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function MapFilterBar({
-  activeTab, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
+  activeTab, onTabChange, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
   activeComunaCd, activeMunicipio, onComunaSelect,
 }: MapFilterBarProps) {
   const isPro = useIsPro();
@@ -1749,6 +1752,30 @@ export function MapFilterBar({
     }
   })() : null;
 
+  // Comprar/Arrendar — vivía en el header (MapNavbar), ahora en el borde
+  // izquierdo de esta barra al traer ComunidadNavbar como header nuevo.
+  const opToggle = onTabChange && activeTab !== "sell" && (
+    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+      {(["buy", "rent"] as const).map((id) => (
+        <button
+          key={id}
+          onClick={() => onTabChange(id)}
+          style={{
+            border: "none", background: activeTab === id ? C.teal : "transparent",
+            color: activeTab === id ? "#fff" : C.muted, padding: "5px 12px",
+            fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
+          }}
+        >
+          {id === "buy" ? "Comprar" : "Arrendar"}
+        </button>
+      ))}
+    </div>
+  );
+
+  // Vender/Agente/Simular/Comparar salieron de esta barra → viven en el hub
+  // "REAL ESTATE ▾" del navbar (destinos, no filtros del mapa). La barra queda
+  // solo con modos (Comprar/Arrendar) + filtros.
+
   // ── Bar container ──────────────────────────────────────────────────────────
   return (
     <>
@@ -1756,21 +1783,24 @@ export function MapFilterBar({
         ref={barRef}
         data-tour="filters"
         style={{
-          position: "fixed", top: 52, left: 0, right: 0, zIndex: 40,
+          position: "fixed", top: "var(--map-header-h, 53px)", left: 0, right: 0, zIndex: 40,
           background: C.white,
           borderBottom: `1px solid ${C.border}`,
+          boxShadow: "0 1px 2px rgba(26,18,8,0.05), 0 10px 24px -14px rgba(26,18,8,0.22)",
           height: 48,
-          display: "flex", alignItems: "center",
+          display: "flex", alignItems: "center", gap: 10,
           padding: "0 16px",
         }}
       >
         {/* Desktop */}
-        <div className="hidden md:flex w-full">
+        <div className="hidden md:flex w-full items-center" style={{ gap: 10 }}>
+          {opToggle}
           {activeTab === "sell" ? sellContent : desktopContent}
         </div>
 
         {/* Mobile trigger */}
-        <div className="flex md:hidden w-full items-center justify-between">
+        <div className="flex md:hidden w-full items-center justify-between" style={{ gap: 8 }}>
+          {opToggle}
           {activeTab === "sell" ? sellContent : (
             <>
               <button

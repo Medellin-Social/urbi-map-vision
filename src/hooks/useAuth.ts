@@ -45,7 +45,7 @@ function storeAuth(res: AuthResponse) {
 
 export function useRegister() {
   return useMutation({
-    mutationFn: async (data: { email: string; password: string; nombre?: string; origen?: string }) => {
+    mutationFn: async (data: { email: string; password: string; nombre?: string; telefono?: string; origen?: string }) => {
       const res = await apiFetch<AuthResponse>(API_ENDPOINTS.register, {
         method: "POST",
         body: JSON.stringify(data),
