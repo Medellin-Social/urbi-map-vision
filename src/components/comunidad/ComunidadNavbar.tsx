@@ -356,18 +356,20 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             >
               {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
             </a>
-            <a
-              href="/suscribirse"
-              className="k-subscribe"
-              style={{
-                background: K.teal, color: '#fff', fontSize: 13, fontWeight: 700,
-                textDecoration: 'none', letterSpacing: '.3px',
-                padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap',
-                transition: 'background 0.15s',
-              }}
-            >
-              {t('Suscríbete', 'Subscribe')}
-            </a>
+            {!logged && (
+              <a
+                href="/suscribirse"
+                className="k-subscribe"
+                style={{
+                  background: K.teal, color: '#fff', fontSize: 13, fontWeight: 700,
+                  textDecoration: 'none', letterSpacing: '.3px',
+                  padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                  transition: 'background 0.15s',
+                }}
+              >
+                {t('Suscríbete', 'Subscribe')}
+              </a>
+            )}
             <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
               {(['es', 'en'] as const).map(l => (
                 <button
@@ -495,14 +497,16 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
             </a>
 
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
-              <a
-                href="/suscribirse"
-                onClick={() => setMenuAbierto(false)}
-                style={{ color: K.amarillo, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
-              >
-                {t('Suscríbete →', 'Subscribe →')}
-              </a>
+            <div style={{ display: 'flex', justifyContent: logged ? 'flex-end' : 'space-between', alignItems: 'center', marginTop: 12 }}>
+              {!logged && (
+                <a
+                  href="/suscribirse"
+                  onClick={() => setMenuAbierto(false)}
+                  style={{ color: K.amarillo, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
+                >
+                  {t('Suscríbete →', 'Subscribe →')}
+                </a>
+              )}
               <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
                 {(['es', 'en'] as const).map(l => (
                   <button
