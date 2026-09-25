@@ -140,7 +140,10 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
 
   function isActive(href: string) {
     if (href === '/') return path === '/'
-    return path.startsWith(href.replace(/\/[^/]+$/, '/'))
+    // Compara por primer segmento: '/blog' activo solo en /blog, '/eventos/x'
+    // activo en cualquier /eventos/*. El regex viejo colapsaba hrefs de un solo
+    // segmento a '/' (startsWith('/') = siempre true → siempre amarillo).
+    return path.split('/')[1] === href.split('/')[1]
   }
 
   function handleBarrioChange(newSlug: string) {
@@ -161,7 +164,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     { href: `/eventos/${barrio.slug}`,         label: t('EVENTOS', 'EVENTS') },
     { href: `/local-business/${barrio.slug}`,  label: t('NEGOCIOS', 'BUSINESSES') },
     { href: '/real-estate',                    label: 'REAL ESTATE', re: true },
-    { href: '#blog',                           label: 'BLOG' },
+    { href: '/blog',                           label: 'BLOG' },
   ]
 
   // "REAL ESTATE ▾" hub — destinos que navegan FUERA del mapa (no filtros).
@@ -226,7 +229,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
       {!compact && (
         <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
           <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
-            <div className="masthead-logo" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
+            <div data-i18n-skip className="masthead-logo" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
               <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
             </div>
           </a>
@@ -253,7 +256,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           {/* LEFT: logo (compact always) or date+barrio (desktop only — masthead has logo on mobile) */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             {compact ? (
-              <a href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
+              <a data-i18n-skip href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
                 <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
               </a>
             ) : (
@@ -271,6 +274,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                     borderRadius: 6, padding: '4px 8px',
                     fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
                     flex: 1, minWidth: 0, maxWidth: 220,
+                    WebkitAppearance: 'none', appearance: 'none',
                   }}
                 >
                   <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
@@ -351,7 +355,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
           <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
             <a
-              href={logged ? '/mis-propiedades' : '/login'}
+              href={logged ? '/perfil' : '/login'}
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
             >
               {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
@@ -432,6 +436,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                   marginBottom: 12,
                   fontSize: 14,
                   fontFamily: 'inherit',
+                  WebkitAppearance: 'none', appearance: 'none',
                 }}
               >
                 <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
@@ -487,7 +492,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             ))}
 
             <a
-              href={logged ? '/mis-propiedades' : '/login'}
+              href={logged ? '/perfil' : '/login'}
               onClick={() => setMenuAbierto(false)}
               style={{
                 display: 'block', color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 500,

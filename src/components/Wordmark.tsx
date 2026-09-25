@@ -17,6 +17,8 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
   const pinDot = (
     <svg
       viewBox="0 0 20 20"
+      width="0.28em"
+      height="0.28em"
       style={{ width: "0.28em", height: "0.28em", display: "inline-block", position: "absolute", left: "50%", top: pinTop, transform: "translateX(-50%)" }}
       aria-hidden="true"
     >
@@ -28,7 +30,7 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
     </svg>
   )
   const i = (
-    <span style={{ position: "relative", display: "inline-block" }}>
+    <span data-i18n-skip style={{ position: "relative", display: "inline-block", lineHeight: "1", overflow: "visible" }}>
       ı{pinDot}
     </span>
   )

@@ -33,7 +33,7 @@ const SITE_LINKS: { label: string; href: string }[] = [
   { label: "EVENTOS",     href: "/eventos/todos" },
   { label: "NEGOCIOS",    href: "/local-business/todos" },
   { label: "REAL ESTATE", href: "/real-estate" },
-  { label: "BLOG",        href: "/#blog" },
+  { label: "BLOG",        href: "/blog" },
 ];
 
 type MapNavbarProps = {
@@ -414,7 +414,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           justifySelf: "center", flexShrink: 0,
         }}
       >
-        <span style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: "#fff", letterSpacing: "-0.5px" }}>
+        <span data-i18n-skip style={{ fontFamily: C.serif, fontWeight: 900, fontSize: "1.05rem", color: "#fff", letterSpacing: "-0.5px" }}>
           <Wordmark teal={C.teal} amarillo={C.amarillo} />
         </span>
       </Link>
