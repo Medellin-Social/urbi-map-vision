@@ -13,7 +13,7 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
   paper?: string
   pinTop?: string
 }) {
-  // "i" normal (stem via glifo sin punto ı), el punto es un pin de mapa chico.
+  // "i" normal (el pin coral cubre su punto — no usar ı U+0131 que falla en iOS).
   const pinDot = (
     <svg
       viewBox="0 0 20 20"
@@ -31,7 +31,7 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
   )
   const i = (
     <span data-i18n-skip style={{ position: "relative", display: "inline-block", lineHeight: "1", overflow: "visible" }}>
-      ı{pinDot}
+      i{pinDot}
     </span>
   )
   return (
