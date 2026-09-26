@@ -907,8 +907,24 @@ class NoticiasResponse(BaseModel):
 
 _NOTICIAS_QUERY = """
 SELECT id, titulo, url, fuente, fecha_publicacion
-FROM public.noticias
-WHERE activa = TRUE
+FROM public.noticias n
+WHERE n.activa = TRUE
+  AND (
+    -- Sin tag = city-wide, siempre visible (todavía no hay taggeo por barrio).
+    n.barrio_id IS NULL
+    OR ($2::int IS NOT NULL AND n.barrio_id IN (
+        SELECT id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $2),
+            3000
+        )
+    ))
+    OR ($2::int IS NULL AND $3::text IS NOT NULL AND n.barrio_id IN (
+        SELECT id FROM raw.barrios WHERE municipio = $3
+    ))
+    OR ($2::int IS NULL AND $3::text IS NULL)
+  )
 ORDER BY fecha_publicacion DESC NULLS LAST
 LIMIT $1
 """
@@ -917,10 +933,12 @@ LIMIT $1
 @router.get("/noticias", response_model=NoticiasResponse)
 async def get_noticias(
     limit: int = Query(4, ge=1, le=20),
+    barrio_id: Optional[int] = Query(None),
+    municipio: Optional[str] = Query(None),
     pool=Depends(get_pool),
 ):
     try:
-        rows = await pool.fetch(_NOTICIAS_QUERY, limit)
+        rows = await pool.fetch(_NOTICIAS_QUERY, limit, barrio_id, municipio)
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")

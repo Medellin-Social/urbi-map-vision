@@ -135,6 +135,7 @@ class ListingDetail(ListingFull):
     estado_inmueble: Optional[str] = None
     parqueaderos: Optional[int] = None
     piso: Optional[int] = None
+    nombre_edificio: Optional[str] = None
     # Barrio context fields
     yield_bruto_pct: Optional[float] = None
     score_corto: Optional[float] = None
@@ -188,7 +189,8 @@ WITH lraw AS (
            END AS pm2,
            fotos[1] AS foto_principal,
            amoblado,
-           COALESCE(verificado, FALSE) AS verificado
+           COALESCE(verificado, FALSE) AS verificado,
+           nombre_edificio
     FROM staging.stg_listings_unificado
     WHERE precio_cop >= 500000
       AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
@@ -271,7 +273,8 @@ SELECT
     l.amoblado,
     l.verificado,
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
-    COALESCE(mm.portada_r2, l.foto_principal) AS foto_principal
+    COALESCE(mm.portada_r2, l.foto_principal) AS foto_principal,
+    l.nombre_edificio
 FROM lraw l
 LEFT JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.listings_georef g  ON g.url = l.url
@@ -708,6 +711,7 @@ WITH listing AS (
            amoblado, COALESCE(verificado, FALSE) AS verificado,
            fecha_scraping, n_duplicados,
            precio_variable, precio_min_cluster, precio_max_cluster,
+           nombre_edificio,
            NULL::date AS fecha_publicacion,
            CASE
                WHEN precio_m2 > 0 AND precio_m2 < 2147483647 THEN precio_m2::int
@@ -834,7 +838,8 @@ SELECT
     liq.tiempo_estimado_venta,
     cat.avaluo_m2_catastro::bigint     AS avaluo_m2_catastro,
     _lp_owner.tour_url,
-    _lp_owner.video_url
+    _lp_owner.video_url,
+    COALESCE(_lp_owner.nombre_edificio, l.nombre_edificio) AS nombre_edificio
 FROM listing l
 JOIN raw.barrios b ON b.id = l.barrio_id
 JOIN analytics.listings_georef g ON g.url = l.url
@@ -871,7 +876,7 @@ LEFT JOIN LATERAL (
       AND entity_id = l.url
 ) _vistas ON TRUE
 LEFT JOIN (
-    SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url
+    SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url, lo.nombre_edificio
     FROM public.listing lo
     JOIN public.owner o ON o.id = lo.owner_id
     JOIN public.usuarios u ON u.id = o.usuario_id

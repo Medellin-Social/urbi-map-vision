@@ -1074,6 +1074,64 @@ async def aprobar_evento(request: Request, evento_id: int, admin: dict = Depends
     return {"id": evento_id, "activo": True}
 
 
+# ── Posts de comunidad (blog) subidos por vecinos, pendientes de aprobación ─────
+
+@router.get("/posts/pendientes")
+async def list_posts_pendientes(admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    rows = await pool.fetch(
+        """
+        SELECT p.id, p.autor_nombre, p.autor_email, p.autor_handle,
+               p.titulo, p.cuerpo, p.imagen_url, p.enlace_url,
+               p.barrio_id, b.nombre AS barrio_nombre, p.municipio, p.categoria,
+               p.created_at
+        FROM public.comunidad_post p
+        LEFT JOIN raw.barrios b ON p.barrio_id = b.id
+        WHERE p.estado = 'pendiente'
+        ORDER BY p.created_at ASC
+        """
+    )
+    return [
+        {
+            "id": r["id"], "autor_nombre": r["autor_nombre"], "autor_email": r["autor_email"],
+            "autor_handle": r["autor_handle"], "titulo": r["titulo"], "cuerpo": r["cuerpo"],
+            "imagen_url": r["imagen_url"], "enlace_url": r["enlace_url"],
+            "barrio_id": r["barrio_id"], "barrio": r["barrio_nombre"],
+            "municipio": r["municipio"], "categoria": r["categoria"],
+            "created_at": r["created_at"].isoformat() if r["created_at"] else None,
+        }
+        for r in rows
+    ]
+
+
+@router.post("/posts/{post_id}/aprobar")
+@limiter.limit("30/minute")
+async def aprobar_post(request: Request, post_id: int, admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "UPDATE public.comunidad_post SET estado = 'aprobado' WHERE id = $1 AND estado = 'pendiente' RETURNING id",
+        post_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Post no encontrado o ya procesado")
+    await _audit(pool, admin, "aprobar_post", "comunidad_post", str(post_id), None, request)
+    return {"id": post_id, "estado": "aprobado"}
+
+
+@router.post("/posts/{post_id}/rechazar")
+@limiter.limit("30/minute")
+async def rechazar_post(request: Request, post_id: int, admin: dict = Depends(require_admin)):
+    pool = get_pool()
+    row = await pool.fetchrow(
+        "UPDATE public.comunidad_post SET estado = 'rechazado' WHERE id = $1 AND estado = 'pendiente' RETURNING id",
+        post_id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Post no encontrado o ya procesado")
+    await _audit(pool, admin, "rechazar_post", "comunidad_post", str(post_id), None, request)
+    return {"id": post_id, "estado": "rechazado"}
+
+
 # ── Negocios locales (tiendas) — destacados con alcance ────────────────────────
 
 @router.get("/tiendas")

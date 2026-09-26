@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { useMagicLinkVerify } from "@/hooks/useAuth";
-import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Mail } from "@/lib/icons";
 
 export const Route = createFileRoute("/login_/verificar")({
   component: MagicLinkVerifyPage,

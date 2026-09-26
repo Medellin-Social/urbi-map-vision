@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, Bed, Bath, Maximize2, Building2, Calendar,
   TrendingUp, Phone, ExternalLink, AlertCircle, MapPin, Share2, X as CloseIcon,
-} from "lucide-react";
+} from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";

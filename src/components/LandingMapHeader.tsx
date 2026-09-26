@@ -3,7 +3,7 @@ import mapboxgl from "mapbox-gl";
 import "mapbox-gl/dist/mapbox-gl.css";
 import { Link } from "@tanstack/react-router";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
-import { ArrowDown, X } from "lucide-react";
+import { ArrowDown, X } from "@/lib/icons";
 import { BarrioChoiceModal } from "@/components/BarrioChoiceModal";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";

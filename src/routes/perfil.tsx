@@ -2,32 +2,26 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { useEffect, useRef, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
+import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowLeft,
   Camera,
   Check,
-  CreditCard,
   Heart,
   History,
-  Map as MapIcon,
-  Plus,
   Search,
   Settings,
   Star,
   Trash2,
   TrendingUp,
   User as UserIcon,
-  X,
-} from "lucide-react";
+} from "@/lib/icons";
 import {
   auth,
   GOAL_LABEL,
-  MAP_STYLES,
   type Budget,
   type Goal,
-  type MapStyleId,
-  type PaymentMethod,
   type PerfilBusqueda,
   type Risk,
   type UrbiUser,
@@ -35,12 +29,6 @@ import {
 import { useUpdateAuthPerfil, logout } from "@/hooks/useAuth";
 import { useTarget } from "@/contexts/TargetContext";
 import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
-import {
-  SCORE_PALETTES,
-  getActivePaletteId,
-  setActivePalette,
-  type ScorePaletteId,
-} from "@/config/mapColors";
 import { formatCOP } from "@/lib/format";
 
 export const Route = createFileRoute("/perfil")({
@@ -49,19 +37,27 @@ export const Route = createFileRoute("/perfil")({
     const raw = localStorage.getItem("medellin-social.user");
     if (!raw) throw redirect({ to: "/login" });
   },
-  component: PerfilPage,
+  component: PerfilRoute,
 });
 
-type Tab = "cuenta" | "busqueda" | "inversor" | "pagos" | "favoritos" | "historial" | "mapa";
+// Envuelto en ComunidadLayout (compact) → mismo navbar/footer que el resto del
+// sitio, en vez de una página suelta sin barra de navegación.
+function PerfilRoute() {
+  return (
+    <ComunidadLayout compact>
+      <PerfilPage />
+    </ComunidadLayout>
+  );
+}
+
+type Tab = "cuenta" | "busqueda" | "inversor" | "favoritos" | "historial";
 
 const TABS: { id: Tab; label: string; Icon: typeof UserIcon }[] = [
   { id: "cuenta", label: "Cuenta", Icon: UserIcon },
   { id: "busqueda", label: "Perfil de búsqueda", Icon: Search },
   { id: "inversor", label: "Perfil inversor", Icon: TrendingUp },
-  { id: "pagos", label: "Métodos de pago", Icon: CreditCard },
   { id: "favoritos", label: "Favoritos", Icon: Heart },
   { id: "historial", label: "Historial", Icon: History },
-  { id: "mapa", label: "Configuración mapa", Icon: MapIcon },
 ];
 
 function PerfilPage() {
@@ -81,8 +77,7 @@ function PerfilPage() {
   if (!user) return null;
 
   return (
-    <div className="relative min-h-screen bg-[#FAF7F2]">
-      <main className="perfil-light mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6">
+    <div className="perfil-light mx-auto max-w-6xl px-4 pb-16 pt-10 sm:px-6">
         <Link
           to="/map"
           className="inline-flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground transition hover:text-primary"
@@ -132,15 +127,12 @@ function PerfilPage() {
                 {tab === "cuenta" && <CuentaTab user={user} />}
                 {tab === "busqueda" && <BusquedaTab user={user} />}
                 {tab === "inversor" && <InversorTab user={user} />}
-                {tab === "pagos" && <PagosTab user={user} />}
                 {tab === "favoritos" && <FavoritosTab user={user} />}
                 {tab === "historial" && <HistorialTab user={user} />}
-                {tab === "mapa" && <MapaTab user={user} />}
               </motion.div>
             </AnimatePresence>
           </section>
         </div>
-      </main>
     </div>
   );
 }
@@ -456,62 +448,13 @@ function BusquedaTab({ user }: { user: UrbiUser }) {
 
 /* ---------------- Inversor ---------------- */
 
-const N_UNIDADES_OPTS = [
-  { v: "1 unit — personal", label: "1 unidad" },
-  { v: "2-5 units — small portfolio", label: "2-5 unidades" },
-  { v: "5+ units — full portfolio", label: "5+ unidades" },
-];
-const TIPO_GESTION_OPTS = [
-  { v: "Self-managed", label: "Self-managed" },
-  { v: "Hire property manager", label: "Con administrador" },
-  { v: "Not sure yet", label: "No sé aún" },
-];
-const TARGET_INQUILINO_OPTS = [
-  { v: "Digital nomads & remote workers", label: "Nómadas digitales" },
-  { v: "Local executives & professionals", label: "Ejecutivos locales" },
-  { v: "Students", label: "Estudiantes" },
-  { v: "Flexible — any", label: "Flexible" },
-];
-const AMOBLADO_OPTS = [
-  { v: "Fully furnished (higher rent)", label: "Amoblado (renta premium)" },
-  { v: "Unfurnished (easier to find)", label: "Sin amueblar" },
-  { v: "Flexible", label: "Flexible" },
-];
-const TIPO_PAGO_OPTS = [
-  { v: "Cash — full payment", label: "Contado" },
-  { v: "Mortgage/financing", label: "Crédito hipotecario" },
-  { v: "Not sure yet", label: "No sé aún" },
-];
-const HORIZONTE_OPTS = [
-  { v: "5 years", label: "5 años" },
-  { v: "10 years", label: "10 años" },
-  { v: "20+ years — long term", label: "20+ años" },
-];
-
 function InversorTab({ user }: { user: UrbiUser }) {
   const [budget, setBudget] = useState<Budget | undefined>(user.budget);
   const [goal, setGoal] = useState<Goal | undefined>(user.goal);
   const [risk, setRisk] = useState<Risk | undefined>(user.risk);
-  const [nUnidades, setNUnidades] = useState(user.nUnidades ?? "");
-  const [tipoGestion, setTipoGestion] = useState(user.tipoGestion ?? "");
-  const [targetInquilino, setTargetInquilino] = useState(user.targetInquilino ?? "");
-  const [amoblado, setAmoblado] = useState(user.amoblado ?? "");
-  const [tipoPago, setTipoPago] = useState(user.tipoPago ?? "");
-  const [horizonteInversion, setHorizonteInversion] = useState(user.horizonteInversion ?? "");
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState<"ok" | "err" | null>(null);
-
-  function changeGoal(g: Goal) {
-    setGoal(g);
-    setNUnidades("");
-    setTipoGestion("");
-    setTargetInquilino("");
-    setAmoblado("");
-    setTipoPago("");
-    setHorizonteInversion("");
-    setDirty(true);
-  }
 
   async function save() {
     setSaving(true);
@@ -522,25 +465,9 @@ function InversorTab({ user }: { user: UrbiUser }) {
           objetivo: goal ?? null,
           perfil_riesgo: risk ?? null,
           presupuesto: budget ?? null,
-          n_unidades: goal === "airbnb" ? nUnidades || null : null,
-          tipo_gestion: goal === "airbnb" ? tipoGestion || null : null,
-          target_inquilino: goal === "mediano_plazo" ? targetInquilino || null : null,
-          amoblado: goal === "mediano_plazo" ? amoblado || null : null,
-          tipo_pago: goal === "renta-larga" ? tipoPago || null : null,
-          horizonte_inversion: goal === "renta-larga" ? horizonteInversion || null : null,
         }),
       });
-      auth.patch({
-        budget,
-        goal,
-        risk,
-        nUnidades: goal === "airbnb" ? nUnidades || undefined : undefined,
-        tipoGestion: goal === "airbnb" ? tipoGestion || undefined : undefined,
-        targetInquilino: goal === "mediano_plazo" ? targetInquilino || undefined : undefined,
-        amoblado: goal === "mediano_plazo" ? amoblado || undefined : undefined,
-        tipoPago: goal === "renta-larga" ? tipoPago || undefined : undefined,
-        horizonteInversion: goal === "renta-larga" ? horizonteInversion || undefined : undefined,
-      });
+      auth.patch({ budget, goal, risk });
       window.dispatchEvent(new CustomEvent("perfil-updated", { detail: auth.get() }));
       setDirty(false);
       setToast("ok");
@@ -569,61 +496,10 @@ function InversorTab({ user }: { user: UrbiUser }) {
       <Field label="Objetivo">
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
           {(Object.keys(GOAL_LABEL) as Goal[]).filter((g) => g !== "valorizacion").map((g) => (
-            <Pill key={g} active={goal === g} onClick={() => changeGoal(g as Goal)}>{GOAL_LABEL[g]}</Pill>
+            <Pill key={g} active={goal === g} onClick={() => { setGoal(g as Goal); setDirty(true); }}>{GOAL_LABEL[g]}</Pill>
           ))}
         </div>
       </Field>
-
-      {goal === "airbnb" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Unidades">
-            <select className={inputCls} value={nUnidades} onChange={(e) => { setNUnidades(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {N_UNIDADES_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Gestión">
-            <select className={inputCls} value={tipoGestion} onChange={(e) => { setTipoGestion(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {TIPO_GESTION_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-        </div>
-      )}
-
-      {goal === "mediano_plazo" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Inquilino objetivo">
-            <select className={inputCls} value={targetInquilino} onChange={(e) => { setTargetInquilino(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {TARGET_INQUILINO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Amoblado">
-            <select className={inputCls} value={amoblado} onChange={(e) => { setAmoblado(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {AMOBLADO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-        </div>
-      )}
-
-      {goal === "renta-larga" && (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Forma de pago">
-            <select className={inputCls} value={tipoPago} onChange={(e) => { setTipoPago(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {TIPO_PAGO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-          <Field label="Horizonte de inversión">
-            <select className={inputCls} value={horizonteInversion} onChange={(e) => { setHorizonteInversion(e.target.value); setDirty(true); }}>
-              <option value="">Seleccionar…</option>
-              {HORIZONTE_OPTS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
-            </select>
-          </Field>
-        </div>
-      )}
 
       <Field label="Perfil de riesgo">
         <div className="grid grid-cols-3 gap-2">
@@ -657,144 +533,6 @@ function InversorTab({ user }: { user: UrbiUser }) {
         )}
       </div>
     </div>
-  );
-}
-
-/* ---------------- Pagos ---------------- */
-
-function PagosTab({ user }: { user: UrbiUser }) {
-  const [list, setList] = useState<PaymentMethod[]>(user.payments ?? []);
-  const [adding, setAdding] = useState(false);
-
-  const persist = (next: PaymentMethod[]) => {
-    setList(next);
-    auth.patch({ payments: next });
-  };
-
-  return (
-    <div className="space-y-5">
-      <SectionTitle
-        title="Métodos de pago"
-        hint="Tarjetas y métodos para suscripciones premium y reportes."
-      />
-
-      <div className="space-y-2">
-        {list.length === 0 && (
-          <div className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            Aún no tienes métodos de pago guardados.
-          </div>
-        )}
-        {list.map((p) => (
-          <div key={p.id} className="flex items-center gap-3 rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-3">
-            <div className="grid h-10 w-14 place-items-center rounded-md bg-gradient-to-br from-primary/20 to-accent/20 text-primary">
-              <CreditCard className="h-4 w-4" />
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="text-sm font-semibold">{p.label}</div>
-              <div className="text-[11px] text-muted-foreground">
-                {p.type.toUpperCase()}{p.last4 ? ` · •••• ${p.last4}` : ""}{p.holder ? ` · ${p.holder}` : ""}
-              </div>
-            </div>
-            <button
-              onClick={() => persist(list.filter((x) => x.id !== p.id))}
-              className="text-muted-foreground transition hover:text-danger"
-              title="Eliminar"
-            >
-              <Trash2 className="h-4 w-4" />
-            </button>
-          </div>
-        ))}
-      </div>
-
-      <button
-        onClick={() => setAdding(true)}
-        className="inline-flex items-center gap-1.5 rounded-md border border-primary/40 bg-primary/10 px-4 py-2 text-xs font-semibold text-primary transition hover:bg-primary/20"
-      >
-        <Plus className="h-3.5 w-3.5" /> Agregar método de pago
-      </button>
-
-      <p className="text-[11px] text-muted-foreground">
-        🔒 Demo: los datos se guardan localmente. Próximamente integraremos pasarela segura.
-      </p>
-
-      <AnimatePresence>
-        {adding && (
-          <AddPaymentModal
-            onClose={() => setAdding(false)}
-            onAdd={(p) => {
-              persist([...list, p]);
-              setAdding(false);
-            }}
-          />
-        )}
-      </AnimatePresence>
-    </div>
-  );
-}
-
-function AddPaymentModal({ onClose, onAdd }: { onClose: () => void; onAdd: (p: PaymentMethod) => void }) {
-  const [type, setType] = useState<PaymentMethod["type"]>("card");
-  const [holder, setHolder] = useState("");
-  const [number, setNumber] = useState("");
-  const [label, setLabel] = useState("");
-
-  const submit = () => {
-    const last4 = number.replace(/\s+/g, "").slice(-4);
-    onAdd({
-      id: crypto.randomUUID(),
-      type,
-      label: label || (type === "card" ? "Tarjeta" : type === "pse" ? "PSE" : "Nequi"),
-      holder: holder || undefined,
-      last4: type === "card" && last4 ? last4 : undefined,
-    });
-  };
-
-  return (
-    <motion.div
-      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
-      onClick={onClose}
-      className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
-    >
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }}
-        onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-md rounded-2xl border border-border bg-surface p-6"
-      >
-        <button onClick={onClose} className="absolute right-3 top-3 grid h-7 w-7 place-items-center rounded-md text-muted-foreground hover:bg-background/60 hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
-        <h3 className="font-display text-lg font-semibold">Nuevo método de pago</h3>
-        <div className="mt-4 space-y-3">
-          <div className="grid grid-cols-3 gap-2">
-            {(["card", "pse", "nequi"] as const).map((t) => (
-              <Pill key={t} active={type === t} onClick={() => setType(t)}>
-                {t === "card" ? "Tarjeta" : t.toUpperCase()}
-              </Pill>
-            ))}
-          </div>
-          <Field label="Nombre / Etiqueta">
-            <input className={inputCls} value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Tarjeta principal" />
-          </Field>
-          <Field label="Titular">
-            <input className={inputCls} value={holder} onChange={(e) => setHolder(e.target.value)} placeholder="Nombre completo" />
-          </Field>
-          {type === "card" && (
-            <Field label="Número (últimos 4 visibles)">
-              <input
-                className={inputCls}
-                inputMode="numeric"
-                value={number}
-                onChange={(e) => setNumber(e.target.value.replace(/[^\d ]/g, "").slice(0, 19))}
-                placeholder="•••• •••• •••• 1234"
-              />
-            </Field>
-          )}
-          <button onClick={submit} className="w-full rounded-md bg-primary py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan">
-            Guardar método
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }
 
@@ -933,138 +671,6 @@ function relativeTime(ts: number): string {
   if (h < 24) return `hace ${h}h`;
   const d = Math.floor(h / 24);
   return `hace ${d}d`;
-}
-
-/* ---------------- Mapa ---------------- */
-
-const SCORE_LABELS = ["≥70", "≥50", "≥30", "<30"] as const;
-
-function MapaTab({ user }: { user: UrbiUser }) {
-  const [style, setStyle] = useState<MapStyleId>(user.mapStyle ?? "monochrome");
-  const [oportunidades, setOportunidades] = useState(user.mostrarOportunidades ?? false);
-  const [scorePalette, setScorePalette] = useState<ScorePaletteId>(getActivePaletteId);
-
-  const applyMapStyle = (id: MapStyleId) => {
-    setStyle(id);
-    auth.patch({ mapStyle: id });
-  };
-
-  const applyScorePalette = (id: ScorePaletteId) => {
-    setScorePalette(id);
-    setActivePalette(id);
-  };
-
-  const toggleOportunidades = () => {
-    const next = !oportunidades;
-    setOportunidades(next);
-    auth.patch({ mostrarOportunidades: next });
-  };
-
-  return (
-    <div className="space-y-7">
-      {/* ── Estilo del mapa base ── */}
-      <div className="space-y-3">
-        <SectionTitle title="Estilo del mapa" hint="Fondo cartográfico. Se aplica al volver al mapa." />
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {(Object.keys(MAP_STYLES) as MapStyleId[]).map((id) => {
-            const s = MAP_STYLES[id];
-            const active = style === id;
-            return (
-              <button
-                key={id}
-                onClick={() => applyMapStyle(id)}
-                className={`overflow-hidden rounded-xl border text-left transition ${
-                  active ? "border-[#1D9E75] shadow-sm shadow-[#1D9E75]/20" : "border-[#E8E0D0] hover:border-[#1D9E75]/40"
-                }`}
-              >
-                <div className="flex h-16">
-                  {s.swatch.map((c) => (
-                    <div key={c} className="flex-1" style={{ background: c }} />
-                  ))}
-                </div>
-                <div className="flex items-center justify-between bg-[#FAF7F2] px-3 py-2">
-                  <span className="text-sm font-semibold text-[#1A1208]">{s.label}</span>
-                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">Activo</span>}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ── Paleta de barrios por score ── */}
-      <div className="space-y-3">
-        <SectionTitle
-          title="Paleta de barrios"
-          hint="Color de los polígonos según score de inversión. Cambio inmediato."
-        />
-        <div className="grid gap-3 sm:grid-cols-2">
-          {(Object.keys(SCORE_PALETTES) as ScorePaletteId[]).map((id) => {
-            const p = SCORE_PALETTES[id];
-            const active = scorePalette === id;
-            return (
-              <button
-                key={id}
-                onClick={() => applyScorePalette(id)}
-                className={`overflow-hidden rounded-xl border text-left transition ${
-                  active ? "border-[#1D9E75] shadow-sm shadow-[#1D9E75]/20" : "border-[#E8E0D0] hover:border-[#1D9E75]/40"
-                }`}
-              >
-                <div className="flex h-14">
-                  {p.swatch.map((c, i) => (
-                    <div key={c} className="relative flex-1" style={{ background: c }}>
-                      <span className="absolute inset-x-0 bottom-1 text-center text-[9px] font-bold"
-                        style={{ color: i < 2 ? "rgba(255,255,255,0.7)" : "rgba(0,0,0,0.5)" }}>
-                        {SCORE_LABELS[i]}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <div className="flex items-center justify-between bg-[#FAF7F2] px-3 py-2">
-                  <span className="text-sm font-semibold text-[#1A1208]">{p.label}</span>
-                  {active && <span className="text-[10px] font-bold uppercase tracking-widest text-[#1D9E75]">Activa</span>}
-                </div>
-              </button>
-            );
-          })}
-        </div>
-        <p className="text-[11px] text-muted-foreground">
-          El cambio colorea los polígonos de barrios en tiempo real. El fondo del mapa no cambia.
-        </p>
-      </div>
-
-      {/* ── Alertas de oportunidad ── */}
-      <div className="rounded-xl border border-[#E8E0D0] bg-[#FAF7F2] p-4">
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold">Alertas de oportunidad</div>
-            <div className="mt-0.5 text-[11px] text-muted-foreground">
-              Muestra barrios con oportunidades detectadas directamente en el mapa
-            </div>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={oportunidades}
-            onClick={toggleOportunidades}
-            className={`relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 focus:outline-none ${
-              oportunidades ? "bg-primary" : "bg-border"
-            }`}
-          >
-            <span
-              className={`inline-block h-5 w-5 transform rounded-full bg-white shadow transition duration-200 ${
-                oportunidades ? "translate-x-5" : "translate-x-0"
-              }`}
-            />
-          </button>
-        </div>
-      </div>
-
-      <Link to="/map" className="inline-flex items-center gap-1.5 rounded-md bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan">
-        Ir al mapa
-      </Link>
-    </div>
-  );
 }
 
 /* ---------------- Atoms ---------------- */

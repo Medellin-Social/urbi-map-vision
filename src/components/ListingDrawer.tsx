@@ -10,7 +10,11 @@ import {
   X, Heart, Phone, ExternalLink, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   MapPin, Clock, Building2, Bed, Bath, Maximize2, Share2,
   Shield, Bell, BellRing, User, BarChart2, Plus, Check, Calendar,
-} from "lucide-react";
+  Home, Car, Layers, Map,
+  Waves, Elevator, Dumbbell, Camera, Train, Trees, WashingMachine,
+  Users, Wind, Utensils, Lock, Baby, GraduationCap, ShoppingBag,
+  Binoculars, Flame, Package, BookOpen, Drop, Road, Sun, Star,
+} from "@/lib/icons";
 import { useTarget } from "@/contexts/TargetContext";
 import { useIsPro, useIsAgente } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
@@ -131,6 +135,51 @@ function CollapsibleDescription({ text }: { text: string }) {
   );
 }
 
+const POT_LABEL: Record<string, string> = {
+  "Áreas de baja mixtura":              "Zona residencial tranquila",
+  "Áreas y corredores de media mixtura":"Zona mixta (residencial + comercio)",
+  "Áreas y corredores de alta mixtura": "Zona activa (comercio, oficinas, restaurantes)",
+  "Espacio Público Existente":          "Espacio público (parque, plaza)",
+  "Espacio Público Proyectado":         "Futuro espacio público",
+  "Uso Dotacional":                     "Equipamiento urbano (colegio, hospital, etc.)",
+};
+
+const AMENITY_ICON_MAP: [RegExp, React.ElementType][] = [
+  [/piscin/i,                          Waves],
+  [/ascensor|elevador/i,               Elevator],
+  [/gimnas|gym/i,                      Dumbbell],
+  [/vigilan|circuito|cámara|cctv/i,    Camera],
+  [/transport|metro|bus|tren/i,        Train],
+  [/zonas? verde|parque|jardín/i,      Trees],
+  [/parqueadero|garaje/i,              Car],
+  [/lavander/i,                        WashingMachine],
+  [/salón|salon|comunal/i,             Users],
+  [/balcón|balcon|terraza/i,           Wind],
+  [/cocina|estufa/i,                   Utensils],
+  [/conjunto cerrado|portería|porteria|conjunto/i, Lock],
+  [/niños|niño|infantil/i,             Baby],
+  [/colegio|universidad|escuela/i,     GraduationCap],
+  [/supermercado|centro comercial|comerciale/i, ShoppingBag],
+  [/vista panorám|panoramic/i,         Binoculars],
+  [/vista/i,                           Sun],
+  [/calentador|gas natural|instalación/i, Flame],
+  [/depósito|deposito|bodega/i,        Package],
+  [/biblioteca|estudio/i,              BookOpen],
+  [/closet|clóset/i,                   Star],
+  [/baño|bano/i,                       Drop],
+  [/citófono|citofono|interfón/i,      Phone],
+  [/sobre vía|vía principal/i,         Road],
+  [/área urbana|urbana|residencial/i,  Building2],
+  [/cuarto de servicio/i,              Home],
+];
+
+function amenityIcon(a: string): React.ElementType {
+  for (const [re, Icon] of AMENITY_ICON_MAP) {
+    if (re.test(a)) return Icon;
+  }
+  return Check;
+}
+
 function Amenidades({ items }: { items: string[] }) {
   const [expanded, setExpanded] = useState(false);
   const clean = items.filter((a) => a && a.trim());
@@ -141,15 +190,18 @@ function Amenidades({ items }: { items: string[] }) {
     <div className="space-y-2.5">
       <h3 className="text-sm font-semibold text-[#1A1208]">Qué tiene</h3>
       <div className="flex flex-wrap gap-1.5">
-        {shown.map((a, i) => (
-          <span
-            key={`${a}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-            style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", color: "#1A1208" }}
-          >
-            <Check className="h-3 w-3 shrink-0 text-[#1D9E75]" /> {a}
-          </span>
-        ))}
+        {shown.map((a, i) => {
+          const Icon = amenityIcon(a);
+          return (
+            <span
+              key={`${a}-${i}`}
+              className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+              style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", color: "#1A1208" }}
+            >
+              <Icon className="h-3 w-3 shrink-0 text-[#1D9E75]" /> {a}
+            </span>
+          );
+        })}
         {clean.length > CAP && (
           <button
             onClick={() => setExpanded((v) => !v)}
@@ -1032,14 +1084,14 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     ? `$${Math.round(v / 10.7639 / 1000)}k/ft²`
     : (v >= 1_000_000 ? `$${(v / 1_000_000).toFixed(1)}M/m²` : `$${Math.round(v / 1000)}k/m²`);
   const facts: { icon: React.ReactNode; text: string }[] = [];
-  if (listing?.tipo_inmueble) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.tipo_inmueble.replace(/_/g, " ") });
+  if (listing?.tipo_inmueble) facts.push({ icon: <Home className="h-4 w-4" />, text: listing.tipo_inmueble.replace(/_/g, " ") });
+  if (listing?.nombre_edificio) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.nombre_edificio });
   if (listing?.antiguedad) facts.push({ icon: <Clock className="h-4 w-4" />, text: cleanAntiguedad(listing.antiguedad) ?? "" });
   if (listing?.tipo_operacion === "venta" && listing?.precio_m2) facts.push({ icon: <BarChart2 className="h-4 w-4" />, text: `${precioM2Label(listing.precio_m2)}` });
-  if (listing?.parqueaderos != null && listing.parqueaderos > 0) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `${listing.parqueaderos} parqueadero${listing.parqueaderos === 1 ? "" : "s"}` });
+  if (listing?.parqueaderos != null && listing.parqueaderos > 0) facts.push({ icon: <Car className="h-4 w-4" />, text: `${listing.parqueaderos} parqueadero${listing.parqueaderos === 1 ? "" : "s"}` });
   if (listing?.estrato_real != null) facts.push({ icon: <Shield className="h-4 w-4" />, text: `Estrato ${listing.estrato_real}` });
-  if (listing?.piso != null) facts.push({ icon: <Building2 className="h-4 w-4" />, text: `Piso ${listing.piso}` });
-  // Uso de suelo POT — solo Medellín, dato del punto exacto (raw.pot_usos_medellin).
-  if (listing?.uso_suelo_pot) facts.push({ icon: <Building2 className="h-4 w-4" />, text: listing.uso_suelo_pot });
+  if (listing?.piso != null) facts.push({ icon: <Layers className="h-4 w-4" />, text: `Piso ${listing.piso}` });
+  if (listing?.uso_suelo_pot) facts.push({ icon: <Map className="h-4 w-4" />, text: POT_LABEL[listing.uso_suelo_pot] ?? listing.uso_suelo_pot });
   if (listing?.estado_inmueble) facts.push({ icon: <Check className="h-4 w-4" />, text: listing.estado_inmueble.toLowerCase() });
   const factsTable = facts.length > 0 ? (
     <div className="grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>

@@ -12,7 +12,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
     [t('Eventos', 'Events'), '/eventos/el-poblado'],
     [t('Negocios', 'Businesses'), '/local-business/el-poblado'],
     ['Real Estate', '/map'],
-    ['Blog', '#'],
+    ['Blog', '/blog'],
   ]
 
   const participa: [string, string][] = [

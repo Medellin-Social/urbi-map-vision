@@ -12,7 +12,7 @@ import { MAPBOX_TOKEN } from '@/lib/mapboxToken'
 import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from '@/lib/apiClient'
 import { useIsMobile } from '@/hooks/use-mobile'
-import { List, Map as MapIcon } from 'lucide-react'
+import { List, Map as MapIcon } from "@/lib/icons"
 
 export const Route = createFileRoute('/local-business/$barrio_slug')({
   component: LocalBusinessRoot,

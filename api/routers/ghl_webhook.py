@@ -78,11 +78,23 @@ async def _upsert_tienda_from_ghl(payload: dict) -> None:
     raise NotImplementedError("ghl_webhook: falta contrato de payload para tienda")
 
 
+async def _upsert_referidor_from_ghl(payload: dict) -> None:
+    """Target: public.aplicacion_referidor (o el futuro public.referidor una
+    vez que exista el paso de activación). Decisión 2026-09-20: comisión de
+    afiliado/embajador vive en GHL — pero no está en su alcance actual
+    (no aparece en customer_type de la migración 0084) y no hay contrato:
+    falta confirmar si GHL notifica cambio de estado de la aplicación,
+    asignación de `codigo`, o eventos de comisión (`referidos`), y los
+    nombres de campo de cada uno. Ver docs/GHL_PENDIENTES_TALAL.md §4."""
+    raise NotImplementedError("ghl_webhook: falta contrato de payload para referidor")
+
+
 _HANDLERS = {
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
     "evento": _upsert_evento_from_ghl,
     "tienda": _upsert_tienda_from_ghl,
+    "referidor": _upsert_referidor_from_ghl,
 }
 
 

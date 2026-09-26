@@ -15,7 +15,7 @@ import {
   Sparkles,
   TrendingUp,
   X,
-} from "lucide-react";
+} from "@/lib/icons";
 import {
   LineChart,
   Line,

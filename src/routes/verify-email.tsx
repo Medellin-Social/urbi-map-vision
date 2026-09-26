@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { API_BASE_URL } from "@/config/api";
-import { CheckCircle, XCircle, Loader2, Mail } from "lucide-react";
+import { CheckCircle, XCircle, Loader2, Mail } from "@/lib/icons";
 
 export const Route = createFileRoute("/verify-email")({
   component: VerifyEmailPage,

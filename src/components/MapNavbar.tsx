@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LogOut, ArrowLeft, Menu, X, ChevronDown } from "lucide-react";
+import { LogOut, ArrowLeft, Menu, X, ChevronDown } from "@/lib/icons";
 import { useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { auth } from "@/lib/auth";

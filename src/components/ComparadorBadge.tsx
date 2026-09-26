@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
 import { useComparadorStore, MAX_COMPARADOR } from "@/hooks/useComparadorStore";
 import { useIsAgente } from "@/components/LockedField";
 import type { ApiListing } from "@/lib/adapters";

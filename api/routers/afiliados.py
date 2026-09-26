@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 from api.db import get_pool
 from api.limiter import limiter
+from api.utils import ghl_client
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -40,6 +41,12 @@ async def aplicar_afiliado(request: Request, body: AplicarAfiliadoIn = Body(...)
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+    try:
+        await ghl_client.sync_referidor(row["id"])
+    except Exception:
+        logger.exception("sync_referidor(%s) falló", row["id"])  # best-effort, no bloquea la aplicación
+
     return AplicarOut(
         ok=True,
         aplicacion_id=row["id"],

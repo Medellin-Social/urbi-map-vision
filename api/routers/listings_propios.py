@@ -215,6 +215,7 @@ async def crear_listing(
     parqueaderos:      Optional[int]   = Form(None),
     estrato:           Optional[int]   = Form(None),
     piso:              Optional[int]   = Form(None),
+    nombre_edificio:   Optional[str]   = Form(None),
     antiguedad:        Optional[str]   = Form(None),
     amoblado:          Optional[bool]  = Form(None),
     amenidades:        Optional[str]   = Form(None),   # JSON array string
@@ -325,7 +326,7 @@ async def crear_listing(
                     amoblado, amenidades, mascotas, permite_airbnb,
                     titulo, descripcion,
                     nombre_contacto, telefono, email_contacto, horario_contacto,
-                    declaraciones, destacado, tour_url, video_url,
+                    declaraciones, destacado, tour_url, video_url, nombre_edificio,
                     published_at, created_at, updated_at
                 ) VALUES (
                     $1, $2, $3, NULL, NULL,
@@ -338,7 +339,7 @@ async def crear_listing(
                     $20, $21, $22, $23,
                     $24, $25,
                     $26, $27, $28, $29,
-                    $30::jsonb, $31, $32, $33, NOW(), NOW(), NOW()
+                    $30::jsonb, $31, $32, $33, $35, NOW(), NOW(), NOW()
                 )
                 """,
                 listing_id, slug, owner_id,
@@ -353,6 +354,7 @@ async def crear_listing(
                 json.dumps(declaraciones_obj), es_agente,
                 _safe_embed_url(tour_url), _safe_embed_url(video_url),
                 es_agente,  # $34: estado/verificado CASE
+                nombre_edificio,  # $35
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(

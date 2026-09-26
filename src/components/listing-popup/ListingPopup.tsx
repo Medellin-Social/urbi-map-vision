@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bath, Bed, ChevronRight, MapPin, Maximize2, X } from "lucide-react";
+import { Bath, Bed, Building2, ChevronRight, MapPin, Maximize2, X } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { formatCOP } from "@/lib/format";
@@ -195,6 +195,11 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
             {ubicacion && (
               <div className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: "#9B8B75" }}>
                 <MapPin className="h-3 w-3 shrink-0" />{ubicacion}
+              </div>
+            )}
+            {d?.nombre_edificio && (
+              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: "#6B5B45" }}>
+                <Building2 className="h-3 w-3 shrink-0" />{d.nombre_edificio}
               </div>
             )}
           </div>

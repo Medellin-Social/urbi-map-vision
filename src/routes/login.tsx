@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useState } from "react";
 import { useLogin, useMagicLinkRequest } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
-import { AlertCircle, Mail } from "lucide-react";
+import { AlertCircle, Mail } from "@/lib/icons";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
 
 export const Route = createFileRoute("/login")({

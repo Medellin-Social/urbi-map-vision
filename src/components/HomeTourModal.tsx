@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, GraduationCap } from "lucide-react";
+import { X, GraduationCap } from "@/lib/icons";
 import { useLang } from "@/lib/i18n";
 
 const LS_KEY = "home_tour_seen";
@@ -21,8 +21,8 @@ const ALL_STEPS: TourStep[] = [
   {
     title: { es: "Bienvenido a Medellín Social", en: "Welcome to Medellín Social" },
     body: {
-      es: "Un recorrido rápido por el sitio: sus páginas, el mapa de inicio y cómo navegar tu barrio.",
-      en: "A quick tour of the site: its pages, the home map, and how to navigate your barrio.",
+      es: "Te mostramos rápido cómo moverte por el sitio: sus páginas, el mapa de inicio y tu barrio.",
+      en: "Let's take a quick look around: the pages, the home map and how to get around your barrio.",
     },
     icon: "🏠",
   },
@@ -47,60 +47,60 @@ const ALL_STEPS: TourStep[] = [
   {
     title: { es: "Elige tu barrio", en: "Choose your barrio" },
     body: {
-      es: "Este selector filtra toda la página — noticias, eventos y negocios — por el barrio que elijas.",
-      en: "This selector filters the whole page — news, events and businesses — by the barrio you pick.",
+      es: "Elige un barrio y toda la página se ajusta a él: sus noticias, eventos y negocios.",
+      en: "Pick a barrio and the whole page follows it: its news, events and businesses.",
     },
     selector: '[data-tour="barrio-select"]',
   },
   {
     title: { es: "El mapa de inicio", en: "The home map" },
     body: {
-      es: "Haz click en el mapa para elegir entre ver Barrios (inmuebles) o Comunidad (eventos y negocios) de una zona.",
-      en: "Click the map to choose between Barrios (real estate) or Community (events and businesses) for an area.",
+      es: "Toca una zona en el mapa y decide qué ver: Barrios (inmuebles) o Comunidad (eventos y negocios).",
+      en: "Tap an area on the map and decide what to see: Barrios (real estate) or Community (events and businesses).",
     },
     selector: '[data-tour="home-hero-map"]',
   },
   {
     title: { es: "Trending en tu barrio", en: "Trending in your barrio" },
     body: {
-      es: "Noticias y eventos destacados del barrio seleccionado, siempre a la vista.",
-      en: "Top news and events for the selected barrio, always in view.",
+      es: "Lo más destacado del barrio que elegiste, noticias y eventos, siempre a la mano.",
+      en: "The best of the barrio you picked, news and events, always within reach.",
     },
     selector: '[data-tour="home-trending"]',
   },
   {
     title: { es: "Lo último del barrio", en: "Latest from the barrio" },
-    body: { es: "Noticias recientes de tu zona.", en: "Recent news from your area." },
+    body: { es: "Lo que acaba de pasar en tu zona.", en: "What just happened in your area." },
     selector: '[data-tour="home-noticias"]',
   },
   {
     title: { es: "Qué hacer esta semana", en: "What to do this week" },
-    body: { es: "La agenda de eventos de la semana en tu barrio.", en: "This week's event agenda for your barrio." },
+    body: { es: "Los planes de esta semana en tu barrio.", en: "The plans lined up this week in your barrio." },
     selector: '[data-tour="home-eventos-semana"]',
   },
   {
     title: { es: "Hotspots & Deals", en: "Hotspots & Deals" },
-    body: { es: "Promociones exclusivas de negocios locales.", en: "Exclusive deals from local businesses." },
+    body: { es: "Promos que solo consigues con negocios de la zona.", en: "Deals you only get with businesses around here." },
     selector: '[data-tour="home-deals"]',
   },
   {
     title: { es: "Directorio 5 Estrellas", en: "5-Star Directory" },
-    body: { es: "Los negocios mejor calificados por categoría.", en: "The top-rated businesses by category." },
+    body: { es: "Los negocios que mejor califica la gente, ordenados por categoría.", en: "The businesses people rate highest, sorted by category." },
     selector: '[data-tour="home-directorio"]',
   },
   {
     title: { es: "Mapa de inversión", en: "Investment map" },
     body: {
-      es: "Aquí entras al mapa completo de inmuebles, con filtros de precio, tipo y más — ese mapa tiene su propio tutorial.",
-      en: "Here you enter the full real-estate map, with filters for price, type and more — that map has its own tutorial.",
+      es: "Aquí entras al mapa completo de inmuebles, con filtros de precio, tipo y mucho más. Ese mapa trae su propio tutorial.",
+      en: "Here you open the full real-estate map, with filters for price, type and lots more. That map has its own tutorial.",
     },
     selector: '[data-tour="home-realestate"]',
   },
   {
     title: { es: "¿Necesitas repasar esto?", en: "Need to review this?" },
     body: {
-      es: "Puedes volver a ver esta guía cuando quieras con este botón.",
-      en: "You can replay this guide anytime with this button.",
+      es: "¿Se te perdió algo? Con este botón repites la guía cuando quieras.",
+      en: "Missed something? This button replays the guide whenever you want.",
     },
     selector: '[data-tour="tour-replay-home"]',
   },

@@ -32,6 +32,7 @@ import { Route as ConectarAgenteRouteImport } from './routes/conectar-agente'
 import { Route as ComunidadRouteImport } from './routes/comunidad'
 import { Route as ComparadorRouteImport } from './routes/comparador'
 import { Route as CalculadoraRouteImport } from './routes/calculadora'
+import { Route as BlogRouteImport } from './routes/blog'
 import { Route as AgentesRouteImport } from './routes/agentes'
 import { Route as AfiliadoRouteImport } from './routes/afiliado'
 import { Route as IndexRouteImport } from './routes/index'
@@ -163,6 +164,11 @@ const CalculadoraRoute = CalculadoraRouteImport.update({
   path: '/calculadora',
   getParentRoute: () => rootRouteImport,
 } as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentesRoute = AgentesRouteImport.update({
   id: '/agentes',
   path: '/agentes',
@@ -244,6 +250,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
   '/agentes': typeof AgentesRoute
+  '/blog': typeof BlogRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -284,6 +291,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
   '/agentes': typeof AgentesRoute
+  '/blog': typeof BlogRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -325,6 +333,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/afiliado': typeof AfiliadoRoute
   '/agentes': typeof AgentesRoute
+  '/blog': typeof BlogRoute
   '/calculadora': typeof CalculadoraRoute
   '/comparador': typeof ComparadorRoute
   '/comunidad': typeof ComunidadRoute
@@ -367,6 +376,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliado'
     | '/agentes'
+    | '/blog'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
@@ -407,6 +417,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliado'
     | '/agentes'
+    | '/blog'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
@@ -447,6 +458,7 @@ export interface FileRouteTypes {
     | '/'
     | '/afiliado'
     | '/agentes'
+    | '/blog'
     | '/calculadora'
     | '/comparador'
     | '/comunidad'
@@ -488,6 +500,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AfiliadoRoute: typeof AfiliadoRoute
   AgentesRoute: typeof AgentesRoute
+  BlogRoute: typeof BlogRoute
   CalculadoraRoute: typeof CalculadoraRoute
   ComparadorRoute: typeof ComparadorRoute
   ComunidadRoute: typeof ComunidadRoute
@@ -688,6 +701,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof CalculadoraRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agentes': {
       id: '/agentes'
       path: '/agentes'
@@ -800,6 +820,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AfiliadoRoute: AfiliadoRoute,
   AgentesRoute: AgentesRoute,
+  BlogRoute: BlogRoute,
   CalculadoraRoute: CalculadoraRoute,
   ComparadorRoute: ComparadorRoute,
   ComunidadRoute: ComunidadRoute,

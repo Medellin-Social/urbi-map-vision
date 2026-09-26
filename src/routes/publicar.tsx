@@ -65,6 +65,7 @@ type FormData = {
   parqueaderos: string;
   estrato: string;
   piso: string;
+  nombre_edificio: string;
   antiguedad: string;
   amoblado: string;
   mascotas: string;
@@ -106,7 +107,7 @@ const INITIAL_FORM: FormData = {
   tipo_operacion: "", tipo_inmueble: "", precio_cop: "",
   tiene_admin: false, administracion_cop: "",
   area_m2: "", area_lote_m2: "", habitaciones: "", banos: "",
-  parqueaderos: "", estrato: "", piso: "", antiguedad: "",
+  parqueaderos: "", estrato: "", piso: "", nombre_edificio: "", antiguedad: "",
   amoblado: "", mascotas: "consultar", permite_airbnb: "no_se",
   amenidades_int: [], amenidades_ext: [],
   barrio_id: "", barrio_nombre: "", municipio: "", comuna: "",
@@ -635,9 +636,10 @@ function Step2({
 }: {
   data: FormData; setData: (p: Partial<FormData>) => void;
 }) {
-  const showLote = ["lote", "casa", "otro"].includes(data.tipo_inmueble);
-  const showHab  = !["lote", "local", "bodega", "oficina"].includes(data.tipo_inmueble);
-  const showPiso = !["lote", "casa"].includes(data.tipo_inmueble);
+  const showLote     = ["lote", "casa", "otro"].includes(data.tipo_inmueble);
+  const showHab      = !["lote", "local", "bodega", "oficina"].includes(data.tipo_inmueble);
+  const showPiso     = !["lote", "casa"].includes(data.tipo_inmueble);
+  const showEdificio = !["lote", "casa", "bodega"].includes(data.tipo_inmueble);
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -676,6 +678,16 @@ function Step2({
           </Field>
         )}
       </div>
+
+      {showEdificio && (
+        <Field label="Nombre del edificio / conjunto">
+          <Input
+            value={data.nombre_edificio}
+            onChange={(e) => setData({ nombre_edificio: e.target.value })}
+            placeholder="Ej: Torres del Poblado, Conjunto Laureles"
+          />
+        </Field>
+      )}
 
       <Field label="Antigüedad">
         <Select value={data.antiguedad} onChange={(e) => setData({ antiguedad: e.target.value })}>
@@ -1534,9 +1546,10 @@ function PublicarPage() {
       if (form.habitaciones) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
       if (form.banos)        fd.append("banos",        form.banos === "4+" ? "4" : form.banos);
       if (form.parqueaderos) fd.append("parqueaderos", form.parqueaderos === "3+" ? "3" : form.parqueaderos);
-      if (form.estrato)      fd.append("estrato",      form.estrato);
-      if (form.piso)         fd.append("piso",         form.piso);
-      if (form.antiguedad)   fd.append("antiguedad",   form.antiguedad);
+      if (form.estrato)           fd.append("estrato",           form.estrato);
+      if (form.piso)              fd.append("piso",              form.piso);
+      if (form.nombre_edificio)   fd.append("nombre_edificio",   form.nombre_edificio);
+      if (form.antiguedad)        fd.append("antiguedad",        form.antiguedad);
       if (form.amoblado)     fd.append("amoblado",     form.amoblado === "si" ? "true" : "false");
       const amenidades = [...form.amenidades_int, ...form.amenidades_ext];
       if (amenidades.length) fd.append("amenidades", JSON.stringify(amenidades));

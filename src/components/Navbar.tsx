@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, LogOut } from "lucide-react";
+import { ArrowLeft, LogOut } from "@/lib/icons";
 import { auth } from "@/lib/auth";
 import { logout } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";

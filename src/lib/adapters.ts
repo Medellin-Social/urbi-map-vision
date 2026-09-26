@@ -328,6 +328,7 @@ export type ApiListingDetail = ApiListing & {
   estado_inmueble?: string | null;
   parqueaderos?: number | null;
   piso?: number | null;
+  nombre_edificio?: string | null;
   vistas?: number | null;
   precio_historia?: { precio: number; fecha: string; delta_pct?: number | null }[] | null;
   // Barrio context (paid tier)

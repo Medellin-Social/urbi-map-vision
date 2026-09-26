@@ -8,7 +8,7 @@ import {
   UtensilsCrossed, Wind, WashingMachine, Snowflake,
   ArrowUpDown, Building2, Users, Dumbbell, Waves, Car, DoorClosed,
   Shield, Camera, Trees, Baby, TrainFront, Sofa,
-} from "lucide-react";
+} from "@/lib/icons";
 import { useIsPro } from "@/components/LockedField";
 import { useLang } from "@/lib/i18n";
 import { useTrm } from "@/hooks/useTrm";

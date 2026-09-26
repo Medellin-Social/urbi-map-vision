@@ -5,7 +5,7 @@ import {
   Users, ShieldCheck, LayoutDashboard, Eye, Heart, Calculator, GitCompare, Check, X, Ban,
   Building2, CreditCard, MapPinned, Plus, Trash2, ClipboardList, Star, Lock, KeyRound,
   UserSearch, ShieldAlert, Activity, Store, Search, ChevronLeft, ChevronRight,
-} from "lucide-react";
+} from "@/lib/icons";
 import {
   ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
   Tooltip, LabelList,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { X } from "lucide-react";
+import { X } from "@/lib/icons";
 
 function BuildingPlaceholder({ height }: { height: number }) {
   return (

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Flame, MapPin } from "lucide-react";
+import { ChevronDown, Flame, MapPin } from "@/lib/icons";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";
 import type { Neighborhood } from "@/lib/adapters";
 import { useOportunidades } from "@/hooks/useOportunidades";

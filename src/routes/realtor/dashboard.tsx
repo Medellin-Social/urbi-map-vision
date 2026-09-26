@@ -1,7 +1,7 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, MapPinned, Plus } from "lucide-react";
+import { ArrowLeft, Inbox, MapPinned, Plus } from "@/lib/icons";
 import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
@@ -54,9 +54,10 @@ export const Route = createFileRoute("/realtor/dashboard")({
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 
-type Tab = "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
+type Tab = "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "resultados",   label: "Resultados" },
   { id: "inbox",        label: "Inbox" },
   { id: "agenda",       label: "Agenda" },
   { id: "listings",     label: "Mis listings" },
@@ -66,7 +67,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 function RealtorDashboardPage() {
-  const [tab, setTab] = useState<Tab>("inbox");
+  const [tab, setTab] = useState<Tab>("resultados");
   const { isError, error, isLoading } = useRealtorPerfil();
 
   // La cuenta logueada existe pero no tiene fila `agent` (backend responde 403
@@ -99,6 +100,7 @@ function RealtorDashboardPage() {
     <div className="paper-theme min-h-screen bg-background">
       <RealtorNav tab={tab} onTab={setTab} />
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
+        {tab === "resultados"   && <ResultadosTab />}
         {tab === "inbox"        && <InboxTab />}
         {tab === "agenda"       && <AgendaTab />}
         {tab === "listings"     && <ListingsTab />}
@@ -1152,6 +1154,314 @@ const ESTADO_META: Record<EstadoListing, { label: string; badge: string }> = {
   rechazado:   { label: "Rechazado",   badge: "border-danger/30 bg-danger/10 text-danger" },
   cerrado:     { label: "Cerrado",     badge: "border-border bg-muted text-muted-foreground" },
 };
+
+// ══ TAB: Resultados ════════════════════════════════════════════════════════════
+// Panel client-facing (PDF panel-resultados-realtor.pdf, luz verde de Kathy).
+// NO trae datos nuevos: reúne los MISMOS endpoints que Desempeño (/desempeno) e
+// Inteligencia (/inteligencia/{zona}) en lenguaje llano para el realtor. La zona
+// pagada manda: §2 y §3 hablan de la misma zona (la de mayor patrocinio).
+
+const SUGERENCIAS: { titulo: string; detalle: string }[] = [
+  {
+    titulo: "Avisos cuando baja el precio de tus inmuebles",
+    detalle:
+      "Para que sepas de inmediato cuándo uno de tus inmuebles bajó de precio, sin tener que revisarlo tú mismo.",
+  },
+  {
+    titulo: "Saber qué tanto interés real tiene cada inmueble",
+    detalle:
+      "Hoy solo sabemos quién lo vio. Falta saber quién lo comparó con otros o lo guardó como favorito — eso muestra quién está más cerca de decidirse.",
+  },
+  {
+    titulo: "De dónde vienen tus clientes",
+    detalle:
+      "WhatsApp, Instagram, Google, un referido — para saber en qué vale la pena invertir más tu tiempo y tu plata.",
+  },
+  {
+    titulo: "Clientes que perdiste por no responder a tiempo",
+    detalle:
+      "Cuántos clientes se te devolvieron por no contestar rápido, comparado con otros asesores de tu zona.",
+  },
+  {
+    titulo: "Cuánta gente vive en tu zona",
+    detalle:
+      "Para que sepas si vale la pena pasar de barrio a comuna, según cuántas personas viven ahí.",
+  },
+];
+
+const TIER_LABEL: Record<string, string> = {
+  agente_premium: "Plan Agente Premium",
+  comuna: "Plan Comuna",
+  barrio: "Plan Barrio",
+};
+
+function planZona(z: RoiZona): string {
+  const plan = z.tier ? TIER_LABEL[z.tier] ?? z.tier.replace(/_/g, " ") : "Patrocinio";
+  return `${plan} · ${formatCOP(z.precio_mensual)}/mes`;
+}
+
+// walk_score (0–100) → etiqueta llana, como en el PDF ("Muy caminable")
+function etiquetaCaminable(score: number | null | undefined): string {
+  if (score == null) return "—";
+  if (score >= 85) return "Muy caminable";
+  if (score >= 65) return "Caminable";
+  if (score >= 40) return "Algo caminable";
+  return "Poco caminable";
+}
+
+function ResultadosTab() {
+  const { data, isLoading, isError } = useDesempeno();
+  // zonas viene ordenado por precio_mensual DESC → [0] es la zona pagada principal
+  const zonaPagada = data?.zonas?.[0] ?? null;
+  const { data: intel, isError: intelError } = useInteligenciaBarrio(
+    zonaPagada?.zona_codigo ?? null,
+    zonaPagada?.nivel,
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <Skeleton className="h-64 rounded-xl" />
+      </div>
+    );
+  }
+  if (isError || !data) return <SectionError msg="No se pudo cargar tu panel de resultados." />;
+
+  const mediana = data.mediana_horas_aceptar != null
+    ? data.mediana_horas_aceptar < 48
+      ? `${data.mediana_horas_aceptar} horas`
+      : `${Math.round(data.mediana_horas_aceptar / 24)} días`
+    : "—";
+  const ofertasInteres = data.ofertas_90d + data.interesados_90d;
+
+  return (
+    <div className="space-y-12">
+      <header>
+        <h1 className="text-xl font-semibold text-foreground">Tu panel de resultados</h1>
+        <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+          Cómo te está yendo, cómo rinde tu zona pagada y qué dice el mercado. Cuéntanos qué te
+          sirve más — eso decide qué construimos después.
+        </p>
+      </header>
+
+      {/* ── §1 Cómo te está yendo ── */}
+      <section>
+        <BloqueHeader titulo="Cómo te está yendo" estado="disponible" sub="Últimos 3 meses" />
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
+          <ResultCard
+            label="Clientes que aceptaste"
+            value={data.aceptados_90d}
+            sub={`Te llegaron ${data.asignados_90d} y aceptaste ${data.aceptados_90d}`}
+          />
+          <ResultCard
+            label="Qué tan rápido respondes"
+            value={mediana}
+            sub="Desde que te llega un cliente hasta que lo aceptas"
+          />
+          <ResultCard
+            label="Personas que vieron tus inmuebles"
+            value={data.vistas_30d.toLocaleString("es-CO")}
+            sub="En los últimos 30 días"
+          />
+          <ResultCard
+            label="Asistencia a las visitas"
+            value={data.show_rate != null ? `${Math.round(data.show_rate * 100)}%` : "—"}
+            sub={`${data.visitas_realizadas_90d} sí llegaron y ${data.visitas_no_show_90d} no llegaron`}
+          />
+          <ResultCard
+            label="Visitas con oferta o interés real"
+            value={ofertasInteres}
+            sub={`${data.ofertas_90d} ofertas y ${data.interesados_90d} personas interesadas`}
+          />
+        </div>
+      </section>
+
+      {/* ── §2 Resultados en tu zona pagada ── */}
+      <section>
+        <BloqueHeader titulo="Resultados en tu zona pagada" estado="disponible" />
+        {!zonaPagada ? (
+          <EmptyState msg="Cuando actives una zona pagada, aquí verás cuánto te cuesta cada cliente y cómo avanzan tus inmuebles en esa zona." />
+        ) : (
+          <div className="rounded-xl border border-border bg-surface p-5 sm:p-6">
+            <div>
+              <h3 className="text-base font-semibold capitalize text-foreground">
+                {zonaPagada.zona_nombre}
+                <span className="ml-2 text-sm font-normal capitalize text-muted-foreground">{zonaPagada.nivel}</span>
+              </h3>
+              <p className="mt-0.5 text-xs text-muted-foreground">{planZona(zonaPagada)}</p>
+            </div>
+
+            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
+              <BigNumber
+                value={zonaPagada.costo_por_intake != null ? formatCOP(zonaPagada.costo_por_intake) : "—"}
+                sub="Costo por cada cliente conseguido"
+              />
+              <BigNumber
+                value={zonaPagada.vistas_30d.toLocaleString("es-CO")}
+                sub="Visitas a tus inmuebles este mes"
+              />
+              <BigNumber
+                value={zonaPagada.intakes_mes}
+                sub="Inmuebles nuevos este mes"
+              />
+            </div>
+
+            <div className="mt-6 space-y-2">
+              {[
+                { label: "Llegaron",  value: zonaPagada.intakes_mes },
+                { label: "Tomados",   value: zonaPagada.tomados_mes },
+                { label: "Publicados", value: zonaPagada.publicados_total },
+                { label: "Cerrados",  value: zonaPagada.cerrados_total },
+              ].map(({ label, value }) => {
+                const max = Math.max(zonaPagada.intakes_mes, 1);
+                return (
+                  <div key={label} className="flex items-center gap-3">
+                    <span className="w-24 shrink-0 text-sm text-muted-foreground">{label}</span>
+                    <div className="h-2 flex-1 overflow-hidden rounded-full bg-muted">
+                      <div className="h-full rounded-full bg-primary" style={{ width: `${Math.min(100, (value / max) * 100)}%` }} />
+                    </div>
+                    <span className="w-8 shrink-0 text-right text-sm font-semibold tabular-nums text-foreground">{value}</span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </section>
+
+      {/* ── §3 Información del mercado ── */}
+      <section>
+        <BloqueHeader titulo="Información del mercado" estado="disponible" />
+        {!zonaPagada ? (
+          <EmptyState msg="La información de mercado aparece según tu zona pagada." />
+        ) : intelError || !intel ? (
+          <EmptyState msg="Aún no tenemos datos de mercado para esta zona." />
+        ) : (
+          <div className="space-y-6">
+            <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+              {intel.nombre ?? zonaPagada.zona_nombre}
+            </h3>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <MercadoCol titulo="Venta" filas={[
+                ["Precio por metro cuadrado", intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"],
+                ["Ganancia anual", intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"],
+                ["Facilidad de venta", intel.liquidez.categoria ?? "—"],
+                ["Tiempo estimado para vender", intel.liquidez.tiempo_estimado_venta ?? "—"],
+              ]} />
+              <MercadoCol titulo="Arriendo de largo plazo" filas={[
+                ["Arriendo típico", intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"],
+                ["Ganancia anual", intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"],
+                ["Años para recuperar la inversión", intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"],
+              ]} />
+              <MercadoCol titulo="Alquiler por días (tipo Airbnb)" filas={[
+                ["Días ocupado", intel.airbnb.ocupacion_pct != null ? `${Math.round(intel.airbnb.ocupacion_pct)}%` : "—"],
+                ["Precio promedio por noche", intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"],
+                ["Ganancia anual", intel.airbnb.yield_airbnb_pct != null ? `${intel.airbnb.yield_airbnb_pct.toFixed(1)}%` : "—"],
+              ]} />
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+              <MercadoCol titulo="Seguridad" filas={[
+                ["Qué tan segura es", intel.seguridad.score != null ? `${intel.seguridad.score} de 100` : "—"],
+                ["Cómo va cambiando", intel.seguridad.tendencia ?? "—"],
+              ]} />
+              <MercadoCol titulo="Ubicación" filas={[
+                ["Distancia al metro", intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"],
+                ["Qué tan caminable es", etiquetaCaminable(intel.conectividad.walk_score)],
+                ["Colegios cerca", intel.conectividad.n_colegios_1km ?? "—"],
+              ]} />
+              <MercadoCol titulo="Valorización" filas={[
+                ["Cuánto subió de precio este año", intel.valorizacion.var_anual_pct != null ? `${intel.valorizacion.var_anual_pct > 0 ? "+" : ""}${intel.valorizacion.var_anual_pct.toFixed(1)}%` : "—"],
+                ["Lo que se espera que suba en 5 años", intel.valorizacion.proyeccion_5anos_pct != null ? `${intel.valorizacion.proyeccion_5anos_pct > 0 ? "+" : ""}${intel.valorizacion.proyeccion_5anos_pct.toFixed(0)}%` : "—"],
+              ]} />
+            </div>
+
+            <p className="text-xs text-muted-foreground">
+              Esta información se actualiza cada semana o cada mes, no al instante.
+            </p>
+          </div>
+        )}
+      </section>
+
+      {/* ── §4 Ideas para más adelante ── */}
+      <section>
+        <BloqueHeader titulo="Ideas para más adelante" estado="pendiente" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {SUGERENCIAS.map((s) => (
+            <div key={s.titulo} className="rounded-xl border border-dashed border-border bg-surface/50 p-5">
+              <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Sugerencia</span>
+              <h4 className="mt-1.5 text-sm font-semibold text-foreground">{s.titulo}</h4>
+              <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{s.detalle}</p>
+            </div>
+          ))}
+        </div>
+        <p className="mt-4 text-xs text-muted-foreground">
+          Estas ideas todavía no existen. Cuéntanos qué te gustaría ver primero.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+// Encabezado de bloque con sello "YA DISPONIBLE" / "AÚN NO EXISTEN"
+function BloqueHeader({ titulo, estado, sub }: { titulo: string; estado: "disponible" | "pendiente"; sub?: string }) {
+  return (
+    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
+      <h2 className="text-lg font-semibold text-foreground">{titulo}</h2>
+      {estado === "disponible" ? (
+        <span className="rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-primary">
+          Ya disponible
+        </span>
+      ) : (
+        <span className="rounded-full bg-muted px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+          Aún no existen
+        </span>
+      )}
+      {sub && <span className="w-full text-xs text-muted-foreground sm:w-auto">{sub}</span>}
+    </div>
+  );
+}
+
+// Tarjeta de estadística cálida (número grande + explicación en llano)
+function ResultCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <div className="text-xs text-muted-foreground">{label}</div>
+      <div className="mt-2 text-3xl font-semibold tabular-nums text-foreground">{value}</div>
+      <div className="mt-1.5 text-xs leading-relaxed text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+function BigNumber({ value, sub }: { value: string | number; sub: string }) {
+  return (
+    <div>
+      <div className="text-3xl font-semibold tabular-nums text-foreground">{value}</div>
+      <div className="mt-1 text-xs leading-relaxed text-muted-foreground">{sub}</div>
+    </div>
+  );
+}
+
+// Columna de mercado: título + filas [etiqueta, valor]
+function MercadoCol({ titulo, filas }: { titulo: string; filas: [string, string | number][] }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-5">
+      <h4 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{titulo}</h4>
+      <dl className="mt-3 space-y-3">
+        {filas.map(([label, value]) => (
+          <div key={label} className="flex items-baseline justify-between gap-3">
+            <dt className="text-xs text-muted-foreground">{label}</dt>
+            <dd className="shrink-0 text-sm font-semibold tabular-nums text-foreground">{value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
 
 // ══ TAB 3: Desempeño ═══════════════════════════════════════════════════════════
 

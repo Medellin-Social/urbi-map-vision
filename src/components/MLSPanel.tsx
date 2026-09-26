@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown } from "lucide-react";
+import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";

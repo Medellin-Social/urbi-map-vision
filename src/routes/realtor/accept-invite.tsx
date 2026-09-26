@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { apiFetch } from "@/lib/apiClient";
 import { API_BASE_URL } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, CheckCircle, XCircle } from "lucide-react";
+import { Building2, CheckCircle, XCircle } from "@/lib/icons";
 
 export const Route = createFileRoute("/realtor/accept-invite")({
   component: AcceptInvitePage,

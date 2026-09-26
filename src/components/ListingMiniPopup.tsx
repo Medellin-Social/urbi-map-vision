@@ -1,4 +1,4 @@
-import { X, ChevronRight, Bed, Bath, Maximize2, Clock, MapPin, Plus, Check } from "lucide-react";
+import { X, ChevronRight, Bed, Bath, Maximize2, Clock, MapPin, Plus, Check } from "@/lib/icons";
 import { formatCOP } from "@/lib/format";
 import type { ApiListing } from "@/lib/adapters";
 import { useComparadorStore } from "@/hooks/useComparadorStore";

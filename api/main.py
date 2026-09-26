@@ -17,7 +17,7 @@ from api.db import create_pool, close_pool, get_pool
 from api import parametros
 from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
-from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrios, business, calculadora, comparador, comunidad, comunas, embajadores, favoritos, ghl_webhook, historial, intake, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
+from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_webhook, historial, intake, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -148,6 +148,7 @@ app.include_router(trm.router,           prefix="/api/v1/trm",             tags=
 app.include_router(tracking.router,      prefix="/api/v1/track",           tags=["tracking"])
 app.include_router(admin.router,         prefix="/api/v1/admin",           tags=["admin"])
 app.include_router(comunidad.router,     prefix="/api/v1/comunidad",        tags=["comunidad"])
+app.include_router(comunidad_posts.router, prefix="/api/v1/comunidad/posts", tags=["comunidad-posts"])
 app.include_router(comunas.router,       prefix="/api/v1/comunas",           tags=["comunas"])
 app.include_router(business.router,      prefix="/api/v1/business",          tags=["business"])
 app.include_router(embajadores.router,   prefix="/api/v1/embajadores",       tags=["embajadores"])

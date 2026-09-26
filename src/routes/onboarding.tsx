@@ -8,7 +8,7 @@ import { API_ENDPOINTS } from "@/config/api";
 import {
   Building2, Home, KeyRound, Briefcase, Shield, ShieldHalf, Flame,
   Globe2, TrendingUp,
-} from "lucide-react";
+} from "@/lib/icons";
 import { LanguageToggle } from "@/lib/i18n";
 
 const GOAL_TO_OBJETIVO: Record<Goal, string> = {

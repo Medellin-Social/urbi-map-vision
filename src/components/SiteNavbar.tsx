@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Building2, ArrowRight, Home } from "lucide-react";
+import { Building2, ArrowRight, Home } from "@/lib/icons";
 import { LanguageToggle } from "@/lib/i18n";
 import { auth } from "@/lib/auth";
 

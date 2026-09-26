@@ -1,6 +1,6 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";
-import { Check, Lock } from "lucide-react";
+import { Check, Lock } from "@/lib/icons";
 import { auth } from "@/lib/auth";
 import { getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";

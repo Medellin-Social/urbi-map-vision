@@ -1,5 +1,5 @@
 import { createRouter, useRouter } from "@tanstack/react-router";
-import { AlertTriangle } from "lucide-react";
+import { AlertTriangle } from "@/lib/icons";
 import { routeTree } from "./routeTree.gen";
 
 function DefaultErrorComponent({ error, reset }: { error: Error; reset: () => void }) {

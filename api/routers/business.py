@@ -175,6 +175,84 @@ async def get_deals(
     return DealsResponse(ciudad_id=ciudad_id, total=len(deals), deals=deals)
 
 
+# ── Hotspots ──────────────────────────────────────────────────────────────────
+
+class HotspotOut(BaseModel):
+    id: int
+    categoria_experiencia: str
+    descripcion: str
+    tienda_nombre: str
+    foto_url: Optional[str]
+    lat: Optional[float]
+    lon: Optional[float]
+    barrio_nombre: Optional[str]
+
+
+class HotspotsResponse(BaseModel):
+    ciudad_id: int
+    total: int
+    hotspots: list[HotspotOut]
+
+
+_HOTSPOTS_QUERY = """
+SELECT
+    h.id,
+    h.categoria_experiencia,
+    h.descripcion,
+    t.nombre   AS tienda_nombre,
+    COALESCE(h.foto_url, t.foto_url) AS foto_url,
+    t.lat,
+    t.lon,
+    b.nombre   AS barrio_nombre
+FROM public.hotspots h
+JOIN public.tiendas t ON h.tienda_id = t.id
+LEFT JOIN raw.barrios b ON COALESCE(h.barrio_id, t.barrio_id) = b.id
+WHERE h.activo    = TRUE
+  AND h.destacado = TRUE
+  AND (h.fecha_fin IS NULL OR h.fecha_fin >= CURRENT_DATE)
+  AND (
+    ($2::int IS NOT NULL AND COALESCE(h.barrio_id, t.barrio_id) IN (
+        SELECT id FROM raw.barrios b2
+        WHERE ST_DWithin(
+            b2.geometry,
+            (SELECT geometry FROM raw.barrios WHERE id = $2),
+            3000
+        )
+    ))
+    OR ($2::int IS NULL AND $3::text IS NOT NULL AND COALESCE(h.barrio_id, t.barrio_id) IN (
+        SELECT id FROM raw.barrios WHERE municipio = $3
+    ))
+    OR ($2::int IS NULL AND $3::text IS NULL AND h.ciudad_id = $1)
+  )
+ORDER BY h.created_at DESC
+LIMIT 4
+"""
+
+
+@router.get("/hotspots", response_model=HotspotsResponse)
+async def get_hotspots(
+    ciudad_id: int = Query(1),
+    barrio_id: Optional[int] = Query(None),
+    municipio: Optional[str] = Query(None),
+    pool=Depends(get_pool),
+):
+    try:
+        rows = await pool.fetch(_HOTSPOTS_QUERY, ciudad_id, barrio_id, municipio)
+    except Exception:
+        logger.exception("Error inesperado")
+        raise HTTPException(status_code=500, detail="Error interno del servidor")
+    hotspots = [
+        HotspotOut(
+            id=r["id"], categoria_experiencia=r["categoria_experiencia"],
+            descripcion=r["descripcion"], tienda_nombre=r["tienda_nombre"],
+            foto_url=_sanitize_foto(r["foto_url"]), lat=r["lat"], lon=r["lon"],
+            barrio_nombre=r["barrio_nombre"],
+        )
+        for r in rows
+    ]
+    return HotspotsResponse(ciudad_id=ciudad_id, total=len(hotspots), hotspots=hotspots)
+
+
 # ── Directorio Featured ───────────────────────────────────────────────────────
 
 class DirectorioOut(BaseModel):

@@ -564,3 +564,44 @@ async def push_evento_to_ghl(evento_id: int, campos: dict) -> Optional[str]:
 
 async def push_deal_to_ghl(deal_id: int, campos: dict) -> Optional[str]:
     raise NotImplementedError("ghl_client.push_deal_to_ghl: falta contrato GHL para deal")
+
+
+# ── Referidor (afiliado/embajador) — comisión por negocio referido ──────────
+# Decisión 2026-09-20: todo pago vive en GHL, referidor incluido — pero, a
+# diferencia de tienda/listing, acá no hay NADA confirmado con Talal todavía:
+# ni credenciales, ni Contacts API (find_or_create_contact arriba también es
+# stub — no hay un push de Contact funcionando del cual copiar el shape real),
+# ni nombres de custom field. `contact_type`/`referidor_codigo`/
+# `referidor_tipo`/`referidor_zona`/`comision_pct` en
+# docs/GHL_PENDIENTES_TALAL.md §4 son PROPUESTA nuestra, no contrato — no se
+# mandan hasta que Talal los confirme (mismo criterio que _map_choice arriba:
+# mejor 501 explícito que adivinar un campo y corromper algo en silencio).
+#
+# Necesario de Talal antes de implementar:
+#   - Credenciales (GHL_PRIVATE_TOKEN/LOCATION_ID) + confirmar que Contacts
+#     API es el objeto correcto (no un custom object aparte, como listing)
+#   - Nombres reales de los custom fields propuestos en el PDF/doc
+#   - Si el `codigo` de referido se genera acá o lo asigna GHL
+
+async def push_referidor_to_ghl(referidor_id: int, campos: dict) -> Optional[str]:
+    """referidor_id = public.aplicacion_referidor.id. Target propuesto: Contact."""
+    raise NotImplementedError("ghl_client.push_referidor_to_ghl: falta contrato GHL para referidor (Contact)")
+
+
+_REFERIDOR_SELECT = """
+    SELECT tipo, nombre, email, telefono, canal, barrio_id, experiencia, motivacion
+    FROM public.aplicacion_referidor WHERE id = $1
+"""
+
+
+async def sync_referidor(referidor_id: int) -> Optional[str]:
+    """Lee aplicacion_referidor y empuja a GHL. Mismo patrón que sync_tienda/
+    sync_listing: no-op si no hay credenciales configuradas (siempre el caso
+    hoy — is_configured() corta antes de llegar al stub de arriba)."""
+    if not is_configured():
+        return None
+    pool = get_pool()
+    row = await pool.fetchrow(_REFERIDOR_SELECT, referidor_id)
+    if row is None:
+        return None
+    return await push_referidor_to_ghl(referidor_id, dict(row))

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, GraduationCap } from "lucide-react";
+import { X, GraduationCap } from "@/lib/icons";
 import { SCORE_PALETTES } from "@/config/mapColors";
 
 const LS_KEY = "map_tour_seen";

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Eye, Heart, CalendarClock, Plus, ShieldCheck, Clock, Maximize2, BedDouble, MapPin } from "lucide-react";
+import { Eye, Heart, CalendarClock, Plus, ShieldCheck, Clock, Maximize2, BedDouble, MapPin } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";

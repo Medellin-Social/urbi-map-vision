@@ -5,7 +5,7 @@ import { z } from "zod";
 import {
   ArrowLeft, Lock, Plus, X, ChevronDown, ChevronUp,
   Trophy, MapPin, Clock, Trash2, Home, Building2, BarChart2,
-} from "lucide-react";
+} from "@/lib/icons";
 import { MapNavbar } from "@/components/MapNavbar";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
 import { useBarriosRaw, useCompararRaw } from "@/hooks/useBarrios";

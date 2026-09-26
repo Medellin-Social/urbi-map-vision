@@ -34,7 +34,7 @@ import {
   Activity,
   Target,
   X,
-} from "lucide-react";
+} from "@/lib/icons";
 import type { NomadaBreakdown } from "@/lib/adapters";
 import type { Neighborhood } from "@/lib/adapters";
 import { LIQUIDITY_COLORS } from "@/data/marketActivity";

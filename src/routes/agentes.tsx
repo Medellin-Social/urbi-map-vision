@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { MapPin, MessageCircle, Users, ArrowRight, Search, Star, ShieldCheck, HelpCircle } from "lucide-react";
+import { MapPin, MessageCircle, Users, ArrowRight, Search, Star, ShieldCheck, HelpCircle } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";

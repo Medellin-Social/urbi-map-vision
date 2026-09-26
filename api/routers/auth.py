@@ -34,6 +34,7 @@ class RegisterRequest(BaseModel):
     password: str = Field(min_length=8)
     nombre: Optional[str] = None
     apellido: Optional[str] = None
+    telefono: Optional[str] = None
     origen: Optional[str] = None  # 'mls' | 'comunidad'
 
     _normalizar_email = field_validator("email")(_normalizar_email)
@@ -55,6 +56,7 @@ class UserBasic(BaseModel):
     email: str
     nombre: Optional[str]
     apellido: Optional[str]
+    telefono: Optional[str] = None
     plan: Optional[str] = "free"
     es_agente: Optional[bool] = False
     perfil_busqueda: Optional[str] = None
@@ -135,11 +137,11 @@ async def register(request: Request, req: RegisterRequest = Body(...)):
     password_hash = _hash_password(req.password)
     user_id = await pool.fetchval(
         """
-        INSERT INTO usuarios (email, password_hash, nombre, apellido, origen_registro)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO usuarios (email, password_hash, nombre, apellido, telefono, origen_registro)
+        VALUES ($1, $2, $3, $4, $5, $6)
         RETURNING id
         """,
-        req.email, password_hash, req.nombre, req.apellido, req.origen,
+        req.email, password_hash, req.nombre, req.apellido, req.telefono, req.origen,
     )
 
     # Send verification email (best-effort — don't block registration on SMTP failure)
@@ -164,7 +166,7 @@ async def register(request: Request, req: RegisterRequest = Body(...)):
         token=token,
         user=UserBasic(
             id=user_id, email=req.email, nombre=req.nombre, apellido=req.apellido,
-            origen_registro=req.origen,
+            telefono=req.telefono, origen_registro=req.origen,
         ),
     )
 
@@ -346,7 +348,8 @@ async def refresh_token(
 # ── Email verification ────────────────────────────────────────────────────────
 
 @router.get("/verify-email", status_code=200)
-async def verify_email(token: str):
+@limiter.limit("10/minute")
+async def verify_email(request: Request, token: str):
     pool = get_pool()
     row = await pool.fetchrow(
         "SELECT usuario_id, expires_at, used FROM email_verification_tokens WHERE token = $1",

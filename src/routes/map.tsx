@@ -24,7 +24,7 @@ import { ListingPopup } from "@/components/listing-popup/ListingPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
 import { MapTourModal } from "@/components/MapTourModal";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { List, Map as MapIcon } from "lucide-react";
+import { List, Map as MapIcon } from "@/lib/icons";
 import { AnimatePresence } from "framer-motion";
 
 export const Route = createFileRoute("/map")({

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "@tanstack/react-router";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, Check } from "lucide-react";
+import { X, Check } from "@/lib/icons";
 import { toast } from "sonner";
 import { auth, type PerfilBusqueda } from "@/lib/auth";
 import { useMe, useUpdateAuthPerfil } from "@/hooks/useAuth";
