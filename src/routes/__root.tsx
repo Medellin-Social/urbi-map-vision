@@ -42,7 +42,7 @@ function NotFoundComponent() {
     <div
       className="paper-theme"
       style={{
-        minHeight: "100vh",
+        minHeight: "100dvh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
@@ -108,7 +108,9 @@ export const Route = createRootRoute({
   head: () => ({
     meta: [
       { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1" },
+      { name: "viewport", content: "width=device-width, initial-scale=1, viewport-fit=cover" },
+      { name: "apple-mobile-web-app-capable", content: "yes" },
+      { name: "apple-mobile-web-app-status-bar-style", content: "black-translucent" },
       { title: "Medellín Social · Where Smart Investors Meet Local Culture" },
       { name: "description", content: "The only platform that combines real estate intelligence with authentic local experiences in Medellín and the Aburrá Valley." },
       { name: "author", content: "Medellín Social" },

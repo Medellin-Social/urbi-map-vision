@@ -1608,7 +1608,7 @@ function PublicarPage() {
   const stepProps = { data: form, setData };
 
   return (
-    <div style={{ background: K.paper, minHeight: "100vh", padding: "0 0 60px" }}>
+    <div style={{ background: K.paper, minHeight: "100dvh", padding: "0 0 60px" }}>
       {/* Header */}
       <div
         style={{

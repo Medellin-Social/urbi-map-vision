@@ -237,6 +237,14 @@ body {
   border-color: #D3C7AF !important;
 }
 
+/* ── Safari / iOS: dvh override ────────────────────────────────────────────
+   100vh in iOS Safari includes the address bar height, cutting off the page.
+   100dvh tracks the actual visible viewport. Safari 15.4+ supports dvh.     */
+@supports (height: 100dvh) {
+  .h-screen    { height: 100dvh; }
+  .min-h-screen { min-height: 100dvh; }
+}
+
 /* Loading veil — indeterminate teal bar (LoadingVeil component) */
 .load-bar {
   width: 132px; height: 3px; border-radius: 2px;

@@ -283,7 +283,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
               width: size.width,
               height: size.height,
               minHeight: 200,
-              maxHeight: `calc(100vh - ${pos.top + 20}px)`,
+              maxHeight: `calc(100dvh - ${pos.top + 20}px)`,
               background: '#FAF7F2',
               border: '0.5px solid #E8E0D0',
               boxShadow: '0 8px 32px rgba(26,18,8,0.15)',

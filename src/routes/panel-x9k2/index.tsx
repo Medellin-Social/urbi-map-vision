@@ -64,11 +64,11 @@ function AdminPanel() {
     }
   }, [gate.error, navigate]);
 
-  if (gate.isLoading) return <div style={{ background: K.paper, minHeight: "100vh" }} />;
+  if (gate.isLoading) return <div style={{ background: K.paper, minHeight: "100dvh" }} />;
   if (gate.error) return null; // redirigiendo
 
   return (
-    <div style={{ background: K.paper, minHeight: "100vh" }}>
+    <div style={{ background: K.paper, minHeight: "100dvh" }}>
       <header className="border-b" style={{ borderColor: K.line, background: "#FFFFFF" }}>
         <div className="mx-auto flex max-w-6xl items-center justify-between px-4 py-4">
           <h1 className="text-xl font-bold" style={{ fontFamily: K.serif, color: K.ink }}>Panel de administración</h1>

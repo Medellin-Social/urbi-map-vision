@@ -79,7 +79,7 @@ function MisPropiedades() {
   const totVisitas = props.reduce((s, p) => s + p.visitas_pendientes, 0);
 
   return (
-    <div style={{ background: K.paper, minHeight: "100vh" }}>
+    <div style={{ background: K.paper, minHeight: "100dvh" }}>
       <SiteNavbar />
       {/* pt-24 despeja el SiteNavbar fijo */}
       <div className="mx-auto max-w-3xl px-4 pb-16 pt-24">

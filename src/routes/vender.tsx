@@ -148,7 +148,7 @@ function VenderPage() {
   const [intencion, setIntencion] = useState<Intencion>(null);
 
   return (
-    <div style={{ background: K.paper, minHeight: "100vh" }}>
+    <div style={{ background: K.paper, minHeight: "100dvh" }}>
       <style>{`
         .vender-hero-grid { display: grid; grid-template-columns: 55fr 45fr; }
         @media (max-width: 720px) {

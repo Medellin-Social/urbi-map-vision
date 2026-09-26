@@ -58,7 +58,7 @@ function Inner({ children, subNav, compact }: { children: ReactNode; subNav?: Re
       background: '#fbf9f3',
       color: '#14201d',
       fontFamily: "'Inter', system-ui, sans-serif",
-      minHeight: '100vh',
+      minHeight: '100dvh',
       display: 'flex',
       flexDirection: 'column',
     }}>

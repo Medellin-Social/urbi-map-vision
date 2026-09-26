@@ -209,7 +209,7 @@ export function AuthShell({
           font-weight: 400;
         }
       `}</style>
-      <div style={{ display: "flex", minHeight: "100vh", background: K.paper, fontFamily: K.manrope }}>
+      <div style={{ display: "flex", minHeight: "100dvh", background: K.paper, fontFamily: K.manrope }}>
         {/* Left editorial column — desktop only */}
         <div
           className="hidden lg:flex"
