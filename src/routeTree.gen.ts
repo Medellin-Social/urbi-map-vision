@@ -42,6 +42,10 @@ import { Route as SuscripcionCanceladaRouteImport } from './routes/suscripcion/c
 import { Route as RealtorDashboardRouteImport } from './routes/realtor/dashboard'
 import { Route as RealtorAgencyDashboardRouteImport } from './routes/realtor/agency-dashboard'
 import { Route as RealtorAcceptInviteRouteImport } from './routes/realtor/accept-invite'
+import { Route as PlanesListingMemberRouteImport } from './routes/planes_.listing-member'
+import { Route as PlanesHotSpotRouteImport } from './routes/planes_.hot-spot'
+import { Route as PlanesFeaturedRealtorRouteImport } from './routes/planes_.featured-realtor'
+import { Route as PlanesDealRouteImport } from './routes/planes_.deal'
 import { Route as NegociosUnirseRouteImport } from './routes/negocios/unirse'
 import { Route as LoginVerificarRouteImport } from './routes/login_.verificar'
 import { Route as LocalBusinessBarrio_slugRouteImport } from './routes/local-business/$barrio_slug'
@@ -214,6 +218,26 @@ const RealtorAcceptInviteRoute = RealtorAcceptInviteRouteImport.update({
   path: '/realtor/accept-invite',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PlanesListingMemberRoute = PlanesListingMemberRouteImport.update({
+  id: '/planes_/listing-member',
+  path: '/planes/listing-member',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanesHotSpotRoute = PlanesHotSpotRouteImport.update({
+  id: '/planes_/hot-spot',
+  path: '/planes/hot-spot',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanesFeaturedRealtorRoute = PlanesFeaturedRealtorRouteImport.update({
+  id: '/planes_/featured-realtor',
+  path: '/planes/featured-realtor',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PlanesDealRoute = PlanesDealRouteImport.update({
+  id: '/planes_/deal',
+  path: '/planes/deal',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const NegociosUnirseRoute = NegociosUnirseRouteImport.update({
   id: '/negocios/unirse',
   path: '/negocios/unirse',
@@ -280,6 +304,10 @@ export interface FileRoutesByFullPath {
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/login/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/planes/deal': typeof PlanesDealRoute
+  '/planes/featured-realtor': typeof PlanesFeaturedRealtorRoute
+  '/planes/hot-spot': typeof PlanesHotSpotRoute
+  '/planes/listing-member': typeof PlanesListingMemberRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
@@ -321,6 +349,10 @@ export interface FileRoutesByTo {
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/login/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/planes/deal': typeof PlanesDealRoute
+  '/planes/featured-realtor': typeof PlanesFeaturedRealtorRoute
+  '/planes/hot-spot': typeof PlanesHotSpotRoute
+  '/planes/listing-member': typeof PlanesListingMemberRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
@@ -363,6 +395,10 @@ export interface FileRoutesById {
   '/local-business/$barrio_slug': typeof LocalBusinessBarrio_slugRoute
   '/login_/verificar': typeof LoginVerificarRoute
   '/negocios/unirse': typeof NegociosUnirseRoute
+  '/planes_/deal': typeof PlanesDealRoute
+  '/planes_/featured-realtor': typeof PlanesFeaturedRealtorRoute
+  '/planes_/hot-spot': typeof PlanesHotSpotRoute
+  '/planes_/listing-member': typeof PlanesListingMemberRoute
   '/realtor/accept-invite': typeof RealtorAcceptInviteRoute
   '/realtor/agency-dashboard': typeof RealtorAgencyDashboardRoute
   '/realtor/dashboard': typeof RealtorDashboardRoute
@@ -406,6 +442,10 @@ export interface FileRouteTypes {
     | '/local-business/$barrio_slug'
     | '/login/verificar'
     | '/negocios/unirse'
+    | '/planes/deal'
+    | '/planes/featured-realtor'
+    | '/planes/hot-spot'
+    | '/planes/listing-member'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
@@ -447,6 +487,10 @@ export interface FileRouteTypes {
     | '/local-business/$barrio_slug'
     | '/login/verificar'
     | '/negocios/unirse'
+    | '/planes/deal'
+    | '/planes/featured-realtor'
+    | '/planes/hot-spot'
+    | '/planes/listing-member'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
@@ -488,6 +532,10 @@ export interface FileRouteTypes {
     | '/local-business/$barrio_slug'
     | '/login_/verificar'
     | '/negocios/unirse'
+    | '/planes_/deal'
+    | '/planes_/featured-realtor'
+    | '/planes_/hot-spot'
+    | '/planes_/listing-member'
     | '/realtor/accept-invite'
     | '/realtor/agency-dashboard'
     | '/realtor/dashboard'
@@ -530,6 +578,10 @@ export interface RootRouteChildren {
   LocalBusinessBarrio_slugRoute: typeof LocalBusinessBarrio_slugRoute
   LoginVerificarRoute: typeof LoginVerificarRoute
   NegociosUnirseRoute: typeof NegociosUnirseRoute
+  PlanesDealRoute: typeof PlanesDealRoute
+  PlanesFeaturedRealtorRoute: typeof PlanesFeaturedRealtorRoute
+  PlanesHotSpotRoute: typeof PlanesHotSpotRoute
+  PlanesListingMemberRoute: typeof PlanesListingMemberRoute
   RealtorAcceptInviteRoute: typeof RealtorAcceptInviteRoute
   RealtorAgencyDashboardRoute: typeof RealtorAgencyDashboardRoute
   RealtorDashboardRoute: typeof RealtorDashboardRoute
@@ -771,6 +823,34 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof RealtorAcceptInviteRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/planes_/listing-member': {
+      id: '/planes_/listing-member'
+      path: '/planes/listing-member'
+      fullPath: '/planes/listing-member'
+      preLoaderRoute: typeof PlanesListingMemberRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planes_/hot-spot': {
+      id: '/planes_/hot-spot'
+      path: '/planes/hot-spot'
+      fullPath: '/planes/hot-spot'
+      preLoaderRoute: typeof PlanesHotSpotRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planes_/featured-realtor': {
+      id: '/planes_/featured-realtor'
+      path: '/planes/featured-realtor'
+      fullPath: '/planes/featured-realtor'
+      preLoaderRoute: typeof PlanesFeaturedRealtorRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/planes_/deal': {
+      id: '/planes_/deal'
+      path: '/planes/deal'
+      fullPath: '/planes/deal'
+      preLoaderRoute: typeof PlanesDealRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/negocios/unirse': {
       id: '/negocios/unirse'
       path: '/negocios/unirse'
@@ -850,6 +930,10 @@ const rootRouteChildren: RootRouteChildren = {
   LocalBusinessBarrio_slugRoute: LocalBusinessBarrio_slugRoute,
   LoginVerificarRoute: LoginVerificarRoute,
   NegociosUnirseRoute: NegociosUnirseRoute,
+  PlanesDealRoute: PlanesDealRoute,
+  PlanesFeaturedRealtorRoute: PlanesFeaturedRealtorRoute,
+  PlanesHotSpotRoute: PlanesHotSpotRoute,
+  PlanesListingMemberRoute: PlanesListingMemberRoute,
   RealtorAcceptInviteRoute: RealtorAcceptInviteRoute,
   RealtorAgencyDashboardRoute: RealtorAgencyDashboardRoute,
   RealtorDashboardRoute: RealtorDashboardRoute,

@@ -3,17 +3,17 @@
  * Pega cada URL cuando esté lista en GHL — mientras esté vacía usa el fallback.
  */
 export const GHL = {
-  /** Listing Destacado — pago único $1,000 USD por listing */
-  listing: "",
-  // ej: "https://checkout.medellin.social/listing-destacado"
+  /** Listing Member — $149/mo especial */
+  listing_member: "",
 
-  /** Agente de Zona — barrio $200 USD/mes */
-  agente_barrio: "",
-  // ej: "https://checkout.medellin.social/agente-barrio"
+  /** Featured Realtor — $299/mo especial */
+  featured_realtor: "",
 
-  /** Agente de Zona — comuna $1,000 USD/mes */
-  agente_comuna: "",
-  // ej: "https://checkout.medellin.social/agente-comuna"
+  /** Hot Spot — $199/mo especial, negocio local */
+  hot_spot: "",
+
+  /** Deal/Convenio — $29/mo por deal activo */
+  deal: "",
 };
 
 /**
