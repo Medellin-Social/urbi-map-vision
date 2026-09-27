@@ -118,14 +118,16 @@ async def get_eventos_todos(
 
 
 # "Comuna" de un barrio: la real (Medellín, analytics.barrios_cd) o, para los otros
-# municipios del Valle de Aburrá (sin comunas), el pseudo-código 101-105 del municipio —
+# municipios del Valle de Aburrá (sin comunas), el pseudo-código 101-109 del municipio —
 # mismo mapeo que admin.py::_MUNICIPIO_A_PSEUDO_COMUNA y comunidad.py::_MUNICIPIO_TOTAL_COUNTS_QUERY.
 def _zona_comuna_de(barrio_param: str) -> str:
     return f"""COALESCE(
         (SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc WHERE bc.barrio_id = {barrio_param}),
         (SELECT CASE bx.municipio
             WHEN 'BELLO' THEN '101' WHEN 'ENVIGADO' THEN '102' WHEN 'ITAGUI' THEN '103'
-            WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105' END
+            WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105'
+            WHEN 'CALDAS' THEN '106' WHEN 'COPACABANA' THEN '107'
+            WHEN 'GIRARDOTA' THEN '108' WHEN 'BARBOSA' THEN '109' END
          FROM raw.barrios bx WHERE bx.id = {barrio_param})
     )"""
 
@@ -379,7 +381,9 @@ _DESTACADO_MUNICIPIO_TIENDA = """COALESCE(
         OR t.destacado_nivel = 'ciudad'
         OR (t.destacado_nivel = 'comuna' AND t.destacado_zona_codigo = CASE UPPER($1)
               WHEN 'BELLO' THEN '101' WHEN 'ENVIGADO' THEN '102' WHEN 'ITAGUI' THEN '103'
-              WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105' END)
+              WHEN 'SABANETA' THEN '104' WHEN 'LA ESTRELLA' THEN '105'
+              WHEN 'CALDAS' THEN '106' WHEN 'COPACABANA' THEN '107'
+              WHEN 'GIRARDOTA' THEN '108' WHEN 'BARBOSA' THEN '109' END)
     ),
     FALSE
 )"""
@@ -667,7 +671,7 @@ async def get_municipio_tiendas_counts(municipio: str, pool=Depends(get_pool)):
 
 
 # ── Densidad de negocios por comuna — colorea el mapa de zonas en /local-business ─
-# cd_comuna 1-16 = comunas de Medellín, 101-105 = municipios del Valle de Aburrá
+# cd_comuna 1-16 = comunas de Medellín, 101-109 = municipios del Valle de Aburrá
 # (mismo esquema que api/routers/comunas.py::get_comunas_geojson).
 
 _COMUNA_TOTAL_COUNTS_QUERY = """
@@ -687,12 +691,16 @@ SELECT
         WHEN 'ITAGUI'      THEN 103
         WHEN 'SABANETA'    THEN 104
         WHEN 'LA ESTRELLA' THEN 105
+        WHEN 'CALDAS'      THEN 106
+        WHEN 'COPACABANA'  THEN 107
+        WHEN 'GIRARDOTA'   THEN 108
+        WHEN 'BARBOSA'     THEN 109
     END AS cd_comuna,
     COUNT(*)::int AS total
 FROM public.tiendas t
 JOIN raw.barrios b ON t.barrio_id = b.id
 WHERE t.activo = TRUE
-  AND b.municipio IN ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA')
+  AND b.municipio IN ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA', 'CALDAS', 'COPACABANA', 'GIRARDOTA', 'BARBOSA')
 GROUP BY b.municipio
 """
 

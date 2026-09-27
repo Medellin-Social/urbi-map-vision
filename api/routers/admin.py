@@ -919,6 +919,7 @@ _NIVELES_DESTACADO = ("barrio", "comuna", "ciudad")
 # comunas.py para colorear el mapa. Así "comuna" cubre los 10 municipios, no solo Medellín.
 _MUNICIPIO_A_PSEUDO_COMUNA = {
     "BELLO": "101", "ENVIGADO": "102", "ITAGUI": "103", "SABANETA": "104", "LA ESTRELLA": "105",
+    "CALDAS": "106", "COPACABANA": "107", "GIRARDOTA": "108", "BARBOSA": "109",
 }
 _PSEUDO_COMUNA_A_MUNICIPIO = {v: k for k, v in _MUNICIPIO_A_PSEUDO_COMUNA.items()}
 

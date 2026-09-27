@@ -59,6 +59,10 @@ SELECT
         WHEN 'ITAGUI'      THEN 103
         WHEN 'SABANETA'    THEN 104
         WHEN 'LA ESTRELLA' THEN 105
+        WHEN 'CALDAS'      THEN 106
+        WHEN 'COPACABANA'  THEN 107
+        WHEN 'GIRARDOTA'   THEN 108
+        WHEN 'BARBOSA'     THEN 109
     END                                          AS cd_comuna,
     b.municipio                                  AS comuna,
     ROUND(AVG({score_col}) FILTER (WHERE {score_col} > 0))::int  AS score_promedio,
@@ -83,7 +87,7 @@ LEFT JOIN (
     WHERE barrio_id IS NOT NULL
     GROUP BY barrio_id
 ) lc ON b.id = lc.barrio_id
-WHERE b.municipio IN ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA')
+WHERE b.municipio IN ('BELLO', 'ENVIGADO', 'ITAGUI', 'SABANETA', 'LA ESTRELLA', 'CALDAS', 'COPACABANA', 'GIRARDOTA', 'BARBOSA')
 GROUP BY b.municipio
 ORDER BY b.municipio
 """

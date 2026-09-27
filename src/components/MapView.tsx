@@ -98,19 +98,17 @@ const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", feature
 // encuadren el valle entero sea cual sea el tamaño real del contenedor —
 // un zoom fijo asumía una caja alta como la de /map y en cajas cortas
 // terminaba mostrando solo el norte, con el valle corrido hacia abajo.
-// Home hero: encuadra Bello (extremo norte, lat 6.3623) ↔ La Estrella (extremo
-// sur, lat 6.106) con padding SIMÉTRICO y mapa PLANO (pitch 0). Así ambos
-// polígonos quedan a la misma distancia del borde → el valle queda centrado sea
-// cual sea el alto de pantalla. Con tilt 3D, "misma distancia" es imposible
-// (la perspectiva distorsiona), por eso el hero va plano.
-const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.68, 6.106], [-75.51, 6.3623]];
+// Home hero: encuadra Barbosa (extremo norte, lat 6.52) ↔ Caldas (extremo
+// sur, lat 5.97) con padding SIMÉTRICO y mapa PLANO (pitch 0). Así los 10
+// municipios quedan centrados sea cual sea el alto de pantalla.
+const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.70, 5.97], [-75.20, 6.52]];
 // Zoom at which the polygon tier flips comuna → barrio (matches cluster→points). Knob.
 const POLYGON_TIER_ZOOM = 13;
 // Synthetic barrio ids (non-API fallback) live at/above this — excluded from the layer.
 const _REAL_ID_MAX = 800_000;
 
 // Municipalities not included in map data
-const _HIDDEN_MUNICIPIOS = ["CALDAS", "COPACABANA", "GIRARDOTA", "BARBOSA"];
+const _HIDDEN_MUNICIPIOS: string[] = [];
 
 // Fallback static files for municipio blocks — only fetched when API omits them
 const MUNICIPIO_STATIC: Record<number, string> = {
@@ -119,6 +117,10 @@ const MUNICIPIO_STATIC: Record<number, string> = {
   103: "/data/comunas_itagui.geojson",
   104: "/data/comunas_sabaneta.geojson",
   105: "/data/comunas_la_estrella.geojson",
+  106: "/data/comunas_caldas.geojson",
+  107: "/data/comunas_copacabana.geojson",
+  108: "/data/comunas_girardota.geojson",
+  109: "/data/comunas_barbosa.geojson",
 };
 
 // Calcula los bounds de un feature de Mapbox
@@ -496,8 +498,8 @@ export function MapView({
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: MAP_STYLES[styleId]?.url ?? "mapbox://styles/mapbox/streets-v12",
-      // fitValle (home hero): fitBounds Bello↔La Estrella, plano y simétrico → el
-      // valle queda centrado (polígonos extremos equidistantes del borde). El
+      // fitValle (home hero): fitBounds 10 municipios Valle de Aburrá, plano y simétrico → el
+      // valle queda centrado. El
       // container ya NO usa min-h-screen, así fitBounds mide la caja real y no
       // recorta el sur. Se re-encuadra en 'load' con el tamaño ya asentado.
       ...(fitValleRef.current
