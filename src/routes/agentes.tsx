@@ -1,13 +1,18 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { MapPin, MessageCircle, Users, ArrowRight, Search, Star, ShieldCheck, HelpCircle } from "@/lib/icons";
+import { MapPin, MessageCircle, Users, ArrowRight, Search, Star, ShieldCheck, HelpCircle, X, Home, Calendar, CheckCircle } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { auth } from "@/lib/auth";
 
+type AgentesSearch = { agente?: string };
+
 export const Route = createFileRoute("/agentes")({
+  validateSearch: (s: Record<string, unknown>): AgentesSearch => ({
+    agente: typeof s.agente === "string" ? s.agente : undefined,
+  }),
   component: AgentesPage,
 });
 
@@ -59,11 +64,20 @@ const FAQ: { q: string; a: string }[] = [
   },
 ];
 
-function waLink(a: Agente): string {
-  const tel = a.telefono.replace(/\D/g, "");
+function waFromTel(telefono: string, nombre: string): string {
+  const tel = telefono.replace(/\D/g, "");
   const num = tel.startsWith("57") ? tel : `57${tel}`;
-  const text = encodeURIComponent(`Hola ${a.nombre}, quiero información sobre propiedades.`);
+  const text = encodeURIComponent(`Hola ${nombre}, quiero información sobre propiedades.`);
   return `https://wa.me/+${num}?text=${text}`;
+}
+
+function waLink(a: Agente): string {
+  return waFromTel(a.telefono, a.nombre);
+}
+
+function fmtPrecio(v: number | null | undefined, moneda = "COP"): string {
+  if (v == null) return "";
+  return new Intl.NumberFormat("es-CO", { style: "currency", currency: moneda, maximumFractionDigits: 0 }).format(v);
 }
 
 function Stars({ value, size = 14 }: { value: number; size?: number }) {
@@ -162,7 +176,214 @@ function ResenaForm({ agentId, onDone }: { agentId: string; onDone: () => void }
   );
 }
 
-function AgenteRow({ a }: { a: Agente }) {
+type PerfilListing = {
+  id: string; slug: string | null; titulo: string | null; precio: number | null;
+  moneda: string; operacion: string | null; tipo_inmueble: string | null;
+  area_m2: number | null; habitaciones: number | null; banos: number | null;
+  municipio: string | null; barrio: string | null; foto_portada: string | null;
+};
+type PerfilResena = { calificacion: number; comentario: string | null; autor: string; created_at: string | null };
+type PerfilZona = { nivel: string; nombre: string | null };
+type AgentePerfil = {
+  id: string; nombre: string; foto_url: string | null; bio: string | null;
+  telefono: string | null; agencia_nombre: string | null; agencia_verificada: boolean;
+  miembro_desde: string | null; rating_promedio: number | null; n_resenas: number;
+  zonas: PerfilZona[]; activos: PerfilListing[]; cierres: PerfilListing[];
+  n_activos: number; n_cierres: number; precio_min: number | null; precio_max: number | null;
+  resenas: PerfilResena[];
+};
+
+function ListingMini({ l, cerrado }: { l: PerfilListing; cerrado?: boolean }) {
+  return (
+    <div className="overflow-hidden rounded-xl" style={{ border: `1px solid ${K.line}`, background: "#FFFFFF" }}>
+      <div className="relative aspect-[4/3] w-full" style={{ background: K.tealLight }}>
+        {l.foto_portada
+          ? <img src={l.foto_portada} alt={l.titulo ?? ""} className="h-full w-full object-cover" />
+          : <div className="grid h-full w-full place-items-center"><Home className="h-8 w-8" style={{ color: K.teal }} /></div>}
+        {cerrado && (
+          <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white" style={{ background: K.tealDeep }}>
+            <CheckCircle className="h-3 w-3" /> Cerrado
+          </span>
+        )}
+      </div>
+      <div className="p-2.5">
+        <div className="text-sm font-bold" style={{ color: K.ink }}>{fmtPrecio(l.precio, l.moneda)}</div>
+        {l.titulo && <div className="mt-0.5 truncate text-xs" style={{ color: K.muted }}>{l.titulo}</div>}
+        <div className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: K.muted }}>
+          <MapPin className="h-3 w-3" /> {[l.barrio, l.municipio].filter(Boolean).join(", ") || "Medellín"}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: K.paper, border: `1px solid ${K.line}` }}>
+      <div className="text-lg font-bold" style={{ color: K.tealDeep, fontFamily: K.serif }}>{value}</div>
+      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: K.muted }}>{label}</div>
+    </div>
+  );
+}
+
+// Perfil tipo Zillow: bio/foto que el agente escribe + su actividad in-platform
+// (activos + cierres) auto-agregada + reseñas. Cierres vacío es honesto: hasta
+// que el agente cierre listings en la plataforma, no hay historial que mostrar.
+function AgentePerfilModal({ agentId, onClose }: { agentId: string; onClose: () => void }) {
+  const { data: p, isLoading, isError } = useQuery<AgentePerfil>({
+    queryKey: ["agente-perfil", agentId],
+    queryFn: () => apiFetch<AgentePerfil>(API_ENDPOINTS.agentePerfil(agentId)),
+  });
+  const iniciales = p?.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase() ?? "";
+  const anioMiembro = p?.miembro_desde ? new Date(p.miembro_desde).getFullYear() : null;
+  const rango = p && p.precio_min != null && p.precio_max != null
+    ? (p.precio_min === p.precio_max ? fmtPrecio(p.precio_min) : `${fmtPrecio(p.precio_min)} – ${fmtPrecio(p.precio_max)}`)
+    : "—";
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto p-4 sm:p-8"
+      style={{ background: "rgba(26,18,8,0.55)" }}
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-2xl rounded-2xl"
+        style={{ background: K.paper, border: `1px solid ${K.line}` }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          onClick={onClose}
+          aria-label="Cerrar"
+          className="absolute right-3 top-3 z-10 grid h-8 w-8 place-items-center rounded-full transition hover:opacity-80"
+          style={{ background: "#FFFFFF", border: `1px solid ${K.line}`, color: K.ink }}
+        >
+          <X className="h-4 w-4" />
+        </button>
+
+        {isLoading && <div className="p-10 text-center text-sm" style={{ color: K.muted }}>Cargando perfil…</div>}
+        {isError && <div className="p-10 text-center text-sm" style={{ color: "#C0392B" }}>No se pudo cargar el perfil.</div>}
+
+        {p && (
+          <div className="p-5 sm:p-7">
+            {/* Header */}
+            <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
+              <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl" style={{ background: K.tealLight }}>
+                {p.foto_url
+                  ? <img src={p.foto_url} alt={p.nombre} className="h-full w-full object-cover" />
+                  : <span className="text-2xl font-bold" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales}</span>}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="text-2xl font-bold leading-tight tracking-tight" style={{ color: K.ink, fontFamily: K.serif }}>{p.nombre}</div>
+                {p.rating_promedio != null ? (
+                  <div className="mt-0.5 flex items-center gap-1.5">
+                    <Stars value={p.rating_promedio} />
+                    <span className="text-xs font-semibold" style={{ color: K.ink }}>{p.rating_promedio.toFixed(1)}</span>
+                    <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>({p.n_resenas} reseña{p.n_resenas === 1 ? "" : "s"})</span>
+                  </div>
+                ) : (
+                  <div className="mt-0.5 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>
+                )}
+                <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {p.agencia_nombre && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                      style={p.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: "#F5F0E8", color: K.muted }}
+                    >
+                      {p.agencia_verificada && <ShieldCheck className="h-3 w-3" />} {p.agencia_nombre}
+                    </span>
+                  )}
+                  {anioMiembro && (
+                    <span className="inline-flex items-center gap-1 text-[11px]" style={{ color: K.muted }}>
+                      <Calendar className="h-3 w-3" /> Miembro desde {anioMiembro}
+                    </span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Bio */}
+            <p className="mt-4 text-sm leading-relaxed" style={{ color: p.bio ? K.ink : K.muted }}>
+              {p.bio || "Este agente aún no agregó una descripción."}
+            </p>
+
+            {/* Stats */}
+            <div className="mt-4 grid grid-cols-3 gap-2">
+              <Stat label="Cierres" value={String(p.n_cierres)} />
+              <Stat label="Activos" value={String(p.n_activos)} />
+              <Stat label="Rango" value={rango} />
+            </div>
+
+            {/* Zonas */}
+            {p.zonas.length > 0 && (
+              <div className="mt-4 flex flex-wrap gap-1.5">
+                {p.zonas.map((z) => (
+                  <span key={`${z.nivel}-${z.nombre}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}>
+                    <MapPin className="h-3 w-3" /> {z.nombre}
+                  </span>
+                ))}
+              </div>
+            )}
+
+            {/* Activos */}
+            {p.activos.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-bold" style={{ color: K.ink }}>Propiedades activas</h3>
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {p.activos.map((l) => <ListingMini key={l.id} l={l} />)}
+                </div>
+              </div>
+            )}
+
+            {/* Cierres — empty-state honesto */}
+            <div className="mt-6">
+              <h3 className="mb-2 text-sm font-bold" style={{ color: K.ink }}>Cierres</h3>
+              {p.cierres.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {p.cierres.map((l) => <ListingMini key={l.id} l={l} cerrado />)}
+                </div>
+              ) : (
+                <p className="text-xs" style={{ color: K.muted }}>Aún no registra cierres en la plataforma.</p>
+              )}
+            </div>
+
+            {/* Reseñas */}
+            {p.resenas.length > 0 && (
+              <div className="mt-6">
+                <h3 className="mb-2 text-sm font-bold" style={{ color: K.ink }}>Reseñas</h3>
+                <div className="flex flex-col gap-3">
+                  {p.resenas.map((r, i) => (
+                    <div key={i} className="rounded-xl p-3" style={{ background: "#FFFFFF", border: `1px solid ${K.line}` }}>
+                      <div className="flex items-center gap-2">
+                        <Stars value={r.calificacion} size={12} />
+                        <span className="text-xs font-semibold" style={{ color: K.ink }}>{r.autor}</span>
+                      </div>
+                      {r.comentario && <p className="mt-1 text-[13px] leading-relaxed" style={{ color: K.muted }}>{r.comentario}</p>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Contacto — WhatsApp (nunca email) */}
+            {p.telefono && (
+              <a
+                href={waFromTel(p.telefono, p.nombre)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-6 flex items-center justify-center gap-2 rounded-xl px-5 py-3 text-sm font-semibold text-white transition hover:opacity-90"
+                style={{ background: K.tealDeep }}
+              >
+                <MessageCircle className="h-4 w-4" /> Contactar por WhatsApp
+              </a>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function AgenteRow({ a, onOpen }: { a: Agente; onOpen: () => void }) {
   const iniciales = a.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
   const [zonaPrincipal, ...zonasExtra] = a.zonas;
   const [reseñando, setReseñando] = useState(false);
@@ -174,16 +395,16 @@ function AgenteRow({ a }: { a: Agente }) {
       style={{ borderColor: K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}
     >
       <div className="flex flex-col items-start gap-4 sm:flex-row sm:items-center">
-        <div className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl" style={{ background: K.tealLight }}>
+        <button onClick={onOpen} aria-label={`Ver perfil de ${a.nombre}`} className="grid h-24 w-24 shrink-0 place-items-center overflow-hidden rounded-2xl transition hover:opacity-90" style={{ background: K.tealLight }}>
           {a.foto_url
             ? <img src={a.foto_url} alt={a.nombre} className="h-full w-full object-cover" />
             : iniciales
             ? <span className="text-2xl font-bold" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales}</span>
             : <Users className="h-9 w-9" style={{ color: K.teal }} />}
-        </div>
+        </button>
 
         <div className="min-w-0 flex-1">
-          <div className="text-2xl font-bold leading-tight tracking-tight" style={{ color: K.ink, fontFamily: K.serif }}>{a.nombre}</div>
+          <button onClick={onOpen} className="text-left text-2xl font-bold leading-tight tracking-tight transition hover:opacity-70" style={{ color: K.ink, fontFamily: K.serif }}>{a.nombre}</button>
 
           {a.rating_promedio != null ? (
             <div className="mt-0.5 flex items-center gap-1.5">
@@ -232,6 +453,9 @@ function AgenteRow({ a }: { a: Agente }) {
           >
             <MessageCircle className="h-4 w-4" /> Contactar por WhatsApp
           </a>
+          <button onClick={onOpen} className="text-center text-xs font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
+            Ver perfil completo
+          </button>
           {!reseñando && (
             logueado ? (
               <button onClick={() => setReseñando(true)} className="text-xs font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
@@ -270,6 +494,11 @@ function AgentesPage() {
     queryFn: () => apiFetch<Agente[]>(API_ENDPOINTS.agentesDirectorio),
   });
   const agentes = data ?? [];
+
+  const { agente: agenteAbierto } = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const abrirPerfil = (id: string) => navigate({ search: { agente: id } });
+  const cerrarPerfil = () => navigate({ search: { agente: undefined } });
 
   const [busqueda, setBusqueda] = useState("");
   const [zonaFiltro, setZonaFiltro] = useState("");
@@ -397,7 +626,7 @@ function AgentesPage() {
 
             {visibles.length > 0 && (
               <div className="flex flex-col gap-3">
-                {visibles.map((a) => <AgenteRow key={a.id} a={a} />)}
+                {visibles.map((a) => <AgenteRow key={a.id} a={a} onOpen={() => abrirPerfil(a.id)} />)}
               </div>
             )}
           </div>
@@ -441,6 +670,8 @@ function AgentesPage() {
           </p>
         </div>
       </div>
+
+      {agenteAbierto && <AgentePerfilModal agentId={agenteAbierto} onClose={cerrarPerfil} />}
     </ComunidadLayout>
   );
 }

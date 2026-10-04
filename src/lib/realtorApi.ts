@@ -24,6 +24,7 @@ export type PerfilAgente = {
   id: string;
   nombre: string;
   avatar?: string;
+  bio?: string | null;
   estado: EstadoAgent;
   zonas_patrocinadas: ZonaPatrocinada[];
 };
@@ -213,6 +214,10 @@ export function datosMinimosCompletos(l: ListingDraft): { ok: boolean; faltan: s
 export interface RealtorDashboardApi {
   /** GET /api/v1/realtor/me */
   getPerfil(): Promise<PerfilAgente>;
+  /** PATCH /api/v1/realtor/me — edita bio */
+  editarPerfil(bio: string): Promise<void>;
+  /** POST /api/v1/realtor/me/foto (multipart) — foto de perfil */
+  subirFotoPerfil(file: File): Promise<void>;
   /** GET /api/v1/realtor/asignados */
   getAsignados(): Promise<ItemAsignado[]>;
   /** GET /api/v1/realtor/pool */
@@ -498,6 +503,14 @@ const mockApi: RealtorDashboardApi = {
     await _d(300);
   },
 
+  async editarPerfil(_bio) {
+    await _d(300);
+  },
+
+  async subirFotoPerfil(_file) {
+    await _d(500);
+  },
+
   async subirFotosListing(_listingId, _files) {
     await _d(500);
   },
@@ -538,6 +551,22 @@ const httpApi: RealtorDashboardApi = {
   getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),
   verificarDDItem:      (id, estado, nota) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota }) }),
   actualizarListing:    (id, campos) => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}`, { method: "PATCH", body: JSON.stringify(campos) }),
+  editarPerfil:         (bio)  => apiFetch<void>               (`${API_BASE_URL}/realtor/me`, { method: "PATCH", body: JSON.stringify({ bio }) }),
+  async subirFotoPerfil(file) {
+    // multipart — no puede pasar por apiFetch (fuerza Content-Type JSON)
+    const fd = new FormData();
+    fd.append("foto", file);
+    const t = getToken();
+    const res = await fetch(`${API_BASE_URL}/realtor/me/foto`, {
+      method: "POST",
+      headers: t ? { Authorization: `Bearer ${t}` } : undefined,
+      body: fd,
+    });
+    if (!res.ok) {
+      const b = await res.json().catch(() => ({}));
+      throw new Error((b as { detail?: string }).detail ?? `Error ${res.status}`);
+    }
+  },
   async subirFotosListing(id, files) {
     // multipart — no puede pasar por apiFetch (fuerza Content-Type JSON)
     const fd = new FormData();

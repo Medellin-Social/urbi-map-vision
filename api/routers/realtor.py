@@ -48,7 +48,7 @@ _VISTAS_JOIN = "e.event_type = 'listing_view' AND e.entity_id IN (l.id::text, l.
 async def _agent_del_usuario(user: dict, pool, exigir_activo: bool = True) -> SimpleNamespace:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, estado, usuario_id, nombre, foto_url FROM agent WHERE usuario_id = $1",
+            "SELECT id, estado, usuario_id, nombre, foto_url, bio FROM agent WHERE usuario_id = $1",
             user.get("id"),
         )
     if not row:
@@ -67,6 +67,7 @@ async def perfil(user: dict = Depends(get_current_user), pool=Depends(get_pool))
         "id": str(agent.id),
         "nombre": agent.nombre,
         "avatar": agent.foto_url,
+        "bio": agent.bio,
         "estado": str(agent.estado),
         "zonas_patrocinadas": [
             {"codigo": z["zona_codigo"], "nombre": z["nombre"],
@@ -74,6 +75,47 @@ async def perfil(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             for z in zonas
         ],
     }
+
+
+class PerfilPatchRequest(BaseModel):
+    bio: str | None = Field(default=None, max_length=2000)
+
+
+@router.patch("/me")
+async def editar_perfil(
+    req: PerfilPatchRequest,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Edita el perfil público del agente (por ahora solo bio)."""
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    if req.bio is None:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE agent SET bio = $2, updated_at = NOW() WHERE id = $1",
+            agent.id, req.bio.strip() or None,
+        )
+    return {"id": str(agent.id), "bio": req.bio.strip() or None}
+
+
+@router.post("/me/foto", status_code=201)
+async def subir_foto_perfil(
+    foto: UploadFile,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Sube la foto de perfil del agente a R2 y la fija en agent.foto_url."""
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    if not (foto.filename and foto.size):
+        raise HTTPException(status_code=400, detail="Foto inválida")
+    url = await upload_file(await foto.read(), foto.filename, folder="agentes")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE agent SET foto_url = $2, updated_at = NOW() WHERE id = $1",
+            agent.id, url,
+        )
+    return {"id": str(agent.id), "foto_url": url}
 
 
 @router.get("/asignados")

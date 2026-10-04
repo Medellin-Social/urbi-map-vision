@@ -1841,11 +1841,12 @@ function relativeTime(iso: string): string {
 // ── Horario / disponibilidad del agente (slots de visita, sin Google) ─────────
 // ══ TAB 6: Configuración — horario de visitas + zonas patrocinadas ═════════════
 
-type ConfigSub = "horario" | "zonas";
+type ConfigSub = "perfil" | "horario" | "zonas";
 
 function ConfiguracionTab() {
-  const [sub, setSub] = useState<ConfigSub>("horario");
+  const [sub, setSub] = useState<ConfigSub>("perfil");
   const subTabs: { id: ConfigSub; label: string }[] = [
+    { id: "perfil",  label: "Perfil público" },
     { id: "horario", label: "Horario de visitas" },
     { id: "zonas",   label: "Zonas patrocinadas" },
   ];
@@ -1869,9 +1870,96 @@ function ConfiguracionTab() {
           </button>
         ))}
       </div>
+      {sub === "perfil" && <PerfilTab />}
       {sub === "horario" && <DisponibilidadTab />}
       {sub === "zonas" && <ZonasCompraTab />}
     </section>
+  );
+}
+
+// Perfil público que el agente escribe de sí mismo: foto (R2) + descripción.
+// Se muestra en el popup del directorio /agentes junto a su actividad auto-agregada.
+function PerfilTab() {
+  const { data: perfil } = useRealtorPerfil();
+  const qc = useQueryClient();
+  const [bio, setBio] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const [initd, setInitd] = useState(false);
+
+  useEffect(() => {
+    if (perfil && !initd) { setBio(perfil.bio ?? ""); setInitd(true); }
+  }, [perfil, initd]);
+
+  async function guardarBio() {
+    setSaving(true);
+    try {
+      await realtorApi.editarPerfil(bio.trim());
+      await qc.invalidateQueries({ queryKey: ["realtor", "perfil"] });
+      toast.success("Perfil actualizado");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "No se pudo guardar");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function subirFoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSubiendo(true);
+    try {
+      await realtorApi.subirFotoPerfil(file);
+      await qc.invalidateQueries({ queryKey: ["realtor", "perfil"] });
+      toast.success("Foto actualizada");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "No se pudo subir la foto");
+    } finally {
+      setSubiendo(false);
+      e.target.value = "";
+    }
+  }
+
+  const initials = perfil?.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+
+  return (
+    <div className="max-w-xl">
+      <p className="mb-5 text-sm text-muted-foreground">
+        Así te ven los visitantes en tu perfil público del directorio. Tus propiedades y cierres se muestran solos.
+      </p>
+
+      {/* Foto */}
+      <div className="mb-6 flex items-center gap-4">
+        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-surface text-lg font-semibold text-foreground">
+          {perfil?.avatar
+            ? <img src={perfil.avatar} alt={perfil.nombre} className="h-full w-full object-cover" />
+            : initials}
+        </div>
+        <label className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface">
+          {subiendo ? "Subiendo…" : "Cambiar foto"}
+          <input type="file" accept="image/*" onChange={subirFoto} disabled={subiendo} className="hidden" />
+        </label>
+      </div>
+
+      {/* Bio */}
+      <label className="mb-1.5 block text-sm font-medium text-foreground">Descripción</label>
+      <textarea
+        value={bio}
+        onChange={(e) => setBio(e.target.value)}
+        maxLength={2000}
+        rows={6}
+        placeholder="Cuéntales a los clientes sobre ti: tu experiencia, las zonas que conoces, tu estilo de trabajo."
+        className="w-full resize-none rounded-lg border border-border bg-background p-3 text-sm text-foreground outline-none focus:border-primary"
+      />
+      <div className="mt-1 text-right text-xs text-muted-foreground">{bio.length}/2000</div>
+      <button
+        onClick={guardarBio}
+        disabled={saving}
+        className="mt-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
+      >
+        {saving ? "Guardando…" : "Guardar"}
+      </button>
+    </div>
   );
 }
 

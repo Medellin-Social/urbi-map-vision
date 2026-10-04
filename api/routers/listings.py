@@ -1319,6 +1319,150 @@ async def get_agentes_directorio(request: Request):
     return [AgenteDirectorio(**dict(r)) for r in rows]
 
 
+# ── Perfil público de un agente (tipo Zillow) ─────────────────────────────────
+# Self-descrito (bio, foto) + auto-agregado de su actividad IN-PLATFORM: listings
+# activos + cerrados (sus "cierres"), zonas, reseñas. NO expone email (contacto va
+# por WhatsApp con el teléfono). Cierres = listing.estado='cerrado' del propio
+# agente — self-marcado, no verificado-MLS (no existe ese feed acá). Vacío hasta
+# que agentes registrados creen/cierren listings in-platform.
+# mostrar_exacto: no devolvemos geom ni dirección exacta — solo barrio/municipio,
+# así el mostrar_exacto=false se respeta por omisión.
+class AgentePerfilListing(BaseModel):
+    id: str
+    slug: Optional[str] = None
+    titulo: Optional[str] = None
+    precio: Optional[float] = None
+    moneda: str = "COP"
+    operacion: Optional[str] = None
+    tipo_inmueble: Optional[str] = None
+    area_m2: Optional[float] = None
+    habitaciones: Optional[int] = None
+    banos: Optional[int] = None
+    municipio: Optional[str] = None
+    barrio: Optional[str] = None
+    foto_portada: Optional[str] = None
+
+
+class AgentePerfilResena(BaseModel):
+    calificacion: int
+    comentario: Optional[str] = None
+    autor: str = "Usuario"
+    created_at: Optional[datetime] = None
+
+
+class AgentePerfilZona(BaseModel):
+    nivel: str
+    nombre: Optional[str] = None
+
+
+class AgentePerfil(BaseModel):
+    id: str
+    nombre: str
+    foto_url: Optional[str] = None
+    bio: Optional[str] = None
+    telefono: Optional[str] = None  # para link WhatsApp; email nunca se expone
+    agencia_nombre: Optional[str] = None
+    agencia_verificada: bool = False
+    miembro_desde: Optional[datetime] = None
+    rating_promedio: Optional[float] = None
+    n_resenas: int = 0
+    zonas: list[AgentePerfilZona] = []
+    activos: list[AgentePerfilListing] = []
+    cierres: list[AgentePerfilListing] = []
+    n_activos: int = 0
+    n_cierres: int = 0
+    precio_min: Optional[float] = None
+    precio_max: Optional[float] = None
+    resenas: list[AgentePerfilResena] = []
+
+
+_AGENTE_PERFIL_SQL = """
+SELECT a.id::text, a.nombre, a.foto_url, a.bio, a.telefono, a.created_at AS miembro_desde,
+       agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+FROM agent a
+LEFT JOIN LATERAL (
+    SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
+    FROM agency_member am JOIN agency ag ON ag.id = am.agency_id
+    WHERE am.agent_id = a.id LIMIT 1
+) agcy ON true
+LEFT JOIN (
+    SELECT agent_id, ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio,
+           COUNT(*)::int AS n_resenas
+    FROM agent_review GROUP BY agent_id
+) rev ON rev.agent_id = a.id
+WHERE a.id = $1 AND a.estado = 'activo'
+"""
+
+_AGENTE_PERFIL_LISTINGS_SQL = """
+SELECT l.id::text, l.slug, l.titulo, l.precio::float8 AS precio, l.moneda,
+       l.operacion::text AS operacion, l.tipo_inmueble::text AS tipo_inmueble,
+       l.area_m2::float8 AS area_m2, l.habitaciones, l.banos,
+       l.municipio, l.barrio, l.estado::text AS estado,
+       (SELECT url FROM listing_media m WHERE m.listing_id = l.id AND m.es_portada LIMIT 1) AS foto_portada
+FROM listing l
+WHERE l.agent_id = $1 AND l.estado IN ('publicado', 'cerrado')
+ORDER BY l.updated_at DESC
+"""
+
+_AGENTE_PERFIL_ZONAS_SQL = """
+SELECT DISTINCT s.zona_nivel::text AS nivel,
+       CASE s.zona_nivel
+         WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
+                              JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
+                              WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
+         WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
+         ELSE NULL
+       END AS nombre
+FROM sponsorship s
+JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+"""
+
+_AGENTE_PERFIL_RESENAS_SQL = """
+SELECT r.calificacion, r.comentario, r.created_at,
+       COALESCE(NULLIF(split_part(u.nombre, ' ', 1), ''), 'Usuario') AS autor
+FROM agent_review r
+LEFT JOIN public.usuarios u ON u.id = r.user_id
+WHERE r.agent_id = $1
+ORDER BY r.created_at DESC
+LIMIT 20
+"""
+
+
+@router.get("/agentes/{agent_id}", response_model=AgentePerfil)
+@limiter.limit("60/minute")
+async def get_agente_perfil(request: Request, agent_id: str):
+    """Perfil público de un agente: bio/foto + su actividad in-platform + reseñas."""
+    pool = get_pool()
+    base = await pool.fetchrow(_AGENTE_PERFIL_SQL, agent_id)
+    if not base:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    listings = await pool.fetch(_AGENTE_PERFIL_LISTINGS_SQL, agent_id)
+    zonas = await pool.fetch(_AGENTE_PERFIL_ZONAS_SQL, agent_id)
+    resenas = await pool.fetch(_AGENTE_PERFIL_RESENAS_SQL, agent_id)
+
+    activos, cierres, precios = [], [], []
+    for r in listings:
+        item = AgentePerfilListing(**{k: r[k] for k in r.keys() if k != "estado"})
+        if r["precio"] is not None:
+            precios.append(r["precio"])
+        (cierres if r["estado"] == "cerrado" else activos).append(item)
+
+    return AgentePerfil(
+        id=base["id"], nombre=base["nombre"], foto_url=base["foto_url"], bio=base["bio"],
+        telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
+        agencia_verificada=base["agencia_verificada"], miembro_desde=base["miembro_desde"],
+        rating_promedio=base["rating_promedio"], n_resenas=base["n_resenas"],
+        zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
+               if z["nombre"]],
+        activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
+        precio_min=min(precios) if precios else None,
+        precio_max=max(precios) if precios else None,
+        resenas=[AgentePerfilResena(**dict(r)) for r in resenas],
+    )
+
+
 class ResenaIn(BaseModel):
     calificacion: int = Field(ge=1, le=5)
     comentario: Optional[str] = None

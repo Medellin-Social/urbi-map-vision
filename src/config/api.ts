@@ -34,6 +34,7 @@ export const API_ENDPOINTS = {
   listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
   listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
   agentesDirectorio: `${API_BASE_URL}/listings/agentes`,
+  agentePerfil: (id: string) => `${API_BASE_URL}/listings/agentes/${id}`,
   agenteResenas: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/resenas`,
   listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
   visitas: `${API_BASE_URL}/visitas`,
