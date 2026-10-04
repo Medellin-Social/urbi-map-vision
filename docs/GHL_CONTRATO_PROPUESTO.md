@@ -8,10 +8,48 @@ migraciones reales al momento de fusionar, no es un copy-paste de los
 archivos viejos — donde algo había cambiado o estaba mal, se corrigió (ver
 notas "✅ verificado" / "🔧 corregido" en cada sección).*
 
-**Propuesta, no contrato confirmado en ningún punto** — no se inventa
-picklist ni nombre de campo sin que Talal lo confirme (mismo criterio que
-`_map_choice()` en `api/utils/ghl_client.py`: mejor un campo sin mandar que
-uno inventado que corrompa algo en silencio del lado GHL).
+**Propuesta — primera tanda ya confirmada por Talal (ver bloque siguiente,
+2026-10-03); el resto sigue sin confirmar.** No se inventa picklist ni nombre
+de campo sin que Talal lo confirme (mismo criterio que `_map_choice()` en
+`api/utils/ghl_client.py`: mejor un campo sin mandar que uno inventado que
+corrompa algo en silencio del lado GHL).
+
+---
+
+## ✅ Confirmado por Talal — 2026-10-03
+
+**Tipos de objeto GHL (cierra §9 Q9):** todos nativos, sin Custom Object
+dedicado salvo Property.
+
+| Entidad nuestra | Objeto GHL confirmado |
+|---|---|
+| Agent / Realtor | **Contact** |
+| Property Owner | **Contact** |
+| Agency | **Business / Company** |
+| Local Business (tienda) | **Business / Company** |
+| Property (listing) | **Real Estate Listing — Custom Object** |
+
+- **`POST /contacts` probado → 201 Created** (cierra §9 Q12). Talal ya mandó
+  el JSON standalone de Postman. **Pendiente de nuestro lado:** recibir ese
+  JSON para implementar `find_or_create_contact()` (hoy stub) con el payload
+  exacto — no se infiere sin verlo.
+- **`business_status` NO se crea** (cierra §9 Q8): GHL ya tiene
+  `business_listing_status` (Pending/Approved/Published/Rejected/…) **+**
+  `active` (Yes/No). `business_listing_status` es el campo que porta el estado
+  de moderación; en el inbound (GHL→nosotros) ese valor se consume hacia
+  nuestro `activo` boolean. Se cae la propuesta de §2/§8.
+- **`featured_scope` / `featured_zone_code` NO existen hoy** en los custom
+  fields de Business (responde §9 Q7). Decisión abierta: crearlos si se
+  quiere sync del destacado por alcance, o dejar el destacado solo de nuestro
+  lado.
+- **NO confirmados todavía — no asumir como contrato:** Events (§1), Deals
+  (§3a), Hotspots (§3b), Affiliate/Referral (§6). Siguen siendo propuestas.
+
+**Próximo paso activo:** contrato inbound **GHL → API webhook**. Talal
+configura un test controlado desde GHL y manda el payload real; con eso se
+finaliza el mapeo inbound (`_upsert_*_from_ghl`) y la firma
+(`verificar_webhook`). El código ya está listo para recibir — devuelve 501
+explícito hasta que exista el contrato (`api/routers/ghl_webhook.py`).
 
 ---
 
@@ -101,9 +139,9 @@ custom field en el Business object de GHL.
 
 | Campo GHL propuesto (nuevo) | Columna nuestra | Tipo | Nota |
 |---|---|---|---|
-| `featured_scope` | destacado_nivel | picklist: barrio/comuna/ciudad | mismo campo que evento — reusar si GHL permite compartirlo entre Business y Custom Object |
-| `featured_zone_code` | destacado_zona_codigo | texto | |
-| `business_status` | activo | picklist: pendiente/activo/rechazado* | hoy `activo` es boolean — para reflejar aprobado/rechazado desde GHL hace falta un estado de 3 valores |
+| `featured_scope` | destacado_nivel | picklist: barrio/comuna/ciudad | 🔧 2026-10-03: NO existe hoy en Business (§confirmado). Crear si se quiere sync del destacado |
+| `featured_zone_code` | destacado_zona_codigo | texto | ídem — no existe hoy |
+| ~~`business_status`~~ | ~~activo~~ | — | ❌ 2026-10-03: no se crea. GHL ya tiene `business_listing_status` (Pending/Approved/Published/Rejected) + `active`; en el inbound ese `business_listing_status` → nuestro `activo` |
 
 **Entrada (GHL → nosotros):** `_upsert_tienda_from_ghl` en `ghl_webhook.py`
 ya existe como stub, listo para recibir en cuanto haya contrato.
@@ -173,9 +211,13 @@ Checklist propuesto (nunca antes propuesto a Talal, es nuevo en este doc):
 
 ## 4. Agent / Owner / Agency → Contact / Business
 
+✅ 2026-10-03: tipos de objeto **confirmados** (Agent/Owner=Contact,
+Agency=Business). Falta solo picklist a nivel campo (`agent_status`,
+`agency_type`, §9 Q10-11).
+
 ✅ Verificado: `find_or_create_contact()` sigue siendo stub — no hay ningún
-push de Contact funcionando hoy en todo el código, este es el primer intento
-de definir ese contrato.
+push de Contact funcionando hoy. `POST /contacts` ya probado (201), falta el
+JSON de Postman para implementarlo con el payload exacto.
 
 **Por qué objetos nativos, no Custom Objects:** `agent`/`owner` son
 personas → **Contact**. `agency` es empresa → **Business** (mismo objeto
@@ -238,9 +280,10 @@ de ads son **dos pools sin ningún puente**, en ninguna dirección.
 `usuarios.customer_type` + `ghl_account_mapping` (✅ verificado, migración
 0084) son columnas ya reservadas para esto, sin código que las use todavía.
 
-- **Website → GHL (crear Contact):** el handoff existente solo valida
-  GET/PUT sobre un Contact que ya existe — cero `POST /contacts` probado.
-  Mismo bloqueo circular que Agent/Owner arriba.
+- **Website → GHL (crear Contact):** ✅ 2026-10-03 — `POST /contacts` probado
+  (201 Created), se levanta el bloqueo circular que tenía Agent/Owner. Talal
+  mandó el JSON de Postman; falta recibirlo para implementar
+  `find_or_create_contact()` con el payload exacto.
 - **GHL → nuestra DB (traer leads de ads):** ¿el contrato incluye List/Search
   Contacts filtrable por tag/funnel, o solo GET-por-ID? Si es solo
   GET-por-ID, no hay forma de *descubrir* leads nuevos sin la firma del
@@ -364,7 +407,9 @@ crearse — no inventar los valores, crear como texto libre o esperar.*
 `active`.
 
 **Business (nativo) — nuevos, tienda:** `featured_scope`,
-`featured_zone_code`, `business_status` (picklist*).
+`featured_zone_code` (🔧 2026-10-03: confirmados como NO existentes hoy —
+crear solo si se quiere sync del destacado). `business_status` ❌ descartado
+(GHL ya tiene `business_listing_status` + `active`).
 
 **Business (nativo) — nuevos, agency:** `agency_nit`, `agency_type`
 (picklist*), `agency_verified`, `agency_plan`, `agency_internal_id`.
@@ -405,17 +450,20 @@ agente↔agencia (la de listing↔agency ya existe).
    hay una URL por tipo?
 
 **Negocios locales (tienda):**
-7. ¿`featured_scope`/`featured_zone_code` ya existen como custom field en
-   Business, o hay que crearlos?
-8. ¿Cómo reflejar aprobado/rechazado si `activo` es boolean?
+7. ✅ 2026-10-03 — NO existen en Business; crear solo si se quiere sync del
+   destacado (decisión abierta).
+8. ✅ 2026-10-03 — usar `business_listing_status` existente de GHL; no se crea
+   `business_status`.
 
 **Agent / Owner / Agency:**
-9. ¿Confirma Contact/Business nativos, o insiste en Custom Objects dedicados?
+9. ✅ 2026-10-03 — Contact/Business nativos confirmados (Property = Real
+   Estate Listing Custom Object).
 10. Picklist real de `agent_status` y `agency_type`.
 11. ¿Las Associations soportan custom fields propios (para `rol`)?
 
 **Usuarios / Leads:**
-12. Website → GHL: confirmar `POST /contacts` (crear, no solo GET/PUT).
+12. ✅ 2026-10-03 — `POST /contacts` probado, 201 Created. Falta recibir el
+    JSON de Postman para implementar `find_or_create_contact()`.
 13. GHL → nosotros: ¿List/Search Contacts filtrable, o solo GET-por-ID?
 14. Login unificado: ¿el Workflow "Contact Created" puede mandar el email
     en el payload? (única pieza que falta, ya construimos el resto).
@@ -450,4 +498,6 @@ confundir con Deal, son dos productos distintos desde 2026-09-23):**
 5. **Hotspot (§3b)** — producto nuevo (2026-09-23), cero propuesta previa a
    Talal, agregado por primera vez en este documento.
 6. **Resto (evento, tienda, agent/owner/agency, usuarios)** — ya tienen
-   propuesta escrita, solo falta que Talal confirme.
+   propuesta escrita. agent/owner/agency + tienda: tipo de objeto y
+   `POST /contacts` ✅ confirmados 2026-10-03, falta picklist a nivel campo.
+   evento sigue sin confirmar.
