@@ -95,6 +95,14 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
+@app.get("/health", include_in_schema=False)
+async def health():
+    # Railway healthcheckPath. Sin DB a propósito: responde apenas uvicorn
+    # sirve. Si alembic/arranque falla (uvicorn nunca sube), da 502 y Railway
+    # no reemplaza el deploy bueno — el fallo del 2026-10-04 no habría tumbado prod.
+    return {"status": "ok"}
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()

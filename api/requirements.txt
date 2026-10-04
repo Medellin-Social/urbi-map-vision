@@ -1,21 +1,28 @@
-fastapi>=0.110.0
-aiofiles>=23.0.0
-uvicorn[standard]>=0.27.0
-asyncpg>=0.29.0
-python-dotenv>=1.0.0
-pydantic[email]>=2.0.0
-python-jose[cryptography]>=3.3.0
-bcrypt>=4.0.0
-python-multipart>=0.0.9
-slowapi>=0.1.9
-structlog>=24.1.0
-alembic>=1.13.0
-geoalchemy2>=0.15.0
-psycopg2-binary>=2.9.0
-sentry-sdk[fastapi]>=2.0.0
-boto3>=1.34.0
-stripe>=8.0.0
+# Versiones PINEADAS (==) al set que corre en prod hoy. Un dep transitivo sin
+# pin (SQLAlchemy, vía alembic) saltó a 2.1 en un rebuild y tumbó prod el
+# 2026-10-04 (psycopg3 default, no instalado). Pin = rebuild reproducible.
+# Para subir una versión: cámbiala a mano aquí y verifica el deploy (no dejar
+# que un rebuild la mueva solo). SQLAlchemy está explícito aunque sea
+# transitivo — es el que importa.
+fastapi==0.142.2
+aiofiles==25.1.0
+uvicorn[standard]==0.54.0
+asyncpg==0.31.0
+python-dotenv==1.2.4
+pydantic[email]==2.13.5
+python-jose[cryptography]==3.5.0
+bcrypt==5.0.0
+python-multipart==0.0.32
+slowapi==0.1.10
+structlog==26.1.0
+SQLAlchemy==2.1.3
+alembic==1.20.0
+geoalchemy2==0.20.0
+psycopg2-binary==2.9.13
+sentry-sdk[fastapi]==2.71.0
+boto3==1.43.108
+stripe==16.0.0
 # dev / test
-pytest>=8.0.0
-pytest-asyncio>=0.23.0
-httpx>=0.27.0
+pytest==9.1.1
+pytest-asyncio==1.4.0
+httpx==0.28.1
