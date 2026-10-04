@@ -13,7 +13,9 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
   paper?: string
   pinTop?: string
 }) {
-  // "i" normal (el pin coral cubre su punto — no usar ı U+0131 que falla en iOS).
+  // "i" normal con su punto RECORTADO (clipPath) — el pin coral es el punto.
+  // No usar ı U+0131: en iOS cae al fallback (Georgia) y desentona. El clip es
+  // relativo al box propio (lineHeight:1), igual en los 3 contextos.
   const pinDot = (
     <svg
       viewBox="0 0 20 20"
@@ -30,7 +32,7 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
   )
   const i = (
     <span data-i18n-skip style={{ position: "relative", display: "inline-block", lineHeight: "1", overflow: "visible" }}>
-      i{pinDot}
+      <span style={{ display: "inline-block", clipPath: "inset(0.42em 0 0 0)" }}>i</span>{pinDot}
     </span>
   )
   return (

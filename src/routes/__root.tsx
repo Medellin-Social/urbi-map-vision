@@ -114,6 +114,10 @@ export const Route = createRootRoute({
       { title: "Medellín Social · Where Smart Investors Meet Local Culture" },
       { name: "description", content: "The only platform that combines real estate intelligence with authentic local experiences in Medellín and the Aburrá Valley." },
       { name: "author", content: "Medellín Social" },
+      // App traduce sola (i18n propio + Chrome Translator API). Desactiva el
+      // auto-translate de página del navegador: muta text nodes y crashea el
+      // reconciler de React. No afecta nuestra traducción JS.
+      { name: "google", content: "notranslate" },
       { property: "og:title", content: "Medellín Social · Where Smart Investors Meet Local Culture" },
       { property: "og:description", content: "Real estate intelligence meets local culture in Medellín and the Aburrá Valley." },
       { property: "og:image", content: "https://urbidata.co/og-image.png" },
@@ -144,7 +148,7 @@ export const Route = createRootRoute({
 
 function RootShell({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="es" className="dark">
+    <html lang="es" translate="no" className="dark">
       <head>
         <HeadContent />
       </head>
