@@ -83,7 +83,13 @@ PALABRAS_NEGATIVAS = [
     "discriminación", "insulto",
     "gringo", "xenofobia", "racismo",
     # Problemas sociales
+    "habitante de calle", "habitantes de calle",
+    "habitante de la calle", "habitantes de la calle",
+    "indigente", "indigencia", "mendigo", "mendicidad",
     "polémica", "controversia",
+    # Vivienda / desalojos (raíces cubren variantes)
+    "desaloj", "demol", "desahucio", "desplazad",
+    "desplazamiento forzado", "tumbaron", "invasores",
     "rechazo", "inconformidad",
     "reclamo", "anomalía",
     "irregularidad", "problema",
