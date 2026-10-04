@@ -16,10 +16,6 @@ const COMUNA_STATIC = [
   "/data/comunas_itagui.geojson",
   "/data/comunas_la_estrella.geojson",
   "/data/comunas_sabaneta.geojson",
-  "/data/comunas_caldas.geojson",
-  "/data/comunas_copacabana.geojson",
-  "/data/comunas_girardota.geojson",
-  "/data/comunas_barbosa.geojson",
 ];
 
 // Paleta Medellín Social sobre papel #FAF7F2 — verde→teal→ámbar→coral (bueno→bajo)

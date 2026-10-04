@@ -67,10 +67,6 @@ const ZONAS_GEOJSON = [
   '/data/comunas_itagui.geojson',
   '/data/comunas_la_estrella.geojson',
   '/data/comunas_sabaneta.geojson',
-  '/data/comunas_caldas.geojson',
-  '/data/comunas_copacabana.geojson',
-  '/data/comunas_girardota.geojson',
-  '/data/comunas_barbosa.geojson',
 ]
 
 function ringsOf(geom: GeoJSON.Geometry): GeoJSON.Position[][] {
