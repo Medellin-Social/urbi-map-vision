@@ -19,10 +19,15 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override URL from env — same var the app uses
+# Override URL from env — same var the app uses (asyncpg wants a bare scheme).
+# Force psycopg2 for SQLAlchemy/alembic only: SQLAlchemy 2.1 resolves a bare
+# postgresql:// to psycopg(v3), which we don't ship (image has psycopg2-binary).
+# Transform here only — api/db.py keeps reading the plain var for asyncpg.
 db_url = os.getenv("DATABASE_URL", "")
 if db_url.startswith("postgres://"):
     db_url = db_url.replace("postgres://", "postgresql://", 1)
+if db_url.startswith("postgresql://"):
+    db_url = db_url.replace("postgresql://", "postgresql+psycopg2://", 1)
 if db_url:
     config.set_main_option("sqlalchemy.url", db_url)
 
