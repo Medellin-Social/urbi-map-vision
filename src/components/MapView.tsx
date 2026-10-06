@@ -103,7 +103,12 @@ const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", feature
 // polígonos quedan a la misma distancia del borde → el valle queda centrado sea
 // cual sea el alto de pantalla. Con tilt 3D, "misma distancia" es imposible
 // (la perspectiva distorsiona), por eso el hero va plano.
-const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.68, 6.106], [-75.51, 6.3623]];
+// Encuadre del HERO (solo paths fitValle). Valle CENTRAL (~2x más cerca que el
+// valle completo): el fit liga por alto → esta caja de lat ~0.13° deja el frame
+// pegado a Medellín/Poblado/Laureles sin gutters enormes. Recorta Bello (norte)
+// y La Estrella/Sabaneta (sur) a propósito — cuadro chico, pedido del usuario.
+// El zoom sigue libre (scroll-in a calles). /map NO usa esto (fitValle=false).
+const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.65, 6.150], [-75.54, 6.318]];
 // Zoom at which the polygon tier flips comuna → barrio (matches cluster→points). Knob.
 const POLYGON_TIER_ZOOM = 13;
 // Synthetic barrio ids (non-API fallback) live at/above this — excluded from the layer.
@@ -287,6 +292,7 @@ export function MapView({
   const [mapLoaded, setMapLoaded] = useState(false);
   const isMobile = useIsMobile();
   const [legendOpen, setLegendOpen] = useState(false);
+  const [showVolverValle, setShowVolverValle] = useState(false);  // /map: botón "Volver al Valle" al drillear
   const staticFeaturesRef = useRef<GeoJSON.Feature[] | null>(null);
   // In-flight guard: mapLoaded + comunasMetrics can both change on initial
   // load, firing the effect below twice before the first fetch resolves and
@@ -506,8 +512,14 @@ export function MapView({
             fitBoundsOptions: { padding: 28, pitch: 0, bearing: 0 },
           }
         : { center: [-75.5812, 6.2442] as [number, number], zoom: 10 }),
-      minZoom: fitValleRef.current ? 9 : 11,
-      maxBounds: [[-75.72, 6.05], [-75.42, 6.45]],
+      minZoom: fitValleRef.current ? 10 : 11,
+      // Box de paneo. Hero (fitValle): pegado al fit del valle CENTRAL → la vista
+      // encuadrada va ~[-75.677,-75.513]×[6.161,6.307]; el box queda justo por
+      // fuera → casi sin paneo (cuadro chico), pero el zoom-in sigue libre.
+      // /map: box al Valle + margen chico → no te alejas a las montañas del este.
+      maxBounds: fitValleRef.current
+        ? [[-75.715, 6.128], [-75.475, 6.34]]
+        : [[-75.71, 6.07], [-75.46, 6.42]],
       pitch: initPitch,
       bearing: initBearing,
       antialias: true,
@@ -1074,6 +1086,7 @@ export function MapView({
   // cambia) — sin esto, una vez entrado a barrios (flyToBarriosRef o el click
   // directo en una comuna) no había manera de volver: el zoom-out no hacía nada.
   const RETURN_TO_COMUNAS_ZOOM = 11.8;
+  const VOLVER_VALLE_ZOOM = 12.5;  // drilleado más allá del overview de comuna → ofrece volver al valle
   useEffect(() => {
     const map = mapRef.current;
     if (!map || !mapLoadedRef.current || mapView !== "zonas") return;
@@ -1085,6 +1098,7 @@ export function MapView({
       ) {
         switchToComunas(map);
       }
+      setShowVolverValle(map.getZoom() > VOLVER_VALLE_ZOOM);
     };
     map.on("zoomend", onZoomEnd);
     return () => { map.off("zoomend", onZoomEnd); };
@@ -1455,6 +1469,20 @@ export function MapView({
             </button>
           )}
         </div>
+      )}
+
+      {/* Volver al Valle — /map, cuando drilleas más allá del overview de comuna.
+          Reusa switchToComunas (overview valle + reset de capas/selección). */}
+      {mapView === "zonas" && !fitValle && showVolverValle && (
+        <button
+          onClick={() => { const m = mapRef.current; if (m) switchToComunas(m); }}
+          className="absolute right-4 top-[108px] z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-2 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
+        >
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="shrink-0">
+            <path d="M8 2v5m0 0 2.5-2.5M8 7 5.5 4.5M3 10a5 5 0 1 0 10 0" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          </svg>
+          Volver al Valle
+        </button>
       )}
 
     </>
