@@ -109,6 +109,18 @@ const EMPTY_FC: GeoJSON.FeatureCollection = { type: "FeatureCollection", feature
 // y La Estrella/Sabaneta (sur) a propósito — cuadro chico, pedido del usuario.
 // El zoom sigue libre (scroll-in a calles). /map NO usa esto (fitValle=false).
 const VALLE_BOUNDS: [[number, number], [number, number]] = [[-75.65, 6.150], [-75.54, 6.318]];
+// Móvil/iPad: el crop central queda muy cerca en cajas chicas/altas (iPad en
+// portrait es "desktop" por el breakpoint 768 pero su caja alta liga por alto →
+// más zoom que un monitor ancho). <1024 cubre teléfono + iPad portrait → encuadra
+// el valle completo. maxBounds también se ensancha o el fitBounds clampea al box
+// chico y no alcanza a alejarse. iPad landscape queda con el crop desktop (subir
+// el umbral si molesta). El zoom-in a calles sigue libre en ambos.
+const VALLE_BOUNDS_WIDE: [[number, number], [number, number]] = [[-75.68, 6.106], [-75.51, 6.3623]];
+function heroFit(): { bounds: [[number, number], [number, number]]; maxBounds: [[number, number], [number, number]] } {
+  return (typeof window !== "undefined" && window.innerWidth < 1024)
+    ? { bounds: VALLE_BOUNDS_WIDE, maxBounds: [[-75.71, 6.07], [-75.46, 6.42]] }
+    : { bounds: VALLE_BOUNDS, maxBounds: [[-75.715, 6.128], [-75.475, 6.34]] };
+}
 // Zoom at which the polygon tier flips comuna → barrio (matches cluster→points). Knob.
 const POLYGON_TIER_ZOOM = 13;
 // Synthetic barrio ids (non-API fallback) live at/above this — excluded from the layer.
@@ -389,7 +401,7 @@ export function MapView({
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", "none");
     }
     if (fitValleRef.current) {
-      map.fitBounds(VALLE_BOUNDS, { padding: 28, pitch: 0, bearing: 0, speed });
+      map.fitBounds(heroFit().bounds, { padding: 28, pitch: 0, bearing: 0, speed });
     } else {
       map.flyTo({
         center: [-75.5812, 6.2442], zoom: 11.5,
@@ -508,7 +520,7 @@ export function MapView({
       // recorta el sur. Se re-encuadra en 'load' con el tamaño ya asentado.
       ...(fitValleRef.current
         ? {
-            bounds: VALLE_BOUNDS,
+            bounds: heroFit().bounds,
             fitBoundsOptions: { padding: 28, pitch: 0, bearing: 0 },
           }
         : { center: [-75.5812, 6.2442] as [number, number], zoom: 10 }),
@@ -518,7 +530,7 @@ export function MapView({
       // fuera → casi sin paneo (cuadro chico), pero el zoom-in sigue libre.
       // /map: box al Valle + margen chico → no te alejas a las montañas del este.
       maxBounds: fitValleRef.current
-        ? [[-75.715, 6.128], [-75.475, 6.34]]
+        ? heroFit().maxBounds
         : [[-75.71, 6.07], [-75.46, 6.42]],
       pitch: initPitch,
       bearing: initBearing,
