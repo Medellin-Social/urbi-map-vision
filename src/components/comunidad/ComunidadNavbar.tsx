@@ -230,7 +230,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
         <header style={{ borderBottom: `1px solid ${K.line}`, background: K.paper, textAlign: 'center', padding: '24px 26px 16px' }}>
           <a href="/" style={{ textDecoration: 'none', color: K.ink }}>
             <div data-i18n-skip className="masthead-logo" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.6rem,7.5vw,4.5rem)', letterSpacing: -2, lineHeight: .92 }}>
-              <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
+              <Wordmark coral={K.coral} />
             </div>
           </a>
           <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
@@ -257,7 +257,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             {compact ? (
               <a data-i18n-skip href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
-                <Wordmark teal={K.teal} coral={K.coral} amarillo={K.amarillo} />
+                <Wordmark ink="#fff" coral={K.coral} />
               </a>
             ) : (
               <>
@@ -393,25 +393,45 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             </div>
           </div>
 
-          {/* Hamburger — mobile only */}
-          <button
-            onClick={() => setMenuAbierto(prev => !prev)}
-            className="mobile-menu-btn"
-            data-tour="nav-hamburger"
-            aria-label="Menú"
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: '#fff',
-              fontSize: 22,
-              cursor: 'pointer',
-              padding: 4,
-              lineHeight: 1,
-              flexShrink: 0,
-            }}
-          >
-            {menuAbierto ? '✕' : '☰'}
-          </button>
+          {/* Mobile: ES/EN siempre visible (fuera del menú) + hamburger */}
+          <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
+              {(['es', 'en'] as const).map(l => (
+                <button
+                  key={l}
+                  onClick={() => setLang(l)}
+                  aria-label={l === 'es' ? 'Español' : 'English'}
+                  style={{
+                    border: 'none',
+                    background: lang === l ? K.amarillo : 'transparent',
+                    color: lang === l ? K.ink : '#fff',
+                    padding: '4px 10px',
+                    cursor: 'pointer', display: 'flex', alignItems: 'center',
+                  }}
+                >
+                  {l === 'es' ? <FlagCO /> : <FlagUS />}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={() => setMenuAbierto(prev => !prev)}
+              className="mobile-menu-btn"
+              data-tour="nav-hamburger"
+              aria-label="Menú"
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: '#fff',
+                fontSize: 22,
+                cursor: 'pointer',
+                padding: 4,
+                lineHeight: 1,
+                flexShrink: 0,
+              }}
+            >
+              {menuAbierto ? '✕' : '☰'}
+            </button>
+          </div>
 
         </div>
 
@@ -502,34 +522,15 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
             </a>
 
-            <div style={{ display: 'flex', justifyContent: logged ? 'flex-end' : 'space-between', alignItems: 'center', marginTop: 12 }}>
-              {!logged && (
-                <a
-                  href="/suscribirse"
-                  onClick={() => setMenuAbierto(false)}
-                  style={{ color: K.amarillo, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
-                >
-                  {t('Suscríbete →', 'Subscribe →')}
-                </a>
-              )}
-              <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
-                {(['es', 'en'] as const).map(l => (
-                  <button
-                    key={l}
-                    onClick={() => setLang(l)}
-                    style={{
-                      border: 'none',
-                      background: lang === l ? K.amarillo : 'transparent',
-                      color: lang === l ? K.ink : '#fff',
-                      padding: '4px 10px',
-                      cursor: 'pointer', display: 'flex', alignItems: 'center',
-                    }}
-                  >
-                    {l === 'es' ? <FlagCO /> : <FlagUS />}
-                  </button>
-                ))}
-              </div>
-            </div>
+            {!logged && (
+              <a
+                href="/suscribirse"
+                onClick={() => setMenuAbierto(false)}
+                style={{ display: 'block', marginTop: 12, color: K.amarillo, fontSize: 13, fontWeight: 600, textDecoration: 'none' }}
+              >
+                {t('Suscríbete →', 'Subscribe →')}
+              </a>
+            )}
           </div>
         )}
 
