@@ -42,10 +42,7 @@ _ROOT = Path(__file__).parent.parent.parent
 load_dotenv(_ROOT / ".env.local")
 load_dotenv(_ROOT / ".env")
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DATABASE_URL = os.environ["DATABASE_URL"]
 API_KEY = os.getenv("GOOGLE_PLACES_API_KEY", "")
 BASE_URL = "https://places.googleapis.com/v1/places:searchNearby"
 

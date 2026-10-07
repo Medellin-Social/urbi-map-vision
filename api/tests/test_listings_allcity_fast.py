@@ -27,7 +27,7 @@ async def _fetch(conn, sql, args, limit=500):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("args", [ALL_NULL, VENTA], ids=["sin_filtro", "venta"])
 async def test_fast_equals_slow_ignoring_boundary_ties(args):
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         slow = await _fetch(conn, L._LISTINGS_SQL, args)
@@ -63,7 +63,7 @@ async def test_fast_equals_slow_ignoring_boundary_ties(args):
 
 @pytest.mark.asyncio
 async def test_fast_is_faster():
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
 
     async def timed(sql, n=3):

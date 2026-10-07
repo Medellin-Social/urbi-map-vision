@@ -25,10 +25,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DB_URL = os.environ["DATABASE_URL"]
 
 # Bounding box del Valle de Aburrá (sur, oeste, norte, este)
 BBOX = (5.95, -75.76, 6.52, -75.43)

@@ -10,11 +10,12 @@ Estrategia:
 
 import json
 import math
+import os
 import psycopg2
 import psycopg2.extras
 from pathlib import Path
 
-DB_URL = "postgresql://social:urbidata007@localhost:5433/social"
+DB_URL = os.environ["DATABASE_URL"]
 OUT_PATH = Path(__file__).parent.parent / "public" / "data" / "comunas_medellin.geojson"
 
 # Centroides de referencia de cada comuna (lat, lng) — fuente: Alcaldía de Medellín POT

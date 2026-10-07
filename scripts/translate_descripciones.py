@@ -20,7 +20,7 @@ import psycopg2.extras
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from traductor import translate_pairs  # noqa: E402
 
-DB_URL = os.environ.get("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+DB_URL = os.environ["DATABASE_URL"]
 SOURCES = ("listings_metrocuadrado", "listings_fincaraiz", "listings_premium")
 
 # md5(descripcion) se calcula en SQL tanto para filtrar como para guardar → el

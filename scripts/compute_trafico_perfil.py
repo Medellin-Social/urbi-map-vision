@@ -26,7 +26,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
-DB_URL = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+DB_URL = os.environ["DATABASE_URL"]
 
 # Detección de ventana pico
 AMP_MIN = 0.5      # amplitud mínima (jam) para considerar que hay pico real

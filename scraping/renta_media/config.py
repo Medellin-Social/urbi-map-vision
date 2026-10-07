@@ -13,10 +13,7 @@ _ROOT = Path(__file__).parent.parent.parent
 load_dotenv(_ROOT / ".env.local")
 load_dotenv(_ROOT / ".env")
 
-DATABASE_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DATABASE_URL = os.environ["DATABASE_URL"]
 EUR_TO_COP = float(os.getenv("EUR_TO_COP", "4500"))
 USD_TO_COP = float(os.getenv("USD_TO_COP", "4100"))
 

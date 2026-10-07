@@ -28,7 +28,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL     = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+DB_URL     = os.environ["DATABASE_URL"]
 _USD_TO_COP_FALLBACK = float(os.getenv("USD_TO_COP", "4100"))
 MIN_LISTINGS = 1
 

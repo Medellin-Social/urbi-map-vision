@@ -55,7 +55,7 @@ if ! docker inspect "$POSTGRES_CONTAINER" --format '{{.State.Status}}' 2>/dev/nu
     || docker compose up -d postgres 2>/dev/null
   echo -n "Esperando postgres"
   for i in $(seq 1 20); do
-    if PGPASSWORD=urbidata007 psql "postgresql://social:urbidata007@localhost:5433/social" \
+    if psql "${DATABASE_URL:?DATABASE_URL no definido en .env}" \
          -c "SELECT 1" -q >/dev/null 2>&1; then
       echo " OK"
       break

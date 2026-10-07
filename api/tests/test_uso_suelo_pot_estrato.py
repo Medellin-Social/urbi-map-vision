@@ -24,7 +24,7 @@ SCORE_POR_CATEGORIA = {
 async def test_listings_georef_coverage_medellin():
     """estrato_manzana >=95%, uso_suelo_pot >=90% de los listings en Medellín
     (verificado manualmente 2026-08-25: 99.9% y ~99.8% respectivamente)."""
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         row = await conn.fetchrow("""
@@ -52,7 +52,7 @@ async def test_listings_georef_coverage_medellin():
 async def test_listings_georef_otros_municipios_null():
     """Fuera de Medellín, POT/estrato_manzana deben ser NULL (fuente Medellín-only) —
     no un valor heredado por error de join."""
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         row = await conn.fetchrow("""
@@ -72,7 +72,7 @@ async def test_listings_georef_otros_municipios_null():
 async def test_barrios_uso_suelo_score_mapping():
     """Todo barrio con uso_suelo_dominante debe tener el score exacto del
     mapeo — si alguien cambia el script sin actualizar el mapeo, esto avisa."""
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         rows = await conn.fetch("""

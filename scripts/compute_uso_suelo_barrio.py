@@ -17,10 +17,7 @@ import os
 
 import psycopg2
 
-DB_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DB_URL = os.environ["DATABASE_URL"]
 
 # Score de potencial de uso/desarrollo — mismo mapeo que ya existía en la
 # carga huérfana previa (baja mixtura < dotacional/espacio público < alta mixtura).

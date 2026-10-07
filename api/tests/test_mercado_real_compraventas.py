@@ -63,7 +63,7 @@ LEFT JOIN pedido pe ON TRUE
 
 @pytest.mark.asyncio
 async def test_mercado_real_medellin_sano():
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         row = await conn.fetchrow(_MERCADO_REAL_SQL, "MEDELLIN")
@@ -81,7 +81,7 @@ async def test_mercado_real_medellin_sano():
 @pytest.mark.asyncio
 async def test_mercado_real_municipio_sin_datos_no_rompe():
     """Municipio inexistente/sin compraventas → sin fila, no excepción."""
-    dsn = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+    dsn = os.environ["DATABASE_URL"]
     conn = await asyncpg.connect(dsn)
     try:
         row = await conn.fetchrow(_MERCADO_REAL_SQL, "MUNICIPIO_QUE_NO_EXISTE")
