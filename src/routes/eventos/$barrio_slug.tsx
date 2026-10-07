@@ -6,6 +6,7 @@ import { useBarrio } from '@/components/comunidad/BarrioContext'
 import { EventCardMini, EventCardFeatured, type EventoData } from '@/components/comunidad/EventCard'
 import { API_BASE_URL } from '@/config/api'
 import { CATEGORIAS_EVENTOS } from '@/lib/categorias_comunidad'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/eventos/$barrio_slug')({
   component: EventosRoot,
@@ -23,11 +24,7 @@ function EventosRoot() {
   )
 }
 
-const K = {
-  surface: '#f5f0e8', line: '#e9e4d8', ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041', coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928', serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 interface EventosResp { total: number; eventos: EventoData[] }
 const PAGE_SIZE = 12
@@ -144,7 +141,7 @@ function EventosPage() {
             </h1>
             <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
               {t('Todos los eventos, en un solo lugar.', 'Every event, in one place.')}
-              {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {t('eventos', 'events')}</span>}
+              {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {total === 1 ? t('evento', 'event') : t('eventos', 'events')}</span>}
             </p>
           </div>
           <a
@@ -164,17 +161,17 @@ function EventosPage() {
 
       {/* ── Destacados — row above filters ── */}
       {!isLoading && hasData && featured.length > 0 && (
-        <section style={{ background: '#FAF7F2', borderBottom: `0.5px solid #E8E0D0`, padding: '28px 26px' }}>
+        <section style={{ background: '#FAF8F3', borderBottom: `0.5px solid #E5E0D5`, padding: '28px 26px' }}>
           <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: '1.25rem' }}>
-              <h2 style={{ fontFamily: K.serif, fontSize: '20px', fontWeight: 700, color: '#1A1208', margin: 0 }}>
+              <h2 style={{ fontFamily: K.serif, fontSize: '20px', fontWeight: 700, color: '#111418', margin: 0 }}>
                 {t('Eventos destacados', 'Featured Events')}
               </h2>
-              <span style={{ fontSize: '11px', color: '#9B8B75', fontWeight: 500, letterSpacing: '0.05em' }}>
+              <span style={{ fontSize: '11px', color: '#6E726E', fontWeight: 500, letterSpacing: '0.05em' }}>
                 {t('PATROCINADO', 'SPONSORED')}
               </span>
             </div>
-            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
+            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }}>
               {featured.map(e => <EventCardFeatured key={e.id} evento={e} />)}
             </div>
           </div>
@@ -182,7 +179,7 @@ function EventosPage() {
       )}
 
       {/* ── Todos los eventos + filtros ── */}
-      <div style={{ maxWidth: 1200, margin: '0 auto', padding: '32px 26px' }}>
+      <div style={{ maxWidth: 1252, margin: '0 auto', padding: '32px 26px' }}>
         {/* Título sección */}
         <h2 style={{ fontFamily: K.serif, fontWeight: 700, fontSize: '1.1rem', color: K.ink, margin: '0 0 20px' }}>
           {t('Todos los eventos', 'All events')}
@@ -264,7 +261,7 @@ function EventosPage() {
               </a>
             </div>
           ) : (
-            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14 }}>
+            <div className="eventos-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 14 }}>
               {regular.map(e => <EventCardMini key={e.id} evento={e} />)}
             </div>
           )

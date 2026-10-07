@@ -1,4 +1,5 @@
 import { safeHref } from "@/lib/utils"
+import { K as TOKENS } from "@/design/tokens";
 
 export interface EventoData {
   id: number
@@ -22,12 +23,7 @@ export interface EventoData {
   destacado: boolean
 }
 
-const K = {
-  ink: '#14201d', muted: '#62736d', teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7', amarillo: '#ffc928',
-  line: '#e9e4d8', surface: '#f5f0e8',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 function parseFecha(str: string) {
   const normalized = str.replace(' ', 'T')
@@ -42,14 +38,14 @@ function parseFecha(str: string) {
 }
 
 const CATEGORIA_META: Record<string, { label: string; emoji: string; color: string }> = {
-  musica:      { label: 'Música',      emoji: '🎵', color: '#D85A30' },
-  networking:  { label: 'Networking',  emoji: '🤝', color: '#1D9E75' },
+  musica:      { label: 'Música',      emoji: '🎵', color: '#CE1126' },
+  networking:  { label: 'Networking',  emoji: '🤝', color: '#0F8A4F' },
   gastronomia: { label: 'Gastronomía', emoji: '🍽️', color: '#b8960a' },
   cultura:     { label: 'Cultura',     emoji: '🎭', color: '#d6217e' },
   deporte:     { label: 'Deporte',     emoji: '🏃', color: '#639922' },
-  bienestar:   { label: 'Bienestar',   emoji: '🧘', color: '#9B8B75' },
+  bienestar:   { label: 'Bienestar',   emoji: '🧘', color: '#6E726E' },
   tech:        { label: 'Tech',        emoji: '💻', color: '#143cc4' },
-  social:      { label: 'Social',      emoji: '🎉', color: '#D85A30' },
+  social:      { label: 'Social',      emoji: '🎉', color: '#CE1126' },
   happy_hour:  { label: 'Happy Hour',  emoji: '🍹', color: '#b8960a' },
 }
 
@@ -123,8 +119,8 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
       href={safeHref(evento.url_externo) ?? '#'}
       target="_blank" rel="noopener noreferrer"
       style={{
-        display: 'block', background: '#FAF7F2',
-        border: '0.5px solid #E8E0D0', borderRadius: 12,
+        display: 'block', background: '#FAF8F3',
+        border: '0.5px solid #E5E0D5', borderRadius: 12,
         overflow: 'hidden', textDecoration: 'none', position: 'relative',
       }}
     >
@@ -155,12 +151,12 @@ export function EventCardFeatured({ evento }: { evento: EventoData }) {
               {cat.emoji} {cat.label}
             </span>
           )}
-          {priceLabel && <span style={{ fontSize: 10, color: '#9B8B75' }}>· {priceLabel}</span>}
+          {priceLabel && <span style={{ fontSize: 10, color: '#6E726E' }}>· {priceLabel}</span>}
         </div>
-        <h3 style={{ fontFamily: K.serif, fontSize: 15, fontWeight: 600, color: '#1A1208', lineHeight: 1.3, margin: '0 0 6px' }}>
+        <h3 style={{ fontFamily: K.serif, fontSize: 15, fontWeight: 600, color: '#111418', lineHeight: 1.3, margin: '0 0 6px' }}>
           {evento.titulo}
         </h3>
-        <p style={{ fontSize: 12, color: '#9B8B75', margin: 0 }}>
+        <p style={{ fontSize: 12, color: '#6E726E', margin: 0 }}>
           {evento.organizador ? `${evento.organizador} · ` : ''}{f.day} {f.month}
         </p>
       </div>
@@ -217,7 +213,7 @@ export function EventCardMini({ evento }: { evento: EventoData }) {
       target="_blank" rel="noopener noreferrer"
       style={{
         display: 'flex', flexDirection: 'column',
-        background: '#FFFFFF', border: '0.5px solid #E8E0D0',
+        background: '#FFFFFF', border: '0.5px solid #E5E0D5',
         borderRadius: 12, overflow: 'hidden', textDecoration: 'none',
       }}
     >
@@ -234,10 +230,10 @@ export function EventCardMini({ evento }: { evento: EventoData }) {
           padding: '4px 10px', textAlign: 'center',
           boxShadow: '0 2px 6px rgba(0,0,0,0.18)',
         }}>
-          <div style={{ fontFamily: K.serif, fontSize: 14, fontWeight: 700, color: '#1A1208', lineHeight: 1 }}>
+          <div style={{ fontFamily: K.serif, fontSize: 14, fontWeight: 700, color: '#111418', lineHeight: 1 }}>
             {f.day}
           </div>
-          <div style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#9B8B75', marginTop: 1 }}>
+          <div style={{ fontSize: 7.5, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#6E726E', marginTop: 1 }}>
             {f.month}
           </div>
         </div>
@@ -249,12 +245,12 @@ export function EventCardMini({ evento }: { evento: EventoData }) {
           {cat ? `${cat.emoji} ${cat.label}` : '📅'}{priceLabel}
         </div>
         <h3 style={{
-          fontSize: 12.5, fontWeight: 600, color: '#1A1208', lineHeight: 1.25, margin: '0 0 3px',
+          fontSize: 12.5, fontWeight: 600, color: '#111418', lineHeight: 1.25, margin: '0 0 3px',
           overflow: 'hidden', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical' as const,
         }}>
           {evento.titulo}
         </h3>
-        <p style={{ fontSize: 10, color: '#9B8B75', margin: 0 }}>
+        <p style={{ fontSize: 10, color: '#6E726E', margin: 0 }}>
           📍 {evento.barrio_nombre || evento.organizador || 'Medellín'}
         </p>
       </div>

@@ -45,14 +45,14 @@ type MapNavbarProps = {
 };
 
 const C = {
-  paper:    "#FAF7F2",
-  tealDeep: "#085041",
-  teal:     "#1D9E75",
-  muted:    "#6B5B45",
-  border:   "#E8E0D0",
-  ink:      "#1A1208",
-  coral:    "#D85A30",
-  amarillo: "#ffc928",
+  paper:    "#FAF8F3",
+  tealDeep: "#0A5C36",
+  teal:     "#0F8A4F",
+  muted:    "#5B5F5C",
+  border:   "#E5E0D5",
+  ink:      "#111418",
+  coral:    "#CE1126",
+  amarillo: "#FCD116",
   serif:    "'Fraunces', Georgia, serif" as const,
 };
 
@@ -61,7 +61,7 @@ const C = {
 // Los dropdowns flotantes de escritorio (herramientas/cuenta) se quedan
 // claros — son popovers sobre el mapa, no "el header".
 const NAV = {
-  bg:     "#14201d",
+  bg:     "#111418",
   border: "rgba(255,255,255,0.08)",
   text:   "rgba(255,255,255,0.85)",
   muted:  "rgba(255,255,255,0.55)",
@@ -472,7 +472,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                           onClick={() => lang !== l && toggle()}
                           title={l === "es" ? "Español (Colombia)" : "English (USA)"}
                           style={{
-                            border: `1.5px solid ${lang === l ? C.teal : "#C8BFB0"}`,
+                            border: `1.5px solid ${lang === l ? C.teal : "#C9C4B8"}`,
                             background: lang === l ? "rgba(29,158,117,0.14)" : "rgba(0,0,0,0.05)",
                             borderRadius: 999, padding: "3px 8px",
                             cursor: lang === l ? "default" : "pointer", display: "flex", alignItems: "center",

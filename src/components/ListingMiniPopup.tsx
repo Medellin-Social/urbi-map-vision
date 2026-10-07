@@ -12,18 +12,18 @@ function BuildingPlaceholder() {
   return (
     <div
       className="flex h-full w-full items-center justify-center"
-      style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}
+      style={{ background: "linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)" }}
     >
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 36, height: 36, opacity: 0.45 }}>
         <rect x="6" y="12" width="24" height="30" rx="1" fill="white"/>
         <rect x="30" y="20" width="14" height="22" rx="1" fill="white"/>
-        <rect x="10" y="16" width="4" height="4" fill="#1D9E75"/>
-        <rect x="18" y="16" width="4" height="4" fill="#1D9E75"/>
-        <rect x="10" y="24" width="4" height="4" fill="#1D9E75"/>
-        <rect x="18" y="24" width="4" height="4" fill="#1D9E75"/>
-        <rect x="13" y="32" width="6" height="10" fill="#1D9E75"/>
-        <rect x="34" y="24" width="4" height="4" fill="#1D9E75"/>
-        <rect x="34" y="30" width="4" height="4" fill="#1D9E75"/>
+        <rect x="10" y="16" width="4" height="4" fill="#0F8A4F"/>
+        <rect x="18" y="16" width="4" height="4" fill="#0F8A4F"/>
+        <rect x="10" y="24" width="4" height="4" fill="#0F8A4F"/>
+        <rect x="18" y="24" width="4" height="4" fill="#0F8A4F"/>
+        <rect x="13" y="32" width="6" height="10" fill="#0F8A4F"/>
+        <rect x="34" y="24" width="4" height="4" fill="#0F8A4F"/>
+        <rect x="34" y="30" width="4" height="4" fill="#0F8A4F"/>
       </svg>
     </div>
   );
@@ -68,7 +68,7 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
       {/* Popup */}
       <div
         className="fixed z-50 overflow-hidden rounded-xl shadow-2xl"
-        style={{ left, top, width: POPUP_WIDTH, background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ left, top, width: POPUP_WIDTH, background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* Photo */}
@@ -90,8 +90,8 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
             <span
               className="absolute left-2 top-2 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
               style={{
-                background: tipo === "arriendo" ? "#E1F5EE" : "#FAECE7",
-                color: tipo === "arriendo" ? "#1D9E75" : "#D85A30",
+                background: tipo === "arriendo" ? "#E7F4EC" : "#FCE8EA",
+                color: tipo === "arriendo" ? "#0F8A4F" : "#CE1126",
               }}
             >
               {tipo}
@@ -101,11 +101,11 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
 
         {/* Info */}
         <div className="space-y-2 p-3">
-          <div className="text-base font-bold leading-tight" style={{ color: "#1A1208" }}>
+          <div className="text-base font-bold leading-tight" style={{ color: "#111418" }}>
             {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
           </div>
 
-          <div className="flex items-center gap-3 text-xs" style={{ color: "#6B5B45" }}>
+          <div className="flex items-center gap-3 text-xs" style={{ color: "#5B5F5C" }}>
             {listing.area_m2 != null && (
               <span className="flex items-center gap-0.5">
                 <Maximize2 className="h-3 w-3 shrink-0" />{listing.area_m2}m²
@@ -124,13 +124,13 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
           </div>
 
           {listing.barrio_nombre && (
-            <div className="flex items-center gap-1 text-[11px]" style={{ color: "#9B8B75" }}>
+            <div className="flex items-center gap-1 text-[11px]" style={{ color: "#6E726E" }}>
               <MapPin className="h-3 w-3 shrink-0" />{listing.barrio_nombre}
             </div>
           )}
 
           {dias && (
-            <div className="flex items-center gap-1 text-[11px]" style={{ color: "#9B8B75" }}>
+            <div className="flex items-center gap-1 text-[11px]" style={{ color: "#6E726E" }}>
               <Clock className="h-3 w-3 shrink-0" />{dias}
             </div>
           )}
@@ -148,8 +148,8 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
               }}
               className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold transition"
               style={selected
-                ? { background: "#E1F5EE", color: "#085041", border: "1px solid #1D9E75" }
-                : { background: "transparent", color: "#1D9E75", border: "1px solid #1D9E75" }
+                ? { background: "#E7F4EC", color: "#0A5C36", border: "1px solid #0F8A4F" }
+                : { background: "transparent", color: "#0F8A4F", border: "1px solid #0F8A4F" }
               }
             >
               {selected
@@ -161,7 +161,7 @@ export function ListingMiniPopup({ listing, onClose, onViewMore }: Props) {
           <button
             onClick={() => onViewMore(listing.id)}
             className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2 text-xs font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
+            style={{ background: "#0F8A4F" }}
           >
             Ver más <ChevronRight className="h-3.5 w-3.5" />
           </button>

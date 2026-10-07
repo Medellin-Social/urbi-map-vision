@@ -8,6 +8,7 @@ import { apiFetch, getToken } from "@/lib/apiClient";
 import { auth } from "@/lib/auth";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute("/publicar")({
   component: PublicarRoot,
@@ -31,20 +32,7 @@ function PublicarRoot() {
 }
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
-const K = {
-  paper:      "#FAF7F2",
-  surface:    "#F5F0E8",
-  line:       "#E9E4D8",
-  ink:        "#14201D",
-  muted:      "#62736D",
-  teal:       "#1D9E75",
-  tealDeep:   "#085041",
-  tealLight:  "#E1F5EE",
-  coral:      "#D85A30",
-  coralLight: "#FAECE7",
-  amarillo:   "#ffc928",
-  serif:      "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 const COP_USD_RATE = 4200;
 
@@ -192,7 +180,7 @@ function Field({
   );
 }
 
-const inputCls = "w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors";
+const inputCls = "w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0F8A4F]/30 focus:border-[#0F8A4F] transition-colors";
 const inputStyle = { borderColor: K.line, background: "#fff", color: K.ink };
 
 function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
@@ -852,7 +840,7 @@ function Step3({
 
       <Field label="Descripción" required>
         <textarea
-          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors resize-none"
+          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0F8A4F]/30 focus:border-[#0F8A4F] transition-colors resize-none"
           style={{ borderColor: K.line, color: K.ink, minHeight: 100 }}
           value={data.descripcion}
           onChange={(e) => setData({ descripcion: e.target.value })}
@@ -867,7 +855,7 @@ function Step3({
       <Field label="Tour 3D / 360° (opcional)">
         <input
           type="url"
-          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors"
+          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0F8A4F]/30 focus:border-[#0F8A4F] transition-colors"
           style={{ borderColor: K.line, color: K.ink }}
           value={data.tour_url}
           onChange={(e) => setData({ tour_url: e.target.value })}
@@ -881,7 +869,7 @@ function Step3({
       <Field label="Video (opcional)">
         <input
           type="url"
-          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#1D9E75]/30 focus:border-[#1D9E75] transition-colors"
+          className="w-full rounded-lg border px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-[#0F8A4F]/30 focus:border-[#0F8A4F] transition-colors"
           style={{ borderColor: K.line, color: K.ink }}
           value={data.video_url}
           onChange={(e) => setData({ video_url: e.target.value })}
@@ -1647,7 +1635,7 @@ function PublicarPage() {
               <span
                 style={{
                   marginLeft: 10,
-                  background: "#ffc928",
+                  background: "#FCD116",
                   color: K.ink,
                   fontSize: 10,
                   fontWeight: 800,

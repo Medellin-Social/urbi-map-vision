@@ -193,11 +193,11 @@ function buildListingPopupHTML(
   const fuente       = ((props.fuente      as string) ?? "").toLowerCase();
   const url          = (props.url          as string) ?? "";
 
-  const tipoBg    = tipo_op === "arriendo" ? "#E1F5EE" : "#FAECE7";
-  const tipoColor = tipo_op === "arriendo" ? "#1D9E75" : "#D85A30";
+  const tipoBg    = tipo_op === "arriendo" ? "#E7F4EC" : "#FCE8EA";
+  const tipoColor = tipo_op === "arriendo" ? "#0F8A4F" : "#CE1126";
   const tipoBadge = `<span style="background:${tipoBg};color:${tipoColor};padding:2px 8px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.05em;">${tipo_op.toUpperCase()}</span>`;
   const inmBadge     = tipo_inmueble
-    ? `<span style="background:rgba(26,18,8,.07);color:#6B5B45;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;">${tipo_inmueble}</span>`
+    ? `<span style="background:rgba(26,18,8,.07);color:#5B5F5C;padding:2px 8px;border-radius:4px;font-size:10px;font-weight:600;text-transform:capitalize;">${tipo_inmueble}</span>`
     : "";
 
   const specs = [
@@ -210,24 +210,24 @@ function buildListingPopupHTML(
   if (tipo_op === "venta" && precio_m2 && mediana && mediana > 0) {
     const diff = (precio_m2 - mediana) / mediana * 100;
     if (diff < -10)
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#085041;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div><div style="color:#9B8B75;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#0A5C36;font-weight:700;font-size:12px;">🟢 BUENA OFERTA</div><div style="color:#6E726E;font-size:11px;">${Math.abs(diff).toFixed(0)}% bajo la mediana del barrio</div></div>`;
     else if (diff > 15)
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#E24B4A;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div><div style="color:#9B8B75;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#CE1126;font-weight:700;font-size:12px;">🔴 SOBRE PRECIO</div><div style="color:#6E726E;font-size:11px;">${diff.toFixed(0)}% sobre la mediana</div></div>`;
     else
-      badgeHTML = `<div style="margin-top:8px;"><div style="color:#9B8B75;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div><div style="color:#9B8B75;font-size:11px;">Dentro del rango del barrio</div></div>`;
+      badgeHTML = `<div style="margin-top:8px;"><div style="color:#6E726E;font-weight:700;font-size:12px;">⚪ PRECIO JUSTO</div><div style="color:#6E726E;font-size:11px;">Dentro del rango del barrio</div></div>`;
   }
 
   let yieldHTML = "";
   if (tipo_op === "venta" && precio_cop && barrio?.mercado?.arriendo_p50_cop) {
     const y = barrio.mercado.arriendo_p50_cop * 12 / precio_cop * 100;
     if (y > 0 && y < 30)
-      yieldHTML = `<div style="color:#9B8B75;font-size:11px;">Yield estimado: <strong style="color:#1A1208;">${y.toFixed(1)}%</strong></div>`;
+      yieldHTML = `<div style="color:#6E726E;font-size:11px;">Yield estimado: <strong style="color:#111418;">${y.toFixed(1)}%</strong></div>`;
   }
 
   let scoreHTML = "";
   if (barrio?.scores?.score_activo != null) {
     const s = barrio.scores.score_activo;
-    scoreHTML = `<div style="color:#9B8B75;font-size:11px;">Score zona: <strong style="color:#1D9E75;">${s}</strong> · ${_scoreLabel(s)}</div>`;
+    scoreHTML = `<div style="color:#6E726E;font-size:11px;">Score zona: <strong style="color:#0F8A4F;">${s}</strong> · ${_scoreLabel(s)}</div>`;
   }
 
   const sourceMap: Record<string, string> = {
@@ -242,19 +242,19 @@ function buildListingPopupHTML(
   const waUrl   = `https://wa.me/+573122502394?text=${waText}`;
   const btnBase = `cursor:pointer;padding:6px 10px;border-radius:6px;font-size:11px;font-weight:600;border:1px solid;`;
   const btnSrc  = url
-    ? `<button onclick="window.open('${url.replace(/'/g,"\\'")}','_blank')" style="${btnBase}background:transparent;border-color:#E8E0D0;color:#6B5B45;">${sourceLabel}</button>`
+    ? `<button onclick="window.open('${url.replace(/'/g,"\\'")}','_blank')" style="${btnBase}background:transparent;border-color:#E5E0D5;color:#5B5F5C;">${sourceLabel}</button>`
     : "";
-  const btnWa   = `<button onclick="window.open('${waUrl}','_blank')" style="${btnBase}background:#1D9E75;border-color:#1D9E75;color:#E1F5EE;">Agente 💬</button>`;
+  const btnWa   = `<button onclick="window.open('${waUrl}','_blank')" style="${btnBase}background:#0A5C36;border-color:#0A5C36;color:#FFFFFF;">Agente 💬</button>`;
 
   return `
-<div style="font-family:system-ui,sans-serif;min-width:220px;max-width:290px;color:#1A1208;">
+<div style="font-family:system-ui,sans-serif;min-width:220px;max-width:290px;color:#111418;">
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tipoBadge}${inmBadge}</div>
-  <div data-i18n-skip style="color:#9B8B75;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
-  ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#1A1208;">${_fmtCOP(precio_cop)} COP</div>` : ""}
-  ${precio_usd  ? `<div style="color:#9B8B75;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
-  ${specs       ? `<div style="font-size:12px;color:#6B5B45;margin:6px 0;">${specs}</div>` : ""}
-  ${precio_m2 && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Precio/m²: <strong style="color:#1A1208;">${_fmtM2(precio_m2)}</strong></div>` : ""}
-  ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#9B8B75;">Mediana zona: <strong style="color:#1A1208;">${_fmtM2(mediana)}</strong></div>` : ""}
+  <div data-i18n-skip style="color:#6E726E;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
+  ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#111418;">${_fmtCOP(precio_cop)} COP</div>` : ""}
+  ${precio_usd  ? `<div style="color:#6E726E;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
+  ${specs       ? `<div style="font-size:12px;color:#5B5F5C;margin:6px 0;">${specs}</div>` : ""}
+  ${precio_m2 && tipo_op === "venta" ? `<div style="font-size:11px;color:#6E726E;">Precio/m²: <strong style="color:#111418;">${_fmtM2(precio_m2)}</strong></div>` : ""}
+  ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#6E726E;">Mediana zona: <strong style="color:#111418;">${_fmtM2(mediana)}</strong></div>` : ""}
   ${badgeHTML}
   ${yieldHTML || scoreHTML ? `<div style="margin-top:6px;">${yieldHTML}${scoreHTML}</div>` : ""}
   <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">${btnSrc}${btnWa}</div>
@@ -583,16 +583,16 @@ export function MapView({
             if (hide) map.setLayoutProperty(layer.id, "visibility", "none");
           }
           if (layer.type === "background") {
-            map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
+            map.setPaintProperty(layer.id, "background-color", "#FAF8F3");
           }
           if (layer.type === "fill" && srcLayer === "water") {
-            map.setPaintProperty(layer.id, "fill-color", "#C8DFE8");
+            map.setPaintProperty(layer.id, "fill-color", "#C9D6EE");
           }
           if (layer.type === "line" && srcLayer === "waterway") {
-            map.setPaintProperty(layer.id, "line-color", "#C8DFE8");
+            map.setPaintProperty(layer.id, "line-color", "#C9D6EE");
           }
           if (layer.type === "fill" && srcLayer === "building") {
-            map.setPaintProperty(layer.id, "fill-color", "#EDE8E0");
+            map.setPaintProperty(layer.id, "fill-color", "#F3F0E8");
             map.setPaintProperty(layer.id, "fill-opacity", 0.45);
           }
         }
@@ -627,7 +627,7 @@ export function MapView({
         type: "line",
         source: "comunas",
         paint: {
-          "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#D85A30", "#002776"],
+          "line-color": ["case", ["boolean", ["feature-state", "selected"], false], "#CE1126", "#003893"],
           "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.95, 0.6],
           "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 3.5, 2],
         },
@@ -652,8 +652,8 @@ export function MapView({
           "text-offset": [0, 0],
         },
         paint: {
-          "text-color": "#1A1208",
-          "text-halo-color": "#FAF7F2",
+          "text-color": "#111418",
+          "text-halo-color": "#FAF8F3",
           "text-halo-width": 2,
         },
       });
@@ -724,7 +724,7 @@ export function MapView({
         paint: {
           // CAMBIO 3: barrio sin relleno (fill-opacity 0, queryable para hit-test);
           // barrio activo = relleno muy tenue. knobs.
-          "fill-color": "#002776",
+          "fill-color": "#003893",
           "fill-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.10, 0],
         },
       });
@@ -735,7 +735,7 @@ export function MapView({
         layout: { visibility: "none" },
         paint: {
           // borde fino y suave; activo algo más marcado. knobs.
-          "line-color": "#002776",
+          "line-color": "#003893",
           "line-opacity": ["case", ["boolean", ["feature-state", "selected"], false], 0.7, 0.4],
           "line-width": ["case", ["boolean", ["feature-state", "selected"], false], 2.5, 1],
         },
@@ -754,8 +754,8 @@ export function MapView({
           "text-letter-spacing": 0.05,
         },
         paint: {
-          "text-color": "#1A1208",
-          "text-halo-color": "#FAF7F2",
+          "text-color": "#111418",
+          "text-halo-color": "#FAF8F3",
           "text-halo-width": 1.5,
         },
       });
@@ -811,7 +811,7 @@ export function MapView({
         paint: {
           // Thresholds sized for comuna/municipio-level counts (hundreds to ~20k),
           // not the old per-grid-cell counts (single/double digits).
-          "circle-color": ["step", ["get", "count"], "#1D9E75", 1000, "#085041", 8000, "#1A1208"],
+          "circle-color": ["step", ["get", "count"], "#0F8A4F", 1000, "#0A5C36", 8000, "#111418"],
           "circle-radius": ["step", ["get", "count"], 20, 1000, 30, 8000, 40],
           "circle-opacity": 0.88,
           "circle-stroke-width": 2,
@@ -847,7 +847,7 @@ export function MapView({
         paint: {
           "circle-radius": 12,
           // Filtro ya restringe a destacados (propio_pro/agente_verificado) → dorado fijo.
-          "circle-color": "#ffc928",
+          "circle-color": "#FCD116",
           "circle-opacity": 0.4,
           "circle-stroke-width": 0,
         },
@@ -880,21 +880,21 @@ export function MapView({
           "circle-color": [
             "case",
             // Destacado (agente verificado / propietario Pro / socio premium) → dorado
-            ["match", ["get", "fuente_display"], ["agente_verificado", "propio_pro"], true, false], "#ffc928",
+            ["match", ["get", "fuente_display"], ["agente_verificado", "propio_pro"], true, false], "#FCD116",
             // Propietario Free → gris cálido
-            ["==", ["get", "fuente_display"], "propio"],            "#9B8B75",
+            ["==", ["get", "fuente_display"], "propio"],            "#6E726E",
             // FC/MC → color por tipo de inmueble
-            ["==", ["get", "tipo_inmueble"], "apartamento"],        "#1D9E75",
-            ["==", ["get", "tipo_inmueble"], "casa"],               "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "casa_lote"],          "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "finca"],              "#D85A30",
-            ["==", ["get", "tipo_inmueble"], "apartaestudio"],      "#5DCAA5",
-            ["==", ["get", "tipo_inmueble"], "lote"],               "#BA7517",
-            ["==", ["get", "tipo_inmueble"], "local"],              "#7F77DD",
-            ["==", ["get", "tipo_inmueble"], "oficina"],            "#378ADD",
-            ["==", ["get", "tipo_inmueble"], "bodega"],             "#9B8B75",
-            ["==", ["get", "tipo_inmueble"], "consultorio"],        "#9B8B75",
-            "#1D9E75",
+            ["==", ["get", "tipo_inmueble"], "apartamento"],        "#0F8A4F",
+            ["==", ["get", "tipo_inmueble"], "casa"],               "#CE1126",
+            ["==", ["get", "tipo_inmueble"], "casa_lote"],          "#CE1126",
+            ["==", ["get", "tipo_inmueble"], "finca"],              "#CE1126",
+            ["==", ["get", "tipo_inmueble"], "apartaestudio"],      "#5BBE8A",
+            ["==", ["get", "tipo_inmueble"], "lote"],               "#8A6A00",
+            ["==", ["get", "tipo_inmueble"], "local"],              "#1F5BC6",
+            ["==", ["get", "tipo_inmueble"], "oficina"],            "#003893",
+            ["==", ["get", "tipo_inmueble"], "bodega"],             "#6E726E",
+            ["==", ["get", "tipo_inmueble"], "consultorio"],        "#6E726E",
+            "#0F8A4F",
           ],
           "circle-stroke-width": [
             "case",
@@ -958,10 +958,10 @@ export function MapView({
       });
       map.setTerrain({ source: "mapbox-dem", exaggeration: 1.5 });
       map.setFog({
-        color: "#FAF7F2",
+        color: "#FAF8F3",
         "high-color": "#d4c9b8",
         "horizon-blend": 0.08,
-        "space-color": "#FAF7F2",
+        "space-color": "#FAF8F3",
         "star-intensity": 0,
       });
 
@@ -1374,7 +1374,7 @@ export function MapView({
       const opp = b.oportunidad;
       if (!opp.detectada) return;
       const nb = barrioToNeighborhood(b);
-      const color = OPP_COLORS[opp.tipo as keyof typeof OPP_COLORS] ?? "#FDE8D3";
+      const color = OPP_COLORS[opp.tipo as keyof typeof OPP_COLORS] ?? "#FFF6D6";
       const el = document.createElement("div");
       el.className = "opp-pulse-dot";
       el.style.setProperty("--opp-color", color);
@@ -1405,43 +1405,43 @@ export function MapView({
   }
 
   const LEGEND_ITEMS = [
-    { color: "#1D9E75", label: "Apto" },
-    { color: "#D85A30", label: "Casa" },
-    { color: "#5DCAA5", label: "Aptaestudio" },
-    { color: "#BA7517", label: "Lote" },
-    { color: "#7F77DD", label: "Local" },
-    { color: "#378ADD", label: "Oficina" },
-    { color: "#9B8B75", label: "Bodega" },
+    { color: "#0F8A4F", label: "Apto" },
+    { color: "#CE1126", label: "Casa" },
+    { color: "#5BBE8A", label: "Aptaestudio" },
+    { color: "#8A6A00", label: "Lote" },
+    { color: "#1F5BC6", label: "Local" },
+    { color: "#003893", label: "Oficina" },
+    { color: "#6E726E", label: "Bodega" },
   ];
 
   const legendPanel = (
     <div data-tour="legend" style={{
-      background: "#FFFFFF", border: "1px solid #EAE3D6",
+      background: "#FFFFFF", border: "1px solid #E5E0D5",
       borderRadius: 14, padding: "12px 14px", width: 200,
       boxShadow: "0 8px 24px rgba(26,18,8,0.12)",
     }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 10 }}>
-        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#9B8B75" }}>
+        <span style={{ fontSize: 10, fontWeight: 700, letterSpacing: "0.06em", textTransform: "uppercase", color: "#6E726E" }}>
           Tipo de inmueble
         </span>
         <button
           onClick={() => setLegendOpen(false)}
           aria-label="Cerrar leyenda"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "#9B8B75", display: "flex", padding: 0, lineHeight: 1, fontSize: 15 }}
+          style={{ background: "none", border: "none", cursor: "pointer", color: "#6E726E", display: "flex", padding: 0, lineHeight: 1, fontSize: 15 }}
         >
           ×
         </button>
       </div>
       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px 10px" }}>
         {LEGEND_ITEMS.map(({ color, label }) => (
-          <div key={label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#1A1208" }}>
+          <div key={label} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#111418" }}>
             <span style={{ width: 9, height: 9, borderRadius: "50%", background: color, display: "inline-block", flexShrink: 0, boxShadow: `0 0 0 2px ${color}22` }} />
             {label}
           </div>
         ))}
       </div>
-      <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid #F0EADF", display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#1A1208" }}>
-        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#ffc928", display: "inline-block", flexShrink: 0, boxShadow: "0 0 0 2px #ffc92833" }} />
+      <div style={{ marginTop: 9, paddingTop: 9, borderTop: "1px solid #F0EADF", display: "flex", alignItems: "center", gap: 7, fontSize: 12, color: "#111418" }}>
+        <span style={{ width: 9, height: 9, borderRadius: "50%", background: "#FCD116", display: "inline-block", flexShrink: 0, boxShadow: "0 0 0 2px #ffc92833" }} />
         Premium
       </div>
     </div>
@@ -1467,13 +1467,13 @@ export function MapView({
               aria-label="Ver leyenda de tipos"
               style={{
                 display: "flex", alignItems: "center", gap: 7,
-                background: "#FFFFFF", border: "1px solid #EAE3D6",
-                borderRadius: 999, padding: "7px 13px", fontSize: 12, fontWeight: 500, color: "#1A1208",
+                background: "#FFFFFF", border: "1px solid #E5E0D5",
+                borderRadius: 999, padding: "7px 13px", fontSize: 12, fontWeight: 500, color: "#111418",
                 boxShadow: "0 4px 14px rgba(26,18,8,0.1)", cursor: "pointer",
               }}
             >
               <span style={{ display: "inline-flex", gap: 3 }}>
-                {["#1D9E75", "#D85A30", "#378ADD"].map((c) => (
+                {["#0F8A4F", "#CE1126", "#1F5BC6"].map((c) => (
                   <span key={c} style={{ width: 8, height: 8, borderRadius: "50%", background: c, display: "inline-block" }} />
                 ))}
               </span>

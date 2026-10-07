@@ -650,7 +650,7 @@ function MapPageInner() {
           onClick={() => { setGlobalSearch(true); setMapView("listings"); }}
           style={{
             position: "absolute", top: "calc(var(--map-header-h, 53px) + 56px)", left: "50%", transform: "translateX(-50%)",
-            zIndex: 24, background: "#1e3a5f", color: "#FAF7F2",
+            zIndex: 24, background: "#1e3a5f", color: "#FAF8F3",
             borderRadius: 8, padding: "6px 16px", fontSize: 12, fontWeight: 600,
             border: "none", cursor: "pointer", whiteSpace: "nowrap",
             boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
@@ -710,7 +710,7 @@ function MapPageInner() {
           onClick={() => setMobileView((v) => (v === "map" ? "list" : "map"))}
           data-tour="mobile-toggle-view"
           className="fixed left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg"
-          style={{ bottom: 24, background: "#1A1208" }}
+          style={{ bottom: 24, background: "#111418" }}
         >
           {mobileView === "map"
             ? (<><List size={16} /> Lista</>)

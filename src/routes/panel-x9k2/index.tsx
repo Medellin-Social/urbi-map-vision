@@ -14,6 +14,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
 import { toast } from "sonner";
+import { K as TOKENS } from "@/design/tokens";
 
 // Ruta ofuscada (no /admin). El gate real es el backend (ADMIN_EMAIL); esto solo
 // evita descubrimiento casual. beforeLoad exige sesión; los datos 403 si no eres admin.
@@ -29,11 +30,7 @@ export const Route = createFileRoute("/panel-x9k2/")({
   head: () => ({ meta: [{ title: "Panel · Medellín Social" }] }),
 });
 
-const K = {
-  paper: "#FAF7F2", surface: "#F5F0E8", line: "#E9E4D8", ink: "#14201D",
-  muted: "#62736D", teal: "#1D9E75", tealDeep: "#085041", coral: "#D85A30",
-  amber: "#D97706", fucsia: "#FF2D95", serif: "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "eventos" | "negocios" | "seguridad";
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
@@ -534,7 +531,7 @@ function RealtorsTab() {
         {ESTADOS.map((e) => (
           <button key={e.id} onClick={() => setEstado(e.id)}
             className="rounded-full border px-3 py-1 text-xs font-medium transition"
-            style={estado === e.id ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
+            style={estado === e.id ? { borderColor: K.teal, background: "#E7F4EC", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
             {e.label}
           </button>
         ))}
@@ -737,7 +734,7 @@ function DestacadoScope({ destacado, nivel, zonaCodigo, onSave, disabled }: {
         disabled={disabled}
         title="Alcance del destacado"
         className="rounded-full border px-2.5 py-1 text-[11px] font-semibold disabled:opacity-50"
-        style={activo ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, background: K.surface, color: K.muted }}
+        style={activo ? { borderColor: K.teal, background: "#E7F4EC", color: K.tealDeep } : { borderColor: K.line, background: K.surface, color: K.muted }}
       >
         <option value="off">Apagado</option>
         <option value="barrio">★ Barrio</option>
@@ -974,13 +971,13 @@ function LeadsTab() {
         <div className="flex flex-wrap gap-1.5">
           <button onClick={() => setFiltro("todos")}
             className="rounded-full border px-3 py-1 text-xs font-medium transition"
-            style={filtro === "todos" ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
+            style={filtro === "todos" ? { borderColor: K.teal, background: "#E7F4EC", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
             Todos
           </button>
           {LEAD_ESTADOS.map((e) => (
             <button key={e.id} onClick={() => setFiltro(e.id)}
               className="rounded-full border px-3 py-1 text-xs font-medium transition"
-              style={filtro === e.id ? { borderColor: K.teal, background: "#E1F5EE", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
+              style={filtro === e.id ? { borderColor: K.teal, background: "#E7F4EC", color: K.tealDeep } : { borderColor: K.line, color: K.muted }}>
               {e.label}
             </button>
           ))}
@@ -1171,7 +1168,7 @@ function UsuariosTab() {
                     onClick={() => toggleActivo(u)}
                     className="rounded-full px-2.5 py-1 text-[11px] font-semibold"
                     style={(u.activo ?? true)
-                      ? { background: "#E1F5EE", color: K.tealDeep }
+                      ? { background: "#E7F4EC", color: K.tealDeep }
                       : { background: "#FDECEA", color: K.coral }}
                     title="Click para alternar"
                   >

@@ -2,19 +2,9 @@ export type { TiendaData } from '@/hooks/useTiendas'
 import type { TiendaData } from '@/hooks/useTiendas'
 import { CATEGORIA_LABELS, CATEGORIA_COLORS, CATEGORIA_EMOJI } from '@/lib/categorias_comunidad'
 import { safeHref } from '@/lib/utils'
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  ink: '#14201d',
-  muted: '#62736d',
-  teal: '#1D9E75',
-  tealDeep: '#085041',
-  coral: '#D85A30',
-  coralLight: '#FAECE7',
-  amarillo: '#ffc928',
-  line: '#e9e4d8',
-  serif: "'Fraunces', Georgia, serif" as const,
-  green: '#25D366',
-}
+const K = TOKENS;
 
 function Stars({ rating }: { rating: number | null | undefined }) {
   if (!rating) return null
@@ -82,7 +72,7 @@ function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: bool
 
 export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
   const catLabel = tienda.categoria ? (CATEGORIA_LABELS[tienda.categoria] ?? tienda.categoria) : null
-  const catColor = tienda.categoria ? (CATEGORIA_COLORS[tienda.categoria] ?? '#f5f0e8') : '#f5f0e8'
+  const catColor = tienda.categoria ? (CATEGORIA_COLORS[tienda.categoria] ?? '#F3F0E8') : '#F3F0E8'
   const catEmoji = tienda.categoria ? (CATEGORIA_EMOJI[tienda.categoria] ?? '⭐') : '⭐'
 
   const wa = tienda.whatsapp
@@ -100,7 +90,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
   return (
     <div style={{
       background: '#fff',
-      border: '1px solid #e9e4d8',
+      border: '1px solid #E5E0D5',
       borderRadius: 12,
       overflow: 'hidden',
       display: 'flex',
@@ -127,7 +117,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
         {catLabel && (
           <div style={{
             position: 'absolute', top: 8, left: 8,
-            background: '#ffc928', color: '#14201d',
+            background: '#FCD116', color: '#111418',
             fontWeight: 800, fontSize: 10, padding: '3px 7px',
             borderRadius: 4, letterSpacing: '0.4px', whiteSpace: 'nowrap',
             maxWidth: 'calc(100% - 16px)', overflow: 'hidden', textOverflow: 'ellipsis',
@@ -142,7 +132,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
         {/* Barrio */}
         {tienda.barrio_nombre && (
           <p style={{
-            fontSize: 10, color: '#62736d', margin: 0,
+            fontSize: 10, color: '#5B5F5C', margin: 0,
             textTransform: 'uppercase', letterSpacing: '0.6px', fontWeight: 700,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
@@ -152,7 +142,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
 
         {/* Nombre */}
         <p style={{
-          fontWeight: 700, fontSize: 14, color: '#14201d',
+          fontWeight: 700, fontSize: 14, color: '#111418',
           margin: 0, lineHeight: 1.25,
           display: '-webkit-box',
           WebkitLineClamp: 2,
@@ -166,22 +156,22 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 2 }}>
           {tienda.rating_google ? (
             <>
-              <span style={{ color: '#ffc928', fontSize: 12, letterSpacing: 1 }}>
+              <span style={{ color: '#FCD116', fontSize: 12, letterSpacing: 1 }}>
                 {'★'.repeat(Math.min(Math.round(tienda.rating_google), 5))}
               </span>
-              <span style={{ fontSize: 11, color: '#62736d', fontWeight: 600 }}>
+              <span style={{ fontSize: 11, color: '#5B5F5C', fontWeight: 600 }}>
                 {tienda.rating_google.toFixed(1)}
               </span>
             </>
           ) : (
-            <span style={{ fontSize: 11, color: '#9B8B75' }}>Sin calificación</span>
+            <span style={{ fontSize: 11, color: '#6E726E' }}>Sin calificación</span>
           )}
         </div>
 
         {/* Dirección */}
         {tienda.direccion && (
           <p style={{
-            fontSize: 11, color: '#9B8B75', margin: 0, lineHeight: 1.3,
+            fontSize: 11, color: '#6E726E', margin: 0, lineHeight: 1.3,
             overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
           }}>
             {tienda.direccion}
@@ -207,8 +197,8 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
           {secondaryBtn && (
             <a href={secondaryBtn} target="_blank" rel="noopener noreferrer" style={{
               flex: '0 0 auto', padding: '7px 10px',
-              background: '#f5f0e8', border: '1px solid #e9e4d8',
-              borderRadius: 7, fontSize: 11, color: '#14201d',
+              background: '#F3F0E8', border: '1px solid #E5E0D5',
+              borderRadius: 7, fontSize: 11, color: '#111418',
               textDecoration: 'none', fontWeight: 600,
               whiteSpace: 'nowrap',
             }}>
@@ -218,8 +208,8 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
           {!primaryBtn && !secondaryBtn && safeHref(tienda.website) && (
             <a href={safeHref(tienda.website)} target="_blank" rel="noopener noreferrer" style={{
               flex: 1, textAlign: 'center', padding: '7px 0',
-              background: '#f5f0e8', border: '1px solid #e9e4d8',
-              borderRadius: 7, fontSize: 11, color: '#14201d',
+              background: '#F3F0E8', border: '1px solid #E5E0D5',
+              borderRadius: 7, fontSize: 11, color: '#111418',
               textDecoration: 'none', fontWeight: 600,
             }}>
               🌐 Web

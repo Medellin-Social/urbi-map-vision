@@ -24,13 +24,13 @@ export function ComparadorOnboarding({ onClose }: { onClose: () => void }) {
     >
       <div
         className="w-full max-w-sm rounded-2xl p-6 shadow-2xl"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
       >
         <div className="mb-4 flex items-start justify-between">
-          <h2 className="font-display text-lg font-semibold text-[#1A1208]">
+          <h2 className="font-display text-lg font-semibold text-[#111418]">
             ¿Cómo funciona el comparador?
           </h2>
-          <button onClick={handleClose} className="text-[#9B8B75] hover:text-[#1A1208]">
+          <button onClick={handleClose} className="text-[#6E726E] hover:text-[#111418]">
             <X className="h-4 w-4" />
           </button>
         </div>
@@ -44,17 +44,17 @@ export function ComparadorOnboarding({ onClose }: { onClose: () => void }) {
           ].map(({ emoji, text }, i) => (
             <div key={i} className="flex items-start gap-3">
               <span className="text-xl leading-tight">{emoji}</span>
-              <p className="text-sm text-[#6B5B45]">{text}</p>
+              <p className="text-sm text-[#5B5F5C]">{text}</p>
             </div>
           ))}
         </div>
 
-        <label className="mt-5 flex items-center gap-2 text-xs text-[#9B8B75]">
+        <label className="mt-5 flex items-center gap-2 text-xs text-[#6E726E]">
           <input
             type="checkbox"
             checked={noMostrar}
             onChange={(e) => setNoMostrar(e.target.checked)}
-            className="accent-[#1D9E75]"
+            className="accent-[#0F8A4F]"
           />
           No volver a mostrar
         </label>
@@ -62,7 +62,7 @@ export function ComparadorOnboarding({ onClose }: { onClose: () => void }) {
         <button
           onClick={handleClose}
           className="mt-4 w-full rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           Entendido →
         </button>
@@ -87,23 +87,23 @@ function ComparadorPromptModal({
     >
       <div
         className="w-full max-w-xs rounded-2xl p-5 shadow-2xl"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
       >
-        <p className="mb-4 text-center text-sm font-semibold text-[#1A1208]">
+        <p className="mb-4 text-center text-sm font-semibold text-[#111418]">
           ¿Qué quieres hacer?
         </p>
         <div className="space-y-2">
           <button
             onClick={onAgregar}
-            className="w-full rounded-xl py-2.5 text-sm font-medium transition hover:bg-[#F5F0E8]"
-            style={{ border: "0.5px solid #E8E0D0", color: "#6B5B45" }}
+            className="w-full rounded-xl py-2.5 text-sm font-medium transition hover:bg-[#F3F0E8]"
+            style={{ border: "0.5px solid #E5E0D5", color: "#5B5F5C" }}
           >
             + Agregar más (máx. {MAX_COMPARADOR})
           </button>
           <button
             onClick={onComparar}
             className="w-full rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
+            style={{ background: "#0F8A4F" }}
           >
             Comparar ahora →
           </button>
@@ -126,7 +126,7 @@ function Thumb({ listing }: { listing: ApiListing }) {
       ) : (
         <div
           className="flex h-full w-full items-center justify-center text-[10px]"
-          style={{ background: "#1D9E75", color: "#fff" }}
+          style={{ background: "#0F8A4F", color: "#fff" }}
         >
           🏠
         </div>
@@ -194,7 +194,7 @@ export function ComparadorBadge() {
       <div
         className="fixed bottom-6 left-1/2 z-30 flex -translate-x-1/2 flex-col gap-2 rounded-2xl px-4 py-3 shadow-2xl"
         style={{
-          background: "#1A1208",
+          background: "#111418",
           border: "0.5px solid rgba(255,255,255,0.12)",
           minWidth: 320,
           maxWidth: "calc(100vw - 32px)",
@@ -233,7 +233,7 @@ export function ComparadorBadge() {
           <button
             onClick={goToComparador}
             className="flex-1 rounded-lg py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
+            style={{ background: "#0F8A4F" }}
             disabled={listings.length < 2}
           >
             {listings.length < 2 ? `Agrega ${2 - listings.length} más` : "Comparar →"}

@@ -93,9 +93,9 @@ export function GoogleSignInButton({
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
       <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{ flex: 1, height: 1, background: "#E8E0D0" }} />
-        <span style={{ fontFamily: "'Manrope', system-ui, sans-serif", fontSize: 12, color: "#62736d" }}>o</span>
-        <div style={{ flex: 1, height: 1, background: "#E8E0D0" }} />
+        <div style={{ flex: 1, height: 1, background: "#E5E0D5" }} />
+        <span style={{ fontFamily: "'Inter', system-ui, sans-serif", fontSize: 12, color: "#5B5F5C" }}>o</span>
+        <div style={{ flex: 1, height: 1, background: "#E5E0D5" }} />
       </div>
       <div ref={containerRef} style={{ display: "flex", justifyContent: "center" }} />
     </div>

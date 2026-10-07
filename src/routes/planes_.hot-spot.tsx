@@ -3,13 +3,9 @@ import { createFileRoute } from "@tanstack/react-router";
 import { auth } from "@/lib/auth";
 import { GHL, ghlRedirect } from "@/config/ghl";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  paper:    "#FAF7F2", ink:      "#1A1208", muted:    "#6B5B45",
-  teal:     "#1D9E75", tealDeep: "#085041", tealMid:  "#0D6E50",
-  tealLight:"#E8F5F0", line:     "#E8E0D0", faint:    "#F3EFE7",
-  serif:    "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 const BASE = [
   "CRM integrado",
@@ -131,7 +127,7 @@ function HotSpotPage() {
           <div style={{ background: "#fff", border: `2px solid ${K.tealDeep}`, borderRadius: 12, padding: "6px 0", marginBottom: 28 }}>
             {PLATFORM.map((f, i) => (
               <div key={f} style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 20px", borderBottom: i < PLATFORM.length - 1 ? `1px solid ${K.line}` : "none" }}>
-                <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "#D1FAE5", color: K.teal, fontSize: 11, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓</span>
+                <span style={{ flexShrink: 0, width: 22, height: 22, borderRadius: "50%", background: "#E7F4EC", color: K.teal, fontSize: 11, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓</span>
                 <span style={{ fontSize: 14, color: K.ink, fontWeight: 500 }}>{f}</span>
               </div>
             ))}

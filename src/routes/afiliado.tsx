@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/afiliado')({
   component: AfiliadoPage,
@@ -14,14 +15,7 @@ export const Route = createFileRoute('/afiliado')({
   }),
 })
 
-const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 const CANALES = [
   { value: 'red_negocios', label: 'Red de negocios locales' },
@@ -194,7 +188,7 @@ function AfiliadoPage() {
   )
 
   return (
-    <ComunidadLayout subNav={subNav} compact>
+    <ComunidadLayout subNav={subNav}>
 
       {/* HERO */}
       <section style={{
@@ -203,7 +197,7 @@ function AfiliadoPage() {
           linear-gradient(180deg, #fff 0%, ${K.paper} 100%)`,
         padding: '72px 26px 56px', borderBottom: `1px solid ${K.line}`,
       }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.15fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
           <div>
             <span style={{
               display: 'inline-block', background: `rgba(255,201,40,.2)`, color: '#7a5800',
@@ -291,7 +285,7 @@ function AfiliadoPage() {
 
       {/* POR QUÉ */}
       <section id="por-que" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Por qué este producto se vende
           </h2>
@@ -314,8 +308,8 @@ function AfiliadoPage() {
       </section>
 
       {/* COMPENSACIÓN — dark band */}
-      <section id="compensacion" style={{ background: `linear-gradient(135deg, ${K.ink} 0%, #2a3e39 100%)`, padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+      <section id="compensacion" style={{ background: `linear-gradient(135deg, ${K.ink} 0%, #2A302C 100%)`, padding: '72px 26px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: '#fff', margin: '0 0 14px' }}>
             Cómo te pagamos
           </h2>
@@ -352,7 +346,7 @@ function AfiliadoPage() {
 
       {/* MATH */}
       <section style={{ padding: '72px 26px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             La cuenta, simplificada
           </h2>
@@ -394,7 +388,7 @@ function AfiliadoPage() {
 
       {/* PARA QUIÉN */}
       <section style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Para quién está hecho esto
           </h2>
@@ -421,7 +415,7 @@ function AfiliadoPage() {
 
       {/* KIT */}
       <section id="kit" style={{ padding: '72px 26px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Lo que te entregamos el primer día
           </h2>
@@ -448,7 +442,7 @@ function AfiliadoPage() {
 
       {/* CÓMO AVANZA UN TRATO */}
       <section style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Cómo avanza un trato
           </h2>

@@ -125,11 +125,11 @@ function calcCuota(presupuestoMill: number, cuotaIni: number, tasaAnual: number,
 }
 
 function scoreToRating(score: number): { label: string; stars: number; bg: string; border: string; color: string } {
-  if (score >= 80) return { label: "EXCELENTE", stars: 5, bg: "rgba(8,80,65,0.10)", border: "#085041", color: "#085041" };
-  if (score >= 60) return { label: "BUENA INVERSIÓN", stars: 4, bg: "rgba(29,158,117,0.10)", border: "#1D9E75", color: "#1D9E75" };
-  if (score >= 40) return { label: "MODERADA", stars: 3, bg: "rgba(186,117,23,0.10)", border: "#BA7517", color: "#BA7517" };
-  if (score >= 20) return { label: "BAJA", stars: 2, bg: "rgba(216,90,48,0.10)", border: "#D85A30", color: "#D85A30" };
-  return { label: "NO RECOMENDADA", stars: 1, bg: "rgba(216,90,48,0.14)", border: "#D85A30", color: "#D85A30" };
+  if (score >= 80) return { label: "EXCELENTE", stars: 5, bg: "rgba(8,80,65,0.10)", border: "#0A5C36", color: "#0A5C36" };
+  if (score >= 60) return { label: "BUENA INVERSIÓN", stars: 4, bg: "rgba(29,158,117,0.10)", border: "#0F8A4F", color: "#0F8A4F" };
+  if (score >= 40) return { label: "MODERADA", stars: 3, bg: "rgba(186,117,23,0.10)", border: "#8A6A00", color: "#8A6A00" };
+  if (score >= 20) return { label: "BAJA", stars: 2, bg: "rgba(216,90,48,0.10)", border: "#CE1126", color: "#CE1126" };
+  return { label: "NO RECOMENDADA", stars: 1, bg: "rgba(216,90,48,0.14)", border: "#CE1126", color: "#CE1126" };
 }
 
 // ── Main page ────────────────────────────────────────────────────────────────
@@ -429,8 +429,8 @@ function SimuladorPage() {
               <div className="inline-flex items-center gap-1.5 text-[11px] font-medium uppercase tracking-widest text-primary">
                 <Calculator className="h-3 w-3" /> Simulador Pro
               </div>
-              <h1 className="mt-1 font-display text-2xl font-semibold text-[#1A1208]">Simula tu inversión</h1>
-              <p className="mt-1 text-xs text-[#6B5B45]">Resultados con datos reales del mercado</p>
+              <h1 className="mt-1 font-display text-2xl font-semibold text-[#111418]">Simula tu inversión</h1>
+              <p className="mt-1 text-xs text-[#5B5F5C]">Resultados con datos reales del mercado</p>
             </div>
 
             {/* PASO 1 — ZONA Y PRESUPUESTO */}
@@ -438,7 +438,7 @@ function SimuladorPage() {
               <select
                 value={comunaKey ?? ""}
                 onChange={(e) => handleComunaChange(e.target.value || null)}
-                className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#1A1208] focus:border-primary focus:outline-none"
+                className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#111418] focus:border-primary focus:outline-none"
               >
                 <option value="">Seleccionar zona...</option>
                 {(() => {
@@ -475,7 +475,7 @@ function SimuladorPage() {
                   value={barrioId || ""}
                   onChange={(e) => { setBarrioId(Number(e.target.value)); reset(); setCalcDone(false); }}
                   disabled={isComunaLoading}
-                  className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#1A1208] focus:border-primary focus:outline-none disabled:opacity-50"
+                  className="w-full rounded-md border border-border bg-background/60 px-3 py-2 text-sm text-[#111418] focus:border-primary focus:outline-none disabled:opacity-50"
                 >
                   <option value="">
                     {isComunaLoading ? "Cargando barrios..." : "Seleccionar barrio..."}
@@ -507,17 +507,17 @@ function SimuladorPage() {
                     if (!presupuestoStr || n <= 0) { setPresupuestoStr(String(presupuesto)); }
                     else { const c = clamp(n, 50, 2000); setPresupuesto(c); setPresupuestoStr(String(c)); }
                   }}
-                  className="w-28 rounded-md border border-border bg-background/60 px-2 py-2 text-sm text-[#1A1208] focus:border-primary focus:outline-none"
+                  className="w-28 rounded-md border border-border bg-background/60 px-2 py-2 text-sm text-[#111418] focus:border-primary focus:outline-none"
                 />
-                <span className="text-xs text-[#6B5B45]">M COP</span>
-                <span className="ml-auto text-xs text-[#6B5B45]">
+                <span className="text-xs text-[#5B5F5C]">M COP</span>
+                <span className="ml-auto text-xs text-[#5B5F5C]">
                   ≈ ${((presupuesto * 1_000_000) / usdRate).toLocaleString("en-US", { maximumFractionDigits: 0 })} USD
                 </span>
               </div>
               <input
                 type="range" min={50} max={2000} step={50} value={presupuesto}
                 onChange={(e) => { const n = Number(e.target.value); setPresupuesto(n); setPresupuestoStr(String(n)); reset(); setCalcDone(false); }}
-                className="mt-3 w-full accent-[#1D9E75]"
+                className="mt-3 w-full accent-[#0F8A4F]"
               />
               <div className="mt-2 flex flex-wrap gap-1.5">
                 {PRESETS.map((p) => (
@@ -525,7 +525,7 @@ function SimuladorPage() {
                     key={p}
                     onClick={() => { setPresupuesto(p); setPresupuestoStr(String(p)); reset(); setCalcDone(false); }}
                     className={`rounded-md border px-2 py-1 text-[11px] font-medium transition ${
-                      presupuesto === p ? "border-primary bg-primary/15 text-primary" : "border-border text-[#6B5B45] hover:text-[#1A1208]"
+                      presupuesto === p ? "border-primary bg-primary/15 text-primary" : "border-border text-[#5B5F5C] hover:text-[#111418]"
                     }`}
                   >
                     ${p >= 1000 ? `${p/1000}B` : `${p}M`}
@@ -542,7 +542,7 @@ function SimuladorPage() {
                     key={tc}
                     onClick={() => { setTipoCompra(tc); reset(); setCalcDone(false); }}
                     className={`flex-1 rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                      tipoCompra === tc ? "bg-primary text-primary-foreground" : "text-[#6B5B45] hover:text-[#1A1208]"
+                      tipoCompra === tc ? "bg-primary text-primary-foreground" : "text-[#5B5F5C] hover:text-[#111418]"
                     }`}
                   >
                     {tc === "contado" ? "Contado" : "Con crédito"}
@@ -552,40 +552,40 @@ function SimuladorPage() {
               {tipoCompra === "credito" && (
                 <div className="mt-3 space-y-3 rounded-xl border border-border/60 bg-background/40 p-3">
                   <div>
-                    <div className="mb-1 flex justify-between text-[10px] text-[#6B5B45]">
+                    <div className="mb-1 flex justify-between text-[10px] text-[#5B5F5C]">
                       <span>Cuota inicial</span>
-                      <span className="font-semibold text-[#1A1208]">{cuotaInicial}% · {formatCOP(presupuesto * 1_000_000 * cuotaInicial / 100)}</span>
+                      <span className="font-semibold text-[#111418]">{cuotaInicial}% · {formatCOP(presupuesto * 1_000_000 * cuotaInicial / 100)}</span>
                     </div>
                     <input
                       type="range" min={10} max={50} step={5} value={cuotaInicial}
                       onChange={(e) => setCuotaInicial(Number(e.target.value))}
-                      className="w-full accent-[#1D9E75]"
+                      className="w-full accent-[#0F8A4F]"
                     />
-                    <div className="mt-1 text-[10px] text-[#6B5B45]">
+                    <div className="mt-1 text-[10px] text-[#5B5F5C]">
                       Crédito: {formatCOP(presupuesto * 1_000_000 * (1 - cuotaInicial / 100))}
                     </div>
                   </div>
                   <div>
-                    <div className="mb-1 text-[10px] text-[#6B5B45]">Tasa de interés anual E.A.</div>
+                    <div className="mb-1 text-[10px] text-[#5B5F5C]">Tasa de interés anual E.A.</div>
                     <div className="flex items-center gap-2">
                       <input
                         type="number" step="0.1" min={5} max={25} value={tasaAnual}
                         onChange={(e) => setTasaAnual(Number(e.target.value))}
-                        className="w-20 rounded-md border border-border bg-background/60 px-2 py-1.5 text-sm text-[#1A1208] focus:border-primary focus:outline-none"
+                        className="w-20 rounded-md border border-border bg-background/60 px-2 py-1.5 text-sm text-[#111418] focus:border-primary focus:outline-none"
                       />
-                      <span className="text-xs text-[#6B5B45]">%</span>
-                      <span className="ml-1 text-[10px] text-[#6B5B45]">Promedio bancos: ~12–14%</span>
+                      <span className="text-xs text-[#5B5F5C]">%</span>
+                      <span className="ml-1 text-[10px] text-[#5B5F5C]">Promedio bancos: ~12–14%</span>
                     </div>
                   </div>
                   <div>
-                    <div className="mb-1 text-[10px] text-[#6B5B45]">Plazo</div>
+                    <div className="mb-1 text-[10px] text-[#5B5F5C]">Plazo</div>
                     <div className="inline-flex gap-1">
                       {([10, 15, 20] as const).map((p) => (
                         <button
                           key={p}
                           onClick={() => setPlazoAnos(p)}
                           className={`rounded-md border px-3 py-1 text-xs font-medium transition ${
-                            plazoAnos === p ? "border-primary bg-primary/15 text-primary" : "border-border text-[#6B5B45]"
+                            plazoAnos === p ? "border-primary bg-primary/15 text-primary" : "border-border text-[#5B5F5C]"
                           }`}
                         >
                           {p} años
@@ -617,8 +617,8 @@ function SimuladorPage() {
                     }`}
                   >
                     <div className="text-xl">{t.emoji}</div>
-                    <div className="mt-1 text-xs font-semibold leading-tight text-[#1A1208]">{t.label}</div>
-                    <div className="text-[10px] text-[#6B5B45] leading-tight">{t.sub}</div>
+                    <div className="mt-1 text-xs font-semibold leading-tight text-[#111418]">{t.label}</div>
+                    <div className="text-[10px] text-[#5B5F5C] leading-tight">{t.sub}</div>
                   </button>
                 ))}
               </div>
@@ -632,7 +632,7 @@ function SimuladorPage() {
                     key={h}
                     onClick={() => setHorizonte(h)}
                     className={`flex-1 rounded px-3 py-1.5 text-xs font-medium uppercase tracking-wider transition ${
-                      horizonte === h ? "bg-primary text-primary-foreground" : "text-[#1A1208]"
+                      horizonte === h ? "bg-primary text-primary-foreground" : "text-[#111418]"
                     }`}
                   >
                     {h}a
@@ -645,7 +645,7 @@ function SimuladorPage() {
             <div className="mb-4">
               <button
                 onClick={() => setShowGastos(!showGastos)}
-                className="flex w-full items-center justify-between rounded-lg border border-border bg-background/40 px-3 py-2 text-xs font-medium text-[#6B5B45] transition hover:text-[#1A1208]"
+                className="flex w-full items-center justify-between rounded-lg border border-border bg-background/40 px-3 py-2 text-xs font-medium text-[#5B5F5C] transition hover:text-[#111418]"
               >
                 <span>Ajustar gastos</span>
                 {showGastos ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
@@ -666,7 +666,7 @@ function SimuladorPage() {
                           type="text" inputMode="numeric" placeholder="0 si no tiene administración"
                           value={adminMes}
                           onChange={(e) => setAdminMes(e.target.value.replace(/[^0-9]/g, ""))}
-                          className="w-full rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs text-[#1A1208] placeholder:text-[#9B8B75] focus:border-primary focus:outline-none"
+                          className="w-full rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs text-[#111418] placeholder:text-[#6E726E] focus:border-primary focus:outline-none"
                         />
                       </GastoField>
 
@@ -675,7 +675,7 @@ function SimuladorPage() {
                         <input
                           type="range" min={0} max={50} step={1} value={vacanciaPct}
                           onChange={(e) => setVacanciaPct(Number(e.target.value))}
-                          className="w-full accent-[#1D9E75]"
+                          className="w-full accent-[#0F8A4F]"
                         />
                       </GastoField>
 
@@ -684,7 +684,7 @@ function SimuladorPage() {
                         <input
                           type="range" min={0} max={3} step={0.1} value={mantPct}
                           onChange={(e) => setMantPct(Number(e.target.value))}
-                          className="w-full accent-[#1D9E75]"
+                          className="w-full accent-[#0F8A4F]"
                         />
                       </GastoField>
 
@@ -693,7 +693,7 @@ function SimuladorPage() {
                         <input
                           type="range" min={0} max={1} step={0.05} value={seguroPct}
                           onChange={(e) => setSeguroPct(Number(e.target.value))}
-                          className="w-full accent-[#1D9E75]"
+                          className="w-full accent-[#0F8A4F]"
                         />
                       </GastoField>
 
@@ -703,7 +703,7 @@ function SimuladorPage() {
                           <input
                             type="range" min={0} max={25} step={1} value={feePct}
                             onChange={(e) => setFeePct(Number(e.target.value))}
-                            className="w-full accent-[#1D9E75]"
+                            className="w-full accent-[#0F8A4F]"
                           />
                         </GastoField>
                       )}
@@ -714,13 +714,13 @@ function SimuladorPage() {
                           type="text" inputMode="numeric" placeholder={`${(presupuesto * 0.005).toFixed(1)}M estimado`}
                           value={predialStr}
                           onChange={(e) => setPredialStr(e.target.value.replace(/[^0-9.]/g, ""))}
-                          className="w-full rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs text-[#1A1208] placeholder:text-[#9B8B75] focus:border-primary focus:outline-none"
+                          className="w-full rounded-md border border-border bg-background/60 px-2 py-1.5 text-xs text-[#111418] placeholder:text-[#6E726E] focus:border-primary focus:outline-none"
                         />
                       </GastoField>
 
                       {/* Retención */}
                       <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[#6B5B45]">Retención en la fuente (3.5% si canon &gt;$1.3M)</span>
+                        <span className="text-[10px] text-[#5B5F5C]">Retención en la fuente (3.5% si canon &gt;$1.3M)</span>
                         <button
                           onClick={() => setRetencion(!retencion)}
                           className={`relative inline-flex h-5 w-9 shrink-0 rounded-full border transition ${retencion ? "border-primary bg-primary" : "border-border bg-background"}`}
@@ -731,7 +731,7 @@ function SimuladorPage() {
 
                       <button
                         onClick={restoreDefaults}
-                        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-[11px] text-[#6B5B45] transition hover:text-[#1A1208]"
+                        className="flex w-full items-center justify-center gap-1.5 rounded-md border border-border py-1.5 text-[11px] text-[#5B5F5C] transition hover:text-[#111418]"
                       >
                         <RotateCcw className="h-3 w-3" /> Restaurar defaults
                       </button>
@@ -953,7 +953,7 @@ function ResultsPanel({
             <RowItem label="Retorno total (5 años)" value={formatCOP(r.valorizacion.retorno_total_5anos_cop)} bold />
           </div>
         </div>
-        <p className="mt-3 text-[11px] text-[#6B5B45]">
+        <p className="mt-3 text-[11px] text-[#5B5F5C]">
           En 5 años tu propiedad valdría ~{formatCOP(r.valorizacion.valor_5anos_cop)} y habrás generado{" "}
           {formatCOP(Math.round(ingresosNetosAcum5))} en ingresos netos.
         </p>
@@ -965,7 +965,7 @@ function ResultsPanel({
           {r.alertas.map((a, i) => (
             <div key={i} className="flex items-start gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3 text-xs">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-warning" />
-              <span className="text-[#1A1208]">{a}</span>
+              <span className="text-[#111418]">{a}</span>
             </div>
           ))}
         </div>
@@ -975,7 +975,7 @@ function ResultsPanel({
       {r.resumen && (
         <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
           <div className="text-[11px] font-bold uppercase tracking-widest text-primary">Análisis</div>
-          <p className="mt-1 text-xs leading-relaxed text-[#1A1208]">{r.resumen}</p>
+          <p className="mt-1 text-xs leading-relaxed text-[#111418]">{r.resumen}</p>
         </div>
       )}
 
@@ -1006,7 +1006,7 @@ function ResultsPanel({
               navigator.clipboard?.writeText(url);
             }
           }}
-          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background/40 py-2.5 text-xs font-semibold text-[#1A1208] transition hover:border-primary/40"
+          className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-border bg-background/40 py-2.5 text-xs font-semibold text-[#111418] transition hover:border-primary/40"
         >
           <Share2 className="h-3 w-3" /> Compartir
         </button>
@@ -1034,7 +1034,7 @@ function FlujoCajaCard({ d }: { d: FlujoCajaDesglose }) {
         {d.seguro != null && <FlujRow label="Seguro propiedad" value={d.seguro} />}
         {d.predial != null && <FlujRow label="Predial" value={d.predial} />}
         <div className="mt-1 border-t border-border/60 pt-1">
-          <div className="flex justify-between font-semibold text-[#1A1208]">
+          <div className="flex justify-between font-semibold text-[#111418]">
             <span>Ingreso neto mensual</span>
             <span className="text-primary">{formatCOP(d.ingreso_neto)}</span>
           </div>
@@ -1065,8 +1065,8 @@ function FlujRow({ label, value, positive }: { label: string; value: number; pos
   const isPos = positive || value > 0;
   return (
     <div className="flex justify-between">
-      <span className="text-[#6B5B45]">{label}</span>
-      <span className={isPos ? "text-success" : "text-[#6B5B45]"}>
+      <span className="text-[#5B5F5C]">{label}</span>
+      <span className={isPos ? "text-success" : "text-[#5B5F5C]"}>
         {value > 0 ? "+" : ""}{formatCOP(value)}
       </span>
     </div>
@@ -1115,7 +1115,7 @@ function ProyeccionChart({ r, horizonte, presupuestoMill }: { r: SimulacionRespo
             onMouseLeave={() => setActiveIdx(null)}
           >
             <CartesianGrid strokeDasharray="3 3" stroke="rgba(107,91,69,0.12)" vertical={false} />
-            <XAxis dataKey="año" tick={{ fontSize: 10, fill: "#6B5B45" }} axisLine={false} tickLine={false} />
+            <XAxis dataKey="año" tick={{ fontSize: 10, fill: "#5B5F5C" }} axisLine={false} tickLine={false} />
             <YAxis hide />
             <Tooltip
               content={({ payload, label }) => {
@@ -1126,11 +1126,11 @@ function ProyeccionChart({ r, horizonte, presupuestoMill }: { r: SimulacionRespo
                     <div className="mb-1 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{label}</div>
                     <div className="space-y-1">
                       <div className="flex justify-between gap-4">
-                        <span className="text-[#1D9E75]">Valor inmueble</span>
+                        <span className="text-[#0F8A4F]">Valor inmueble</span>
                         <span className="font-semibold">{d.valor}M</span>
                       </div>
                       <div className="flex justify-between gap-4">
-                        <span className="text-[#D85A30]">Ingresos netos acum.</span>
+                        <span className="text-[#CE1126]">Ingresos netos acum.</span>
                         <span className="font-semibold">{d.ingresos}M</span>
                       </div>
                       <div className="mt-1 border-t border-border/60 pt-1 flex justify-between">
@@ -1143,20 +1143,20 @@ function ProyeccionChart({ r, horizonte, presupuestoMill }: { r: SimulacionRespo
               }}
             />
             <Legend
-              wrapperStyle={{ fontSize: 10, color: "#6B5B45" }}
+              wrapperStyle={{ fontSize: 10, color: "#5B5F5C" }}
               formatter={(value) => value === "valor" ? "Valor inmueble" : "Ingresos netos acum."}
             />
             <Line
               type="monotone" dataKey="valor" name="valor"
-              stroke="#1D9E75" strokeWidth={2}
-              dot={{ r: 4, fill: "#1D9E75", strokeWidth: 0 }}
-              activeDot={{ r: 7, fill: "#1D9E75", stroke: "rgba(29,158,117,0.4)", strokeWidth: 2 }}
+              stroke="#0F8A4F" strokeWidth={2}
+              dot={{ r: 4, fill: "#0F8A4F", strokeWidth: 0 }}
+              activeDot={{ r: 7, fill: "#0F8A4F", stroke: "rgba(29,158,117,0.4)", strokeWidth: 2 }}
             />
             <Line
               type="monotone" dataKey="ingresos" name="ingresos"
-              stroke="#D85A30" strokeWidth={2} strokeDasharray="4 2"
-              dot={{ r: 4, fill: "#D85A30", strokeWidth: 0 }}
-              activeDot={{ r: 7, fill: "#D85A30", stroke: "rgba(216,90,48,0.4)", strokeWidth: 2 }}
+              stroke="#CE1126" strokeWidth={2} strokeDasharray="4 2"
+              dot={{ r: 4, fill: "#CE1126", strokeWidth: 0 }}
+              activeDot={{ r: 7, fill: "#CE1126", stroke: "rgba(216,90,48,0.4)", strokeWidth: 2 }}
             />
           </LineChart>
         </ResponsiveContainer>
@@ -1187,7 +1187,7 @@ function ComparativoTable({
       <div className="mt-3 overflow-x-auto">
         <table className="w-full text-xs">
           <thead>
-            <tr className="text-[10px] uppercase tracking-widest text-[#6B5B45]">
+            <tr className="text-[10px] uppercase tracking-widest text-[#5B5F5C]">
               <th className="pb-2 text-left">Modalidad</th>
               <th className="pb-2 text-right">Ingreso/mes</th>
               <th className="pb-2 text-right">Yield neto</th>
@@ -1200,20 +1200,20 @@ function ComparativoTable({
               const isActive = item.tipo === tipoActual;
               return (
                 <tr key={item.tipo} className={`transition ${isActive ? "bg-primary/8" : ""}`}>
-                  <td className={`py-2 font-medium ${isActive ? "text-primary" : "text-[#1A1208]"}`}>
+                  <td className={`py-2 font-medium ${isActive ? "text-primary" : "text-[#111418]"}`}>
                     {item.label}
                     {item.es_recomendada && <span className="ml-1.5 text-[9px] font-bold text-primary uppercase tracking-wider">★ Mejor</span>}
                   </td>
-                  <td className="py-2 text-right text-[#1A1208]">
+                  <td className="py-2 text-right text-[#111418]">
                     {item.ingreso_mes ? formatCOP(item.ingreso_mes) : "—"}
                   </td>
-                  <td className={`py-2 text-right font-semibold ${isActive ? "text-primary" : "text-[#6B5B45]"}`}>
+                  <td className={`py-2 text-right font-semibold ${isActive ? "text-primary" : "text-[#5B5F5C]"}`}>
                     {item.yield_neto_pct != null ? `${item.yield_neto_pct.toFixed(1)}%` : "—"}
                   </td>
-                  <td className="py-2 text-right text-[#6B5B45]">
+                  <td className="py-2 text-right text-[#5B5F5C]">
                     {item.recupero_anos != null ? `${item.recupero_anos.toFixed(1)}a` : "—"}
                   </td>
-                  <td className="py-2 text-right text-[#6B5B45]">{item.riesgo}</td>
+                  <td className="py-2 text-right text-[#5B5F5C]">{item.riesgo}</td>
                 </tr>
               );
             })}
@@ -1244,7 +1244,7 @@ function AlternativasSection({
   const navigate = useNavigate();
   if (isLoading) {
     return (
-      <div className="mt-8 flex items-center justify-center gap-2 text-xs text-[#6B5B45]">
+      <div className="mt-8 flex items-center justify-center gap-2 text-xs text-[#5B5F5C]">
         <Loader2 className="h-4 w-4 animate-spin" /> Buscando alternativas...
       </div>
     );
@@ -1255,10 +1255,10 @@ function AlternativasSection({
   return (
     <section className="mt-10">
       <div className="mb-1">
-        <h2 className="font-display text-xl font-semibold text-[#1A1208]">
+        <h2 className="font-display text-xl font-semibold text-[#111418]">
           Encontramos {alternativas.length} propiedades con buen rendimiento
         </h2>
-        <p className="mt-0.5 text-xs text-[#6B5B45]">
+        <p className="mt-0.5 text-xs text-[#5B5F5C]">
           Basado en: presupuesto ${presupuestoMill}M · {tipoLabel}{barrioNombre ? ` · ${titleCase(barrioNombre)}` : ""} · {horizonte} años
         </p>
       </div>
@@ -1276,10 +1276,10 @@ function AlternativasSection({
               />
             )}
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-semibold text-[#1A1208]">
+              <div className="text-xs font-semibold text-[#111418]">
                 {titleCase(alt.tipo_inmueble ?? "Inmueble")} · {titleCase(alt.barrio_nombre)}
               </div>
-              <div className="mt-0.5 text-xs text-[#6B5B45]">
+              <div className="mt-0.5 text-xs text-[#5B5F5C]">
                 {formatCOP(alt.precio)} COP
                 {alt.area_m2 != null && ` · ${alt.area_m2}m²`}
                 {alt.habitaciones != null && ` · ${alt.habitaciones} hab`}
@@ -1291,7 +1291,7 @@ function AlternativasSection({
                   </span>
                 )}
                 {alt.recupero_anos != null && (
-                  <span className="rounded-md bg-surface/80 border border-border px-2 py-0.5 text-[11px] text-[#6B5B45]">
+                  <span className="rounded-md bg-surface/80 border border-border px-2 py-0.5 text-[11px] text-[#5B5F5C]">
                     Recupero {alt.recupero_anos.toFixed(1)} años
                   </span>
                 )}
@@ -1306,7 +1306,7 @@ function AlternativasSection({
               </button>
               <button
                 onClick={() => navigate({ to: "/map", search: { listing: alt.id } as any })}
-                className="rounded-lg border border-border bg-background/40 px-3 py-1.5 text-[11px] text-[#6B5B45] transition hover:text-[#1A1208]"
+                className="rounded-lg border border-border bg-background/40 px-3 py-1.5 text-[11px] text-[#5B5F5C] transition hover:text-[#111418]"
               >
                 Ver listing
               </button>
@@ -1376,49 +1376,49 @@ function SimuladorHistorialSection({
   return (
     <div
       className="mt-8 rounded-2xl border"
-      style={{ background: "#FAF7F2", borderColor: "#E8E0D0" }}
+      style={{ background: "#FAF8F3", borderColor: "#E5E0D5" }}
     >
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-5 py-4"
       >
-        <span className="text-sm font-semibold text-[#1A1208]">
+        <span className="text-sm font-semibold text-[#111418]">
           Mis simulaciones guardadas
         </span>
         {open
-          ? <ChevronUp className="h-4 w-4 text-[#6B5B45]" />
-          : <ChevronDown className="h-4 w-4 text-[#6B5B45]" />
+          ? <ChevronUp className="h-4 w-4 text-[#5B5F5C]" />
+          : <ChevronDown className="h-4 w-4 text-[#5B5F5C]" />
         }
       </button>
 
       {open && (
-        <div className="border-t px-5 pb-4" style={{ borderColor: "#E8E0D0" }}>
+        <div className="border-t px-5 pb-4" style={{ borderColor: "#E5E0D5" }}>
           {isLoading && (
-            <p className="py-4 text-center text-xs text-[#9B8B75]">Cargando historial…</p>
+            <p className="py-4 text-center text-xs text-[#6E726E]">Cargando historial…</p>
           )}
           {!isLoading && items.length === 0 && (
-            <p className="py-4 text-center text-xs text-[#9B8B75]">
+            <p className="py-4 text-center text-xs text-[#6E726E]">
               Aún no tienes simulaciones guardadas.
             </p>
           )}
-          <div className="mt-3 divide-y" style={{ borderColor: "#E8E0D0" }}>
+          <div className="mt-3 divide-y" style={{ borderColor: "#E5E0D5" }}>
             {items.map((item) => {
               const yield_ = (item.resultados as any)?.yield_bruto ?? null;
               const roi = (item.resultados as any)?.roi_total_pct ?? null;
               return (
                 <div key={item.id} className="flex items-center justify-between py-3">
                   <div className="min-w-0 flex-1">
-                    <div className="text-sm font-medium text-[#1A1208]">
+                    <div className="text-sm font-medium text-[#111418]">
                       {item.tipo_inversion ? (tipoLabel[item.tipo_inversion] ?? item.tipo_inversion) : "—"}
                       {" · "}
                       {item.barrio_nombre ?? "Barrio no disponible"}
                       {item.presupuesto && (
-                        <span className="ml-1 text-[11px] text-[#6B5B45]">
+                        <span className="ml-1 text-[11px] text-[#5B5F5C]">
                           · {formatCOP(item.presupuesto)}
                         </span>
                       )}
                     </div>
-                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[#9B8B75]">
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[11px] text-[#6E726E]">
                       {yield_ != null && (
                         <span>Yield {Number(yield_).toFixed(1)}%</span>
                       )}
@@ -1434,14 +1434,14 @@ function SimuladorHistorialSection({
                   <div className="ml-3 flex items-center gap-2">
                     <button
                       onClick={() => { onLoad(item); setOpen(false); }}
-                      className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#1D9E75] transition hover:bg-[#E1F5EE]"
-                      style={{ border: "0.5px solid #1D9E75" }}
+                      className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
+                      style={{ border: "0.5px solid #0F8A4F" }}
                     >
                       Cargar →
                     </button>
                     <button
                       onClick={() => deleteMut.mutate(item.id)}
-                      className="rounded-lg p-1.5 text-[#9B8B75] transition hover:text-[#D85A30]"
+                      className="rounded-lg p-1.5 text-[#6E726E] transition hover:text-[#CE1126]"
                       title="Eliminar"
                     >
                       <X className="h-3.5 w-3.5" />
@@ -1462,7 +1462,7 @@ function SimuladorHistorialSection({
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="mb-4">
-      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-[#6B5B45]">{label}</div>
+      <div className="mb-1.5 text-[11px] font-medium uppercase tracking-widest text-[#5B5F5C]">{label}</div>
       {children}
     </div>
   );
@@ -1471,7 +1471,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 function GastoField({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-1 text-[10px] text-[#6B5B45]">{label}</div>
+      <div className="mb-1 text-[10px] text-[#5B5F5C]">{label}</div>
       {children}
     </div>
   );
@@ -1482,7 +1482,7 @@ function Card({ children }: { children: React.ReactNode }) {
 }
 
 function CardTitle({ children }: { children: React.ReactNode }) {
-  return <div className="text-[11px] font-medium uppercase tracking-widest text-[#6B5B45]">{children}</div>;
+  return <div className="text-[11px] font-medium uppercase tracking-widest text-[#5B5F5C]">{children}</div>;
 }
 
 function BigMetric({ label, value, sub, delay = 0 }: { label: string; value: string; sub?: React.ReactNode; delay?: number }) {
@@ -1493,18 +1493,18 @@ function BigMetric({ label, value, sub, delay = 0 }: { label: string; value: str
       transition={{ duration: 0.3, delay }}
       className="rounded-xl border border-border bg-surface/70 p-4"
     >
-      <div className="text-[10px] font-medium uppercase tracking-widest text-[#6B5B45]">{label}</div>
-      <div className="mt-1 font-display text-xl font-semibold text-[#1A1208]">{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-[#6B5B45]">{sub}</div>}
+      <div className="text-[10px] font-medium uppercase tracking-widest text-[#5B5F5C]">{label}</div>
+      <div className="mt-1 font-display text-xl font-semibold text-[#111418]">{value}</div>
+      {sub && <div className="mt-0.5 text-[11px] text-[#5B5F5C]">{sub}</div>}
     </motion.div>
   );
 }
 
 function RowItem({ label, value, bold, muted }: { label: string; value: string; bold?: boolean; muted?: boolean }) {
   return (
-    <div className={`flex items-center justify-between ${muted ? "text-[#9B8B75]" : "text-[#6B5B45]"}`}>
+    <div className={`flex items-center justify-between ${muted ? "text-[#6E726E]" : "text-[#5B5F5C]"}`}>
       <span>{label}</span>
-      <span className={bold ? "font-display text-base font-bold text-primary" : "font-medium text-[#1A1208]"}>{value}</span>
+      <span className={bold ? "font-display text-base font-bold text-primary" : "font-medium text-[#111418]"}>{value}</span>
     </div>
   );
 }

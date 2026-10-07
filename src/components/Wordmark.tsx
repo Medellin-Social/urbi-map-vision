@@ -6,7 +6,7 @@
 // pinTop: offset vertical del pin sobre la "i". El valor visual cambia según el
 // contexto (line-height) donde vive el wordmark, por eso el veil de carga lo
 // sube por su cuenta (pinTop propio) y los logos usan el default. Van separados.
-export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2", pinTop = "0.1em" }: {
+export function Wordmark({ teal = "#0F8A4F", coral = "#CE1126", paper = "#FAF8F3", pinTop = "0.1em" }: {
   teal?: string
   coral?: string
   amarillo?: string
@@ -48,7 +48,7 @@ export function Wordmark({ teal = "#1D9E75", coral = "#D85A30", paper = "#FAF7F2
 // Insignia apilada (logo 05) — plaquita coral con "M" chico en ámbar arriba y
 // "S" grande en paper abajo. Un solo componente, tamaño por prop, para que se
 // vea igual en el header móvil de /map y en el círculo de cuenta.
-export function BrandBadge({ size = 32, coral = "#D85A30", amarillo = "#ffc928", paper = "#FAF7F2" }: {
+export function BrandBadge({ size = 32, coral = "#CE1126", amarillo = "#FCD116", paper = "#FAF8F3" }: {
   size?: number
   coral?: string
   amarillo?: string

@@ -122,10 +122,10 @@ function sortListings(listings: ApiListing[], key: SortKey): ApiListing[] {
 }
 
 function matchColor(score: number): string {
-  if (score >= 75) return "#10b981";
-  if (score >= 55) return "#1D9E75";
-  if (score >= 35) return "#f59e0b";
-  return "#6b7280";
+  if (score >= 75) return "#0F8A4F";
+  if (score >= 55) return "#0F8A4F";
+  if (score >= 35) return "#F2B807";
+  return "#5B5F5C";
 }
 
 export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: perfilProp, risk: riskProp }: Props) {
@@ -232,7 +232,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
           animate={{ y: minimized ? 360 : 0 }}
           transition={{ type: "spring", stiffness: 260, damping: 30 }}
           className="absolute inset-x-0 bottom-0 z-20 max-h-[78vh] overflow-hidden rounded-t-2xl"
-          style={{ background: '#FAF7F2', borderTop: '0.5px solid #E8E0D0', '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)' } as React.CSSProperties}
+          style={{ background: '#FAF8F3', borderTop: '0.5px solid #E5E0D5', '--background': '#FFFFFF', '--foreground': '#111418', '--surface': '#FAF8F3', '--surface-elevated': '#F3F0E8', '--muted-foreground': '#5B5F5C', '--border': 'rgb(184 164 138 / 50%)' } as React.CSSProperties}
           drag="y"
           dragConstraints={{ top: 0, bottom: 360 }}
           onDragEnd={(_, info) => setMinimized(info.offset.y > 80)}
@@ -260,8 +260,8 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
             onClick={() => setMinimized(false)}
-            className="pointer-events-auto absolute right-4 top-1/2 flex h-32 -translate-y-1/2 items-center justify-center gap-2 rounded-l-xl px-2 text-xs font-medium text-[#1D9E75]"
-            style={{ background: '#FAF7F2', border: '0.5px solid #E8E0D0', boxShadow: '0 2px 12px rgba(26,18,8,0.1)' }}
+            className="pointer-events-auto absolute right-4 top-1/2 flex h-32 -translate-y-1/2 items-center justify-center gap-2 rounded-l-xl px-2 text-xs font-medium text-[#0F8A4F]"
+            style={{ background: '#FAF8F3', border: '0.5px solid #E5E0D5', boxShadow: '0 2px 12px rgba(26,18,8,0.1)' }}
           >
             <ChevronRight className="h-3.5 w-3.5 rotate-180" />
             <span style={{ writingMode: "vertical-rl" }} className="rotate-180 uppercase tracking-widest">
@@ -284,14 +284,14 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
               height: size.height,
               minHeight: 200,
               maxHeight: `calc(100dvh - ${pos.top + 20}px)`,
-              background: '#FAF7F2',
-              border: '0.5px solid #E8E0D0',
+              background: '#FAF8F3',
+              border: '0.5px solid #E5E0D5',
               boxShadow: '0 8px 32px rgba(26,18,8,0.15)',
               '--background': '#FFFFFF',
-              '--foreground': '#1A1208',
-              '--surface': '#FAF7F2',
-              '--surface-elevated': '#F5F0E8',
-              '--muted-foreground': '#6B5B45',
+              '--foreground': '#111418',
+              '--surface': '#FAF8F3',
+              '--surface-elevated': '#F3F0E8',
+              '--muted-foreground': '#5B5F5C',
               '--border': 'rgb(184 164 138 / 50%)',
             } as React.CSSProperties}
             className="pointer-events-auto flex flex-col overflow-hidden rounded-2xl"
@@ -300,7 +300,7 @@ export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: 
             <div
               onMouseDown={startDrag}
               className="flex h-10 shrink-0 cursor-grab select-none items-center justify-between px-3"
-              style={{ background: '#F5F0E8', borderBottom: '0.5px solid #E8E0D0' }}
+              style={{ background: '#F3F0E8', borderBottom: '0.5px solid #E5E0D5' }}
             >
               <div className="flex items-center gap-2 text-muted-foreground">
                 <GripVertical className="h-4 w-4" />
@@ -530,8 +530,8 @@ function CityOverview({ goal, onSelect }: { goal?: Goal; onSelect?: (n: Neighbor
           <ResponsiveContainer>
             <BarChart data={chartData} margin={{ top: 8, right: 8, left: -16, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.06)" vertical={false} />
-              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#9B8B75" }} axisLine={false} tickLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "#9B8B75" }} axisLine={false} tickLine={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 10, fill: "#6E726E" }} axisLine={false} tickLine={false} />
+              <YAxis tick={{ fontSize: 10, fill: "#6E726E" }} axisLine={false} tickLine={false} />
               <Tooltip
                 cursor={{ fill: "rgba(29,158,117,0.06)" }}
                 contentStyle={tooltipStyle}
@@ -540,8 +540,8 @@ function CityOverview({ goal, onSelect }: { goal?: Goal; onSelect?: (n: Neighbor
               <Bar dataKey="yield" radius={[6, 6, 0, 0]} fill="url(#barGrad)" />
               <defs>
                 <linearGradient id="barGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#1D9E75" />
-                  <stop offset="100%" stopColor="#7c3aed" />
+                  <stop offset="0%" stopColor="#0F8A4F" />
+                  <stop offset="100%" stopColor="#003893" />
                 </linearGradient>
               </defs>
             </BarChart>
@@ -603,28 +603,28 @@ function calcValorizStats(estrato: number) {
 }
 
 const SEGURIDAD_COLORS: Record<string, string> = {
-  "ALTA":     "#10b981",
-  "MEDIA":    "#1D9E75",
-  "BAJA":     "#f59e0b",
-  "MUY BAJA": "#ef4444",
-  "SIN DATOS": "#6b7280",
+  "ALTA":     "#0F8A4F",
+  "MEDIA":    "#0F8A4F",
+  "BAJA":     "#F2B807",
+  "MUY BAJA": "#CE1126",
+  "SIN DATOS": "#5B5F5C",
 };
 
 const TRAFICO_COLORS: Record<string, string> = {
-  "bajo":  "#10b981",
-  "medio": "#f59e0b",
-  "alto":  "#ef4444",
+  "bajo":  "#0F8A4F",
+  "medio": "#F2B807",
+  "alto":  "#CE1126",
 };
 
 const VERDE_COLORS: Record<string, string> = {
-  "ALTA":    "#10b981",
-  "MEDIA":   "#22c55e",
-  "BAJA":    "#f59e0b",
-  "MÍNIMA":  "#ef4444",
-  "SIN DATOS": "#6b7280",
+  "ALTA":    "#0F8A4F",
+  "MEDIA":   "#0F8A4F",
+  "BAJA":    "#F2B807",
+  "MÍNIMA":  "#CE1126",
+  "SIN DATOS": "#5B5F5C",
 };
 
-// Interpolate gray (#9ca3af) → plant green (#22c55e) based on 0–1 ratio
+// Interpolate gray (#8A8E8A) → plant green (#0F8A4F) based on 0–1 ratio
 function verdeColor(ratio: number): string {
   const r = Math.round(156 + (34 - 156) * ratio);
   const g = Math.round(163 + (197 - 163) * ratio);
@@ -635,25 +635,25 @@ function verdeColor(ratio: number): string {
 // Categorías POT (raw.pot_usos_medellin.areagraluso) — mixtura alta = más
 // flexible para desarrollo/inversión, espacio público = más restrictivo.
 const USO_SUELO_COLORS: Record<string, string> = {
-  "Áreas y corredores de alta mixtura":  "#1D9E75",
-  "Áreas y corredores de media mixtura": "#22c55e",
-  "Áreas de baja mixtura":               "#f59e0b",
+  "Áreas y corredores de alta mixtura":  "#0F8A4F",
+  "Áreas y corredores de media mixtura": "#0F8A4F",
+  "Áreas de baja mixtura":               "#F2B807",
   "Uso Dotacional":                      "#6366f1",
-  "Espacio Público Existente":           "#6b7280",
-  "Espacio Público Proyectado":          "#9ca3af",
+  "Espacio Público Existente":           "#5B5F5C",
+  "Espacio Público Proyectado":          "#8A8E8A",
 };
 
 const MERCADO_REAL_COLORS: Record<string, string> = {
-  "vendedor":    "#ef4444",  // poco inventario, se vende rápido
-  "balanceado":  "#f59e0b",
-  "comprador":   "#10b981",  // mucho inventario, más poder de negociación
+  "vendedor":    "#CE1126",  // poco inventario, se vende rápido
+  "balanceado":  "#F2B807",
+  "comprador":   "#0F8A4F",  // mucho inventario, más poder de negociación
 };
 
 const SALUD_COLORS: Record<string, string> = {
-  "MUY SALUDABLE": "#10b981",
-  "SALUDABLE":     "#1D9E75",
-  "PRECAUCIÓN":    "#f59e0b",
-  "ALERTA":        "#ef4444",
+  "MUY SALUDABLE": "#0F8A4F",
+  "SALUDABLE":     "#0F8A4F",
+  "PRECAUCIÓN":    "#F2B807",
+  "ALERTA":        "#CE1126",
 };
 
 function fmtConn(v: number | null | undefined, suffix: string): string {
@@ -723,9 +723,9 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
       <div>
         <div className="flex items-start justify-between gap-2">
           <div>
-            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1D9E75', margin: '0 0 4px' }}>Barrio</p>
-            <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.5rem', fontWeight: 900, color: '#1A1208', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{titleCase(n.nombre)}</h2>
-            <p style={{ marginTop: 3, fontSize: 11, color: '#6B5B45' }}>{n.comuna}</p>
+            <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0F8A4F', margin: '0 0 4px' }}>Barrio</p>
+            <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.5rem', fontWeight: 900, color: '#111418', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>{titleCase(n.nombre)}</h2>
+            <p style={{ marginTop: 3, fontSize: 11, color: '#5B5F5C' }}>{n.comuna}</p>
           </div>
           <button
             onClick={toggleFav}
@@ -771,8 +771,8 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
             onClick={() => setTarget(opt.value)}
             className="flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium transition-all"
             style={target === opt.value
-              ? { background: '#1D9E75', color: '#FFFFFF', border: '0.5px solid #1D9E75' }
-              : { background: '#F5F0E8', color: '#6B5B45', border: '0.5px solid #E8E0D0' }
+              ? { background: '#0F8A4F', color: '#FFFFFF', border: '0.5px solid #0F8A4F' }
+              : { background: '#F3F0E8', color: '#5B5F5C', border: '0.5px solid #E5E0D5' }
             }
           >
             <span>{opt.icon}</span>
@@ -818,33 +818,33 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
       <Section title="Corrección inmobiliaria">
         <div style={{ borderRadius: 10, border: '1px solid rgb(184 164 138 / 55%)', background: 'rgba(255,255,255,0.55)', padding: 12, fontSize: 12, display: 'flex', flexDirection: 'column', gap: 6 }}>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Precio publicado:</span>
-            <span style={{ color: '#1A1208', fontWeight: 600 }}>{formatCOP(n.precio_m2)}/m²</span>
+            <span style={{ color: '#5B5F5C' }}>Precio publicado:</span>
+            <span style={{ color: '#111418', fontWeight: 600 }}>{formatCOP(n.precio_m2)}/m²</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Precio negociación:</span>
-            <span style={{ color: '#10b981', fontWeight: 600 }}>~{formatCOP(Math.round(n.precio_m2 * 0.97))}/m² <span style={{ color: '#9B8B75' }}>(-3%)</span></span>
-          </div>
-          <hr style={{ border: 'none', borderTop: '1px solid rgb(184 164 138 / 40%)' }} />
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Arriendo publicado:</span>
-            <span style={{ color: '#1A1208', fontWeight: 600 }}>{formatCOP(n.arriendo)}/mes</span>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Arriendo neto:</span>
-            <span style={{ color: '#10b981', fontWeight: 600 }}>~{formatCOP(Math.round(n.arriendo * 0.90))}/mes <span style={{ color: '#9B8B75' }}>(-10%)</span></span>
+            <span style={{ color: '#5B5F5C' }}>Precio negociación:</span>
+            <span style={{ color: '#0F8A4F', fontWeight: 600 }}>~{formatCOP(Math.round(n.precio_m2 * 0.97))}/m² <span style={{ color: '#6E726E' }}>(-3%)</span></span>
           </div>
           <hr style={{ border: 'none', borderTop: '1px solid rgb(184 164 138 / 40%)' }} />
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Yield publicado:</span>
-            <span style={{ color: '#1A1208', fontWeight: 600 }}>{formatPct(n.yield)}</span>
+            <span style={{ color: '#5B5F5C' }}>Arriendo publicado:</span>
+            <span style={{ color: '#111418', fontWeight: 600 }}>{formatCOP(n.arriendo)}/mes</span>
           </div>
           <div style={{ display: 'flex', justifyContent: 'space-between' }}>
-            <span style={{ color: '#6B5B45' }}>Yield real est.:</span>
-            <span style={{ color: '#10b981', fontWeight: 600 }}>{n.yield != null ? formatPct(Math.round(n.yield * (0.90 / 0.97) * 10) / 10) : "—"}</span>
+            <span style={{ color: '#5B5F5C' }}>Arriendo neto:</span>
+            <span style={{ color: '#0F8A4F', fontWeight: 600 }}>~{formatCOP(Math.round(n.arriendo * 0.90))}/mes <span style={{ color: '#6E726E' }}>(-10%)</span></span>
+          </div>
+          <hr style={{ border: 'none', borderTop: '1px solid rgb(184 164 138 / 40%)' }} />
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#5B5F5C' }}>Yield publicado:</span>
+            <span style={{ color: '#111418', fontWeight: 600 }}>{formatPct(n.yield)}</span>
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+            <span style={{ color: '#5B5F5C' }}>Yield real est.:</span>
+            <span style={{ color: '#0F8A4F', fontWeight: 600 }}>{n.yield != null ? formatPct(Math.round(n.yield * (0.90 / 0.97) * 10) / 10) : "—"}</span>
           </div>
         </div>
-        <p style={{ marginTop: 6, fontSize: 10, lineHeight: 1.5, color: '#9B8B75' }}>
+        <p style={{ marginTop: 6, fontSize: 10, lineHeight: 1.5, color: '#6E726E' }}>
           ℹ️ Precio de negociación estimado descontando comisión inmobiliaria (3% venta, 10% arriendo).
           Dato real disponible próximamente con escrituras SNR.
         </p>
@@ -917,10 +917,10 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
 /* ------------- Renta media section ------------- */
 
 function demandaIndexColor(idx: number | null | undefined): string {
-  if (idx == null) return "#6b7280";
-  if (idx >= 70) return "#10b981";
-  if (idx >= 40) return "#f59e0b";
-  return "#ef4444";
+  if (idx == null) return "#5B5F5C";
+  if (idx >= 70) return "#0F8A4F";
+  if (idx >= 40) return "#F2B807";
+  return "#CE1126";
 }
 
 function NomadaSection({ n }: { n: Neighborhood }) {
@@ -952,11 +952,11 @@ function NomadaSection({ n }: { n: Neighborhood }) {
     : null;
 
   const PBN_COLORS: Record<string, string> = {
-    BAJO: "#10b981",
-    NORMAL: "#1D9E75",
-    SOBRE: "#ef4444",
+    BAJO: "#0F8A4F",
+    NORMAL: "#0F8A4F",
+    SOBRE: "#CE1126",
   };
-  const pbnColor = estadoPrecio ? (PBN_COLORS[estadoPrecio] ?? "#6b7280") : "#6b7280";
+  const pbnColor = estadoPrecio ? (PBN_COLORS[estadoPrecio] ?? "#5B5F5C") : "#5B5F5C";
 
   return (
     <div className="space-y-4">
@@ -1114,7 +1114,7 @@ function ScoreRow({ label, pts, max, highlight }: { label: string; pts: number |
             className="h-full rounded-full transition-all"
             style={{
               width: `${(val / max) * 100}%`,
-              background: highlight ? "#1D9E75" : "#7c3aed",
+              background: highlight ? "#0F8A4F" : "#003893",
             }}
           />
         </div>
@@ -1300,10 +1300,10 @@ function SeguridadSection({ n }: { n: Neighborhood }) {
   const tend = n.seguridad_tendencia;
   const tendInfo = tend
     ? tend.toLowerCase().includes("mejor")
-      ? { label: "↑ Mejorando", color: "#10b981" }
+      ? { label: "↑ Mejorando", color: "#0F8A4F" }
       : tend.toLowerCase().includes("empeor")
-      ? { label: "↓ Empeorando", color: "#ef4444" }
-      : { label: "→ Estable", color: "#9ca3af" }
+      ? { label: "↓ Empeorando", color: "#CE1126" }
+      : { label: "→ Estable", color: "#8A8E8A" }
     : null;
 
   return (
@@ -1439,7 +1439,7 @@ function UsoSueloSection({ n }: { n: Neighborhood }) {
   const categoria = n.uso_suelo_dominante;
   const score = n.uso_suelo_score;
   if (categoria == null) return null;
-  const color = USO_SUELO_COLORS[categoria] ?? "#6b7280";
+  const color = USO_SUELO_COLORS[categoria] ?? "#5B5F5C";
   const barWidth = score != null ? `${Math.min(100, score).toFixed(0)}%` : "0%";
 
   return (
@@ -1478,7 +1478,7 @@ function UsoSueloSection({ n }: { n: Neighborhood }) {
 function SaludFinancieraSection({ n }: { n: Neighborhood }) {
   const remates = n.n_remates_municipio ?? 0;
   const cat = remates === 0 ? "MUY SALUDABLE" : remates <= 3 ? "SALUDABLE" : remates <= 8 ? "PRECAUCIÓN" : "ALERTA";
-  const color = SALUD_COLORS[cat] ?? "#6b7280";
+  const color = SALUD_COLORS[cat] ?? "#5B5F5C";
   return (
     <div>
       <div className="mb-2 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
@@ -1505,10 +1505,10 @@ function SaludFinancieraSection({ n }: { n: Neighborhood }) {
 
 // Thresholds sobre ratio_vs_ciudad (ratio barrio / mediana Medellín = 58.8x)
 const RATIO_VS_CIUDAD_BADGE: Array<{ min: number; label: string; color: string }> = [
-  { min: 3.0, label: "BRECHA MUY ALTA",  color: "#ef4444" },
-  { min: 1.5, label: "BRECHA ALTA",      color: "#f59e0b" },
-  { min: 0.7, label: "BRECHA NORMAL",    color: "#1D9E75" },
-  { min: 0,   label: "BRECHA BAJA",      color: "#10b981" },
+  { min: 3.0, label: "BRECHA MUY ALTA",  color: "#CE1126" },
+  { min: 1.5, label: "BRECHA ALTA",      color: "#F2B807" },
+  { min: 0.7, label: "BRECHA NORMAL",    color: "#0F8A4F" },
+  { min: 0,   label: "BRECHA BAJA",      color: "#0F8A4F" },
 ];
 
 function CatastroSection({ n }: { n: Neighborhood }) {
@@ -1573,7 +1573,7 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
   const mr = n.mercado_real;
   if (!mr || mr.anio_dato == null) return null;
 
-  const color = mr.clasificacion_mercado ? MERCADO_REAL_COLORS[mr.clasificacion_mercado] ?? "#6b7280" : "#6b7280";
+  const color = mr.clasificacion_mercado ? MERCADO_REAL_COLORS[mr.clasificacion_mercado] ?? "#5B5F5C" : "#5B5F5C";
   const clasifLabel = mr.clasificacion_mercado === "vendedor" ? "Mercado de vendedor"
     : mr.clasificacion_mercado === "comprador" ? "Mercado de comprador"
     : mr.clasificacion_mercado === "balanceado" ? "Mercado balanceado"
@@ -1627,9 +1627,9 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
 /* ------------- Valorización ------------- */
 
 const TEND_MAP: Record<string, { label: string; color: string }> = {
-  aceler:    { label: "↑ Acelerando",    color: "#10b981" },
-  estable:   { label: "→ Estable",       color: "#1D9E75" },
-  desacel:   { label: "↓ Desacelerando", color: "#f59e0b" },
+  aceler:    { label: "↑ Acelerando",    color: "#0F8A4F" },
+  estable:   { label: "→ Estable",       color: "#0F8A4F" },
+  desacel:   { label: "↓ Desacelerando", color: "#F2B807" },
 };
 
 function tendBadge(tendencia: string | null | undefined): { label: string; color: string } | null {
@@ -1714,27 +1714,27 @@ function ListingCard({ l }: { l: ApiListing }) {
     <div style={{ borderRadius: 10, border: '1px solid rgb(184 164 138 / 55%)', background: 'rgba(255,255,255,0.6)', padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 8 }}>
         <div style={{ minWidth: 0, flex: 1 }}>
-          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#085041', fontWeight: 700 }}>
+          <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#0A5C36', fontWeight: 700 }}>
             {l.tipo_inmueble ?? "—"} · {l.tipo_operacion ?? "—"}
           </div>
-          <div data-i18n-skip="true" style={{ marginTop: 4, fontWeight: 800, fontSize: '1rem', color: '#14201d' }}>
+          <div data-i18n-skip="true" style={{ marginTop: 4, fontWeight: 800, fontSize: '1rem', color: '#111418' }}>
             {primary}
           </div>
-          {secondary && <div data-i18n-skip="true" style={{ fontSize: 11, color: '#62736d' }}>{secondary}</div>}
-          <div style={{ marginTop: 2, fontSize: 12, color: '#3d5a50' }}>
+          {secondary && <div data-i18n-skip="true" style={{ fontSize: 11, color: '#5B5F5C' }}>{secondary}</div>}
+          <div style={{ marginTop: 2, fontSize: 12, color: '#33473D' }}>
             {l.area_m2 != null ? `${l.area_m2} m²` : "—"}
             {l.habitaciones != null ? ` · ${l.habitaciones} hab` : ""}
             {l.banos != null ? ` · ${l.banos} baños` : ""}
           </div>
           {l.direccion_raw && (
-            <div style={{ marginTop: 2, fontSize: 10, color: '#62736d', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            <div style={{ marginTop: 2, fontSize: 10, color: '#5B5F5C', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {l.direccion_raw}
             </div>
           )}
           {l.match_razones && l.match_razones.length > 0 && (
             <div style={{ marginTop: 6, display: 'flex', flexWrap: 'wrap', gap: 4 }}>
               {l.match_razones.map((r, i) => (
-                <span key={i} style={{ borderRadius: 4, background: 'rgba(8,80,65,0.08)', border: '1px solid rgba(8,80,65,0.18)', padding: '2px 6px', fontSize: 10, color: '#085041', fontWeight: 600 }}>
+                <span key={i} style={{ borderRadius: 4, background: 'rgba(8,80,65,0.08)', border: '1px solid rgba(8,80,65,0.18)', padding: '2px 6px', fontSize: 10, color: '#0A5C36', fontWeight: 600 }}>
                   {r}
                 </span>
               ))}
@@ -1748,16 +1748,16 @@ function ListingCard({ l }: { l: ApiListing }) {
             </span>
           )}
           {l.buena_oferta && (
-            <span style={{ borderRadius: 6, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#10b981' }}>
+            <span style={{ borderRadius: 6, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#0F8A4F' }}>
               Buena oferta
             </span>
           )}
           {l.precio_m2 != null && (
-            <div style={{ fontSize: 11, color: '#3d5a50', fontWeight: 600 }}>{formatCOP(l.precio_m2)}/m²</div>
+            <div style={{ fontSize: 11, color: '#33473D', fontWeight: 600 }}>{formatCOP(l.precio_m2)}/m²</div>
           )}
           {l.url && (
             <a href={l.url} target="_blank" rel="noopener noreferrer"
-              style={{ fontSize: 11, color: '#1D9E75', fontWeight: 700, textDecoration: 'none' }}>
+              style={{ fontSize: 11, color: '#0F8A4F', fontWeight: 700, textDecoration: 'none' }}>
               Ver →
             </a>
           )}
@@ -1819,11 +1819,11 @@ function ListingsView({
       </button>
 
       <div>
-        <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#1D9E75', margin: '0 0 4px' }}>Listings</p>
-        <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.4rem', fontWeight: 900, color: '#14201d', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
+        <p style={{ fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#0F8A4F', margin: '0 0 4px' }}>Listings</p>
+        <h2 style={{ fontFamily: "'Fraunces', Georgia, serif", fontSize: '1.4rem', fontWeight: 900, color: '#111418', margin: 0, letterSpacing: '-0.5px', lineHeight: 1.1 }}>
           {titleCase(n.nombre)}
         </h2>
-        <p style={{ marginTop: 3, fontSize: 11, color: '#3d5a50' }}>
+        <p style={{ marginTop: 3, fontSize: 11, color: '#33473D' }}>
           {isLoading
             ? "Cargando…"
             : `${filtered.length} resultado${filtered.length !== 1 ? "s" : ""}${listingsData ? ` de ${listingsData.total} en ${op}` : ""}`}
@@ -1861,7 +1861,7 @@ function ListingsView({
             value={sliderPrecio}
             disabled={isLoading || maxPrecioData === 0}
             onChange={(e) => setPrecioMax(Number(e.target.value))}
-            className="w-full accent-[#1D9E75] disabled:opacity-40"
+            className="w-full accent-[#0F8A4F] disabled:opacity-40"
           />
         </FilterRow>
         <FilterRow
@@ -1876,7 +1876,7 @@ function ListingsView({
             value={areaMin}
             disabled={isLoading}
             onChange={(e) => setAreaMin(Number(e.target.value))}
-            className="w-full accent-[#1D9E75] disabled:opacity-40"
+            className="w-full accent-[#0F8A4F] disabled:opacity-40"
           />
         </FilterRow>
       </div>
@@ -1907,12 +1907,12 @@ function ListingsView({
       <div className="space-y-2">
         {filtered.map((l) => <ListingCard key={l.id} l={l} />)}
         {!isLoading && filtered.length === 0 && listings.length > 0 && (
-          <div style={{ borderRadius: 8, border: '1px dashed rgb(184 164 138 / 70%)', padding: '24px', textAlign: 'center', fontSize: 12, color: '#3d5a50' }}>
+          <div style={{ borderRadius: 8, border: '1px dashed rgb(184 164 138 / 70%)', padding: '24px', textAlign: 'center', fontSize: 12, color: '#33473D' }}>
             No hay listings con estos filtros.
           </div>
         )}
         {!isLoading && listings.length === 0 && (
-          <div style={{ borderRadius: 8, border: '1px dashed rgb(184 164 138 / 70%)', padding: '24px', textAlign: 'center', fontSize: 12, color: '#3d5a50' }}>
+          <div style={{ borderRadius: 8, border: '1px dashed rgb(184 164 138 / 70%)', padding: '24px', textAlign: 'center', fontSize: 12, color: '#33473D' }}>
             No hay listings de {op} disponibles.
           </div>
         )}
@@ -1926,10 +1926,10 @@ function ListingsView({
 function Metric({ label, value, accent }: { label: string; value: string; accent?: "cyan" | "green" }) {
   return (
     <div style={{ borderRadius: 12, border: '1px solid rgb(184 164 138 / 55%)', background: 'rgba(255,255,255,0.55)', padding: 12 }}>
-      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6B5B45', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 10, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#5B5F5C', fontWeight: 600 }}>{label}</div>
       <div style={{
         marginTop: 4, fontSize: '1rem', fontWeight: 700,
-        color: accent === 'cyan' ? '#1D9E75' : accent === 'green' ? '#10b981' : '#1A1208',
+        color: accent === 'cyan' ? '#0F8A4F' : accent === 'green' ? '#0F8A4F' : '#111418',
       }}>
         {value}
       </div>
@@ -1940,7 +1940,7 @@ function Metric({ label, value, accent }: { label: string; value: string; accent
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div style={{ marginBottom: 8, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#6B5B45' }}>{title}</div>
+      <div style={{ marginBottom: 8, fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.07em', color: '#5B5F5C' }}>{title}</div>
       {children}
     </div>
   );
@@ -1963,10 +1963,10 @@ function Badge({ children, color }: { children: React.ReactNode; color?: string 
 function ConnRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: string }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 8, border: '1px solid rgb(184 164 138 / 50%)', background: 'rgba(255,255,255,0.5)', padding: '8px 12px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#6B5B45' }}>
-        <span style={{ color: '#1D9E75' }}>{icon}</span> {label}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: '#5B5F5C' }}>
+        <span style={{ color: '#0F8A4F' }}>{icon}</span> {label}
       </div>
-      <span style={{ fontSize: 12, fontWeight: 700, color: '#1A1208' }}>{value}</span>
+      <span style={{ fontSize: 12, fontWeight: 700, color: '#111418' }}>{value}</span>
     </div>
   );
 }
@@ -1975,7 +1975,7 @@ function FilterRow({ label, children, onReset }: { label: string; children: Reac
   return (
     <div>
       <div className="mb-1 flex items-center justify-between">
-        <span style={{ fontSize: 11, color: '#3d5a50', fontWeight: 600 }}>{label}</span>
+        <span style={{ fontSize: 11, color: '#33473D', fontWeight: 600 }}>{label}</span>
         {onReset && (
           <button onClick={onReset} className="text-[10px] text-primary hover:underline">
             resetear
@@ -2114,7 +2114,7 @@ function OpportunityBanner({ n }: { n: Neighborhood }) {
   const apiOpp = n.oportunidad;
   if (!apiOpp?.detectada) return null;
   const tipo = (apiOpp.tipo ?? "ALTO RENDIMIENTO").toUpperCase();
-  const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#085041";
+  const color = OPP_COLORS[tipo as keyof typeof OPP_COLORS] ?? "#0A5C36";
   const emoji = OPP_EMOJIS[tipo] ?? "📊";
   return (
     <motion.div

@@ -12,6 +12,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
 import type { ApiBarrio } from "@/lib/adapters";
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute("/vender")({
   component: VenderRoot,
@@ -37,19 +38,7 @@ function VenderRoot() {
 
 // ── Palette ───────────────────────────────────────────────────────────────────
 
-const K = {
-  paper:      "#FAF7F2",
-  surface:    "#F5F0E8",
-  line:       "#E9E4D8",
-  ink:        "#14201D",
-  muted:      "#62736D",
-  teal:       "#1D9E75",
-  tealDeep:   "#085041",
-  tealLight:  "#E1F5EE",
-  tealMid:    "#0D6E50",
-  coral:      "#D85A30",
-  serif:      "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 // ── Formatters ────────────────────────────────────────────────────────────────
 
@@ -305,8 +294,8 @@ function HeroSection() {
               <rect x="215" y="80"  width="60" height="220" fill="white" />
               <rect x="285" y="110" width="45" height="190" fill="white" />
               <rect x="340" y="150" width="35" height="150" fill="white" />
-              <rect x="115" y="90"  width="10" height="12" fill="#1D9E75" />
-              <rect x="220" y="68"  width="10" height="14" fill="#1D9E75" />
+              <rect x="115" y="90"  width="10" height="12" fill="#0F8A4F" />
+              <rect x="220" y="68"  width="10" height="14" fill="#0F8A4F" />
             </svg>
             <p
               style={{

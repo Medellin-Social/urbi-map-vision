@@ -4,26 +4,13 @@ import { useLogin, useMagicLinkRequest } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import { AlertCircle, Mail } from "@/lib/icons";
 import { GoogleSignInButton } from "@/components/GoogleSignInButton";
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
-const K = {
-  paper:    "#FAF8F5",
-  surface:  "#F2ECE2",
-  line:     "#E8E0D0",
-  ink:      "#14201d",
-  muted:    "#62736d",
-  tertiary: "#9B8B75",
-  teal:     "#1D9E75",
-  tealDeep: "#085041",
-  coral:    "#D85A30",
-  coralLight: "#FAECE7",
-  serif:    "'Fraunces', Georgia, serif",
-  manrope:  "'Manrope', system-ui, sans-serif",
-  sans:     "'Inter', system-ui, sans-serif",
-} as const;
+const K = TOKENS;
 
 function LoginPage() {
   const navigate = useNavigate();
@@ -75,7 +62,7 @@ function LoginPage() {
         {magicSent ? (
           <div style={{ display: "flex", flexDirection: "column", gap: 16, textAlign: "center" }}>
             <div style={{ display: "flex", justifyContent: "center" }}>
-              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#E1F5EE", display: "flex", alignItems: "center", justifyContent: "center" }}>
+              <div style={{ width: 48, height: 48, borderRadius: "50%", background: "#E7F4EC", display: "flex", alignItems: "center", justifyContent: "center" }}>
                 <Mail style={{ width: 22, height: 22, color: K.teal }} />
               </div>
             </div>
@@ -197,12 +184,12 @@ export function AuthShell({
     <>
       <style>{`
         .auth-input:focus {
-          border-color: #1D9E75 !important;
+          border-color: #0F8A4F !important;
           box-shadow: 0 0 0 3px rgba(29,158,117,0.12) !important;
           outline: none;
         }
         .auth-btn:hover:not(:disabled) {
-          background: #085041 !important;
+          background: #0A5C36 !important;
         }
         .auth-input::placeholder {
           color: #9aada6;
@@ -313,11 +300,11 @@ export function AuthShell({
 export const inputStyle: React.CSSProperties = {
   width: "100%",
   background: "#fff",
-  border: "1px solid #E8E0D0",
+  border: "1px solid #E5E0D5",
   borderRadius: 10,
   padding: "13px 16px",
-  color: "#14201d",
-  fontFamily: "'Manrope', system-ui, sans-serif",
+  color: "#111418",
+  fontFamily: "'Inter', system-ui, sans-serif",
   fontSize: 14,
   fontWeight: 500,
   outline: "none",
@@ -330,10 +317,10 @@ export function Field({ label, children }: { label: string; children: React.Reac
     <div>
       <div
         style={{
-          fontFamily: "'Manrope', system-ui, sans-serif",
+          fontFamily: "'Inter', system-ui, sans-serif",
           fontSize: 11,
           fontWeight: 700,
-          color: "#62736d",
+          color: "#5B5F5C",
           textTransform: "uppercase",
           letterSpacing: "0.09em",
           marginBottom: 7,
@@ -353,8 +340,8 @@ export function ErrorBanner({ message }: { message: string }) {
         display: "flex",
         alignItems: "center",
         gap: 8,
-        background: "#FAECE7",
-        border: "1px solid #D85A30",
+        background: "#FCE8EA",
+        border: "1px solid #CE1126",
         borderRadius: 8,
         padding: "10px 14px",
         fontFamily: "'Inter', system-ui, sans-serif",
@@ -362,7 +349,7 @@ export function ErrorBanner({ message }: { message: string }) {
         color: "#8B2A10",
       }}
     >
-      <AlertCircle style={{ width: 14, height: 14, flexShrink: 0, color: "#D85A30" }} />
+      <AlertCircle style={{ width: 14, height: 14, flexShrink: 0, color: "#CE1126" }} />
       {message}
     </div>
   );
@@ -380,7 +367,7 @@ function AuthLangToggle() {
           style={{
             borderRadius: 999,
             border: `1.5px solid ${lang === l ? K.teal : K.line}`,
-            background: lang === l ? "#E1F5EE" : K.paper,
+            background: lang === l ? "#E7F4EC" : K.paper,
             padding: "4px 8px",
             cursor: lang === l ? "default" : "pointer",
             display: "flex", alignItems: "center",
@@ -408,9 +395,9 @@ export function AuthButton({
       className="auth-btn"
       style={{
         width: "100%",
-        background: "#1D9E75",
+        background: "#0F8A4F",
         color: "#fff",
-        fontFamily: "'Manrope', system-ui, sans-serif",
+        fontFamily: "'Inter', system-ui, sans-serif",
         fontSize: 14,
         fontWeight: 800,
         letterSpacing: ".2px",

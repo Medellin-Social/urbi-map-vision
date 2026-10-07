@@ -45,7 +45,7 @@
   --radius: 0.625rem;
 
   /* Medellin Social dark theme */
-  --background: oklch(0.15 0.02 260);          /* #0a0e1a */
+  --background: oklch(0.15 0.02 260);          /* #0B0D12 */
   --foreground: oklch(0.98 0.005 260);         /* #f9fafb */
   --surface: oklch(0.21 0.02 260);             /* #111827 */
   --surface-elevated: oklch(0.26 0.02 260);
@@ -54,26 +54,26 @@
   --popover: oklch(0.21 0.02 260);
   --popover-foreground: oklch(0.98 0.005 260);
 
-  --primary: oklch(0.62 0.12 164);             /* teal #1D9E75 */
+  --primary: #0F8A4F;                          /* Antioquia green */
   --primary-foreground: oklch(0.98 0.005 260);
   --secondary: oklch(0.28 0.02 260);
   --secondary-foreground: oklch(0.98 0.005 260);
   --muted: oklch(0.28 0.02 260);
-  --muted-foreground: oklch(0.72 0.02 260);    /* #9ca3af */
-  --accent: oklch(0.55 0.22 295);              /* purple #7c3aed */
+  --muted-foreground: oklch(0.72 0.02 260);    /* #8A8E8A */
+  --accent: #003893;                           /* flag blue */
   --accent-foreground: oklch(0.98 0.005 260);
 
-  --cyan: oklch(0.62 0.12 164);
-  --purple: oklch(0.55 0.22 295);
-  --success: oklch(0.7 0.17 165);              /* #10b981 */
-  --warning: oklch(0.78 0.17 75);              /* #f59e0b */
-  --danger: oklch(0.65 0.23 25);               /* #ef4444 */
-  --destructive: oklch(0.65 0.23 25);
+  --cyan: #1F5BC6;
+  --purple: #003893;
+  --success: oklch(0.7 0.17 165);              /* #0F8A4F */
+  --warning: #FCD116;                          /* flag yellow */
+  --danger: #CE1126;                           /* flag red */
+  --destructive: #CE1126;
   --destructive-foreground: oklch(0.98 0.005 260);
 
   --border: oklch(0.3 0.02 260 / 80%);         /* #1f2937-ish */
   --input: oklch(0.3 0.02 260);
-  --ring: oklch(0.62 0.12 164);
+  --ring: #0F8A4F;
 }
 
 .dark {
@@ -117,7 +117,7 @@ body {
 }
 .mapboxgl-popup-content {
   background: rgba(250, 247, 242, 0.98) !important;
-  color: #1A1208 !important;
+  color: #111418 !important;
   border: 1px solid rgba(184, 164, 138, 0.5) !important;
   border-radius: 10px !important;
   font-family: var(--font-sans);
@@ -128,7 +128,7 @@ body {
 }
 .mapboxgl-popup-tip { display: none; }
 .urbi-dark-tip .mapboxgl-popup-content {
-  background: #1A1208 !important;
+  background: #111418 !important;
   color: #fff !important;
   border: none !important;
   border-radius: 4px !important;
@@ -162,8 +162,8 @@ body {
   width: 14px;
   height: 14px;
   border-radius: 9999px;
-  background: var(--opp-color, #f59e0b);
-  box-shadow: 0 0 12px var(--opp-color, #f59e0b);
+  background: var(--opp-color, #F2B807);
+  box-shadow: 0 0 12px var(--opp-color, #F2B807);
   cursor: pointer;
 }
 .opp-pulse-dot::before {
@@ -171,7 +171,7 @@ body {
   position: absolute;
   inset: 0;
   border-radius: 9999px;
-  background: var(--opp-color, #f59e0b);
+  background: var(--opp-color, #F2B807);
   animation: opp-pulse 2s ease-out infinite;
 }
 
@@ -184,36 +184,36 @@ body {
 /* Perfil / Settings page — light paper theme */
 .perfil-light {
   --background: #FFFFFF;
-  --foreground: #1A1208;
-  --surface: #FAF7F2;
-  --surface-elevated: #F5F0E8;
+  --foreground: #111418;
+  --surface: #FAF8F3;
+  --surface-elevated: #F3F0E8;
   --card: #FFFFFF;
-  --card-foreground: #1A1208;
-  --muted: #F5F0E8;
-  --muted-foreground: #6B5B45;
+  --card-foreground: #111418;
+  --muted: #F3F0E8;
+  --muted-foreground: #5B5F5C;
   --border: rgb(184 164 138 / 50%);
-  --input: #FAF7F2;
+  --input: #FAF8F3;
 }
 
 /* Simulador / Comparador — full paper theme (overrides all dark tokens) */
 .paper-theme {
-  --background: #FAF7F2;
-  --foreground: #1A1208;
-  --surface: #F5F0E8;
-  --surface-elevated: #F5F0E8;
-  --card: #F5F0E8;
-  --card-foreground: #1A1208;
-  --muted: #F5F0E8;
-  --muted-foreground: #6B5B45;
+  --background: #FAF8F3;
+  --foreground: #111418;
+  --surface: #F3F0E8;
+  --surface-elevated: #F3F0E8;
+  --card: #F3F0E8;
+  --card-foreground: #111418;
+  --muted: #F3F0E8;
+  --muted-foreground: #5B5F5C;
   --border: rgb(184 164 138 / 50%);
-  --input: #FAF7F2;
-  --primary: #1D9E75;
+  --input: #FAF8F3;
+  --primary: #0F8A4F;
   --primary-foreground: #FFFFFF;
-  --accent: #085041;
+  --accent: #0A5C36;
   --accent-foreground: #FFFFFF;
-  --success: #1D9E75;
-  --warning: #BA7517;
-  --danger: #D85A30;
+  --success: #0F8A4F;
+  --warning: #8A6A00;
+  --danger: #CE1126;
 }
 
 /* Landing map — responsive height */
@@ -252,7 +252,7 @@ body {
 }
 .load-bar::before {
   content: ""; position: absolute; top: 0; bottom: 0; width: 40%; border-radius: 2px;
-  background: linear-gradient(90deg, #1D9E75, #085041);
+  background: linear-gradient(90deg, #0F8A4F, #0A5C36);
   animation: load-bar-slide 1.1s ease-in-out infinite;
 }
 @keyframes load-bar-slide {
@@ -266,14 +266,12 @@ body {
 @media (max-width: 768px) {
   .footer-grid {
     grid-template-columns: 1fr 1fr !important;
+    gap: 28px 20px !important;
   }
+  .footer-brand { grid-column: 1 / -1; }
 }
-
-@media (max-width: 480px) {
-  .footer-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
+.footer-link { transition: color .15s, transform .15s; }
+.footer-link:hover { color: #FCD116 !important; transform: translateX(2px); }
 
 @media (max-width: 600px) {
   .landing-map-wrapper {
@@ -305,4 +303,21 @@ body {
     scrollbar-width: none;
     padding-bottom: 4px !important;
   }
+}
+
+/* ── Motion: scroll reveal + press feedback (ComunidadLayout) ───────── */
+.ms-reveal {
+  opacity: 0;
+  transform: translateY(18px);
+  transition: opacity .6s ease, transform .6s cubic-bezier(.2,.7,.2,1);
+}
+.ms-reveal.ms-in { opacity: 1; transform: none; }
+main a, main button { transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease, border-color .15s ease, color .15s ease; }
+/* Solo elementos sin transform propio (Tailwind translate/rotate/scale) */
+@media (prefers-reduced-motion: no-preference) {
+  main a:not([class*="translate"]):not([class*="rotate"]):not([class*="scale"]):active,
+  main button:not([class*="translate"]):not([class*="rotate"]):not([class*="scale"]):active { transform: scale(.98); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ms-reveal { opacity: 1 !important; transform: none !important; transition: none !important; }
 }

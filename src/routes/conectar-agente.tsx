@@ -4,18 +4,9 @@ import { auth } from "@/lib/auth";
 import { getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  paper:     "#FAF7F2",
-  ink:       "#1A1208",
-  muted:     "#6B5B45",
-  teal:      "#1D9E75",
-  tealDeep:  "#085041",
-  tealLight: "#E8F5F0",
-  coral:     "#D85A30",
-  line:      "#E8E0D0",
-  serif:     "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 interface Agente {
   id: number;
@@ -117,7 +108,7 @@ function ConectarAgentePage() {
           ) : (
             <div style={{
               marginTop: 12, padding: "10px 16px",
-              background: "#FFF3CD", border: "1px solid #FFC107",
+              background: "#FFF6D6", border: "1px solid #FFC107",
               borderRadius: 8, fontSize: 13, color: "#856404",
             }}>
               Sin propiedad seleccionada. Publica primero desde <a href="/publicar" style={{ color: K.teal }}>aquí</a>.
@@ -127,7 +118,7 @@ function ConectarAgentePage() {
 
         {error && (
           <div style={{
-            background: "#FFF0ED", border: `1px solid ${K.coral}`,
+            background: "#FCE8EA", border: `1px solid ${K.coral}`,
             borderRadius: 8, padding: "10px 14px", marginBottom: 20,
             fontSize: 13, color: K.coral,
             display: "flex", justifyContent: "space-between", alignItems: "center",

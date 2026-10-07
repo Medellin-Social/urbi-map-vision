@@ -168,7 +168,7 @@ export const MAP_STYLES: Record<MapStyleId, { label: string; url: string; swatch
   dark: {
     label: "Cyber Dark",
     url: "mapbox://styles/mapbox/dark-v11",
-    swatch: ["#0a0e1a", "#111827", "#00d4ff", "#7c3aed"],
+    swatch: ["#0B0D12", "#111827", "#1F5BC6", "#003893"],
   },
   night: {
     label: "Midnight Indigo",

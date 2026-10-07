@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { BARRIOS } from '@/components/comunidad/BarrioContext'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/negocios/unirse')({
   component: NegociosUnirsePage,
@@ -14,14 +15,7 @@ export const Route = createFileRoute('/negocios/unirse')({
   }),
 })
 
-const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 const CATEGORIAS = [
   'Brunch', 'Restaurante / Cena', 'Bar', 'Café', 'Panadería', 'Comida rápida',
@@ -158,7 +152,7 @@ function NegociosUnirsePage() {
   )
 
   return (
-    <ComunidadLayout subNav={subNav} compact>
+    <ComunidadLayout subNav={subNav}>
 
       {/* HERO */}
       <section style={{
@@ -328,7 +322,7 @@ function NegociosUnirsePage() {
 
       {/* POR QUÉ — dark band */}
       <section id="porque" style={{ background: K.ink, padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: '#fff', margin: '0 0 14px' }}>
             Por qué funciona
           </h2>
@@ -354,7 +348,7 @@ function NegociosUnirsePage() {
 
       {/* SEO / AEO / MEO */}
       <section style={{ padding: '72px 26px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Autoridad local real
           </h2>
@@ -381,7 +375,7 @@ function NegociosUnirsePage() {
 
       {/* TABLA COMPARATIVA */}
       <section id="form" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto', overflowX: 'auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', overflowX: 'auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 32px' }}>
             ¿Qué incluye cada plan?
           </h2>
@@ -417,7 +411,7 @@ function NegociosUnirsePage() {
 
       {/* CATEGORÍAS ELEGIBLES */}
       <section style={{ padding: '0 26px 72px' }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.5rem,3vw,2rem)', color: K.ink, margin: '0 0 14px' }}>
             Categorías disponibles
           </h2>
@@ -438,7 +432,7 @@ function NegociosUnirsePage() {
 
       {/* CÓMO FUNCIONA ONBOARDING */}
       <section style={{ padding: '0 26px 72px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, paddingTop: 72 }}>
-        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Cómo funciona el proceso
           </h2>

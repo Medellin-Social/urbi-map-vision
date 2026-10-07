@@ -1,9 +1,5 @@
-const K = {
-  ink: '#14201d',
-  teal: '#1D9E75',
-  amarillo: '#ffc928',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+import { K as TOKENS } from "@/design/tokens";
+const K = TOKENS;
 
 export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
   const t = (es: string, en: string) => lang === 'es' ? es : en
@@ -23,13 +19,19 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
   ]
 
   return (
-    <footer style={{ background: K.ink, color: '#bccfc8', padding: '46px 26px 30px' }}>
+    <footer style={{ background: K.ink, color: '#C9D9CE', padding: '0 26px 30px' }}>
+      {/* Franja tricolor a todo el ancho, igual que bajo el navbar */}
+      <div aria-hidden="true" style={{ display: 'flex', height: 3, margin: '0 -26px 46px' }}>
+        <i style={{ flex: 2, background: K.amarillo }} />
+        <i style={{ flex: 1, background: K.azul }} />
+        <i style={{ flex: 1, background: K.rojo }} />
+      </div>
       <div className="footer-grid" style={{
         display: 'grid',
         gridTemplateColumns: '1.4fr 1fr 1fr 1fr',
         gap: 34, maxWidth: 1200, margin: '0 auto',
       }}>
-        <div>
+        <div className="footer-brand">
           <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.8rem', color: '#fff', letterSpacing: -1 }}>
             Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
           </div>
@@ -45,7 +47,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
             {t('Secciones', 'Sections')}
           </h5>
           {secciones.map(([label, href]) => (
-            <a key={label} href={href} style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#bccfc8', textDecoration: 'none' }}>
+            <a key={label} href={href} className="footer-link" style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#C9D9CE', textDecoration: 'none' }}>
               {label}
             </a>
           ))}
@@ -55,7 +57,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
             Barrios
           </h5>
           {['El Poblado', 'Laureles', 'Envigado', 'Sabaneta'].map(b => (
-            <a key={b} href={`/eventos/${b.toLowerCase().replace(' ', '-')}`} style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#bccfc8', textDecoration: 'none' }}>
+            <a key={b} href={`/eventos/${b.toLowerCase().replace(' ', '-')}`} className="footer-link" style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#C9D9CE', textDecoration: 'none' }}>
               {b}
             </a>
           ))}
@@ -65,7 +67,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
             {t('Participa', 'Get Involved')}
           </h5>
           {participa.map(([label, href]) => (
-            <a key={label} href={href} style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#bccfc8', textDecoration: 'none' }}>
+            <a key={label} href={href} className="footer-link" style={{ display: 'block', padding: '5px 0', fontSize: '.9rem', color: '#C9D9CE', textDecoration: 'none' }}>
               {label}
             </a>
           ))}

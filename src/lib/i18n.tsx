@@ -2631,6 +2631,8 @@ const PHRASES: Array<[string, string]> = [
 
   // ── Planes / Productos ────────────────────────────────────────────────────
   // Long phrases first to avoid partial matches
+  ["Planes y precios", "Plans and pricing"],
+  ["Aún no hay noticias. Vuelve pronto.", "No news yet. Check back soon."],
   ["Productos distintos para agentes inmobiliarios y negocios locales en el Valle de Aburrá.",
     "Distinct products for real estate agents and local businesses in the Aburrá Valley."],
   ["CRM, comunicaciones y herramientas de marketing integradas con el MLS del Valle de Aburrá.",

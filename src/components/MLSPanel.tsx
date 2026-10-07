@@ -74,30 +74,30 @@ const TIPO_GRUPOS = [
 ];
 
 const TIPO_INMUEBLE_COLOR: Record<string, string> = {
-  apartamento:   '#1D9E75',
-  casa:          '#D85A30',
-  casa_lote:     '#D85A30',
-  finca:         '#D85A30',
-  apartaestudio: '#5DCAA5',
-  lote:          '#BA7517',
-  local:         '#7F77DD',
-  oficina:       '#378ADD',
-  bodega:        '#9B8B75',
-  consultorio:   '#9B8B75',
+  apartamento:   '#0F8A4F',
+  casa:          '#CE1126',
+  casa_lote:     '#CE1126',
+  finca:         '#CE1126',
+  apartaestudio: '#5BBE8A',
+  lote:          '#8A6A00',
+  local:         '#1F5BC6',
+  oficina:       '#1F5BC6',
+  bodega:        '#6E726E',
+  consultorio:   '#6E726E',
 };
 
 function getTipoInmuebleBadgeStyle(tipo: string): React.CSSProperties {
-  const bg = TIPO_INMUEBLE_COLOR[tipo] ?? '#9B8B75';
+  const bg = TIPO_INMUEBLE_COLOR[tipo] ?? '#6E726E';
   return { background: bg, color: '#FFFFFF' };
 }
 
 function tierColor(l: ApiListing): string {
-  if (l.tier === "agencia_premium") return "#ffc928";
-  return TIPO_INMUEBLE_COLOR[l.tipo_inmueble ?? ""] ?? "#9B8B75";
+  if (l.tier === "agencia_premium") return "#FCD116";
+  return TIPO_INMUEBLE_COLOR[l.tipo_inmueble ?? ""] ?? "#6E726E";
 }
 
 // Listing con visibilidad pagada (owner Pro o agente verificado) → destacado.
-const DESTACADO_COLOR = "#ffc928";
+const DESTACADO_COLOR = "#FCD116";
 function esDestacado(l: ApiListing): boolean {
   return l.fuente_display === "propio_pro" || l.fuente_display === "agente_verificado";
 }
@@ -196,28 +196,28 @@ function ListingCard({
         data-tour="listing-card"
         className="cursor-pointer rounded-lg border overflow-hidden"
         style={highlighted
-          ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-          : { border: '0.5px solid #E8E0D0', background: '#FFFFFF' }
+          ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+          : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
         }
       >
-        <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F5F0E8' }}>
+        <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
           {listing.foto_principal ? (
             <img src={listing.foto_principal} alt="" className="h-full w-full object-cover" loading="lazy" decoding="async" />
           ) : (
-            <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #085041 100%)' }}>
+            <div className="flex h-full w-full items-center justify-center" style={{ background: 'linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)' }}>
               <span style={{ color: '#fff', opacity: 0.5, fontSize: 11, fontWeight: 700 }}>Medellín Social</span>
             </div>
           )}
           <span
             className="absolute left-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-            style={{ background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30", color: "#FFFFFF" }}
+            style={{ background: listing.tipo_operacion === "arriendo" ? "#0F8A4F" : "#CE1126", color: "#FFFFFF" }}
           >
             {tipo}
           </span>
           {esDestacado(listing) && (
             <span
               className="absolute right-1.5 top-1.5 rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider"
-              style={{ background: DESTACADO_COLOR, color: "#1A1208" }}
+              style={{ background: DESTACADO_COLOR, color: "#111418" }}
             >
               ★
             </span>
@@ -225,8 +225,8 @@ function ListingCard({
         </div>
         <div className="flex items-start justify-between gap-2 p-2">
           <div className="min-w-0">
-            <div data-i18n-skip="true" className="text-sm font-bold leading-tight text-[#1A1208]">{precio}</div>
-            {specs && <div className="mt-0.5 truncate text-[11px] text-[#6B5B45]">{specs}</div>}
+            <div data-i18n-skip="true" className="text-sm font-bold leading-tight text-[#111418]">{precio}</div>
+            {specs && <div className="mt-0.5 truncate text-[11px] text-[#5B5F5C]">{specs}</div>}
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
@@ -245,14 +245,14 @@ function ListingCard({
       ref={cardRef}
       onClick={(e) => onSelect(e)}
       data-tour="listing-card"
-      className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F5F0E8]"
+      className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F3F0E8]"
       style={highlighted
-        ? { border: '1.5px solid #1D9E75', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-        : { border: '0.5px solid #E8E0D0', background: '#FFFFFF' }
+        ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+        : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
       }
     >
       {/* Photo */}
-      <div className="relative h-[140px] w-full overflow-hidden" style={{ background: '#F5F0E8' }}>
+      <div className="relative h-[140px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
         {listing.foto_principal ? (
           <img
             src={listing.foto_principal}
@@ -264,18 +264,18 @@ function ListingCard({
         ) : (
           <div
             className="flex h-full w-full items-center justify-center"
-            style={{ background: 'linear-gradient(135deg, #1D9E75 0%, #085041 100%)' }}
+            style={{ background: 'linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)' }}
           >
             <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 36, height: 36, opacity: 0.45 }}>
               <rect x="6" y="12" width="24" height="30" rx="1" fill="white"/>
               <rect x="30" y="20" width="14" height="22" rx="1" fill="white"/>
-              <rect x="10" y="16" width="4" height="4" fill="#1D9E75"/>
-              <rect x="18" y="16" width="4" height="4" fill="#1D9E75"/>
-              <rect x="10" y="24" width="4" height="4" fill="#1D9E75"/>
-              <rect x="18" y="24" width="4" height="4" fill="#1D9E75"/>
-              <rect x="13" y="32" width="6" height="10" fill="#1D9E75"/>
-              <rect x="34" y="24" width="4" height="4" fill="#1D9E75"/>
-              <rect x="34" y="30" width="4" height="4" fill="#1D9E75"/>
+              <rect x="10" y="16" width="4" height="4" fill="#0F8A4F"/>
+              <rect x="18" y="16" width="4" height="4" fill="#0F8A4F"/>
+              <rect x="10" y="24" width="4" height="4" fill="#0F8A4F"/>
+              <rect x="18" y="24" width="4" height="4" fill="#0F8A4F"/>
+              <rect x="13" y="32" width="6" height="10" fill="#0F8A4F"/>
+              <rect x="34" y="24" width="4" height="4" fill="#0F8A4F"/>
+              <rect x="34" y="30" width="4" height="4" fill="#0F8A4F"/>
             </svg>
           </div>
         )}
@@ -283,7 +283,7 @@ function ListingCard({
         <span
           className="absolute top-2 left-2 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           style={{
-            background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            background: listing.tipo_operacion === "arriendo" ? "#0F8A4F" : "#CE1126",
             color:      "#FFFFFF",
           }}
         >
@@ -305,13 +305,13 @@ function ListingCard({
             title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
             className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full shadow-md transition hover:scale-110"
             style={{
-              background: selected ? "#1D9E75" : "rgba(255,255,255,0.92)",
-              border: selected ? "none" : "0.5px solid #E8E0D0",
+              background: selected ? "#0F8A4F" : "rgba(255,255,255,0.92)",
+              border: selected ? "none" : "0.5px solid #E5E0D5",
             }}
           >
             {selected
               ? <Check className="h-3.5 w-3.5 text-white" />
-              : <Plus className="h-3.5 w-3.5 text-[#1D9E75]" />
+              : <Plus className="h-3.5 w-3.5 text-[#0F8A4F]" />
             }
           </button>
         )}
@@ -319,7 +319,7 @@ function ListingCard({
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
         {esDestacado(listing) && (
-          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: DESTACADO_COLOR, color: '#1A1208' }}>
+          <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider" style={{ background: DESTACADO_COLOR, color: '#111418' }}>
             ★ Destacado
           </span>
         )}
@@ -331,7 +331,7 @@ function ListingCard({
         {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
           <span
             className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-            style={{ background: '#E1F5EE', color: '#085041', border: '0.5px solid #1D9E75' }}
+            style={{ background: '#E7F4EC', color: '#0A5C36', border: '0.5px solid #0F8A4F' }}
           >
             BUENA OFERTA
           </span>
@@ -339,7 +339,7 @@ function ListingCard({
         {listing.amoblado && (
           <span
             className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-            style={{ background: '#F0EBE1', color: '#6B5B45', border: '0.5px solid #C8B99A' }}
+            style={{ background: '#F3F0E8', color: '#5B5F5C', border: '0.5px solid #C8B99A' }}
           >
             AMOBLADO
           </span>
@@ -347,7 +347,7 @@ function ListingCard({
         <span
           className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
           style={{
-            background: listing.tipo_operacion === "arriendo" ? "#1D9E75" : "#D85A30",
+            background: listing.tipo_operacion === "arriendo" ? "#0F8A4F" : "#CE1126",
             color:      "#FFFFFF",
           }}
         >
@@ -360,13 +360,13 @@ function ListingCard({
         )}
       </div>
 
-      <div data-i18n-skip="true" className="text-base font-bold leading-tight text-[#1A1208]">{precio}</div>
-      {precioSub && <div data-i18n-skip="true" className="text-[11px] text-[#6B5B45]">{precioSub}</div>}
-      {specs && <div className="mt-1 text-xs text-[#6B5B45]">{specs}</div>}
-      {m2 && <div className="text-[11px] text-[#6B5B45]">{m2}</div>}
+      <div data-i18n-skip="true" className="text-base font-bold leading-tight text-[#111418]">{precio}</div>
+      {precioSub && <div data-i18n-skip="true" className="text-[11px] text-[#5B5F5C]">{precioSub}</div>}
+      {specs && <div className="mt-1 text-xs text-[#5B5F5C]">{specs}</div>}
+      {m2 && <div className="text-[11px] text-[#5B5F5C]">{m2}</div>}
 
       {(listing.pct_bajo_mediana ?? 0) > 5 && (
-        <div className="mt-1.5 text-[11px] font-medium text-[#085041]">
+        <div className="mt-1.5 text-[11px] font-medium text-[#0A5C36]">
           {listing.pct_bajo_mediana?.toFixed(0)}% bajo la mediana del barrio
         </div>
       )}
@@ -377,18 +377,18 @@ function ListingCard({
           title={listing.fecha_publicacion ? `Publicado el ${listing.fecha_publicacion}` : undefined}
         >
           {(listing.dias_en_mercado ?? 0) < 7 && (
-            <span className="rounded px-1.5 py-0 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#ffc928', color: '#1A1208' }}>
+            <span className="rounded px-1.5 py-0 text-[10px] font-bold uppercase tracking-wider" style={{ background: '#FCD116', color: '#111418' }}>
               NUEVO
             </span>
           )}
           <span className={
             (listing.dias_en_mercado ?? 0) < 7
-              ? "text-[#085041]"
+              ? "text-[#0A5C36]"
               : (listing.dias_en_mercado ?? 0) < 30
-              ? "text-[#6B5B45]"
+              ? "text-[#5B5F5C]"
               : (listing.dias_en_mercado ?? 0) < 90
-              ? "text-[#BA7517]"
-              : "text-[#E24B4A]"
+              ? "text-[#8A6A00]"
+              : "text-[#CE1126]"
           }>
             {diasLabel(listing.dias_en_mercado)}
             {(listing.dias_en_mercado ?? 0) > 90 && " · Lleva tiempo"}
@@ -403,21 +403,21 @@ function ListingCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="flex items-center gap-1 text-[10px] text-[#9B8B75] capitalize hover:text-[#1D9E75] transition-colors"
+            className="flex items-center gap-1 text-[10px] text-[#6E726E] capitalize hover:text-[#0F8A4F] transition-colors"
           >
             {listing.fuente ?? "—"}
             <ExternalLink className="h-2.5 w-2.5" />
           </a>
         ) : listing.disponible_actualmente === false ? (
           <span
-            className="flex items-center gap-1 text-[10px] text-[#C8B8A2] capitalize cursor-default"
+            className="flex items-center gap-1 text-[10px] text-[#C9C4B8] capitalize cursor-default"
             title="Este listing ya no está disponible, pero sus datos son referencia histórica del mercado"
           >
             {listing.fuente ?? "—"}
             <ExternalLink className="h-2.5 w-2.5 opacity-30" />
           </span>
         ) : (
-          <span className="text-[10px] text-[#9B8B75] capitalize">
+          <span className="text-[10px] text-[#6E726E] capitalize">
             {listing.fuente ?? "—"}
           </span>
         )}
@@ -426,7 +426,7 @@ function ListingCard({
           {isRealtor && (
             <button
               onClick={(e) => { e.stopPropagation(); onSimular(); }}
-              className="rounded px-1.5 py-0.5 text-[10px] text-[#9B8B75] border border-[#E8E0D0] hover:text-[#1D9E75] hover:border-[#1D9E75]/40 transition"
+              className="rounded px-1.5 py-0.5 text-[10px] text-[#6E726E] border border-[#E5E0D5] hover:text-[#0F8A4F] hover:border-[#0F8A4F]/40 transition"
               title="Simular inversión"
             >
               Simular
@@ -586,7 +586,7 @@ export function MLSPanel({
     ? toTitleCase(barrio.comuna ?? "")
     : null;
 
-  const panelVars = { '--background': '#FFFFFF', '--foreground': '#1A1208', '--surface': '#FAF7F2', '--surface-elevated': '#F5F0E8', '--muted': '#F5F0E8', '--muted-foreground': '#6B5B45', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF7F2', '--card': '#FFFFFF', '--card-foreground': '#1A1208' } as React.CSSProperties;
+  const panelVars = { '--background': '#FFFFFF', '--foreground': '#111418', '--surface': '#FAF8F3', '--surface-elevated': '#F3F0E8', '--muted': '#F3F0E8', '--muted-foreground': '#5B5F5C', '--border': 'rgb(184 164 138 / 50%)', '--input': '#FAF8F3', '--card': '#FFFFFF', '--card-foreground': '#111418' } as React.CSSProperties;
 
   // Destacados (visibilidad pagada) arriba en su propia sección; el resto abajo.
   // filtered ya viene ordenado pro-first del API; el split solo agrega los encabezados.
@@ -728,7 +728,7 @@ export function MLSPanel({
         <div ref={listContainerRef} data-tour="listing-panel" className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
           {isLoading && (
             <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
-              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
+              <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0F8A4F] border-t-transparent" />
               <span>Cargando inmuebles…</span>
             </div>
           )}
@@ -745,7 +745,7 @@ export function MLSPanel({
                 <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: DESTACADO_COLOR }}>
                   ★ {lang === "en" ? "Featured in this area" : "Destacados en esta zona"}
                 </span>
-                <span className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+                <span className="h-px flex-1" style={{ background: "#E5E0D5" }} />
               </div>
               {destacados.map(renderCard)}
               {resto.length > 0 && (
@@ -753,7 +753,7 @@ export function MLSPanel({
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {lang === "en" ? "All properties" : "Todas las propiedades"}
                   </span>
-                  <span className="h-px flex-1" style={{ background: "#E8E0D0" }} />
+                  <span className="h-px flex-1" style={{ background: "#E5E0D5" }} />
                 </div>
               )}
             </>
@@ -762,7 +762,7 @@ export function MLSPanel({
           {/* Sentinel para render progresivo — dispara el siguiente lote */}
           {hayMas && (
             <div ref={sentinelRef} className="flex justify-center py-4">
-              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
+              <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#0F8A4F] border-t-transparent" />
             </div>
           )}
           {!isLoading && !hayMas && filtered.length > 0 && (
@@ -786,7 +786,7 @@ export function MLSPanel({
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 280 }}
         className="fixed inset-x-0 bottom-0 z-20 flex flex-col"
-        style={{ top: 100, background: '#FAF7F2', ...panelVars }}
+        style={{ top: 100, background: '#FAF8F3', ...panelVars }}
       >
         {body}
       </motion.div>
@@ -803,7 +803,7 @@ export function MLSPanel({
         exit={{ x: "100%" }}
         transition={{ type: "spring", damping: 30, stiffness: 280 }}
         className="absolute right-0 top-0 z-20 flex h-full w-[380px] max-w-full flex-col shadow-2xl"
-        style={{ background: '#FAF7F2', borderLeft: '0.5px solid #E8E0D0', ...panelVars }}
+        style={{ background: '#FAF8F3', borderLeft: '0.5px solid #E5E0D5', ...panelVars }}
       >
         {body}
       </motion.aside>

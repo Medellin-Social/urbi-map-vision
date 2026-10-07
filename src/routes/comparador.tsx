@@ -51,12 +51,12 @@ export const Route = createFileRoute("/comparador")({
 
 // ─── Colors ────────────────────────────────────────────────────────────────────
 
-const COLORS = ["#1D9E75", "#BA7517", "#6B5B45", "#378ADD", "#D85A30"];
+const COLORS = ["#0F8A4F", "#8A6A00", "#5B5F5C", "#1F5BC6", "#CE1126"];
 
 function getPaperScoreColor(score: number): string {
-  if (score >= 60) return "#1D9E75";
-  if (score >= 40) return "#BA7517";
-  return "#D85A30";
+  if (score >= 60) return "#0F8A4F";
+  if (score >= 40) return "#8A6A00";
+  return "#CE1126";
 }
 
 function scoreToCategory(score: number): string {
@@ -154,48 +154,48 @@ function HistorialSection({
   return (
     <div
       className="mt-8 rounded-2xl border"
-      style={{ background: "#FAF7F2", borderColor: "#E8E0D0" }}
+      style={{ background: "#FAF8F3", borderColor: "#E5E0D5" }}
     >
       <button
         onClick={() => setOpen((v) => !v)}
         className="flex w-full items-center justify-between px-5 py-4"
       >
-        <span className="text-sm font-semibold text-[#1A1208]">
+        <span className="text-sm font-semibold text-[#111418]">
           Mis comparaciones guardadas
         </span>
-        {open ? <ChevronUp className="h-4 w-4 text-[#6B5B45]" /> : <ChevronDown className="h-4 w-4 text-[#6B5B45]" />}
+        {open ? <ChevronUp className="h-4 w-4 text-[#5B5F5C]" /> : <ChevronDown className="h-4 w-4 text-[#5B5F5C]" />}
       </button>
 
       {open && (
-        <div className="border-t px-5 pb-4" style={{ borderColor: "#E8E0D0" }}>
+        <div className="border-t px-5 pb-4" style={{ borderColor: "#E5E0D5" }}>
           {isLoading && (
-            <p className="py-4 text-center text-xs text-[#9B8B75]">Cargando historial…</p>
+            <p className="py-4 text-center text-xs text-[#6E726E]">Cargando historial…</p>
           )}
           {!isLoading && items.length === 0 && (
-            <p className="py-4 text-center text-xs text-[#9B8B75]">
+            <p className="py-4 text-center text-xs text-[#6E726E]">
               Aún no tienes comparaciones guardadas.
             </p>
           )}
-          <div className="mt-3 divide-y" style={{ borderColor: "#E8E0D0" }}>
+          <div className="mt-3 divide-y" style={{ borderColor: "#E5E0D5" }}>
             {items.map((item) => (
               <div
                 key={item.id}
                 className="flex items-center justify-between py-3"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-2 text-sm font-medium text-[#1A1208]">
+                  <div className="flex items-center gap-2 text-sm font-medium text-[#111418]">
                     {item.tipo === "barrios"
-                      ? <Building2 className="h-3.5 w-3.5 shrink-0 text-[#1D9E75]" />
-                      : <Home className="h-3.5 w-3.5 shrink-0 text-[#D85A30]" />
+                      ? <Building2 className="h-3.5 w-3.5 shrink-0 text-[#0F8A4F]" />
+                      : <Home className="h-3.5 w-3.5 shrink-0 text-[#CE1126]" />
                     }
                     <span className="truncate">
                       {item.nombre ?? (item.tipo === "barrios" ? `${item.items.length} barrios` : `${item.items.length} inmuebles`)}
                       {item.filtro_inversion && (
-                        <span className="ml-1 text-[10px] text-[#9B8B75]">· {item.filtro_inversion}</span>
+                        <span className="ml-1 text-[10px] text-[#6E726E]">· {item.filtro_inversion}</span>
                       )}
                     </span>
                   </div>
-                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#9B8B75]">
+                  <div className="mt-0.5 flex items-center gap-1 text-[11px] text-[#6E726E]">
                     <Clock className="h-3 w-3" />
                     {timeAgo(item.fecha_creacion)}
                   </div>
@@ -210,14 +210,14 @@ function HistorialSection({
                       }
                       setOpen(false);
                     }}
-                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#1D9E75] transition hover:bg-[#E1F5EE]"
-                    style={{ border: "0.5px solid #1D9E75" }}
+                    className="rounded-lg px-3 py-1.5 text-xs font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
+                    style={{ border: "0.5px solid #0F8A4F" }}
                   >
                     Ver →
                   </button>
                   <button
                     onClick={() => deleteMut.mutate(item.id)}
-                    className="rounded-lg p-1.5 text-[#9B8B75] transition hover:text-[#D85A30]"
+                    className="rounded-lg p-1.5 text-[#6E726E] transition hover:text-[#CE1126]"
                     title="Eliminar"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -305,8 +305,8 @@ function TabBarrios({
             onClick={() => setFiltroInversion(f.id)}
             className="rounded-lg px-3 py-1.5 text-xs font-medium transition"
             style={filtroInversion === f.id
-              ? { background: "#1D9E75", color: "#FFFFFF" }
-              : { background: "#F5F0E8", color: "#6B5B45", border: "0.5px solid #E8E0D0" }
+              ? { background: "#0F8A4F", color: "#FFFFFF" }
+              : { background: "#F3F0E8", color: "#5B5F5C", border: "0.5px solid #E5E0D5" }
             }
           >
             {f.label}
@@ -329,10 +329,10 @@ function TabBarrios({
                 setIds((prev) => prev.map((v, idx) => (idx === i ? Number(e.target.value) : v)))
               }
               className="bg-transparent text-sm outline-none"
-              style={{ color: "#1A1208" }}
+              style={{ color: "#111418" }}
             >
               {barrios.map((n) => (
-                <option key={n.id} value={n.id} className="bg-surface" style={{ color: "#1A1208" }}>
+                <option key={n.id} value={n.id} className="bg-surface" style={{ color: "#111418" }}>
                   {titleCase(n.nombre)}
                 </option>
               ))}
@@ -353,7 +353,7 @@ function TabBarrios({
             if (next) setIds([...ids, next.id]);
           }}
           className="inline-flex items-center gap-1 rounded-md border border-dashed px-3 py-1 text-xs font-medium transition hover:bg-accent/10"
-          style={{ borderColor: "#085041", color: "#085041" }}
+          style={{ borderColor: "#0A5C36", color: "#0A5C36" }}
         >
           <Plus className="h-3 w-3" /> Añadir barrio
         </button>
@@ -366,7 +366,7 @@ function TabBarrios({
               onChange={(e) => setNombre(e.target.value)}
               placeholder="Nombre (opcional)"
               className="rounded-md px-2 py-1 text-xs outline-none"
-              style={{ border: "0.5px solid #E8E0D0", color: "#1A1208", background: "#FFFFFF", width: 140 }}
+              style={{ border: "0.5px solid #E5E0D5", color: "#111418", background: "#FFFFFF", width: 140 }}
             />
             <button
               onClick={() => {
@@ -380,7 +380,7 @@ function TabBarrios({
               }}
               disabled={saveMut.isPending}
               className="inline-flex items-center gap-1 rounded-md px-3 py-1 text-xs font-medium text-white transition hover:opacity-90"
-              style={{ background: "#1D9E75" }}
+              style={{ background: "#0F8A4F" }}
             >
               Guardar
             </button>
@@ -405,7 +405,7 @@ function TabBarrios({
                 <thead>
                   <tr
                     className="text-left text-[10px] uppercase tracking-widest"
-                    style={{ background: "#085041", color: "#FFFFFF" }}
+                    style={{ background: "#0A5C36", color: "#FFFFFF" }}
                   >
                     <th className="rounded-tl-lg py-2 px-2 font-medium">Métrica</th>
                     {items.map((b) => (
@@ -488,10 +488,10 @@ function priceBadgeLabel(pct: number | null | undefined): string {
 }
 
 function priceBadgeColor(pct: number | null | undefined): string {
-  if (pct == null) return "#9B8B75";
-  if (pct > 10) return "#1D9E75";
-  if (pct >= -10) return "#BA7517";
-  return "#D85A30";
+  if (pct == null) return "#6E726E";
+  if (pct > 10) return "#0F8A4F";
+  if (pct >= -10) return "#8A6A00";
+  return "#CE1126";
 }
 
 function diasLabel(dias: number | null | undefined): string | null {
@@ -531,8 +531,8 @@ function TableRow({
   const worst = vals && dir ? worstIdx(vals, dir) : -1;
 
   return (
-    <tr className="border-b" style={{ borderColor: "#E8E0D0" }}>
-      <td className="py-2.5 pr-4 text-[11px] text-[#9B8B75] whitespace-nowrap">{label}</td>
+    <tr className="border-b" style={{ borderColor: "#E5E0D5" }}>
+      <td className="py-2.5 pr-4 text-[11px] text-[#6E726E] whitespace-nowrap">{label}</td>
       {(vals ?? []).map((v, i) => {
         const isBest = i === best && i !== worst;
         const isWorst = i === worst && i !== best;
@@ -541,9 +541,9 @@ function TableRow({
           <td
             key={i}
             className="py-2.5 pl-3 text-xs font-medium"
-            style={{ color: isBest ? "#085041" : isWorst ? "#D85A30" : "#1A1208" }}
+            style={{ color: isBest ? "#0A5C36" : isWorst ? "#CE1126" : "#111418" }}
           >
-            <span style={isBest ? { background: "#E1F5EE", padding: "2px 6px", borderRadius: 4 } : isWorst ? { background: "#FAECE7", padding: "2px 6px", borderRadius: 4 } : undefined}>
+            <span style={isBest ? { background: "#E7F4EC", padding: "2px 6px", borderRadius: 4 } : isWorst ? { background: "#FCE8EA", padding: "2px 6px", borderRadius: 4 } : undefined}>
               {content}
             </span>
           </td>
@@ -559,7 +559,7 @@ function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
       <td
         colSpan={colSpan}
         className="pb-1 pt-4 text-[9px] font-bold uppercase tracking-widest"
-        style={{ color: "#6B5B45" }}
+        style={{ color: "#5B5F5C" }}
       >
         {label}
       </td>
@@ -606,11 +606,11 @@ function WinnerCard({ listing, idx, goal }: { listing: ComparadorListing; idx: n
   return (
     <div
       className="mt-8 rounded-2xl p-5"
-      style={{ background: "#E1F5EE", border: "1.5px solid #1D9E75" }}
+      style={{ background: "#E7F4EC", border: "1.5px solid #0F8A4F" }}
     >
       <div className="mb-3 flex items-center gap-2">
-        <Trophy className="h-5 w-5 text-[#085041]" />
-        <span className="text-sm font-bold text-[#085041]">MEJOR OPCIÓN</span>
+        <Trophy className="h-5 w-5 text-[#0A5C36]" />
+        <span className="text-sm font-bold text-[#0A5C36]">MEJOR OPCIÓN</span>
       </div>
       <div className="flex items-start gap-4">
         {listing.foto_principal && (
@@ -621,16 +621,16 @@ function WinnerCard({ listing, idx, goal }: { listing: ComparadorListing; idx: n
           />
         )}
         <div className="min-w-0 flex-1">
-          <div className="text-base font-bold text-[#1A1208]">
+          <div className="text-base font-bold text-[#111418]">
             {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
           </div>
-          <div className="mt-0.5 flex items-center gap-1 text-xs text-[#6B5B45]">
+          <div className="mt-0.5 flex items-center gap-1 text-xs text-[#5B5F5C]">
             <MapPin className="h-3 w-3 shrink-0" />
             {listing.barrio_nombre ?? "—"}
           </div>
-          <div className="mt-2 text-xs text-[#085041]">{reasonLabel}</div>
+          <div className="mt-2 text-xs text-[#0A5C36]">{reasonLabel}</div>
           {listing.seguridad_score != null && listing.seguridad_score >= 60 && (
-            <div className="mt-0.5 text-xs text-[#085041]">Zona segura</div>
+            <div className="mt-0.5 text-xs text-[#0A5C36]">Zona segura</div>
           )}
         </div>
       </div>
@@ -639,7 +639,7 @@ function WinnerCard({ listing, idx, goal }: { listing: ComparadorListing; idx: n
           to="/listing/$id"
           params={{ id: String(listing.id) }}
           className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           Ver listing →
         </Link>
@@ -650,8 +650,8 @@ function WinnerCard({ listing, idx, goal }: { listing: ComparadorListing; idx: n
             if (listing.precio_cop) p.set("precio", String(listing.precio_cop));
             navigate({ to: "/simulador", search: { barrio: listing.barrio_id ?? undefined, precio: listing.precio_cop ?? undefined } });
           }}
-          className="flex-1 rounded-xl py-2.5 text-xs font-semibold text-[#085041] transition hover:bg-[#E1F5EE]"
-          style={{ border: "1px solid #1D9E75" }}
+          className="flex-1 rounded-xl py-2.5 text-xs font-semibold text-[#0A5C36] transition hover:bg-[#E7F4EC]"
+          style={{ border: "1px solid #0F8A4F" }}
         >
           Simular →
         </button>
@@ -716,14 +716,14 @@ function TabInmuebles({
     return (
       <div
         className="mt-8 flex flex-col items-center gap-4 rounded-2xl p-8 text-center"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
       >
-        <Lock className="h-8 w-8 text-[#6B5B45]" />
+        <Lock className="h-8 w-8 text-[#5B5F5C]" />
         <div>
-          <p className="font-semibold text-[#1A1208]">
+          <p className="font-semibold text-[#111418]">
             El Comparador de Inmuebles es exclusivo de MLS Pro
           </p>
-          <p className="mt-1 text-sm text-[#6B5B45]">
+          <p className="mt-1 text-sm text-[#5B5F5C]">
             Compara hasta 5 propiedades lado a lado con análisis de precio, yield, zona
             y recomendación automática según tu perfil de inversión.
           </p>
@@ -731,7 +731,7 @@ function TabInmuebles({
         <Link
           to="/planes"
           className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           Suscribirse a MLS Pro →
         </Link>
@@ -743,16 +743,16 @@ function TabInmuebles({
     return (
       <div
         className="mt-8 flex flex-col items-center gap-4 rounded-2xl p-8 text-center"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
       >
-        <BarChart2 className="h-8 w-8 text-[#9B8B75]" />
-        <p className="text-sm text-[#6B5B45]">
+        <BarChart2 className="h-8 w-8 text-[#6E726E]" />
+        <p className="text-sm text-[#5B5F5C]">
           Navega por el mapa y usa el botón + para seleccionar inmuebles a comparar.
         </p>
         <Link
           to="/map"
           className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           Ir al mapa →
         </Link>
@@ -761,13 +761,13 @@ function TabInmuebles({
   }
 
   if (isLoading) {
-    return <div className="mt-12 text-center text-sm text-[#9B8B75]">Cargando datos…</div>;
+    return <div className="mt-12 text-center text-sm text-[#6E726E]">Cargando datos…</div>;
   }
 
   if (listings.length === 0) {
     return (
-      <div className="mt-8 text-center text-sm text-[#9B8B75]">
-        No se pudieron cargar los listings. <button onClick={() => setIds([])} className="text-[#1D9E75] underline">Limpiar selección</button>
+      <div className="mt-8 text-center text-sm text-[#6E726E]">
+        No se pudieron cargar los listings. <button onClick={() => setIds([])} className="text-[#0F8A4F] underline">Limpiar selección</button>
       </div>
     );
   }
@@ -779,7 +779,7 @@ function TabInmuebles({
     <>
       {/* Header actions */}
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <p className="text-sm font-semibold text-[#1A1208]">
+        <p className="text-sm font-semibold text-[#111418]">
           Comparando {n} inmueble{n !== 1 ? "s" : ""}
         </p>
         <div className="flex gap-2">
@@ -790,13 +790,13 @@ function TabInmuebles({
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Nombre (opcional)"
                 className="rounded-xl px-3 py-1.5 text-xs outline-none"
-                style={{ border: "0.5px solid #E8E0D0", color: "#1A1208", background: "#FFFFFF", width: 140 }}
+                style={{ border: "0.5px solid #E5E0D5", color: "#111418", background: "#FFFFFF", width: 140 }}
               />
               <button
                 onClick={() => saveMut.mutate()}
                 disabled={saveMut.isPending}
-                className="rounded-xl px-4 py-1.5 text-xs font-semibold text-[#085041] transition hover:bg-[#E1F5EE]"
-                style={{ border: "0.5px solid #1D9E75" }}
+                className="rounded-xl px-4 py-1.5 text-xs font-semibold text-[#0A5C36] transition hover:bg-[#E7F4EC]"
+                style={{ border: "0.5px solid #0F8A4F" }}
               >
                 Guardar comparación
               </button>
@@ -804,8 +804,8 @@ function TabInmuebles({
           )}
           <button
             onClick={() => { clearAll(); setIds([]); }}
-            className="rounded-xl px-4 py-1.5 text-xs font-medium text-[#6B5B45] transition hover:bg-[#F5F0E8]"
-            style={{ border: "0.5px solid #E8E0D0" }}
+            className="rounded-xl px-4 py-1.5 text-xs font-medium text-[#5B5F5C] transition hover:bg-[#F3F0E8]"
+            style={{ border: "0.5px solid #E5E0D5" }}
           >
             Nueva comparación
           </button>
@@ -814,11 +814,11 @@ function TabInmuebles({
 
       {/* Tabla comparativa — scroll horizontal */}
       <div className="mt-6 overflow-x-auto">
-        <div className="min-w-[520px] overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E8E0D0" }}>
+        <div className="min-w-[520px] overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E5E0D5" }}>
         <table className="w-full text-sm" style={{ background: "#FFFFFF" }}>
           <thead>
-            <tr style={{ background: "#F5F0E8" }}>
-              <th className="py-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-widest text-[#6B5B45]" style={{ minWidth: 110 }}>
+            <tr style={{ background: "#F3F0E8" }}>
+              <th className="py-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-widest text-[#5B5F5C]" style={{ minWidth: 110 }}>
                 Métrica
               </th>
               {listings.map((l, i) => (
@@ -828,36 +828,36 @@ function TabInmuebles({
                     <div className="h-[120px] overflow-hidden rounded-xl">
                       {l.foto_principal
                         ? <img src={l.foto_principal} alt="" className="h-full w-full object-cover" />
-                        : <div className="flex h-full w-full items-center justify-center text-2xl" style={{ background: "linear-gradient(135deg,#1D9E75,#085041)" }}>🏠</div>
+                        : <div className="flex h-full w-full items-center justify-center text-2xl" style={{ background: "linear-gradient(135deg,#0F8A4F,#0A5C36)" }}>🏠</div>
                       }
                     </div>
                     {i === winnerIdx && (
-                      <div className="absolute -top-1 -right-1 rounded-full p-1" style={{ background: "#1D9E75" }}>
+                      <div className="absolute -top-1 -right-1 rounded-full p-1" style={{ background: "#0F8A4F" }}>
                         <Trophy className="h-3.5 w-3.5 text-white" />
                       </div>
                     )}
                   </div>
-                  <div className="mt-2 text-xs font-bold text-[#1A1208]">
+                  <div className="mt-2 text-xs font-bold text-[#111418]">
                     {l.precio_cop ? formatCOP(l.precio_cop) : "—"}
                   </div>
-                  <div className="text-[10px] text-[#6B5B45]">
+                  <div className="text-[10px] text-[#5B5F5C]">
                     {(l.tipo_operacion ?? "").toUpperCase()} · {(l.tipo_inmueble ?? "").toUpperCase()}
                   </div>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] text-[#9B8B75]">
+                  <div className="mt-1 flex items-center gap-1 text-[10px] text-[#6E726E]">
                     <MapPin className="h-2.5 w-2.5 shrink-0" />
                     {l.barrio_nombre ?? "—"}
                   </div>
                   <button
                     onClick={() => setIds((prev) => prev.filter((id) => id !== l.id))}
-                    className="mt-1 text-[10px] text-[#9B8B75] hover:text-[#D85A30]"
+                    className="mt-1 text-[10px] text-[#6E726E] hover:text-[#CE1126]"
                   >
                     × Quitar
                   </button>
                   <Link
                     to="/listing/$id"
                     params={{ id: String(l.id) }}
-                    className="mt-2 block rounded-lg py-1.5 text-center text-[10px] font-semibold text-[#1D9E75] transition hover:bg-[#E1F5EE]"
-                    style={{ border: "0.5px solid #1D9E75" }}
+                    className="mt-2 block rounded-lg py-1.5 text-center text-[10px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
+                    style={{ border: "0.5px solid #0F8A4F" }}
                   >
                     Ver →
                   </Link>
@@ -932,7 +932,7 @@ function TabInmuebles({
               vals={listings.map((l) => l.seguridad_score)}
               dir="↑"
               render={(v) => (
-                <span style={{ color: v == null ? "#9B8B75" : v >= 60 ? "#1D9E75" : v >= 40 ? "#BA7517" : "#D85A30" }}>
+                <span style={{ color: v == null ? "#6E726E" : v >= 60 ? "#0F8A4F" : v >= 40 ? "#8A6A00" : "#CE1126" }}>
                   {v == null ? "—" : v >= 60 ? "Segura" : v >= 40 ? "Moderada" : "Baja"}
                 </span>
               )}
@@ -1010,7 +1010,7 @@ function ComparadorPage() {
           <ArrowLeft className="h-3 w-3" /> Volver al mapa
         </Link>
 
-        <h1 className="mt-4 font-display text-3xl font-semibold text-[#1A1208]">Comparador</h1>
+        <h1 className="mt-4 font-display text-3xl font-semibold text-[#111418]">Comparador</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Compara barrios o inmuebles específicos lado a lado
         </p>
@@ -1018,7 +1018,7 @@ function ComparadorPage() {
         {/* Tabs */}
         <div
           className="mt-6 inline-flex rounded-xl p-1 gap-1"
-          style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}
+          style={{ background: "#F3F0E8", border: "0.5px solid #E5E0D5" }}
         >
           {(["barrios", "inmuebles"] as const).map((tab) => (
             <button
@@ -1026,13 +1026,13 @@ function ComparadorPage() {
               onClick={() => setActiveTab(tab)}
               className="rounded-lg px-5 py-2 text-sm font-semibold transition"
               style={activeTab === tab
-                ? { background: "#FFFFFF", color: "#1D9E75", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
-                : { color: "#6B5B45" }
+                ? { background: "#FFFFFF", color: "#0F8A4F", boxShadow: "0 1px 4px rgba(0,0,0,0.08)" }
+                : { color: "#5B5F5C" }
               }
             >
               {tab === "barrios" ? "🏘️ Barrios" : "🏠 Inmuebles"}
               {tab === "inmuebles" && !isPro && (
-                <Lock className="ml-1 inline h-3 w-3 text-[#9B8B75]" />
+                <Lock className="ml-1 inline h-3 w-3 text-[#6E726E]" />
               )}
             </button>
           ))}
@@ -1079,7 +1079,7 @@ function SectionLabel({ label, colSpan }: { label: string; colSpan: number }) {
       <td
         colSpan={colSpan}
         className="pb-1 pt-3 text-[9px] font-bold uppercase tracking-widest"
-        style={{ color: "#6B5B45", borderTop: "1px solid #E8E0D0" }}
+        style={{ color: "#5B5F5C", borderTop: "1px solid #E5E0D5" }}
       >
         {label}
       </td>
@@ -1100,7 +1100,7 @@ function Row({
     <tr>
       <td className="py-2.5 text-xs uppercase tracking-widest text-muted-foreground">{label}</td>
       {items.map((b) => (
-        <td key={b.barrio_id} className="py-2.5 pl-3 font-medium text-[#1A1208]">
+        <td key={b.barrio_id} className="py-2.5 pl-3 font-medium text-[#111418]">
           {render(b)}
         </td>
       ))}

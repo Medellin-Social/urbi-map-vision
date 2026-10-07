@@ -13,6 +13,7 @@ import { API_ENDPOINTS } from '@/config/api'
 import { apiFetch } from '@/lib/apiClient'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { List, Map as MapIcon } from "@/lib/icons"
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/local-business/$barrio_slug')({
   component: LocalBusinessRoot,
@@ -30,11 +31,7 @@ function LocalBusinessRoot() {
   )
 }
 
-const K = {
-  surface: '#f5f0e8', line: '#e9e4d8', ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041', coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928', serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 // categoria → grupo (mismo agrupamiento que GRUPOS_TIENDAS/backend _GRUPOS_MAP)
 // y grupo → color: cada categoría de negocio pinta distinto en el mapa.
@@ -45,7 +42,7 @@ const GRUPO_COLOR: Record<string, string> = {
   gastronomia:      K.coral,
   salud:            K.teal,
   fitness:          K.amarillo,
-  servicios_hogar:  '#002776',
+  servicios_hogar:  '#003893',
   mas_servicios:    K.muted,
 }
 const GRUPO_DEFAULT_COLOR = K.muted
@@ -182,14 +179,14 @@ function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Ba
               .some(k => lid.includes(k))
           if (hide) map.setLayoutProperty(layer.id, 'visibility', 'none')
         } else if (layer.type === 'fill' && srcLayer === 'water') {
-          map.setPaintProperty(layer.id, 'fill-color', '#C8DFE8')
+          map.setPaintProperty(layer.id, 'fill-color', '#C9D6EE')
         } else if (layer.type === 'line' && srcLayer === 'waterway') {
-          map.setPaintProperty(layer.id, 'line-color', '#C8DFE8')
+          map.setPaintProperty(layer.id, 'line-color', '#C9D6EE')
         } else if (layer.type === 'fill' && srcLayer === 'building') {
-          map.setPaintProperty(layer.id, 'fill-color', '#EDE8E0')
+          map.setPaintProperty(layer.id, 'fill-color', '#F3F0E8')
           map.setPaintProperty(layer.id, 'fill-opacity', 0.45)
         } else if (layer.type === 'background') {
-          map.setPaintProperty(layer.id, 'background-color', '#FAF7F2')
+          map.setPaintProperty(layer.id, 'background-color', '#FAF8F3')
         }
       })
 
@@ -209,12 +206,12 @@ function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Ba
         })
         map.addLayer({
           id: 'comunas-line', type: 'line', source: 'comunas',
-          paint: { 'line-color': '#002776', 'line-opacity': 0.6, 'line-width': 2 },
+          paint: { 'line-color': '#003893', 'line-opacity': 0.6, 'line-width': 2 },
         })
         map.addLayer({
           id: 'comunas-label', type: 'symbol', source: 'comunas',
           layout: { 'text-field': ['get', 'nombre'], 'text-size': 12, 'text-transform': 'uppercase', 'text-letter-spacing': 0.06 },
-          paint: { 'text-color': '#1A1208', 'text-halo-color': '#FAF7F2', 'text-halo-width': 2 },
+          paint: { 'text-color': '#111418', 'text-halo-color': '#FAF8F3', 'text-halo-width': 2 },
         })
 
         // Burbuja de conteo por comuna — mismo esquema que listings-mls-clusters.
@@ -230,7 +227,7 @@ function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Ba
         map.addLayer({
           id: 'comunas-bubble-circle', type: 'circle', source: 'comunas-bubble',
           paint: {
-            'circle-color': ['step', ['get', 'count'], '#1D9E75', 500, '#085041', 2000, '#1A1208'],
+            'circle-color': ['step', ['get', 'count'], '#0F8A4F', 500, '#0A5C36', 2000, '#111418'],
             'circle-radius': ['step', ['get', 'count'], 13, 500, 18, 2000, 24],
             'circle-opacity': 0.88, 'circle-stroke-width': 2, 'circle-stroke-color': 'rgba(29,158,117,0.3)',
           },
@@ -245,12 +242,12 @@ function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Ba
         map.addSource('barrios', { type: 'geojson', data: EMPTY_FC })
         map.addLayer({
           id: 'barrios-fill', type: 'fill', source: 'barrios', layout: { visibility: 'none' },
-          paint: { 'fill-color': '#002776', 'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.10, 0] },
+          paint: { 'fill-color': '#003893', 'fill-opacity': ['case', ['boolean', ['feature-state', 'selected'], false], 0.10, 0] },
         })
         map.addLayer({
           id: 'barrios-line', type: 'line', source: 'barrios', layout: { visibility: 'none' },
           paint: {
-            'line-color': '#002776',
+            'line-color': '#003893',
             'line-opacity': ['case', ['boolean', ['feature-state', 'hover'], false], 0.7, 0.4],
             'line-width': ['case', ['boolean', ['feature-state', 'hover'], false], 2.5, 1],
           },
@@ -260,7 +257,7 @@ function NegociosMap({ barrio, barrios, visible = true, isMobile }: { barrio: Ba
             visibility: 'none', 'text-field': ['get', 'nombre'], 'text-size': 10,
             'text-transform': 'uppercase', 'text-letter-spacing': 0.05,
           },
-          paint: { 'text-color': '#1A1208', 'text-halo-color': '#FAF7F2', 'text-halo-width': 1.5 },
+          paint: { 'text-color': '#111418', 'text-halo-color': '#FAF8F3', 'text-halo-width': 1.5 },
         })
 
         // ── Pines de negocios — color por categoría (grupo), no un naranja plano.
@@ -568,17 +565,17 @@ function LocalBusinessPage() {
   return (
     <>
       {/* ── Header ── */}
-      <div style={{ padding: '2rem 2rem 1.5rem', background: '#FAF7F2', borderBottom: '0.5px solid #E8E0D0' }}>
-        <div style={{ maxWidth: 1440, margin: '0 auto' }}>
-          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#9B8B75', margin: '0 0 4px' }}>
+      <div style={{ padding: '2rem 2rem 1.5rem', background: '#FAF8F3', borderBottom: '0.5px solid #E5E0D5' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+          <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6E726E', margin: '0 0 4px' }}>
             {barrio.nombre} · Medellín
           </p>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <h1 style={{ fontFamily: K.serif, fontSize: 28, fontWeight: 700, color: '#1A1208', margin: '0 0 4px' }}>
+              <h1 style={{ fontFamily: K.serif, fontSize: 28, fontWeight: 700, color: '#111418', margin: '0 0 4px' }}>
                 {t('Negocios locales', 'Local Businesses')}
               </h1>
-              <p style={{ fontSize: 13, color: '#6B5B45', margin: 0 }}>
+              <p style={{ fontSize: 13, color: '#5B5F5C', margin: 0 }}>
                 {isLoading ? '…' : `${total} ${t('negocios en', 'businesses in')} ${barrio.nombre}`}
               </p>
             </div>
@@ -599,8 +596,8 @@ function LocalBusinessPage() {
 
       {/* ── Destacados — negocios patrocinados, misma tarjeta que los filtros ── */}
       {featured.length > 0 && (
-        <div style={{ padding: '1.5rem 2rem 0', background: '#FAF7F2' }}>
-          <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+        <div style={{ padding: '1.5rem 2rem 0', background: '#FAF8F3' }}>
+          <div style={{ maxWidth: 1200, margin: '0 auto' }}>
             <div style={{
               background: '#fff', border: `1px solid ${K.line}`, borderTop: `3px solid ${K.amarillo}`,
               borderRadius: 14, padding: '18px 20px 20px',
@@ -630,8 +627,8 @@ function LocalBusinessPage() {
       )}
 
       {/* ── Filtros ── */}
-      <div style={{ padding: '1rem 2rem', borderBottom: '0.5px solid #E8E0D0', background: '#FAF7F2' }}>
-        <div style={{ maxWidth: 1440, margin: '0 auto' }}>
+      <div style={{ padding: '1rem 2rem', borderBottom: '0.5px solid #E5E0D5', background: '#FAF8F3' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{
             background: '#fff', border: `1px solid ${K.line}`, borderRadius: 14,
             padding: '18px 20px', display: 'flex', flexDirection: 'column', gap: 16,
@@ -658,7 +655,7 @@ function LocalBusinessPage() {
                     ...grupoActual.categorias.map(c => ({ key: c.key, label: `${c.emoji} ${lang === 'es' ? c.label : c.labelEn}` }))
                   ].map(({ key, label }) => (
                     <button key={key ?? '__all'} onClick={() => { setCategoria(key); reset() }} style={{
-                      background: categoria === key ? K.tealDeep : '#F5F0E8', color: categoria === key ? '#fff' : K.muted,
+                      background: categoria === key ? K.tealDeep : '#F3F0E8', color: categoria === key ? '#fff' : K.muted,
                       border: `1px solid ${categoria === key ? K.tealDeep : K.line}`, borderRadius: 999,
                       padding: '4px 12px', fontSize: 12, fontWeight: categoria === key ? 600 : 400,
                       cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
@@ -677,7 +674,7 @@ function LocalBusinessPage() {
             }}>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <button onClick={() => { setSoloTop(v => !v); reset() }} style={{
-                  background: soloTop ? K.amarillo : '#fff', color: soloTop ? '#1A1208' : K.muted,
+                  background: soloTop ? K.amarillo : '#fff', color: soloTop ? '#111418' : K.muted,
                   border: `1.5px solid ${soloTop ? K.amarillo : K.line}`, borderRadius: 999,
                   padding: '7px 14px', fontSize: 13, fontWeight: soloTop ? 700 : 600,
                   cursor: 'pointer', whiteSpace: 'nowrap', fontFamily: 'inherit',
@@ -750,16 +747,16 @@ function LocalBusinessPage() {
               {pages > 1 && (
                 <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: '1.25rem' }}>
                   <button disabled={page === 0} onClick={() => setPage(p => p - 1)} style={{
-                    padding: '7px 16px', background: page === 0 ? '#F5F0E8' : K.ink,
-                    color: page === 0 ? '#9B8B75' : '#FAF7F2',
+                    padding: '7px 16px', background: page === 0 ? '#F3F0E8' : K.ink,
+                    color: page === 0 ? '#6E726E' : '#FAF8F3',
                     border: 'none', borderRadius: 6, cursor: page === 0 ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                   }}>
                     ← {t('Anterior', 'Prev')}
                   </button>
                   <span style={{ padding: '7px 12px', fontSize: 12, color: K.muted }}>{page + 1} / {pages}</span>
                   <button disabled={page >= pages - 1} onClick={() => setPage(p => p + 1)} style={{
-                    padding: '7px 16px', background: page >= pages - 1 ? '#F5F0E8' : K.ink,
-                    color: page >= pages - 1 ? '#9B8B75' : '#FAF7F2',
+                    padding: '7px 16px', background: page >= pages - 1 ? '#F3F0E8' : K.ink,
+                    color: page >= pages - 1 ? '#6E726E' : '#FAF8F3',
                     border: 'none', borderRadius: 6, cursor: page >= pages - 1 ? 'not-allowed' : 'pointer', fontFamily: 'inherit',
                   }}>
                     {t('Siguiente', 'Next')} →
