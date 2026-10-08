@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Building2, ArrowRight, Home } from "@/lib/icons";
 import { LanguageToggle } from "@/lib/i18n";
 import { auth } from "@/lib/auth";
+import { Wordmark } from "@/components/Wordmark";
 
 const NAV_LINKS = [
   { label: "Invertir",   href: "/map" },
@@ -32,10 +33,10 @@ export function SiteNavbar({ transparent = false }: { transparent?: boolean }) {
             <Building2 className="h-4 w-4" />
           </div>
           <span
-            className={`font-display text-base font-semibold tracking-tight ${transparent ? "text-white" : "text-foreground"}`}
+            className={`font-display text-base font-black tracking-tight ${transparent ? "text-white" : "text-foreground"}`}
             style={transparent ? { textShadow: "0 1px 8px rgba(0,0,0,0.8)" } : undefined}
           >
-            Medellín <span className="text-primary">Social</span>
+            <Wordmark />
           </span>
         </Link>
 

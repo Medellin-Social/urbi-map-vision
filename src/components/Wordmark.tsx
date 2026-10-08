@@ -1,3 +1,4 @@
+import type { CSSProperties } from "react"
 // Wordmark "Medellín Social." — el punto de la i de "Social" es un pin de
 // mapa diminuto en vez de un punto genérico (producto de mapa, no un blog).
 // Tamaño sigue el font-size heredado del contenedor (unidades em), un solo
@@ -6,12 +7,33 @@
 // pinTop: offset vertical del pin sobre la "i". El valor visual cambia según el
 // contexto (line-height) donde vive el wordmark, por eso el veil de carga lo
 // sube por su cuenta (pinTop propio) y los logos usan el default. Van separados.
-export function Wordmark({ teal = "#0F8A4F", coral = "#CE1126", paper = "#FAF8F3", pinTop = "0.1em" }: {
+// "Social" va relleno con la bandera de Colombia (amarillo arriba, azul, rojo
+// abajo — proporción 2:1:1 sobre la altura de la letra), recortado al texto.
+// Los cortes están medidos sobre Fraunces 900: amarillo hasta la mitad de la
+// altura de las minúsculas, rojo desde el tercio inferior. flag={false}
+// vuelve al "Social" verde plano.
+const FLAG_FILL = "linear-gradient(180deg, #FCD116 0 SPLIT1, #003893 SPLIT1 SPLIT2, #CE1126 SPLIT2 100%)"
+  .replace(/SPLIT1/g, "49.6%").replace(/SPLIT2/g, "68.8%")
+
+function flagText(extra?: CSSProperties): CSSProperties {
+  return {
+    backgroundImage: FLAG_FILL,
+    WebkitBackgroundClip: "text",
+    backgroundClip: "text",
+    WebkitTextFillColor: "transparent",
+    color: "transparent",
+    textShadow: "none",
+    ...extra,
+  }
+}
+
+export function Wordmark({ teal = "#0F8A4F", coral = "#CE1126", paper = "#FAF8F3", pinTop = "0.1em", flag = true }: {
   teal?: string
   coral?: string
   amarillo?: string
   paper?: string
   pinTop?: string
+  flag?: boolean
 }) {
   // "i" normal con su punto RECORTADO (clipPath) — el pin coral es el punto.
   // No usar ı U+0131: en iOS cae al fallback (Georgia) y desentona. El clip es
@@ -30,18 +52,27 @@ export function Wordmark({ teal = "#0F8A4F", coral = "#CE1126", paper = "#FAF8F3
       <circle cx="10" cy="7" r="2.2" fill={paper} />
     </svg>
   )
+  // Cada tramo lleva su propio fondo recortado: la "i" con clipPath no hereda
+  // el background-clip:text del padre. Todos con lineHeight 1 → mismas franjas.
+  const seg = (txt: string) => (
+    <span style={flag ? flagText({ display: "inline-block", lineHeight: "1" }) : { display: "inline-block", lineHeight: "1" }}>{txt}</span>
+  )
   const i = (
     <span data-i18n-skip style={{ position: "relative", display: "inline-block", lineHeight: "1", overflow: "visible" }}>
-      <span style={{ display: "inline-block", clipPath: "inset(0.42em 0 0 0)" }}>i</span>{pinDot}
+      <span style={flag ? flagText({ display: "inline-block", clipPath: "inset(0.42em 0 0 0)" }) : { display: "inline-block", clipPath: "inset(0.42em 0 0 0)" }}>i</span>{pinDot}
     </span>
   )
+  // Los tramos partidos ("Soc" + "i" + "al") se leerían sueltos en un lector
+  // de pantalla: el conjunto se anuncia como un solo nombre.
   return (
-    <>
-      Medellín{" "}
-      <span style={{ color: teal }}>
-        Soc{i}al
+    <span data-i18n-skip role="img" aria-label="Medellín Social" style={{ whiteSpace: "nowrap" }}>
+      <span aria-hidden="true">
+        Medellín{" "}
+        <span style={{ color: teal }}>
+          {seg("Soc")}{i}{seg("al")}
+        </span>
       </span>
-    </>
+    </span>
   )
 }
 

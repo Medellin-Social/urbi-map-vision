@@ -5,6 +5,7 @@ import { BARRIOS } from '@/components/comunidad/BarrioContext'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { K as TOKENS } from "@/design/tokens";
+import { Wordmark } from "@/components/Wordmark";
 
 export const Route = createFileRoute('/suscribirse')({
   component: SuscribirsePage,
@@ -178,7 +179,7 @@ function SuscribirsePage() {
             }}>
               <div>
                 <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1rem', color: K.ink }}>
-                  Medellín <span style={{ color: K.teal }}>Social</span>
+                  <Wordmark />
                 </div>
                 <div style={{ fontSize: '.75rem', color: K.muted, marginTop: 2 }}>Newsletter del Barrio · Viernes 9 AM</div>
               </div>

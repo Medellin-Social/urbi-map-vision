@@ -5,6 +5,7 @@ import { logout } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import type { Neighborhood } from "@/lib/adapters";
 import { K as TOKENS } from "@/design/tokens";
+import { Wordmark } from "@/components/Wordmark";
 
 // Navbar sits on the dark map chrome, so lines and muted text are white tints.
 const K = { ...TOKENS, line: 'rgba(255,255,255,0.12)', muted: 'rgba(255,255,255,0.65)' } as const;
@@ -48,7 +49,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
       {/* LOGO */}
       <Link to="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
         <span style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.5px' }}>
-          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+          <Wordmark />
         </span>
       </Link>
 

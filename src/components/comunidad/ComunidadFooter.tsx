@@ -1,4 +1,5 @@
 import { K as TOKENS } from "@/design/tokens";
+import { Wordmark } from "@/components/Wordmark";
 const K = TOKENS;
 
 export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
@@ -33,7 +34,7 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
       }}>
         <div className="footer-brand">
           <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.8rem', color: '#fff', letterSpacing: -1 }}>
-            Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+            <Wordmark paper={K.ink} />
           </div>
           <p style={{ marginTop: 12, fontSize: '.9rem', lineHeight: 1.55, maxWidth: 300 }}>
             {t(
