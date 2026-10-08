@@ -32,10 +32,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DB_URL = os.environ["DATABASE_URL"]
 
 AREA_POR_PARQUE_M2 = 5_000
 

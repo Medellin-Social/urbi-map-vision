@@ -28,12 +28,12 @@ const queryClient = new QueryClient({
 import appCss from "../styles.css?url";
 
 const NF = {
-  ink: "#1A1208",
-  muted: "#6B5B45",
-  teal: "#1D9E75",
-  tealDeep: "#085041",
-  tealLight: "#E8F5F0",
-  coral: "#D85A30",
+  ink: "#111418",
+  muted: "#5B5F5C",
+  teal: "#0F8A4F",
+  tealDeep: "#0A5C36",
+  tealLight: "#E7F4EC",
+  coral: "#CE1126",
   serif: "'Fraunces', Georgia, serif" as const,
 };
 
@@ -46,7 +46,7 @@ function NotFoundComponent() {
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        background: "#FAF7F2",
+        background: "#FAF8F3",
         padding: 20,
       }}
     >
@@ -60,7 +60,7 @@ function NotFoundComponent() {
             d="M10 2 C4 2 1 6 1 11 C1 17 10 26 10 26 C10 26 19 17 19 11 C19 6 16 2 10 2 Z"
             fill={NF.coral}
           />
-          <text x="10" y="15.5" textAnchor="middle" fontSize="8" fontWeight={900} fill="#FAF7F2" fontFamily={NF.serif}>
+          <text x="10" y="15.5" textAnchor="middle" fontSize="8" fontWeight={900} fill="#FAF8F3" fontFamily={NF.serif}>
             ?
           </text>
         </svg>
@@ -138,7 +138,7 @@ export const Route = createRootRoute({
       { rel: "dns-prefetch", href: "https://d.tiles.mapbox.com" },
       { rel: "preconnect", href: "https://fonts.googleapis.com" },
       { rel: "preconnect", href: "https://fonts.gstatic.com", crossOrigin: "anonymous" },
-      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=Manrope:wght@400;500;600;700;800&display=swap" },
+      { rel: "stylesheet", href: "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,900&display=swap" },
     ],
   }),
   shellComponent: RootShell,

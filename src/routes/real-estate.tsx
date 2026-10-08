@@ -5,6 +5,7 @@ import { apiFetch } from '@/lib/apiClient'
 import { API_ENDPOINTS } from '@/config/api'
 import type { ApiListingsResponse, ApiListing } from '@/lib/adapters'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/real-estate')({
   component: RealEstateRoot,
@@ -26,22 +27,7 @@ function RealEstateRoot() {
 
 // ── Design tokens ──────────────────────────────────────────────────────────────
 
-const K = {
-  paper:      '#FAF8F5',
-  surface:    '#F2ECE2',
-  line:       '#e9e4d8',
-  ink:        '#14201d',
-  muted:      '#62736d',
-  teal:       '#1D9E75',
-  tealDeep:   '#085041',
-  tealLight:  '#E1F5EE',
-  coral:      '#D85A30',
-  coralLight: '#FAECE7',
-  amarillo:   '#ffc928',
-  serif:      "'Fraunces', Georgia, serif" as const,
-  lora:       "'Lora', Georgia, serif" as const,
-  manrope:    "'Manrope', system-ui, sans-serif" as const,
-}
+const K = TOKENS;
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -64,28 +50,32 @@ const CATEGORIAS = [
     label:    'Comprar',
     sub:      'Apartamentos y casas en venta',
     href:     '/map?tipo_operacion=venta',
-    bg:       `linear-gradient(145deg, ${K.tealDeep} 0%, #0d6b55 100%)`,
+    bg:       `linear-gradient(145deg, ${K.tealDeep} 0%, ${K.teal} 100%)`,
+    fg:       '#fff',
     emoji:    '🏡',
   },
   {
     label:    'Arrendar',
     sub:      'Arriendos en toda el área metropolitana',
     href:     '/map?tipo_operacion=arriendo',
-    bg:       `linear-gradient(145deg, #1A2B24 0%, #283831 100%)`,
+    bg:       `linear-gradient(145deg, #00286B 0%, ${K.azul} 100%)`,
+    fg:       '#fff',
     emoji:    '🔑',
   },
   {
     label:    'Vender',
     sub:      'Publica tu propiedad en minutos',
     href:     '/vender',
-    bg:       `linear-gradient(145deg, ${K.coral} 0%, #a03018 100%)`,
+    bg:       `linear-gradient(145deg, #9E0D1D 0%, ${K.rojo} 100%)`,
+    fg:       '#fff',
     emoji:    '📋',
   },
   {
     label:    'Invertir',
     sub:      'Analiza barrios con datos reales',
     href:     '/map',
-    bg:       `linear-gradient(145deg, #4a3500 0%, ${K.amarillo} 100%)`,
+    bg:       `linear-gradient(145deg, #F2B807 0%, ${K.amarillo} 100%)`,
+    fg:       K.ink,
     emoji:    '📈',
   },
 ]
@@ -399,7 +389,7 @@ function ListingsDestacadosSection() {
       borderBottom: `1px solid ${K.line}`,
       padding: 'clamp(48px, 8vw, 80px) 24px',
     }}>
-      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{
           display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between',
           flexWrap: 'wrap', gap: 16, marginBottom: 36,
@@ -459,7 +449,7 @@ function HistoriaSection() {
       padding: 'clamp(56px, 9vw, 96px) 24px',
     }}>
       <div style={{
-        maxWidth: 1060, margin: '0 auto',
+        maxWidth: 1200, margin: '0 auto',
         display: 'grid',
         gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
         gap: 'clamp(36px, 6vw, 72px)',
@@ -475,8 +465,8 @@ function HistoriaSection() {
           background: `linear-gradient(145deg, ${K.tealDeep} 0%, #1a6b50 100%)`,
         }}>
           <img
-            src="https://images.unsplash.com/photo-1611271689035-e01d1e8e87a2?auto=format&fit=crop&w=800&q=80"
-            alt="Medellín"
+            src="https://images.unsplash.com/photo-1697082390861-9f5186b44431?auto=format&fit=crop&w=900&q=80"
+            alt="Medellín" loading="lazy"
             style={{ width: '100%', height: '100%', objectFit: 'cover', position: 'absolute', inset: 0 }}
             onError={e => { e.currentTarget.style.display = 'none' }}
           />
@@ -556,7 +546,7 @@ function CategoriasSection() {
       borderBottom: `1px solid ${K.line}`,
       padding: 'clamp(48px, 8vw, 80px) 24px',
     }}>
-      <div style={{ maxWidth: 1060, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <h2 style={{
           fontFamily: K.serif, fontWeight: 800,
           fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
@@ -581,7 +571,7 @@ function CategoriasSection() {
                 padding: '36px 24px 28px',
                 display: 'flex', flexDirection: 'column',
                 textDecoration: 'none',
-                color: '#fff',
+                color: cat.fg,
                 transition: 'transform .15s, box-shadow .15s',
                 minHeight: 180,
               }}
@@ -605,7 +595,7 @@ function CategoriasSection() {
               </div>
               <div style={{
                 fontFamily: K.manrope,
-                fontSize: '.78rem', color: 'rgba(255,255,255,0.72)',
+                fontSize: '.85rem', color: cat.fg, opacity: .78,
                 lineHeight: 1.5, flex: 1,
               }}>
                 {cat.sub}
@@ -613,7 +603,7 @@ function CategoriasSection() {
               <div style={{
                 fontFamily: K.manrope,
                 marginTop: 20, fontSize: '.78rem',
-                fontWeight: 700, color: 'rgba(255,255,255,0.82)',
+                fontWeight: 700, color: cat.fg, opacity: .9,
                 letterSpacing: '.2px',
               }}>
                 Explorar →
@@ -634,7 +624,7 @@ function StatsSection() {
       background: K.ink,
       padding: 'clamp(40px, 6vw, 64px) 24px',
     }}>
-      <div style={{ maxWidth: 1060, margin: '0 auto' }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
@@ -684,7 +674,7 @@ function StatsSection() {
 function FinalCTASection() {
   return (
     <section style={{
-      background: 'linear-gradient(145deg, #1A2B24 0%, #14201d 55%, #2A1A10 100%)',
+      background: 'linear-gradient(145deg, #161A17 0%, #111418 55%, #2A1A10 100%)',
       padding: 'clamp(56px, 9vw, 88px) 24px',
       textAlign: 'center',
     }}>

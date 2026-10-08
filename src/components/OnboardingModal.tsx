@@ -72,14 +72,14 @@ export function OnboardingModal() {
           transition={{ duration: 0.25 }}
           className="pointer-events-auto relative w-full rounded-2xl shadow-2xl"
           style={{
-            background: "#FAF7F2",
-            border: "1px solid #E8E0D0",
+            background: "#FAF8F3",
+            border: "1px solid #E5E0D5",
             maxWidth: "min(480px, 92vw)",
           }}
         >
           <button
             onClick={dismiss}
-            className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-[#6B5B45] transition hover:bg-[#E8E0D0] hover:text-[#1A1208]"
+            className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full text-[#5B5F5C] transition hover:bg-[#E5E0D5] hover:text-[#111418]"
           >
             <X className="h-4 w-4" />
           </button>
@@ -87,10 +87,10 @@ export function OnboardingModal() {
           <div className="p-6 pb-5">
             {/* Logo */}
             <div className="mb-4 flex items-center gap-2">
-              <div className="grid h-7 w-7 place-items-center rounded-md bg-[#1D9E75]/15 text-[#1D9E75]">
+              <div className="grid h-7 w-7 place-items-center rounded-md bg-[#0F8A4F]/15 text-[#0F8A4F]">
                 <span className="text-sm font-bold">M</span>
               </div>
-              <span className="text-sm font-semibold text-[#1A1208]">Medellín Social</span>
+              <span className="text-sm font-semibold text-[#111418]">Medellín Social</span>
             </div>
 
             {origen === "mls" ? (
@@ -154,10 +154,10 @@ function MLSContent({
 
   return (
     <>
-      <h2 className="font-display text-[28px] font-semibold leading-tight text-[#1A1208]">
+      <h2 className="font-display text-[28px] font-semibold leading-tight text-[#111418]">
         ¡Bienvenido a Medellín Social!
       </h2>
-      <p className="mt-1.5 text-[15px] text-[#6B5B45]">
+      <p className="mt-1.5 text-[15px] text-[#5B5F5C]">
         Cuéntanos qué estás buscando para mostrarte lo más relevante
       </p>
 
@@ -171,17 +171,17 @@ function MLSContent({
               className="flex w-full items-start gap-3 rounded-xl border p-3.5 text-left transition"
               style={{
                 background: "#FFFFFF",
-                borderColor: active ? "#1D9E75" : "#E8E0D0",
-                boxShadow: active ? "0 0 0 1px #1D9E75" : "none",
+                borderColor: active ? "#0F8A4F" : "#E5E0D5",
+                boxShadow: active ? "0 0 0 1px #0F8A4F" : "none",
               }}
             >
               <span className="mt-0.5 text-xl leading-none">{o.icon}</span>
               <div className="flex-1">
                 <div className="flex items-center justify-between">
-                  <span className="text-sm font-semibold text-[#1A1208]">{o.title}</span>
-                  {active && <Check className="h-4 w-4 text-[#1D9E75]" />}
+                  <span className="text-sm font-semibold text-[#111418]">{o.title}</span>
+                  {active && <Check className="h-4 w-4 text-[#0F8A4F]" />}
                 </div>
-                <p className="mt-0.5 text-xs text-[#6B5B45]">{o.hint}</p>
+                <p className="mt-0.5 text-xs text-[#5B5F5C]">{o.hint}</p>
               </div>
             </button>
           );
@@ -192,22 +192,22 @@ function MLSContent({
         disabled={!selected}
         onClick={() => selected && onSelect(selected)}
         className="mt-5 w-full rounded-xl py-2.5 text-sm font-semibold text-white transition disabled:opacity-40"
-        style={{ background: selected ? "#1D9E75" : "#A8C5BB" }}
+        style={{ background: selected ? "#0F8A4F" : "#A8C5BB" }}
       >
         Continuar →
       </button>
 
       <div className="my-4 flex items-center gap-3">
-        <div className="h-px flex-1 bg-[#E8E0D0]" />
-        <span className="text-[11px] text-[#6B5B45]">También en Medellín Social</span>
-        <div className="h-px flex-1 bg-[#E8E0D0]" />
+        <div className="h-px flex-1 bg-[#E5E0D5]" />
+        <span className="text-[11px] text-[#5B5F5C]">También en Medellín Social</span>
+        <div className="h-px flex-1 bg-[#E5E0D5]" />
       </div>
 
-      <div className="rounded-xl p-3.5" style={{ background: "#F5F0E8", border: "1px solid #E8E0D0" }}>
-        <p className="text-xs text-[#6B5B45]">
+      <div className="rounded-xl p-3.5" style={{ background: "#F3F0E8", border: "1px solid #E5E0D5" }}>
+        <p className="text-xs text-[#5B5F5C]">
           Descubre eventos, negocios y la cultura del Valle de Aburrá en nuestra comunidad
         </p>
-        <button onClick={onClose} className="mt-2 text-xs font-semibold text-[#1D9E75] hover:underline">
+        <button onClick={onClose} className="mt-2 text-xs font-semibold text-[#0F8A4F] hover:underline">
           Ver comunidad →
         </button>
       </div>
@@ -228,20 +228,20 @@ function ComunidadContent({ onClose }: { onClose: () => void }) {
 
   return (
     <>
-      <h2 className="font-display text-[28px] font-semibold leading-tight text-[#1A1208]">
+      <h2 className="font-display text-[28px] font-semibold leading-tight text-[#111418]">
         ¡Ya eres parte de Medellín Social!
       </h2>
-      <p className="mt-1.5 text-[15px] text-[#6B5B45]">
+      <p className="mt-1.5 text-[15px] text-[#5B5F5C]">
         Explora tu ciudad, conecta con tu barrio y descubre lo mejor del Valle de Aburrá
       </p>
 
       <div className="mt-5 space-y-2.5">
         {CHECKS.map((item) => (
           <div key={item} className="flex items-center gap-2.5">
-            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#1D9E75]/15 text-[#1D9E75]">
+            <span className="grid h-5 w-5 shrink-0 place-items-center rounded-full bg-[#0F8A4F]/15 text-[#0F8A4F]">
               <Check className="h-3 w-3" />
             </span>
-            <span className="text-sm text-[#1A1208]">{item}</span>
+            <span className="text-sm text-[#111418]">{item}</span>
           </div>
         ))}
       </div>
@@ -249,27 +249,27 @@ function ComunidadContent({ onClose }: { onClose: () => void }) {
       <button
         onClick={onClose}
         className="mt-5 w-full rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-        style={{ background: "#1D9E75" }}
+        style={{ background: "#0F8A4F" }}
       >
         Explorar la comunidad →
       </button>
 
       <div className="my-4 flex items-center gap-3">
-        <div className="h-px flex-1 bg-[#E8E0D0]" />
-        <div className="h-px flex-1 bg-[#E8E0D0]" />
+        <div className="h-px flex-1 bg-[#E5E0D5]" />
+        <div className="h-px flex-1 bg-[#E5E0D5]" />
       </div>
 
-      <div className="rounded-xl p-3.5" style={{ background: "#E1F5EE", border: "1px solid #1D9E75" }}>
+      <div className="rounded-xl p-3.5" style={{ background: "#E7F4EC", border: "1px solid #0F8A4F" }}>
         <div className="flex items-start gap-2">
           <span className="text-base">🏠</span>
           <div>
-            <p className="text-xs font-semibold text-[#085041]">¿Buscas tu próxima propiedad?</p>
-            <p className="mt-0.5 text-xs text-[#1D9E75]">
+            <p className="text-xs font-semibold text-[#0A5C36]">¿Buscas tu próxima propiedad?</p>
+            <p className="mt-0.5 text-xs text-[#0F8A4F]">
               Tenemos 54,000+ inmuebles en venta y arriendo en el Valle de Aburrá
             </p>
             <button
               onClick={() => { onClose(); navigate({ to: "/map" }); }}
-              className="mt-2 rounded-md border border-[#1D9E75] px-3 py-1.5 text-[11px] font-semibold text-[#085041] transition hover:bg-[#1D9E75] hover:text-white"
+              className="mt-2 rounded-md border border-[#0F8A4F] px-3 py-1.5 text-[11px] font-semibold text-[#0A5C36] transition hover:bg-[#0F8A4F] hover:text-white"
             >
               Ver inmuebles en el mapa →
             </button>

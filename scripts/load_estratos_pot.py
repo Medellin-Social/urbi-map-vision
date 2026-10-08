@@ -11,10 +11,7 @@ import geopandas as gpd
 from sqlalchemy import create_engine, text
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-DATABASE_URL = os.environ.get(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DATABASE_URL = os.environ["DATABASE_URL"]
 
 ESTRATO_PATH = os.path.join(ROOT, "geojson_estrato_socioeconomico_mr",
                              "estrato_socioeconomico_mr.geojson")

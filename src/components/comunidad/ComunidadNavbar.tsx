@@ -5,18 +5,9 @@ import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
 import { auth } from '../../lib/auth'
 import { useIsAgente } from '../LockedField'
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  ink:      '#14201d',
-  teal:     '#1D9E75',
-  amarillo: '#ffc928',
-  rojo:     '#e63148',
-  paper:    '#fbf9f3',
-  line:     '#e9e4d8',
-  muted:    '#62736d',
-  coral:    '#D85A30',
-  serif:    "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 const CATEGORIA_EMOJI: Record<string, string> = {
   musica:       '🎵',
@@ -210,9 +201,31 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           transition: background 0.15s, color 0.15s;
           white-space: nowrap;
         }
-        .k-nav-link:hover { background: rgba(255,255,255,0.1); }
-        .k-subscribe:hover { background: #17875f; }
-        .re-item:hover { background: rgba(29,158,117,0.10); }
+        .k-nav-link { position: relative; }
+        .k-nav-link::after {
+          content: ''; position: absolute; left: 14px; right: 14px; bottom: 3px; height: 2px;
+          background: ${K.amarillo}; border-radius: 2px;
+          transform: scaleX(0); transform-origin: left; transition: transform .25s ease;
+        }
+        .k-nav-link:hover::after, .k-nav-link[aria-current="page"]::after { transform: scaleX(1); }
+        .k-nav-link:hover { background: rgba(255,255,255,0.06); }
+        .k-subscribe { transition: background .15s, transform .15s; }
+        .k-subscribe:hover { background: ${K.tealMid}; transform: translateY(-1px); }
+        .re-item:hover { background: ${K.tealLight}; }
+        .k-ticker:hover .k-ticker-inner { animation-play-state: paused; }
+        .k-tricolor { display: flex; height: 3px; }
+        .k-tricolor > i { display: block; transform-origin: left; animation: kStripe .7s cubic-bezier(.2,.7,.2,1) both; }
+        .k-tricolor > i:nth-child(1) { flex: 2; background: ${K.amarillo}; }
+        .k-tricolor > i:nth-child(2) { flex: 1; background: ${K.azul}; animation-delay: .12s; }
+        .k-tricolor > i:nth-child(3) { flex: 1; background: ${K.rojo}; animation-delay: .24s; }
+        @keyframes kStripe { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+        @keyframes kRise { from { opacity: 0; transform: translateY(10px) } to { opacity: 1; transform: none } }
+        .masthead-logo { animation: kRise .6s cubic-bezier(.2,.7,.2,1) both; }
+        .masthead-tag { animation: kRise .6s .15s cubic-bezier(.2,.7,.2,1) both; letter-spacing: 4px; }
+        @media (max-width: 480px) { .masthead-tag { letter-spacing: 1.5px; font-size: 11px !important; } }
+        @media (prefers-reduced-motion: reduce) {
+          .k-ticker-inner, .k-tricolor > i, .masthead-logo, .masthead-tag { animation: none !important; }
+        }
         @media (max-width: 768px) {
           .mobile-menu-btn { display: flex !important; align-items: center; justify-content: center; }
           .desktop-nav-links { display: none !important; }
@@ -233,7 +246,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               <Wordmark coral={K.coral} />
             </div>
           </a>
-          <div style={{ marginTop: 10, fontSize: 12, letterSpacing: 4, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
+          <div className="masthead-tag" style={{ marginTop: 10, fontSize: 12, textTransform: 'uppercase', color: K.muted, fontWeight: 600 }}>
             {t('TU CIUDAD · TU BARRIO · TU HISTORIA', 'YOUR CITY · YOUR BARRIO · YOUR STORY')}
           </div>
         </header>
@@ -245,10 +258,9 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
         position: 'sticky',
         top: 0,
         zIndex: 40,
-        borderBottom: '1px solid rgba(255,255,255,0.08)',
       }}>
         <div style={{
-          maxWidth: 1200, margin: '0 auto', padding: '0 16px',
+          maxWidth: 1232, margin: '0 auto', padding: '0 16px',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           height: 52, gap: 8,
         }}>
@@ -257,7 +269,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
             {compact ? (
               <a data-i18n-skip href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
-                <Wordmark ink="#fff" coral={K.coral} />
+                <Wordmark coral={K.coral} />
               </a>
             ) : (
               <>
@@ -345,6 +357,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 key={lnk.label}
                 href={lnk.href}
                 className="k-nav-link"
+                aria-current={isActive(lnk.href) ? 'page' : undefined}
                 style={{ color: isActive(lnk.href) ? K.amarillo : 'rgba(255,255,255,0.85)' }}
               >
                 {lnk.label}
@@ -438,7 +451,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
         {/* Mobile dropdown */}
         {menuAbierto && (
           <div style={{
-            background: '#14201d',
+            background: '#111418',
             padding: '12px 16px 16px',
             borderTop: '0.5px solid rgba(255,255,255,0.1)',
           }}>
@@ -534,14 +547,16 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           </div>
         )}
 
+        {/* Franja tricolor (amarillo · azul · rojo) — firma visual en todas las páginas */}
+        <div className="k-tricolor" aria-hidden="true"><i /><i /><i /></div>
       </nav>
 
       {/* ── Ticker ───────────────────────────────────── */}
       {!hideTicker && (
-      <div style={{ background: K.rojo, color: '#fff', overflow: 'hidden', fontSize: '.82rem' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', padding: '0 0 0 26px', display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
+      <div className="k-ticker" style={{ background: K.azul, color: '#fff', overflow: 'hidden', fontSize: '.82rem' }}>
+        <div style={{ maxWidth: 1226, margin: '0 auto', padding: '0 0 0 26px', display: 'flex', alignItems: 'center', gap: 14, height: 38 }}>
           <span style={{
-            background: '#fff', color: K.rojo, fontWeight: 900,
+            background: K.amarillo, color: K.ink, fontWeight: 900,
             padding: '3px 11px', borderRadius: 5,
             textTransform: 'uppercase', fontSize: '.7rem',
             flexShrink: 0, letterSpacing: '.8px',

@@ -48,7 +48,7 @@ export function BarrioChoiceModal({ barrio, onClose, onComunidad, onInversiones 
         <div className="grid grid-cols-2 gap-3">
           <button
             onClick={onComunidad}
-            className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-[#ff6b6b]/60 hover:bg-[#ff6b6b]/08"
+            className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-[#E5484D]/60 hover:bg-[#E5484D]/08"
           >
             <span className="text-3xl">🏘️</span>
             <span className="text-[15px] font-semibold text-white">Comunidad</span>
@@ -59,7 +59,7 @@ export function BarrioChoiceModal({ barrio, onClose, onComunidad, onInversiones 
 
           <button
             onClick={onInversiones}
-            className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-[#00d4ff]/60 hover:bg-[#00d4ff]/08"
+            className="flex flex-col items-center gap-2 rounded-xl border border-white/10 bg-white/5 p-5 text-center transition-all duration-200 hover:-translate-y-0.5 hover:border-[#1F5BC6]/60 hover:bg-[#1F5BC6]/08"
           >
             <span className="text-3xl">📊</span>
             <span className="text-[15px] font-semibold text-white">Invertir</span>

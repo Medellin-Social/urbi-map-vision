@@ -916,7 +916,7 @@ function VisitaRow({
           {v.es_pro && (
             <span
               className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: "#ffc928", color: "#1A1208" }}
+              style={{ background: "#FCD116", color: "#111418" }}
               title="Lead de listing destacado — priorízalo"
             >
               🔥 Pro
@@ -931,7 +931,7 @@ function VisitaRow({
             return (
               <span
                 className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-                style={{ background: "#E24B4A" }}
+                style={{ background: "#CE1126" }}
                 title={`Sin responder hace ${v.horas_pendiente}h (SLA ${limite}h)`}
               >
                 ⏰ Vencido
@@ -1564,7 +1564,7 @@ function RingStat({ label, percent, sub, unit = "%" }: { label: string; percent:
       <div className="relative h-14 w-14 shrink-0">
         <PieChart width={56} height={56}>
           <Pie data={data} dataKey="value" innerRadius={20} outerRadius={28} startAngle={90} endAngle={-270} stroke="none">
-            <Cell fill="#1D9E75" />
+            <Cell fill="#0F8A4F" />
             <Cell fill="var(--muted)" />
           </Pie>
         </PieChart>

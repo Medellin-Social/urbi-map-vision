@@ -4,6 +4,7 @@ import { API_BASE_URL } from '@/config/api'
 import { BARRIOS } from '@/components/comunidad/BarrioContext'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/embajador')({
   component: EmbajadorPage,
@@ -15,14 +16,7 @@ export const Route = createFileRoute('/embajador')({
   }),
 })
 
-const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 const DUTIES = [
   { titulo: 'Curar y publicar contenido semanal', desc: 'Historias locales, eventos, novedades del barrio. Usas el Motor de Contenido IA para redactar — tú aportas la voz editorial y el juicio local.' },
@@ -146,7 +140,7 @@ function EmbajadorPage() {
   )
 
   return (
-    <ComunidadLayout subNav={subNav} compact>
+    <ComunidadLayout subNav={subNav}>
 
       {/* HERO */}
       <section style={{
@@ -155,7 +149,7 @@ function EmbajadorPage() {
           linear-gradient(180deg, #fff 0%, ${K.paper} 100%)`,
         padding: '72px 26px 56px', borderBottom: `1px solid ${K.line}`,
       }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1.2fr 1fr', gap: isMobile ? 32 : 56, alignItems: 'center' }}>
           <div>
             <span style={{
               display: 'inline-block', background: `rgba(29,158,117,.12)`, color: K.tealDeep,
@@ -246,7 +240,7 @@ function EmbajadorPage() {
 
       {/* QUÉ HARÁS */}
       <section id="que-haras" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Lo que realmente harás
           </h2>
@@ -271,9 +265,9 @@ function EmbajadorPage() {
 
       {/* HERRAMIENTAS — dark band */}
       <section id="herramientas" style={{ padding: '72px 26px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <div style={{
-            background: `linear-gradient(135deg, ${K.ink} 0%, #2a3e39 100%)`,
+            background: `linear-gradient(135deg, ${K.ink} 0%, #2A302C 100%)`,
             borderRadius: 16, padding: '48px 40px',
           }}>
             <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: '#fff', margin: '0 0 14px' }}>
@@ -299,7 +293,7 @@ function EmbajadorPage() {
 
       {/* QUÉ OBTIENES */}
       <section id="que-obtienes" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Lo que obtienes
           </h2>
@@ -329,7 +323,7 @@ function EmbajadorPage() {
 
       {/* A QUIÉN BUSCAMOS */}
       <section style={{ padding: '72px 26px', background: '#fff', borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             A quién buscamos
           </h2>
@@ -352,7 +346,7 @@ function EmbajadorPage() {
 
       {/* SEMANA TÍPICA */}
       <section style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Cómo se ve una semana típica
           </h2>
@@ -375,7 +369,7 @@ function EmbajadorPage() {
 
       {/* KPIs */}
       <section style={{ padding: '0 26px 72px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.5rem,3vw,2rem)', color: K.ink, margin: '0 0 28px' }}>
             Cómo medimos el éxito
           </h2>

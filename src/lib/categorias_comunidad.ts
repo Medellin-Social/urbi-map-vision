@@ -114,14 +114,14 @@ export const CATEGORIA_LABELS: Record<string, string> = {
 }
 
 export const CATEGORIA_COLORS: Record<string, string> = {
-  bares: '#14201d', brunch: '#f5f0e8', cafes: '#c8a96e', cena: '#2d1b0e',
-  gimnasios: '#1D9E75', masajes_spa: '#d4a5c9', medicos: '#e8f4f8',
-  dentistas: '#e8f4f8', peluquerias: '#fce4ec', yoga: '#e8f5e9',
-  fisioterapia: '#fff8e1', dermatologia: '#fce4ec', estetica: '#fce4ec',
-  almuerzo: '#fff3e0', panaderia: '#fff8e1', comida_rapida: '#fbe9e7',
-  bancos: '#e8eef7', cerrajeria: '#f5f0e8', electricistas: '#fff8e1',
-  jardineria: '#e8f5e9', mascotas: '#fce4ec', mudanzas: '#f5f0e8',
-  parqueaderos: '#e8eef7', remodelaciones: '#fff3e0',
+  bares: '#111418', brunch: '#F3F0E8', cafes: '#c8a96e', cena: '#2d1b0e',
+  gimnasios: '#0F8A4F', masajes_spa: '#d4a5c9', medicos: '#E6ECF7',
+  dentistas: '#E6ECF7', peluquerias: '#FCE8EA', yoga: '#E7F4EC',
+  fisioterapia: '#FFF6D6', dermatologia: '#FCE8EA', estetica: '#FCE8EA',
+  almuerzo: '#FFF6D6', panaderia: '#FFF6D6', comida_rapida: '#fbe9e7',
+  bancos: '#E6ECF7', cerrajeria: '#F3F0E8', electricistas: '#FFF6D6',
+  jardineria: '#E7F4EC', mascotas: '#FCE8EA', mudanzas: '#F3F0E8',
+  parqueaderos: '#E6ECF7', remodelaciones: '#FFF6D6',
 }
 
 export const CATEGORIA_EMOJI: Record<string, string> = {

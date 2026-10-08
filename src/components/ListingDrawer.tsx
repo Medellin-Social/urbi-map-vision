@@ -43,16 +43,16 @@ function fmtUSD(cop: number, trm: number): string {
 }
 
 const TIPO_INMUEBLE_COLOR: Record<string, string> = {
-  apartamento:   "#1D9E75",
-  casa:          "#D85A30",
-  casa_lote:     "#D85A30",
-  finca:         "#D85A30",
-  apartaestudio: "#5DCAA5",
-  lote:          "#BA7517",
-  local:         "#7F77DD",
-  oficina:       "#378ADD",
-  bodega:        "#9B8B75",
-  consultorio:   "#9B8B75",
+  apartamento:   "#0F8A4F",
+  casa:          "#CE1126",
+  casa_lote:     "#CE1126",
+  finca:         "#CE1126",
+  apartaestudio: "#5BBE8A",
+  lote:          "#8A6A00",
+  local:         "#1F5BC6",
+  oficina:       "#1F5BC6",
+  bodega:        "#6E726E",
+  consultorio:   "#6E726E",
 };
 
 function diasLabel(dias: number | null | undefined): string | null {
@@ -119,13 +119,13 @@ function CollapsibleDescription({ text }: { text: string }) {
   return (
     <div className="space-y-1.5">
       {/* data-i18n-skip: our hook owns this text; keep the dict translator out (no Spanglish) */}
-      <p data-i18n-skip className="whitespace-pre-line text-sm leading-relaxed text-[#1A1208]">
+      <p data-i18n-skip className="whitespace-pre-line text-sm leading-relaxed text-[#111418]">
         {!expanded && needsTruncate ? text.slice(0, LIMIT) + "…" : text}
       </p>
       {needsTruncate && (
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-1 text-xs font-medium text-[#1D9E75] transition hover:text-[#085041]"
+          className="flex items-center gap-1 text-xs font-medium text-[#0F8A4F] transition hover:text-[#0A5C36]"
         >
           {expanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
           {expanded ? "Ver menos" : "Ver más"}
@@ -188,7 +188,7 @@ function Amenidades({ items }: { items: string[] }) {
   const shown = expanded ? clean : clean.slice(0, CAP);
   return (
     <div className="space-y-2.5">
-      <h3 className="text-sm font-semibold text-[#1A1208]">Qué tiene</h3>
+      <h3 className="text-sm font-semibold text-[#111418]">Qué tiene</h3>
       <div className="flex flex-wrap gap-1.5">
         {shown.map((a, i) => {
           const Icon = amenityIcon(a);
@@ -196,17 +196,17 @@ function Amenidades({ items }: { items: string[] }) {
             <span
               key={`${a}-${i}`}
               className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
-              style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0", color: "#1A1208" }}
+              style={{ background: "#F3F0E8", border: "0.5px solid #E5E0D5", color: "#111418" }}
             >
-              <Icon className="h-3 w-3 shrink-0 text-[#1D9E75]" /> {a}
+              <Icon className="h-3 w-3 shrink-0 text-[#0F8A4F]" /> {a}
             </span>
           );
         })}
         {clean.length > CAP && (
           <button
             onClick={() => setExpanded((v) => !v)}
-            className="rounded-full px-2.5 py-1 text-xs font-medium text-[#1D9E75] transition hover:text-[#085041]"
-            style={{ border: "0.5px solid #1D9E75" }}
+            className="rounded-full px-2.5 py-1 text-xs font-medium text-[#0F8A4F] transition hover:text-[#0A5C36]"
+            style={{ border: "0.5px solid #0F8A4F" }}
           >
             {expanded ? "Ver menos" : `+${clean.length - CAP} más`}
           </button>
@@ -233,17 +233,17 @@ function InfoTip({ text }: { text: string }) {
         aria-label="Más información"
         onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
         className="grid h-4 w-4 place-items-center rounded-full text-[10px] font-bold leading-none transition"
-        style={{ border: "1px solid #C8B8A2", color: open ? "#1D9E75" : "#9B8B75", cursor: "pointer" }}
+        style={{ border: "1px solid #C9C4B8", color: open ? "#0F8A4F" : "#6E726E", cursor: "pointer" }}
       >
         i
       </button>
       {open && (
         <span
           className="absolute z-50 block rounded-xl shadow-2xl"
-          style={{ bottom: "calc(100% + 8px)", left: -8, width: "min(240px, 70vw)", background: "#1A1208", color: "#fff", padding: "10px 12px" }}
+          style={{ bottom: "calc(100% + 8px)", left: -8, width: "min(240px, 70vw)", background: "#111418", color: "#fff", padding: "10px 12px" }}
           onClick={(e) => e.stopPropagation()}
         >
-          <span className="absolute" style={{ bottom: -6, left: 12, width: 12, height: 6, background: "#1A1208", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
+          <span className="absolute" style={{ bottom: -6, left: 12, width: 12, height: 6, background: "#111418", clipPath: "polygon(0 0, 100% 0, 50% 100%)" }} />
           <span className="block text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.82)" }}>{text}</span>
         </span>
       )}
@@ -281,9 +281,9 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
   if (valor == null && renta == null && avaluo == null) return null;
 
   const Row = ({ label, tip, children }: { label: string; tip: string; children: React.ReactNode }) => (
-    <div className="flex items-start justify-between gap-3 border-b py-3 last:border-0" style={{ borderColor: "#EAE3D6" }}>
+    <div className="flex items-start justify-between gap-3 border-b py-3 last:border-0" style={{ borderColor: "#E5E0D5" }}>
       <div className="flex items-center gap-1.5 pt-0.5">
-        <span className="text-[13px]" style={{ color: "#6B5B45" }}>{label}</span>
+        <span className="text-[13px]" style={{ color: "#5B5F5C" }}>{label}</span>
         <InfoTip text={tip} />
       </div>
       <div className="text-right">{children}</div>
@@ -292,19 +292,19 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Valor estimado</h3>
+      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Valor estimado</h3>
       <div>
         {valor != null && (
           <Row label="Valor de mercado" tip={`Precio de venta probable, estimado con el precio/m² típico de ${barrio} multiplicado por los ${area}m² de este inmueble.`}>
-            <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#1D9E75" }}>{formatCOP(valor)}</div>
+            <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#0F8A4F" }}>{formatCOP(valor)}</div>
             {rangoMin != null && rangoMax != null && (
-              <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#9B8B75" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
+              <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#6E726E" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
             )}
           </Row>
         )}
         {renta != null && (
           <Row label="Renta estimada" tip={`Canon de arriendo mensual típico para inmuebles similares en ${barrio}.`}>
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(renta)}<span className="text-[11px] font-normal" style={{ color: "#9B8B75" }}>/mes</span></div>
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(renta)}<span className="text-[11px] font-normal" style={{ color: "#6E726E" }}>/mes</span></div>
           </Row>
         )}
         {avaluo != null && (
@@ -312,7 +312,7 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
             label="Avalúo catastral"
             tip={`Valor fiscal del predio según el catastro de Medellín (estimado con el avalúo/m² de la comuna). Es la base sobre la que se cobran los impuestos y casi siempre es menor al precio de mercado — aquí, cerca de ${valor && avaluo ? Math.round(valor / avaluo) : 4}× por debajo.`}
           >
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(avaluo)}</div>
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(avaluo)}</div>
           </Row>
         )}
         {predial != null && (
@@ -320,7 +320,7 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
             label="Predial estimado"
             tip={`Impuesto predial anual aproximado: avalúo catastral × tarifa del municipio (~${milaje} por mil${listing.estrato_real != null ? ` para estrato ${listing.estrato_real}` : ""} en Medellín). La tarifa exacta la fija la Alcaldía según estrato y uso.`}
           >
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(predial)}<span className="text-[11px] font-normal" style={{ color: "#9B8B75" }}>/año</span></div>
+            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(predial)}<span className="text-[11px] font-normal" style={{ color: "#6E726E" }}>/año</span></div>
           </Row>
         )}
       </div>
@@ -358,23 +358,23 @@ function YieldMultiModal({ listing }: { listing: ApiListingDetail }) {
 
   return (
     <div className="space-y-2">
-      <h3 className="text-sm font-semibold text-[#1A1208]">Si arriendas esta propiedad</h3>
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+      <h3 className="text-sm font-semibold text-[#111418]">Si arriendas esta propiedad</h3>
+      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
         {rows.map(({ label, ingreso, yield: yPct }) => (
-          <div key={label} className="flex items-center justify-between px-4 py-2.5 text-sm" style={{ borderBottom: "0.5px solid #F5F0E8" }}>
-            <span className="text-[#6B5B45]">{label}</span>
+          <div key={label} className="flex items-center justify-between px-4 py-2.5 text-sm" style={{ borderBottom: "0.5px solid #F3F0E8" }}>
+            <span className="text-[#5B5F5C]">{label}</span>
             <div className="flex items-center gap-2 text-right">
-              {ingreso != null && <span className="text-xs text-[#6B5B45]">{formatCOP(ingreso)}/mes</span>}
-              {yPct != null && <span className="font-semibold text-[#1D9E75]">{yPct.toFixed(1)}%</span>}
+              {ingreso != null && <span className="text-xs text-[#5B5F5C]">{formatCOP(ingreso)}/mes</span>}
+              {yPct != null && <span className="font-semibold text-[#0F8A4F]">{yPct.toFixed(1)}%</span>}
             </div>
           </div>
         ))}
-        <div className="px-4 py-2.5 space-y-1" style={{ background: "#F5F0E8" }}>
+        <div className="px-4 py-2.5 space-y-1" style={{ background: "#F3F0E8" }}>
           <div>
-            <span className="text-xs text-[#6B5B45]">Mejor opción para {listing.barrio_nombre ?? "la zona"}: </span>
-            <span className="text-xs font-semibold text-[#1A1208]">{mejorOpcion}</span>
+            <span className="text-xs text-[#5B5F5C]">Mejor opción para {listing.barrio_nombre ?? "la zona"}: </span>
+            <span className="text-xs font-semibold text-[#111418]">{mejorOpcion}</span>
           </div>
-          <p className="text-[12px] italic leading-snug text-[#6B5B45]">{razon}</p>
+          <p className="text-[12px] italic leading-snug text-[#5B5F5C]">{razon}</p>
         </div>
       </div>
     </div>
@@ -407,17 +407,17 @@ function AlertModal({ listing, onClose }: { listing: ApiListingDetail; onClose: 
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div
         className="w-full max-w-sm rounded-2xl p-5 shadow-2xl"
-        style={{ background: "#FAF7F2", border: "0.5px solid #E8E0D0" }}
+        style={{ background: "#FAF8F3", border: "0.5px solid #E5E0D5" }}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="mb-3 flex items-start justify-between">
           <div className="flex items-center gap-2">
-            <BellRing className="h-5 w-5 text-[#1D9E75]" />
-            <span className="font-semibold text-[#1A1208]">Alerta de precio</span>
+            <BellRing className="h-5 w-5 text-[#0F8A4F]" />
+            <span className="font-semibold text-[#111418]">Alerta de precio</span>
           </div>
-          <button onClick={onClose} className="text-[#6B5B45] hover:text-[#1A1208]"><X className="h-4 w-4" /></button>
+          <button onClick={onClose} className="text-[#5B5F5C] hover:text-[#111418]"><X className="h-4 w-4" /></button>
         </div>
-        <p className="mb-4 text-sm text-[#6B5B45]">
+        <p className="mb-4 text-sm text-[#5B5F5C]">
           Te avisamos si esta propiedad baja de precio o aparece algo similar en{" "}
           <strong>{listing.barrio_nombre ?? "el barrio"}</strong>.
         </p>
@@ -425,7 +425,7 @@ function AlertModal({ listing, onClose }: { listing: ApiListingDetail; onClose: 
           onClick={crearAlerta}
           disabled={loading}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           <Bell className="h-4 w-4" />
           {loading ? "Creando…" : "Crear alerta →"}
@@ -453,18 +453,18 @@ type BarrioFetch = {
 
 /** Score bar en escala 1-10 estilo Zillow. Recibe score interno 0-100. Público. */
 function ScoreBar({ label, score, sub }: { label: string; score: number; sub: string }) {
-  const color = score >= 70 ? "#1D9E75" : score >= 40 ? "#BA7517" : "#D85A30";
+  const color = score >= 70 ? "#0F8A4F" : score >= 40 ? "#8A6A00" : "#CE1126";
   const s10 = score > 0 ? Math.max(1, Math.round(score / 10)) : 0;
   return (
-    <div className="rounded-xl px-4 py-3" style={{ background: "#F5F0E8", border: "0.5px solid #E8E0D0" }}>
+    <div className="rounded-xl px-4 py-3" style={{ background: "#F3F0E8", border: "0.5px solid #E5E0D5" }}>
       <div className="flex items-baseline justify-between">
-        <span className="text-xs font-semibold text-[#6B5B45]">{label}</span>
-        <span className="text-lg font-bold" style={{ color }}>{s10}<span className="text-[11px] font-normal text-[#9B8B75]">/10</span></span>
+        <span className="text-xs font-semibold text-[#5B5F5C]">{label}</span>
+        <span className="text-lg font-bold" style={{ color }}>{s10}<span className="text-[11px] font-normal text-[#6E726E]">/10</span></span>
       </div>
-      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "#E8E0D0" }}>
+      <div className="mt-1.5 h-1.5 overflow-hidden rounded-full" style={{ background: "#E5E0D5" }}>
         <div className="h-full rounded-full" style={{ width: `${score}%`, background: color }} />
       </div>
-      <div className="mt-1 text-[11px]" style={{ color: "#9B8B75" }}>{sub}</div>
+      <div className="mt-1 text-[11px]" style={{ color: "#6E726E" }}>{sub}</div>
     </div>
   );
 }
@@ -505,7 +505,7 @@ function GettingAround({ barrioId }: { barrioId: number }) {
 
   return (
     <div className="space-y-2.5">
-      <h3 className="text-sm font-semibold" style={{ color: "#1A1208" }}>Entorno</h3>
+      <h3 className="text-sm font-semibold" style={{ color: "#111418" }}>Entorno</h3>
       <div className="grid gap-2" style={{ gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))` }}>
         {tiles.map((t) => (
           <ScoreBar key={t.label} label={t.label} score={t.score} sub={t.sub} />
@@ -641,26 +641,26 @@ function ScheduleVisitModal({
         {/* Confirmación — recap tras enviar; cubre el formulario hasta "Listo". */}
         {enviado && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center gap-2 bg-white px-8 py-10 text-center">
-            <div className="grid h-14 w-14 place-items-center rounded-full" style={{ background: "#E1F5EE" }}>
-              <Check className="h-7 w-7" style={{ color: "#1D9E75" }} />
+            <div className="grid h-14 w-14 place-items-center rounded-full" style={{ background: "#E7F4EC" }}>
+              <Check className="h-7 w-7" style={{ color: "#0F8A4F" }} />
             </div>
-            <h3 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+            <h3 className="text-lg font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#111418" }}>
               ¡Visita solicitada!
             </h3>
-            <p className="text-sm font-medium capitalize" style={{ color: "#1A1208" }}>{enviado}</p>
-            {agente && <p className="text-[13px]" style={{ color: "#6B5B45" }}>Con {agente.nombre}</p>}
-            <p className="mt-1 text-[13px]" style={{ color: "#6B5B45" }}>Te contactaremos pronto para confirmar.</p>
+            <p className="text-sm font-medium capitalize" style={{ color: "#111418" }}>{enviado}</p>
+            {agente && <p className="text-[13px]" style={{ color: "#5B5F5C" }}>Con {agente.nombre}</p>}
+            <p className="mt-1 text-[13px]" style={{ color: "#5B5F5C" }}>Te contactaremos pronto para confirmar.</p>
             <button
               onClick={onClose}
               className="mt-4 rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-              style={{ background: "#1D9E75" }}
+              style={{ background: "#0F8A4F" }}
             >
               Listo
             </button>
           </div>
         )}
         {/* Header con acento */}
-        <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}>
+        <div className="px-6 pt-6 pb-5" style={{ background: "linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)" }}>
           <div className="flex items-start justify-between">
             <div className="flex items-center gap-2.5 text-white">
               <Calendar className="h-5 w-5" />
@@ -680,14 +680,14 @@ function ScheduleVisitModal({
         <div className="space-y-5 px-6 py-5">
           {/* Día — flechas laterales + ventana de días */}
           <div>
-            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Elige un día</div>
+            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#5B5F5C]">Elige un día</div>
             <div className="flex items-center gap-2">
               <button
                 onClick={() => setPage((p) => Math.max(0, p - 1))}
                 disabled={page === 0}
                 aria-label="Días anteriores"
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-30"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1D9E75" }}
+                style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF", color: "#0F8A4F" }}
               >
                 <ChevronLeft className="h-4 w-4" />
               </button>
@@ -701,8 +701,8 @@ function ScheduleVisitModal({
                       onClick={() => { setDiaIdx(abs); setHora(""); }}
                       className="flex flex-col items-center rounded-xl py-2 text-center transition"
                       style={sel
-                        ? { background: "#1D9E75", color: "#FFFFFF", boxShadow: "0 2px 8px rgba(29,158,117,0.3)" }
-                        : { background: "#F5F0E8", color: "#6B5B45" }}
+                        ? { background: "#0F8A4F", color: "#FFFFFF", boxShadow: "0 2px 8px rgba(29,158,117,0.3)" }
+                        : { background: "#F3F0E8", color: "#5B5F5C" }}
                     >
                       <span className="text-[10px] font-semibold uppercase tracking-wide">{d.label}</span>
                       <span className="text-[13px] font-bold leading-tight">{d.date.getDate()}</span>
@@ -716,7 +716,7 @@ function ScheduleVisitModal({
                 disabled={page === maxPage}
                 aria-label="Días siguientes"
                 className="grid h-9 w-9 shrink-0 place-items-center rounded-full transition disabled:opacity-30"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1D9E75" }}
+                style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF", color: "#0F8A4F" }}
               >
                 <ChevronRight className="h-4 w-4" />
               </button>
@@ -725,44 +725,44 @@ function ScheduleVisitModal({
 
           {/* Hora — lista desplegable */}
           <div>
-            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Elige una hora</div>
+            <div className="mb-2.5 text-xs font-semibold uppercase tracking-wider text-[#5B5F5C]">Elige una hora</div>
             <div className="relative">
               <select
                 value={hora}
                 onChange={(e) => setHora(e.target.value)}
                 className="w-full appearance-none rounded-xl px-4 py-3 pr-10 text-sm font-medium transition focus:outline-none"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: hora ? "#1A1208" : "#9B8B75" }}
+                style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF", color: hora ? "#111418" : "#6E726E" }}
               >
                 <option value="" disabled>Selecciona una hora</option>
                 {horas.map((h) => (
-                  <option key={h} value={h} style={{ color: "#1A1208" }}>{h}</option>
+                  <option key={h} value={h} style={{ color: "#111418" }}>{h}</option>
                 ))}
               </select>
-              <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9B8B75]" />
+              <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6E726E]" />
             </div>
           </div>
 
           {/* Contacto del solicitante — para que el agente devuelva la llamada */}
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Tu nombre</div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#5B5F5C]">Tu nombre</div>
               <input
                 value={nombre}
                 onChange={(e) => setNombre(e.target.value)}
                 placeholder="Nombre"
                 className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1A1208" }}
+                style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF", color: "#111418" }}
               />
             </div>
             <div>
-              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#6B5B45]">Tu teléfono</div>
+              <div className="mb-1.5 text-xs font-semibold uppercase tracking-wider text-[#5B5F5C]">Tu teléfono</div>
               <input
                 value={telefono}
                 onChange={(e) => setTelefono(e.target.value)}
                 inputMode="tel"
                 placeholder="300 000 0000"
                 className="w-full rounded-xl px-3 py-2.5 text-sm focus:outline-none"
-                style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF", color: "#1A1208" }}
+                style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF", color: "#111418" }}
               />
             </div>
           </div>
@@ -771,7 +771,7 @@ function ScheduleVisitModal({
             onClick={confirmar}
             disabled={!puedeEnviar || enviando}
             className="flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
-            style={{ background: "#1D9E75" }}
+            style={{ background: "#0F8A4F" }}
           >
             <Calendar className="h-4 w-4" />
             {enviando ? "Enviando…" : "Solicitar visita"}
@@ -798,16 +798,16 @@ function RealtorPrimaryCard({
 }: { listingId: number; agente: ApiListingAgente; secondary?: ApiListingAgente | null; onSchedule: () => void }) {
   const esComuna = agente.zona_nivel === "comuna";
   return (
-    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #1D9E75", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
+    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #0F8A4F", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#E1F5EE", border: "2px solid #1D9E75" }}>
+        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#E7F4EC", border: "2px solid #0F8A4F" }}>
           {agente.foto_url
             ? <img src={agente.foto_url} alt={agente.nombre} className="h-full w-full object-cover" />
-            : <User className="h-7 w-7" style={{ color: "#1D9E75" }} />}
+            : <User className="h-7 w-7" style={{ color: "#0F8A4F" }} />}
         </div>
         <div className="min-w-0">
-          <div className="truncate text-base font-bold" style={{ color: "#1A1208" }}>{agente.nombre}</div>
-          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#085041" }}>
+          <div className="truncate text-base font-bold" style={{ color: "#111418" }}>{agente.nombre}</div>
+          <div className="flex items-center gap-1 text-[11px] font-semibold" style={{ color: "#0A5C36" }}>
             <Shield className="h-3 w-3" /> Agente de la {esComuna ? "comuna" : "zona"}
           </div>
         </div>
@@ -818,14 +818,14 @@ function RealtorPrimaryCard({
           target="_blank"
           rel="noopener noreferrer"
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           <Phone className="h-4 w-4" /> Contactar
         </a>
         <button
           onClick={onSchedule}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
-          style={{ border: "1px solid #1D9E75", color: "#085041", background: "#E1F5EE" }}
+          style={{ border: "1px solid #0F8A4F", color: "#0A5C36", background: "#E7F4EC" }}
         >
           <Calendar className="h-4 w-4" /> Agendar visita
         </button>
@@ -836,7 +836,7 @@ function RealtorPrimaryCard({
             target="_blank"
             rel="noopener noreferrer"
             className="flex w-full items-center justify-center gap-1.5 pt-1 text-[11px] transition hover:opacity-70"
-            style={{ color: "#9B8B75" }}
+            style={{ color: "#6E726E" }}
           >
             <User className="h-3 w-3" />
             <span className="truncate">También: {secondary.nombre}, agente del barrio</span>
@@ -850,14 +850,14 @@ function RealtorPrimaryCard({
 /** Fallback sin patrocinio: contacto genérico del equipo. */
 function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule: () => void }) {
   return (
-    <div className="overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+    <div className="overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
-        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full" style={{ background: "#E1F5EE" }}>
-          <User className="h-6 w-6" style={{ color: "#1D9E75" }} />
+        <div className="grid h-12 w-12 shrink-0 place-items-center rounded-full" style={{ background: "#E7F4EC" }}>
+          <User className="h-6 w-6" style={{ color: "#0F8A4F" }} />
         </div>
         <div className="min-w-0">
-          <div className="text-sm font-semibold" style={{ color: "#1A1208" }}>Equipo Medellín Social</div>
-          <div className="text-[11px]" style={{ color: "#6B5B45" }}>Contacto</div>
+          <div className="text-sm font-semibold" style={{ color: "#111418" }}>Equipo Medellín Social</div>
+          <div className="text-[11px]" style={{ color: "#5B5F5C" }}>Contacto</div>
         </div>
       </div>
       <div className="space-y-2 px-4 pb-4">
@@ -866,14 +866,14 @@ function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule:
           target="_blank"
           rel="noopener noreferrer"
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#1D9E75" }}
+          style={{ background: "#0F8A4F" }}
         >
           <Phone className="h-4 w-4" /> Contactar
         </a>
         <button
           onClick={onSchedule}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
-          style={{ border: "1px solid #1D9E75", color: "#085041", background: "#E1F5EE" }}
+          style={{ border: "1px solid #0F8A4F", color: "#0A5C36", background: "#E7F4EC" }}
         >
           <Calendar className="h-4 w-4" /> Agendar visita
         </button>
@@ -1014,10 +1014,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const tourSrc = toEmbedSrc(listing?.tour_url) ?? toEmbedSrc(listing?.video_url);
   const tourSection = tourSrc ? (
     <div className="space-y-2">
-      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>
+      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>
         Tour 3D / Video
       </h3>
-      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", aspectRatio: "16 / 9" }}>
+      <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5", aspectRatio: "16 / 9" }}>
         <iframe
           src={tourSrc}
           title="Tour 3D"
@@ -1039,30 +1039,30 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     <div className="flex flex-wrap items-center gap-1.5">
       {esPropio && (
         listing.verificado ? (
-          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#085041", color: "#FFFFFF" }}>
+          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#0A5C36", color: "#FFFFFF" }}>
             ✓ Verificado
           </span>
         ) : (
-          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#F5F0E8", color: "#8A7A64", border: "1px solid #E8E0D0" }}>
+          <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#F3F0E8", color: "#8A7A64", border: "1px solid #E5E0D5" }}>
             Sin verificar
           </span>
         )
       )}
       {esDestacado && (
-        <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#ffc928", color: "#1A1208" }}>
+        <span className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: "#FCD116", color: "#111418" }}>
           ★ Destacado
         </span>
       )}
       <span
         className="rounded-md px-2.5 py-1 text-xs font-bold uppercase tracking-wider"
-        style={{ background: tipoOp === "arriendo" ? "#1D9E75" : "#D85A30", color: "#FFFFFF" }}
+        style={{ background: tipoOp === "arriendo" ? "#0F8A4F" : "#CE1126", color: "#FFFFFF" }}
       >
         {tipoOp === "arriendo" ? "Arriendo" : "Venta"}
       </span>
       {listing.tipo_inmueble && (
         <span
           className="rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider capitalize"
-          style={{ background: TIPO_INMUEBLE_COLOR[listing.tipo_inmueble] ?? "#9B8B75", color: "#FFFFFF" }}
+          style={{ background: TIPO_INMUEBLE_COLOR[listing.tipo_inmueble] ?? "#6E726E", color: "#FFFFFF" }}
         >
           {listing.tipo_inmueble.replace(/_/g, " ")}
         </span>
@@ -1072,10 +1072,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
 
   // Specs inline — van a la derecha del precio (mismo nivel), estilo Zillow.
   const specsInline = listing && (listing.area_m2 != null || listing.habitaciones != null || listing.banos != null) ? (
-    <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#1A1208" }}>
-      {listing.area_m2 != null && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-[#6B5B45]" />{formatArea(listing.area_m2, unit)}</span>}
-      {listing.habitaciones != null && <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.habitaciones} hab</span>}
-      {listing.banos != null && <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-[#6B5B45]" />{listing.banos} baños</span>}
+    <div className="flex items-center gap-2 text-sm font-medium" style={{ color: "#111418" }}>
+      {listing.area_m2 != null && <span className="flex items-center gap-1"><Maximize2 className="h-3.5 w-3.5 text-[#5B5F5C]" />{formatArea(listing.area_m2, unit)}</span>}
+      {listing.habitaciones != null && <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 text-[#5B5F5C]" />{listing.habitaciones} hab</span>}
+      {listing.banos != null && <span className="flex items-center gap-1"><Bath className="h-3.5 w-3.5 text-[#5B5F5C]" />{listing.banos} baños</span>}
     </div>
   ) : null;
 
@@ -1094,18 +1094,18 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   if (listing?.uso_suelo_pot) facts.push({ icon: <Map className="h-4 w-4" />, text: POT_LABEL[listing.uso_suelo_pot] ?? listing.uso_suelo_pot });
   if (listing?.estado_inmueble) facts.push({ icon: <Check className="h-4 w-4" />, text: listing.estado_inmueble.toLowerCase() });
   const factsTable = facts.length > 0 ? (
-    <div className="grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+    <div className="grid grid-cols-2 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
       {facts.map((f, i) => (
         <div
           key={i}
           className="flex items-center gap-2 px-4 py-3 text-sm capitalize"
           style={{
-            color: "#1A1208",
-            borderRight: i % 2 === 0 ? "0.5px solid #F5F0E8" : "none",
-            borderBottom: i < facts.length - (facts.length % 2 === 0 ? 2 : 1) ? "0.5px solid #F5F0E8" : "none",
+            color: "#111418",
+            borderRight: i % 2 === 0 ? "0.5px solid #F3F0E8" : "none",
+            borderBottom: i < facts.length - (facts.length % 2 === 0 ? 2 : 1) ? "0.5px solid #F3F0E8" : "none",
           }}
         >
-          <span className="shrink-0 text-[#1D9E75]">{f.icon}</span>
+          <span className="shrink-0 text-[#0F8A4F]">{f.icon}</span>
           <span className="font-medium">{f.text}</span>
         </div>
       ))}
@@ -1123,7 +1123,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   if (isRealtor && listing?.liquidez_score != null && listing.liquidez_score >= 65)
     activityParts.push(`se vende más rápido que ${Math.round(listing.liquidez_score)}% de la zona`);
   const activityLine = activityParts.length > 0 ? (
-    <div className="text-xs" style={{ color: "#6B5B45" }}>{activityParts.join("  ·  ")}</div>
+    <div className="text-xs" style={{ color: "#5B5F5C" }}>{activityParts.join("  ·  ")}</div>
   ) : null;
 
   // Favorito arriba, junto al precio — grande y visible sin scroll (antes vivía
@@ -1133,9 +1133,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       onClick={() => { if (!auth.get()) return; toggleFav(listing.url ?? "", listing.barrio_id); }}
       title={isFav(listing.url ?? "") ? "Quitar de favoritos" : "Guardar"}
       className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition"
-      style={{ border: "0.5px solid #E8E0D0", background: isFav(listing.url ?? "") ? "#FAECE7" : "#FFFFFF" }}
+      style={{ border: "0.5px solid #E5E0D5", background: isFav(listing.url ?? "") ? "#FCE8EA" : "#FFFFFF" }}
     >
-      <Heart className="h-5 w-5" style={{ color: isFav(listing.url ?? "") ? "#D85A30" : "#6B5B45" }} fill={isFav(listing.url ?? "") ? "#D85A30" : "none"} />
+      <Heart className="h-5 w-5" style={{ color: isFav(listing.url ?? "") ? "#CE1126" : "#5B5F5C" }} fill={isFav(listing.url ?? "") ? "#CE1126" : "none"} />
     </button>
   ) : null;
 
@@ -1160,8 +1160,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             title={isInComparador(listing.id) ? "Quitar del comparador" : "Agregar a comparación"}
             className="flex shrink-0 items-center justify-center gap-1.5 rounded-xl px-3 py-3 text-xs font-semibold transition"
             style={isInComparador(listing.id)
-              ? { background: "#E1F5EE", color: "#085041", border: "1px solid #1D9E75" }
-              : { border: "0.5px solid #1D9E75", color: "#1D9E75", background: "#FFFFFF" }
+              ? { background: "#E7F4EC", color: "#0A5C36", border: "1px solid #0F8A4F" }
+              : { border: "0.5px solid #0F8A4F", color: "#0F8A4F", background: "#FFFFFF" }
             }
           >
             {isInComparador(listing.id)
@@ -1177,8 +1177,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             href={listing.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium text-[#6B5B45] transition hover:text-[#1A1208]"
-            style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}
+            className="flex flex-1 items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-medium text-[#5B5F5C] transition hover:text-[#111418]"
+            style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}
           >
             <ExternalLink className="h-3.5 w-3.5" />
             {SOURCE_LABEL[fuente] ?? "Ver fuente original →"}
@@ -1188,9 +1188,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           onClick={handleShare}
           title="Copiar link"
           className="grid h-10 w-10 shrink-0 place-items-center rounded-xl transition"
-          style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}
+          style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}
         >
-          <Share2 className="h-4 w-4 text-[#6B5B45]" />
+          <Share2 className="h-4 w-4 text-[#5B5F5C]" />
         </button>
       </div>
       <p className="text-[10px] leading-relaxed" style={{ color: "#9A8B76" }}>
@@ -1202,7 +1202,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         <button
           onClick={() => setShowAlertModal(true)}
           className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition hover:opacity-90"
-          style={{ border: "0.5px solid #1D9E75", background: "#E1F5EE", color: "#085041" }}
+          style={{ border: "0.5px solid #0F8A4F", background: "#E7F4EC", color: "#0A5C36" }}
         >
           <Bell className="h-3.5 w-3.5" />
           Alertarme cuando baje de precio
@@ -1215,7 +1215,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             navigate({ to: "/simulador", search: { listing_id: listing.id } });
           }}
           className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition hover:opacity-90"
-          style={{ border: "0.5px solid #1D9E75", background: "transparent", color: "#085041" }}
+          style={{ border: "0.5px solid #0F8A4F", background: "transparent", color: "#0A5C36" }}
         >
           <BarChart2 className="h-3.5 w-3.5" />
           Simular esta propiedad
@@ -1235,7 +1235,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Description — solo si existe */}
       {listing.descripcion && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-[#1A1208]">Descripción</h3>
+          <h3 className="text-sm font-semibold text-[#111418]">Descripción</h3>
           {/* Traducción offline bidireccional: si el idioma del source != idioma
               elegido y hay traducción, muéstrala; si no, el source (limpio). */}
           <CollapsibleDescription
@@ -1263,17 +1263,17 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 : null;
           return (
             <div className="space-y-3">
-              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
-              <div className="flex items-baseline justify-between border-b pb-3" style={{ borderColor: "#EAE3D6" }}>
+              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
+              <div className="flex items-baseline justify-between border-b pb-3" style={{ borderColor: "#E5E0D5" }}>
                 <div>
-                  <div className="text-[13px]" style={{ color: "#1A1208" }}>Publicado en venta</div>
-                  {fechaListado && <div className="text-[11px]" style={{ color: "#9B8B75" }}>{fmtFecha(fechaListado)}</div>}
+                  <div className="text-[13px]" style={{ color: "#111418" }}>Publicado en venta</div>
+                  {fechaListado && <div className="text-[11px]" style={{ color: "#6E726E" }}>{fmtFecha(fechaListado)}</div>}
                 </div>
-                <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>
+                <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>
                   {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
                 </div>
               </div>
-              <p className="text-[11px] leading-relaxed" style={{ color: "#9B8B75" }}>
+              <p className="text-[11px] leading-relaxed" style={{ color: "#6E726E" }}>
                 Aún no hay cambios de precio registrados para este inmueble. Registramos cada variación desde su publicación.
               </p>
             </div>
@@ -1283,21 +1283,21 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         if (historia.length <= 2) {
           return (
             <div className="space-y-3">
-              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
+              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
               <div className="space-y-2.5">
                 {historia.map((h, i) => {
                   const daysAgo = Math.floor((Date.now() - new Date(h.fecha).getTime()) / 86400000);
                   const cuandoLabel = daysAgo === 0 ? "Hoy" : daysAgo === 1 ? "Hace 1 día" : `Hace ${daysAgo} días`;
                   const sube = (h.delta_pct ?? 0) > 0;
-                  const color = sube ? "#B4462F" : "#1D9E75";
+                  const color = sube ? "#B4462F" : "#0F8A4F";
                   return (
-                    <div key={i} className="flex items-baseline justify-between border-b pb-2.5 last:border-0" style={{ borderColor: "#EAE3D6" }}>
+                    <div key={i} className="flex items-baseline justify-between border-b pb-2.5 last:border-0" style={{ borderColor: "#E5E0D5" }}>
                       <div>
-                        <div className="text-[13px]" style={{ color: "#1A1208" }}>{sube ? "Subió de precio" : "Bajó de precio"}</div>
-                        <div className="text-[11px]" style={{ color: "#9B8B75" }}>{cuandoLabel}</div>
+                        <div className="text-[13px]" style={{ color: "#111418" }}>{sube ? "Subió de precio" : "Bajó de precio"}</div>
+                        <div className="text-[11px]" style={{ color: "#6E726E" }}>{cuandoLabel}</div>
                       </div>
                       <div className="text-right">
-                        <div className="text-[14px] font-semibold tabular-nums" style={{ color: "#1A1208" }}>{formatCOP(h.precio)}</div>
+                        <div className="text-[14px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(h.precio)}</div>
                         {h.delta_pct != null && (
                           <div className="text-[11px] font-medium tabular-nums" style={{ color }}>
                             {sube ? "+" : "−"}{Math.abs(h.delta_pct).toFixed(1)}%
@@ -1325,30 +1325,30 @@ export function ListingDrawer({ listingId, onClose }: Props) {
 
         return (
           <div className="space-y-3">
-            <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#1A1208" }}>Historial de precio</h3>
+            <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
             <div style={{ height: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
                   <defs>
                     <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#1D9E75" stopOpacity={0.16} />
-                      <stop offset="100%" stopColor="#1D9E75" stopOpacity={0} />
+                      <stop offset="0%" stopColor="#0F8A4F" stopOpacity={0.16} />
+                      <stop offset="100%" stopColor="#0F8A4F" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: "#9B8B75" }} tickLine={false} axisLine={false} dy={4} />
+                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: "#6E726E" }} tickLine={false} axisLine={false} dy={4} />
                   <YAxis hide domain={["auto", "auto"]} />
                   <RechartsTooltip
                     formatter={(val: unknown) => [`$${val}M COP`, "Precio"]}
-                    contentStyle={{ background: "#1A1208", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, padding: "6px 10px" }}
+                    contentStyle={{ background: "#111418", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, padding: "6px 10px" }}
                     labelStyle={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}
                   />
                   <Area
                     type="monotone" dataKey="precio"
-                    stroke="#1D9E75" strokeWidth={2} fill="url(#priceFill)"
-                    dot={{ r: 2.5, fill: "#1D9E75", strokeWidth: 0 }}
-                    activeDot={{ r: 4, fill: "#1D9E75" }}
+                    stroke="#0F8A4F" strokeWidth={2} fill="url(#priceFill)"
+                    dot={{ r: 2.5, fill: "#0F8A4F", strokeWidth: 0 }}
+                    activeDot={{ r: 4, fill: "#0F8A4F" }}
                   />
-                  <ReferenceDot x="Hoy" y={currentPrecioM} r={4} fill="#1A1208" stroke="#fff" strokeWidth={2} />
+                  <ReferenceDot x="Hoy" y={currentPrecioM} r={4} fill="#111418" stroke="#fff" strokeWidth={2} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>
@@ -1367,9 +1367,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         <>
           <YieldMultiModal listing={listing} />
           {isPro && listing.score_corto != null && (
-            <div className="flex items-center justify-between border-b py-3 text-[13px]" style={{ borderColor: "#EAE3D6" }}>
-              <span style={{ color: "#6B5B45" }}>Score de inversión</span>
-              <span className="font-semibold tabular-nums" style={{ color: "#1A1208" }}>{Math.round(listing.score_corto / 10)}/10</span>
+            <div className="flex items-center justify-between border-b py-3 text-[13px]" style={{ borderColor: "#E5E0D5" }}>
+              <span style={{ color: "#5B5F5C" }}>Score de inversión</span>
+              <span className="font-semibold tabular-nums" style={{ color: "#111418" }}>{Math.round(listing.score_corto / 10)}/10</span>
             </div>
           )}
         </>
@@ -1384,7 +1384,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         <a
           href="/planes"
           className="flex w-full items-center justify-center rounded-xl py-3 text-[13px] font-semibold transition hover:opacity-90"
-          style={{ background: "#1A1208", color: "#FFFFFF" }}
+          style={{ background: "#111418", color: "#FFFFFF" }}
         >
           Desbloquea el análisis completo con MLS Pro
         </a>
@@ -1393,10 +1393,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Mini mapa */}
       {heroMapUrl && (
         <div className="space-y-2">
-          <h3 className="text-sm font-semibold text-[#1A1208]">Ubicación</h3>
-          <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E8E0D0" }}>
+          <h3 className="text-sm font-semibold text-[#111418]">Ubicación</h3>
+          <div className="overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5" }}>
             <img src={heroMapUrl} alt={`Ubicación en ${listing.barrio_nombre}`} className="h-40 w-full object-cover" loading="lazy" />
-            <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-[#6B5B45]" style={{ borderTop: "0.5px solid #E8E0D0", background: "#FAFAFA" }}>
+            <div className="flex items-center gap-1.5 px-3 py-2 text-xs text-[#5B5F5C]" style={{ borderTop: "0.5px solid #E5E0D5", background: "#FAFAFA" }}>
               <MapPin className="h-3 w-3 shrink-0" />
               {listing.barrio_nombre && <span>{listing.barrio_nombre}</span>}
               {listing.estrato_real != null && <span>· Estrato {listing.estrato_real}</span>}
@@ -1408,8 +1408,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   ) : null;
 
   const similaresSection = similares && similares.length > 0 ? (
-    <div className="space-y-3 border-t pb-6" style={{ borderColor: "#E8E0D0", paddingTop: 20 }}>
-      <h3 className="text-base font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+    <div className="space-y-3 border-t pb-6" style={{ borderColor: "#E5E0D5", paddingTop: 20 }}>
+      <h3 className="text-base font-bold" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#111418" }}>
         Propiedades similares
       </h3>
       <div className="grid grid-cols-2 gap-2.5">
@@ -1419,41 +1419,41 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             onClick={() => onClose()}
             onClickCapture={() => { window.dispatchEvent(new CustomEvent("open-listing-drawer", { detail: { id: s.id } })); }}
             className="group flex flex-col overflow-hidden rounded-xl text-left transition hover:shadow-md"
-            style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}
+            style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}
           >
-            <div className="relative h-36 overflow-hidden" style={{ background: "#F5F0E8" }}>
+            <div className="relative h-36 overflow-hidden" style={{ background: "#F3F0E8" }}>
               {s.foto_principal ? (
                 <img src={s.foto_principal} alt={s.tipo_inmueble ?? "Foto"} className="h-full w-full object-cover transition group-hover:scale-105" loading="lazy" />
               ) : (
-                <div className="flex h-full w-full items-center justify-center" style={{ background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}>
+                <div className="flex h-full w-full items-center justify-center" style={{ background: "linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)" }}>
                   <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 28, height: 28, opacity: 0.45 }}>
                     <rect x="6" y="12" width="24" height="30" rx="1" fill="white"/>
                     <rect x="30" y="20" width="14" height="22" rx="1" fill="white"/>
-                    <rect x="10" y="16" width="4" height="4" fill="#1D9E75"/>
-                    <rect x="18" y="16" width="4" height="4" fill="#1D9E75"/>
-                    <rect x="10" y="24" width="4" height="4" fill="#1D9E75"/>
-                    <rect x="18" y="24" width="4" height="4" fill="#1D9E75"/>
-                    <rect x="13" y="32" width="6" height="10" fill="#1D9E75"/>
-                    <rect x="34" y="24" width="4" height="4" fill="#1D9E75"/>
-                    <rect x="34" y="30" width="4" height="4" fill="#1D9E75"/>
+                    <rect x="10" y="16" width="4" height="4" fill="#0F8A4F"/>
+                    <rect x="18" y="16" width="4" height="4" fill="#0F8A4F"/>
+                    <rect x="10" y="24" width="4" height="4" fill="#0F8A4F"/>
+                    <rect x="18" y="24" width="4" height="4" fill="#0F8A4F"/>
+                    <rect x="13" y="32" width="6" height="10" fill="#0F8A4F"/>
+                    <rect x="34" y="24" width="4" height="4" fill="#0F8A4F"/>
+                    <rect x="34" y="30" width="4" height="4" fill="#0F8A4F"/>
                   </svg>
                 </div>
               )}
             </div>
             <div className="space-y-0.5 p-2.5">
-              <div className="text-sm font-semibold" style={{ color: "#1A1208" }}>{s.precio_cop ? formatCOP(s.precio_cop) : "—"}</div>
-              <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#6B5B45" }}>
+              <div className="text-sm font-semibold" style={{ color: "#111418" }}>{s.precio_cop ? formatCOP(s.precio_cop) : "—"}</div>
+              <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#5B5F5C" }}>
                 {s.area_m2 != null && <span>{formatArea(s.area_m2, unit)}</span>}
                 {s.habitaciones != null && <span>· {s.habitaciones} hab</span>}
                 {s.banos != null && <span>· {s.banos} baños</span>}
               </div>
               {s.barrio_nombre && (
-                <div className="flex items-center gap-1 text-[11px]" style={{ color: "#6B5B45" }}>
+                <div className="flex items-center gap-1 text-[11px]" style={{ color: "#5B5F5C" }}>
                   <MapPin className="h-2.5 w-2.5 shrink-0" />
                   {s.barrio_nombre}
                 </div>
               )}
-              {s.dias_en_mercado != null && <div className="text-[10px]" style={{ color: "#6B5B45" }}>{diasLabel(s.dias_en_mercado) ?? `${s.dias_en_mercado}d`}</div>}
+              {s.dias_en_mercado != null && <div className="text-[10px]" style={{ color: "#5B5F5C" }}>{diasLabel(s.dias_en_mercado) ?? `${s.dias_en_mercado}d`}</div>}
             </div>
           </button>
         ))}
@@ -1463,14 +1463,14 @@ export function ListingDrawer({ listingId, onClose }: Props) {
 
   const modalStyle = {
     "--background": "#FFFFFF",
-    "--foreground": "#1A1208",
-    "--muted-foreground": "#6B5B45",
+    "--foreground": "#111418",
+    "--muted-foreground": "#5B5F5C",
     "--border": "rgb(184 164 138 / 50%)",
   } as React.CSSProperties;
 
   const loadingSpinner = (
     <div className="flex h-40 items-center justify-center">
-      <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#1D9E75] border-t-transparent" />
+      <div className="h-7 w-7 animate-spin rounded-full border-2 border-[#0F8A4F] border-t-transparent" />
     </div>
   );
 
@@ -1494,12 +1494,12 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 initial={{ y: "100%" }} animate={{ y: 0 }} exit={{ y: "100%" }}
                 transition={{ type: "spring", damping: 32, stiffness: 300 }}
                 className="fixed inset-x-0 bottom-0 z-50 flex flex-col overflow-hidden rounded-t-2xl shadow-2xl"
-                style={{ height: "90vh", background: "#FAF7F2", ...modalStyle }}
+                style={{ height: "90vh", background: "#FAF8F3", ...modalStyle }}
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="relative flex shrink-0 items-center justify-center py-3">
-                  <div className="h-1 w-10 rounded-full bg-[#C8B8A2]" />
-                  <button onClick={onClose} className="absolute right-4 grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8]">
+                  <div className="h-1 w-10 rounded-full bg-[#C9C4B8]" />
+                  <button onClick={onClose} className="absolute right-4 grid h-7 w-7 place-items-center rounded-lg text-[#5B5F5C] transition hover:bg-[#F3F0E8]">
                     <X className="h-4 w-4" />
                   </button>
                 </div>
@@ -1513,11 +1513,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                         <div className="space-y-2">
                           <div className="flex items-start justify-between gap-3">
                             <div data-i18n-skip="true">
-                              <div className="font-display text-2xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+                              <div className="font-display text-2xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#111418" }}>
                                 {listing.precio_cop ? (lang === "en" ? `${fmtUSD(listing.precio_cop, trm)} USD` : formatCOP(listing.precio_cop)) : "—"}
                               </div>
                               {listing.precio_cop && (
-                                <div className="text-xs text-[#6B5B45]">
+                                <div className="text-xs text-[#5B5F5C]">
                                   {lang === "en" ? formatCOP(listing.precio_cop) : `~${fmtUSD(listing.precio_cop, trm)} USD`}
                                 </div>
                               )}
@@ -1528,7 +1528,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                             </div>
                           </div>
                           {(listing.barrio_nombre || listing.municipio) && (
-                            <div className="flex items-center gap-1 text-xs text-[#6B5B45]">
+                            <div className="flex items-center gap-1 text-xs text-[#5B5F5C]">
                               <MapPin className="h-3 w-3 shrink-0" />
                               {[
                                 listing.barrio_display ?? listing.barrio_nombre,
@@ -1588,11 +1588,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           <div>
             <div className="flex items-start justify-between gap-3">
               <div data-i18n-skip="true">
-                <div className="font-display text-3xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#1A1208" }}>
+                <div className="font-display text-3xl font-bold leading-tight" style={{ fontFamily: "'Fraunces', Georgia, serif", color: "#111418" }}>
                   {listing.precio_cop ? (lang === "en" ? `${fmtUSD(listing.precio_cop, trm)} USD` : formatCOP(listing.precio_cop)) : "—"}
                 </div>
                 {listing.precio_cop && (
-                  <div className="text-xs text-[#6B5B45]">
+                  <div className="text-xs text-[#5B5F5C]">
                     {lang === "en" ? formatCOP(listing.precio_cop) : `~${fmtUSD(listing.precio_cop, trm)} USD`}
                   </div>
                 )}
@@ -1605,7 +1605,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             <div className="mt-2 space-y-2">
               {badgesRow}
               {(listing.barrio_nombre || listing.municipio) && (
-                <div className="flex items-center gap-1 text-sm text-[#6B5B45]">
+                <div className="flex items-center gap-1 text-sm text-[#5B5F5C]">
                   <MapPin className="h-4 w-4 shrink-0" />
                   <span className="font-medium">
                     {[
@@ -1655,8 +1655,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 left: "50%",
                 width: "min(1400px, 98vw)",
                 height: "90vh",
-                background: "#FAF7F2",
-                border: "0.5px solid #E8E0D0",
+                background: "#FAF8F3",
+                border: "0.5px solid #E5E0D5",
                 boxShadow: "0 25px 60px rgba(0,0,0,0.3)",
                 ...modalStyle,
               } as React.CSSProperties}
@@ -1664,15 +1664,15 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             >
               {/* Header bar */}
               <div
-                className="sticky top-0 z-10 flex shrink-0 items-center justify-between bg-[#FAF7F2] px-5 py-3.5"
-                style={{ borderBottom: "0.5px solid #E8E0D0" }}
+                className="sticky top-0 z-10 flex shrink-0 items-center justify-between bg-[#FAF8F3] px-5 py-3.5"
+                style={{ borderBottom: "0.5px solid #E5E0D5" }}
               >
-                <span className="text-[11px] font-medium uppercase tracking-widest text-[#6B5B45]">
+                <span className="text-[11px] font-medium uppercase tracking-widest text-[#5B5F5C]">
                   Detalle del inmueble
                 </span>
                 <button
                   onClick={onClose}
-                  className="grid h-7 w-7 place-items-center rounded-lg text-[#6B5B45] transition hover:bg-[#F5F0E8] hover:text-[#1A1208]"
+                  className="grid h-7 w-7 place-items-center rounded-lg text-[#5B5F5C] transition hover:bg-[#F3F0E8] hover:text-[#111418]"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -1683,7 +1683,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 <PhotoGallery fotos={listing?.fotos} titulo={listing?.tipo_inmueble ?? undefined} height={420} />
                 <div className="flex items-start">
                   {/* Columna 1 — información */}
-                  <div className="flex-1" style={{ borderRight: "0.5px solid #E8E0D0" }}>
+                  <div className="flex-1" style={{ borderRight: "0.5px solid #E5E0D5" }}>
                     {leftColContent}
                   </div>
                   {/* Columna 2 — contacto realtor + agendar visita (sticky) */}

@@ -27,10 +27,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DB_URL = os.environ["DATABASE_URL"]
 
 BASE = "https://geoportal.siata.gov.co/fastgeoapi/geodata/geodataJson/1"
 URL_OFICIAL = f"{BASE}/ruido_oficial"

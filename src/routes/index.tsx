@@ -13,6 +13,7 @@ import { EventCardRow } from '@/components/comunidad/EventCard'
 import { HomeTourModal } from '@/components/HomeTourModal'
 import { API_ENDPOINTS } from '@/config/api'
 import { safeHref } from '@/lib/utils'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/')({
   component: HomePage,
@@ -24,16 +25,7 @@ export const Route = createFileRoute('/')({
   }),
 })
 
-const K = {
-  paper: '#FAF8F5', surface: '#F2ECE2', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928', rojo: '#e63148',
-  serif: "'Fraunces', Georgia, serif" as const,
-  lora: "'Lora', Georgia, serif" as const,
-  manrope: "'Manrope', system-ui, sans-serif" as const,
-}
+const K = TOKENS;
 
 const CATEGORIA_LABELS: Record<string, string> = {
   brunch: 'Brunch',
@@ -68,16 +60,16 @@ const CATEGORIA_LABELS_EN: Record<string, string> = {
 }
 
 const CATEGORIA_COLORS: Record<string, string> = {
-  bares: '#14201d',
-  brunch: '#f5f0e8',
+  bares: '#111418',
+  brunch: '#F3F0E8',
   cafes: '#c8a96e',
   cena: '#2d1b0e',
-  gimnasios: '#1D9E75',
+  gimnasios: '#0F8A4F',
   masajes_spa: '#d4a5c9',
-  medicos: '#e8f4f8',
-  dentistas: '#e8f4f8',
-  peluquerias: '#fce4ec',
-  yoga: '#e8f5e9',
+  medicos: '#E6ECF7',
+  dentistas: '#E6ECF7',
+  peluquerias: '#FCE8EA',
+  yoga: '#E7F4EC',
 }
 
 const CATEGORIA_EMOJI: Record<string, string> = {
@@ -157,7 +149,7 @@ function HeroOverlay({ phase, barrio, onChoose, onClose }: {
         display: 'flex', gap: 10, zIndex: 10,
       }}>
         <PillButton icon="🗺" iconBg={K.coralLight} label="Ver barrios" onClick={() => onChoose('barrios')} />
-        <PillButton icon="🎉" iconBg="#FFF1C2" label="Ver comunidad" onClick={() => onChoose('comunidad')} />
+        <PillButton icon="🎉" iconBg="#FFF6D6" label="Ver comunidad" onClick={() => onChoose('comunidad')} />
       </div>
     )
   }
@@ -199,7 +191,7 @@ function HeroOverlay({ phase, barrio, onChoose, onClose }: {
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <PillButton href={`/eventos/${barrio.slug}`} icon="📅" iconBg={K.coralLight} label="Eventos" />
           <PillButton href={`/local-business/${barrio.slug}`} icon="🏪" iconBg="#D9F0E7" label="Negocios" />
-          <PillButton href={`/map?lat=${barrio.lat.toFixed(5)}&lng=${barrio.lng.toFixed(5)}&zoom=14`} icon="🏠" iconBg="#FFF1C2" label="Listings" />
+          <PillButton href={`/map?lat=${barrio.lat.toFixed(5)}&lng=${barrio.lng.toFixed(5)}&zoom=14`} icon="🏠" iconBg="#FFF6D6" label="Listings" />
         </div>
       </div>
     )
@@ -342,7 +334,7 @@ function HomeContent() {
   const barrioFilter = isTodos ? null : (barrio.barrio_id ?? null)
   const municipioFilter = isTodos ? undefined : barrio.municipio_nombre
 
-  const { data: noticias   = [] }                          = useNoticias(4, barrioFilter, municipioFilter)
+  const { data: noticias   = [], isLoading: noticiasLoading } = useNoticias(4, barrioFilter, municipioFilter)
   const { data: deals      = [], isLoading: dealsLoading }  = useDeals(1, barrioFilter, municipioFilter)
   const { data: directorio = [], isLoading: dirLoading }    = useDirectorio(1, barrioFilter, municipioFilter)
   const { data: eventosTop = [] }                           = useEventosTop(barrioFilter, municipioFilter, 3)
@@ -444,10 +436,12 @@ function HomeContent() {
             {t('Lo último del barrio', 'Latest from the Barrio')}
           </SecTitle>
 
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(260px, 1fr))', gap: isMobile ? 10 : 16 }} className="noticias-grid">
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(260px, 1fr))', gap: isMobile ? 10 : 16 }} className="noticias-grid">
             {noticias.length === 0 ? (
               <p style={{ color: K.muted, gridColumn: '1/-1' }}>
-                {t('Cargando noticias...', 'Loading news...')}
+                {noticiasLoading
+                  ? t('Cargando noticias...', 'Loading news...')
+                  : t('Aún no hay noticias de este barrio. Vuelve pronto.', 'No news for this barrio yet. Check back soon.')}
               </p>
             ) : (isMobile ? noticias.slice(0, 2) : noticias).map((n, i) => (
               <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
@@ -514,7 +508,7 @@ function HomeContent() {
           {eventosSemana.length === 0 ? (
             <p style={{ opacity: .9 }}>{t('Sin eventos programados esta semana.', 'No events scheduled this week.')}</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fit, minmax(210px, 1fr))', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? 'repeat(2, 1fr)' : 'repeat(auto-fill, minmax(210px, 1fr))', gap: 16 }}>
               {eventosSemana.map(evt => {
                 const d = new Date(evt.fecha_inicio.replace(' ', 'T'))
                 const valid = !isNaN(d.getTime())
@@ -551,7 +545,7 @@ function HomeContent() {
 
           <div className="deals-grid" style={isMobile
             ? { display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 6, WebkitOverflowScrolling: 'touch' }
-            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }
           }>
             {dealsLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
@@ -631,7 +625,7 @@ function HomeContent() {
 
           <div className="directorio-grid" style={isMobile
             ? { display: 'flex', overflowX: 'auto', gap: 12, paddingBottom: 6, WebkitOverflowScrolling: 'touch' }
-            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }
+            : { display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 12 }
           }>
             {dirLoading ? (
               <p style={{ color: K.muted, gridColumn: '1/-1', fontSize: 14 }}>
@@ -694,7 +688,7 @@ function HomeContent() {
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 4, marginBottom: 11 }}>
                   {negocio.rating_google != null ? (
                     <>
-                      <span style={{ color: '#ffc928', fontSize: 13, letterSpacing: 1 }}>
+                      <span style={{ color: '#FCD116', fontSize: 13, letterSpacing: 1 }}>
                         {'★'.repeat(Math.round(negocio.rating_google))}
                         {'☆'.repeat(5 - Math.round(negocio.rating_google))}
                       </span>
@@ -816,7 +810,7 @@ function HomeContent() {
 
       {/* ── SUSCRIPCIÓN ───────────────────────────────── */}
       <section id="subscribe" className="section-padding" style={{ padding: '0 16px 72px' }}>
-        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(145deg, #1A2B24 0%, #14201d 55%, #2A1A10 100%)', borderRadius: 22, padding: 'clamp(32px, 5vw, 60px) clamp(20px, 5vw, 52px)', textAlign: 'center', color: '#fff', boxShadow: '0 16px 48px rgba(20,32,29,.28)' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto', background: 'linear-gradient(145deg, #161A17 0%, #111418 55%, #2A1A10 100%)', borderRadius: 22, padding: 'clamp(32px, 5vw, 60px) clamp(20px, 5vw, 52px)', textAlign: 'center', color: '#fff', boxShadow: '0 16px 48px rgba(20,32,29,.28)' }}>
           <span style={{ fontFamily: K.manrope, fontWeight: 700, letterSpacing: '1.4px', textTransform: 'uppercase', fontSize: '.72rem', background: 'rgba(216,90,48,.22)', border: '1px solid rgba(216,90,48,.4)', color: K.coral, display: 'inline-block', padding: '7px 18px', borderRadius: 999, marginBottom: 20 }}>
             🎉 {t('Miembros Fundadores · Invitación a la Fiesta', 'Founding Members · Launch Party Invite')}
           </span>

@@ -264,7 +264,7 @@ function _mockBarrio(zonaCodigo: string): ApiBarrio {
   const s = _BARRIO_STATS[zonaCodigo] ?? { nombre: zonaCodigo, precioM2: 5_500_000, arriendo: 1_500_000, adr: 180_000, seg: 55 };
   return {
     barrio_id: 0, nombre: s.nombre, comuna: null, municipio: "Medellín", estrato: 4,
-    geometry: null, color_hex: "#1D9E75", excluir_inversion: false,
+    geometry: null, color_hex: "#0F8A4F", excluir_inversion: false,
     scores: { corto: s.seg, cat_corto: null, mediano: s.seg - 5, cat_mediano: null, largo: s.seg - 10, cat_largo: null, perfil_recomendado: null, score_activo: s.seg },
     mercado: {
       precio_m2_cop: s.precioM2, precio_m2_usd: Math.round(s.precioM2 / 4100), precio_venta_promedio: null,

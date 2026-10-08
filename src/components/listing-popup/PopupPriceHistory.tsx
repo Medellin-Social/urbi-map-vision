@@ -47,28 +47,28 @@ export function PopupPriceHistory({ historia, precioActual }: Props) {
 
   return (
     <section className="space-y-1.5" aria-label="Historial de precio">
-      <h3 className="text-xs font-semibold" style={{ color: "#1A1208" }}>Historial de precio</h3>
-      <div className="overflow-hidden rounded-lg" style={{ border: "0.5px solid #E8E0D0", background: "#FFFFFF" }}>
+      <h3 className="text-xs font-semibold" style={{ color: "#111418" }}>Historial de precio</h3>
+      <div className="overflow-hidden rounded-lg" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
         <div className="px-1 pb-1 pt-2" style={{ height: 120 }}>
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 4, right: 12, left: 8, bottom: 0 }}>
-              <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: "#9B8B75" }} tickLine={false} axisLine={false} />
+              <XAxis dataKey="fecha" tick={{ fontSize: 9, fill: "#6E726E" }} tickLine={false} axisLine={false} />
               <YAxis hide domain={["auto", "auto"]} />
               <RechartsTooltip
                 formatter={(val: unknown) => [`$${val}M COP`, "Precio"]}
-                contentStyle={{ background: "#1A1208", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
+                contentStyle={{ background: "#111418", border: "none", borderRadius: 8, color: "#fff", fontSize: 11 }}
                 labelStyle={{ color: "rgba(255,255,255,0.7)", fontSize: 10 }}
               />
               <Line
                 type="monotone"
                 dataKey="precio"
-                stroke="#1D9E75"
+                stroke="#0F8A4F"
                 strokeWidth={2}
-                dot={{ r: 2.5, fill: "#1D9E75", strokeWidth: 0 }}
-                activeDot={{ r: 4, fill: "#1D9E75" }}
+                dot={{ r: 2.5, fill: "#0F8A4F", strokeWidth: 0 }}
+                activeDot={{ r: 4, fill: "#0F8A4F" }}
               />
               {precioActual ? (
-                <ReferenceDot x="Hoy" y={ultimo.precio} r={4} fill="#D85A30" stroke="#fff" strokeWidth={2} />
+                <ReferenceDot x="Hoy" y={ultimo.precio} r={4} fill="#CE1126" stroke="#fff" strokeWidth={2} />
               ) : null}
             </LineChart>
           </ResponsiveContainer>

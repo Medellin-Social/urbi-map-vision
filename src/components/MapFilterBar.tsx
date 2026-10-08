@@ -209,13 +209,13 @@ function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, onComunaS
 
 const C = {
   white:    "#FFFFFF",
-  teal:     "#1D9E75",
-  tealDeep: "#085041",
-  muted:    "#6B5B45",
-  border:   "#E8E0D0",
-  ink:      "#1A1208",
-  coral:    "#D85A30",
-  surface:  "#F5F0E8",
+  teal:     "#0F8A4F",
+  tealDeep: "#0A5C36",
+  muted:    "#5B5F5C",
+  border:   "#E5E0D5",
+  ink:      "#111418",
+  coral:    "#CE1126",
+  surface:  "#F3F0E8",
 };
 
 const TIPO_OPTIONS = [
@@ -599,7 +599,7 @@ function PrecioPanel({
         {/* Track */}
         <div style={{
           position: "absolute", bottom: 8, left: 0, right: 0,
-          height: 4, background: "#DDD8CF", borderRadius: 2,
+          height: 4, background: "#E5E0D5", borderRadius: 2,
         }}>
           <div style={{
             position: "absolute",
@@ -739,7 +739,7 @@ function AreaPanel({
           })}
         </div>
 
-        <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, height: 4, background: "#DDD8CF", borderRadius: 2 }}>
+        <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, height: 4, background: "#E5E0D5", borderRadius: 2 }}>
           <div style={{ position: "absolute", left: `${minR * 100}%`, width: `${(maxR - minR) * 100}%`, height: "100%", background: C.teal, borderRadius: 2 }} />
         </div>
 
@@ -940,7 +940,7 @@ function AmenidadesPanel({
 
   const apply = () => { onChange(pending); onClose(); };
 
-  const ICON_COLOR = "#9B8B75";
+  const ICON_COLOR = "#6E726E";
 
   return (
     <div style={{ ...panelBase, width: 320, padding: 0, display: "flex", flexDirection: "column" }}>
@@ -1718,7 +1718,7 @@ export function MapFilterBar({
                     </div>
                     <span style={{
                       fontSize: 9, fontWeight: 800, letterSpacing: "1px",
-                      background: "#ffc928", color: "#1A1208",
+                      background: "#FCD116", color: "#111418",
                       padding: "2px 7px", borderRadius: 999, flexShrink: 0,
                     }}>
                       PRO

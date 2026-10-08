@@ -259,29 +259,29 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
       className="pointer-events-auto w-[320px] max-w-[92vw] rounded-2xl shadow-2xl"
-      style={{ background: "#FAF7F2", border: "1px solid #E8E0D0" }}
+      style={{ background: "#FAF8F3", border: "1px solid #E5E0D5" }}
     >
       <button
         onClick={finish}
         aria-label="Cerrar guía"
-        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#6B5B45] transition hover:bg-[#E8E0D0] hover:text-[#1A1208]"
+        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#5B5F5C] transition hover:bg-[#E5E0D5] hover:text-[#111418]"
       >
         <X className="h-3.5 w-3.5" />
       </button>
 
       <div className="p-5 pb-4">
-        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: "#E8E0D0" }}>
+        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: "#E5E0D5" }}>
           <div className="h-full rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: palette.alto }} />
         </div>
 
-        <h2 className="mt-3 font-display text-lg font-semibold leading-tight text-[#1A1208]">{s.title}</h2>
-        <p className="mt-1.5 text-sm text-[#6B5B45]">{s.body}</p>
+        <h2 className="mt-3 font-display text-lg font-semibold leading-tight text-[#111418]">{s.title}</h2>
+        <p className="mt-1.5 text-sm text-[#5B5F5C]">{s.body}</p>
         {s.icon && <div className="mt-3 text-center text-3xl">{s.icon}</div>}
 
         <div className="mt-4 flex items-center justify-between">
           <button
             onClick={finish}
-            className="text-xs font-medium text-[#6B5B45] transition hover:text-[#1A1208] hover:underline"
+            className="text-xs font-medium text-[#5B5F5C] transition hover:text-[#111418] hover:underline"
           >
             Saltar recorrido
           </button>
@@ -289,7 +289,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
             {step > 0 && (
               <button
                 onClick={() => setStep((n) => n - 1)}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#6B5B45] transition hover:bg-[#E8E0D0]"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#5B5F5C] transition hover:bg-[#E5E0D5]"
               >
                 Atrás
               </button>
@@ -297,7 +297,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
             <button
               onClick={() => (isLast ? finish() : setStep((n) => n + 1))}
               className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-              style={{ background: "#1D9E75" }}
+              style={{ background: "#0F8A4F" }}
             >
               {isLast ? "Entendido" : "Siguiente"}
             </button>
@@ -316,8 +316,8 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
         className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
         // En móvil left:16 choca con el botón "volver a comunas" (mismo lugar) — a la derecha en móvil.
         style={isMobile
-          ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }
-          : { top: "calc(var(--map-header-h, 53px) + 56px)", left: 16, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }}
+          ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }
+          : { top: "calc(var(--map-header-h, 53px) + 56px)", left: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
       >
         <GraduationCap size={14} />
         Tutorial de la página
@@ -332,7 +332,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
                 style={{
                   left: rect.left - PAD, top: rect.top - PAD,
                   width: rect.width + PAD * 2, height: rect.height + PAD * 2,
-                  borderColor: "#1D9E75",
+                  borderColor: "#0F8A4F",
                   boxShadow: "0 0 0 9999px rgba(20,18,8,0.55)",
                   transition: "left .2s ease, top .2s ease, width .2s ease, height .2s ease",
                 }}

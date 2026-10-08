@@ -7,20 +7,20 @@ function BuildingPlaceholder({ height }: { height: number }) {
       className="flex items-center justify-center"
       style={{
         height,
-        background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)",
-        borderBottom: "0.5px solid #E8E0D0",
+        background: "linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)",
+        borderBottom: "0.5px solid #E5E0D5",
       }}
     >
       <svg viewBox="0 0 80 80" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 64, height: 64, opacity: 0.4 }}>
         <rect x="10" y="20" width="40" height="50" rx="2" fill="white"/>
         <rect x="50" y="32" width="22" height="38" rx="2" fill="white"/>
-        <rect x="16" y="28" width="7" height="7" fill="#1D9E75"/>
-        <rect x="30" y="28" width="7" height="7" fill="#1D9E75"/>
-        <rect x="16" y="40" width="7" height="7" fill="#1D9E75"/>
-        <rect x="30" y="40" width="7" height="7" fill="#1D9E75"/>
-        <rect x="21" y="53" width="10" height="17" fill="#1D9E75"/>
-        <rect x="56" y="40" width="7" height="7" fill="#1D9E75"/>
-        <rect x="56" y="52" width="7" height="7" fill="#1D9E75"/>
+        <rect x="16" y="28" width="7" height="7" fill="#0F8A4F"/>
+        <rect x="30" y="28" width="7" height="7" fill="#0F8A4F"/>
+        <rect x="16" y="40" width="7" height="7" fill="#0F8A4F"/>
+        <rect x="30" y="40" width="7" height="7" fill="#0F8A4F"/>
+        <rect x="21" y="53" width="10" height="17" fill="#0F8A4F"/>
+        <rect x="56" y="40" width="7" height="7" fill="#0F8A4F"/>
+        <rect x="56" y="52" width="7" height="7" fill="#0F8A4F"/>
       </svg>
     </div>
   );
@@ -56,7 +56,7 @@ export function PhotoGallery({ fotos, titulo, height = 224 }: Props) {
     <>
       <div
         className="relative overflow-hidden"
-        style={{ height, borderBottom: "0.5px solid #E8E0D0" }}
+        style={{ height, borderBottom: "0.5px solid #E5E0D5" }}
       >
         <img
           src={photos[idx]}

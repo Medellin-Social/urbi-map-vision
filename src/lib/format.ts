@@ -12,11 +12,11 @@ export function formatPct(n: number | null | undefined): string {
 }
 
 export function yieldColor(y: number | null | undefined): string {
-  if (y == null) return "#9B8B75";
-  if (y > 10) return "#1D9E75";
-  if (y >= 7) return "#085041";
-  if (y >= 5) return "#BA7517";
-  return "#D85A30";
+  if (y == null) return "#6E726E";
+  if (y > 10) return "#0F8A4F";
+  if (y >= 7) return "#0A5C36";
+  if (y >= 5) return "#8A6A00";
+  return "#CE1126";
 }
 
 export function yieldLabel(y: number | null | undefined): string {

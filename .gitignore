@@ -65,3 +65,9 @@ geojson_*/
 
 # public/data GeoJSON files must be included for Railway deploy
 !public/data/*.geojson
+
+# Salidas locales / basura de Windows
+test_simulador_resultado.json
+*:Zone.Identifier
+*.original.geojson
+Caddyfile.bak

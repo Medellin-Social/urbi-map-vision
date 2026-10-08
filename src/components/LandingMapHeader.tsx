@@ -18,13 +18,13 @@ const COMUNA_STATIC = [
   "/data/comunas_sabaneta.geojson",
 ];
 
-// Paleta Medellín Social sobre papel #FAF7F2 — verde→teal→ámbar→coral (bueno→bajo)
+// Paleta Medellín Social sobre papel #FAF8F3 — verde→teal→ámbar→coral (bueno→bajo)
 function scoreToColor(score: number | null | undefined): string {
   if (score == null) return "#CFCabb";        // sin datos → gris papel apagado
-  if (score >= 70) return "#085041";           // tealDeep — top
-  if (score >= 50) return "#1D9E75";           // teal marca
+  if (score >= 70) return "#0A5C36";           // tealDeep — top
+  if (score >= 50) return "#0F8A4F";           // teal marca
   if (score >= 30) return "#E8A33D";           // ámbar cálido
-  return "#D85A30";                            // coral marca (no rojo chillón)
+  return "#CE1126";                            // coral marca (no rojo chillón)
 }
 
 type ComunaMetric = {
@@ -106,13 +106,13 @@ export function LandingMapHeader({
         if (layer.type === "symbol" || isStreet) {
           map.setLayoutProperty(layer.id, "visibility", "none");     // etiquetas + calles fuera
         } else if (layer.type === "background") {
-          map.setPaintProperty(layer.id, "background-color", "#FAF7F2");
+          map.setPaintProperty(layer.id, "background-color", "#FAF8F3");
         } else if (layer.type === "fill" && srcLayer === "water") {
-          map.setPaintProperty(layer.id, "fill-color", "#C8DFE8");
+          map.setPaintProperty(layer.id, "fill-color", "#C9D6EE");
         } else if (layer.type === "line" && srcLayer === "waterway") {
-          map.setPaintProperty(layer.id, "line-color", "#C8DFE8");
+          map.setPaintProperty(layer.id, "line-color", "#C9D6EE");
         } else if (layer.type === "fill" && srcLayer === "building") {
-          map.setPaintProperty(layer.id, "fill-color", "#EDE8E0");
+          map.setPaintProperty(layer.id, "fill-color", "#F3F0E8");
           map.setPaintProperty(layer.id, "fill-opacity", 0.4);
         } else if (layer.type === "fill" && srcLayer === "landuse") {
           map.setPaintProperty(layer.id, "fill-opacity", 0.3);
@@ -306,7 +306,7 @@ export function LandingMapHeader({
             className="pointer-events-none absolute inset-x-0 bottom-0 z-10"
             style={{
               height: "130px",
-              background: "linear-gradient(to bottom, transparent, #0a0e1a)",
+              background: "linear-gradient(to bottom, transparent, #0B0D12)",
             }}
           />
         )}
@@ -333,19 +333,19 @@ export function LandingMapHeader({
         {!hideOverlay && <div className="absolute bottom-[54px] right-3 z-20 hidden rounded-lg border border-white/15 bg-black/65 px-3 py-2 text-[11px] text-white backdrop-blur-sm sm:block">
           <div className="flex flex-col gap-1">
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#10b981]" />
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0F8A4F]" />
               Alto potencial
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#2BBAA5]" />
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#0F8A4F]" />
               Bueno
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#f59e0b]" />
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#F2B807]" />
               Moderado
             </span>
             <span className="flex items-center gap-1.5">
-              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#ef4444]" />
+              <span className="inline-block h-2.5 w-2.5 rounded-full bg-[#CE1126]" />
               Bajo
             </span>
           </div>
@@ -439,7 +439,7 @@ export function LandingMapHeader({
                   "Simulador de retorno",
                 ].map((item) => (
                   <div key={item} className="flex items-center gap-2 text-sm text-white/80">
-                    <span className="text-[#1D9E75]">✅</span>
+                    <span className="text-[#0F8A4F]">✅</span>
                     {item}
                   </div>
                 ))}

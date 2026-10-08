@@ -3,15 +3,9 @@ import { useEffect, useState } from "react";
 import { auth } from "@/lib/auth";
 import { getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  ink:      "#1A1208",
-  muted:    "#6B5B45",
-  teal:     "#1D9E75",
-  tealDeep: "#085041",
-  tealLight:"#E8F5F0",
-  serif:    "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 export const Route = createFileRoute("/suscripcion/exito")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -48,7 +42,7 @@ function ExitoPage() {
   return (
     <div style={{
       minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "#FAF7F2", padding: 20,
+      background: "#FAF8F3", padding: 20,
     }}>
       <div style={{ maxWidth: 480, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 64, marginBottom: 16 }}>🎉</div>

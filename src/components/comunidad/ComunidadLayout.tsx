@@ -48,15 +48,48 @@ function useBooting(path: string): boolean {
   return booting
 }
 
+// Revela cada bloque de <main> al entrar en pantalla (fade + subida corta).
+// Solo se añade la clase desde JS: si JS falla o el usuario pide menos
+// movimiento, el contenido queda visible tal cual.
+function useScrollReveal(path: string) {
+  useEffect(() => {
+    if (typeof window === 'undefined' || !('IntersectionObserver' in window)) return
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
+    const io = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (e.isIntersecting) { e.target.classList.add('ms-in'); io.unobserve(e.target) }
+      }
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.05 })
+    const scan = () => {
+      document.querySelectorAll<HTMLElement>('main > *, main > * > section').forEach(el => {
+        if (el.dataset.msReveal) return
+        el.dataset.msReveal = '1'
+        // Lo que ya está en pantalla al cargar no se anima (evita parpadeo arriba).
+        if (el.getBoundingClientRect().top < window.innerHeight * 0.9) return
+        el.classList.add('ms-reveal')
+        io.observe(el)
+      })
+    }
+    scan()
+    // Las secciones que llegan con datos (fetch) se montan después.
+    const mo = new MutationObserver(scan)
+    const main = document.querySelector('main')
+    if (main) mo.observe(main, { childList: true, subtree: false })
+    const t = setTimeout(scan, 1200)
+    return () => { io.disconnect(); mo.disconnect(); clearTimeout(t) }
+  }, [path])
+}
+
 function Inner({ children, subNav, compact }: { children: ReactNode; subNav?: ReactNode; compact?: boolean }) {
   const { lang } = useBarrio()
   const path = useRouterState({ select: s => s.location.pathname })
   const booting = useBooting(path)
+  useScrollReveal(path)
   return (
     <div style={{
       colorScheme: 'light',
-      background: '#fbf9f3',
-      color: '#14201d',
+      background: '#FAF8F3',
+      color: '#111418',
       fontFamily: "'Inter', system-ui, sans-serif",
       minHeight: '100dvh',
       display: 'flex',

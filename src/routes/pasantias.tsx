@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router'
 import { useState } from 'react'
 import { API_BASE_URL } from '@/config/api'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/pasantias')({
   component: PasantiasPage,
@@ -13,14 +14,7 @@ export const Route = createFileRoute('/pasantias')({
   }),
 })
 
-const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  amarillo: '#ffc928',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 const STATS = [
   { n: '100%', l: 'Empresa internacional' },
@@ -148,7 +142,7 @@ function PasantiasPage() {
   )
 
   return (
-    <ComunidadLayout subNav={subNav} compact>
+    <ComunidadLayout subNav={subNav}>
 
       {/* HERO */}
       <section style={{
@@ -200,7 +194,7 @@ function PasantiasPage() {
 
       {/* POR QUÉ */}
       <section id="por-que" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Por qué esta práctica
           </h2>
@@ -223,8 +217,8 @@ function PasantiasPage() {
       </section>
 
       {/* RUTAS: banda oscura */}
-      <section id="rutas" style={{ background: `linear-gradient(135deg, ${K.ink} 0%, #2a3e39 100%)`, padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+      <section id="rutas" style={{ background: `linear-gradient(135deg, ${K.ink} 0%, #2A302C 100%)`, padding: '72px 26px' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: '#fff', margin: '0 0 14px' }}>
             Rutas de práctica
           </h2>
@@ -265,7 +259,7 @@ function PasantiasPage() {
 
       {/* QUÉ TE LLEVAS */}
       <section style={{ padding: '72px 26px', background: '#fff', borderBottom: `1px solid ${K.line}` }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Lo que te llevarás
           </h2>
@@ -283,7 +277,7 @@ function PasantiasPage() {
 
       {/* CÓMO APLICAR */}
       <section id="como-aplicar" style={{ padding: '72px 26px' }}>
-        <div style={{ maxWidth: 1180, margin: '0 auto' }}>
+        <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem,3.4vw,2.2rem)', color: K.ink, margin: '0 0 14px' }}>
             Cómo aplicar
           </h2>

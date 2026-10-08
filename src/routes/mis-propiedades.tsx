@@ -7,6 +7,7 @@ import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
 import { formatCOP } from "@/lib/format";
 import { SiteNavbar } from "@/components/SiteNavbar";
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute("/mis-propiedades")({
   component: MisPropiedades,
@@ -36,11 +37,7 @@ type MiPropiedad = {
   visitas_pendientes: number;
 };
 
-const K = {
-  paper: "#FAF7F2", ink: "#1A1208", muted: "#6B5B45", line: "#E8E0D0",
-  teal: "#1D9E75", tealDeep: "#085041", coral: "#D85A30", dorado: "#ffc928",
-  serif: "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 function Metric({ icon, value, label }: { icon: React.ReactNode; value: number; label: string }) {
   return (
@@ -100,7 +97,7 @@ function MisPropiedades() {
         </div>
 
         {isLoading && <p className="text-sm" style={{ color: K.muted }}>Cargando…</p>}
-        {error && <p className="text-sm" style={{ color: "#E24B4A" }}>No pudimos cargar tus propiedades.</p>}
+        {error && <p className="text-sm" style={{ color: "#CE1126" }}>No pudimos cargar tus propiedades.</p>}
         {!isLoading && !error && props.length === 0 && (
           <div className="rounded-2xl border p-8 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
             <div className="mb-2 text-3xl">🏡</div>
@@ -126,7 +123,7 @@ function MisPropiedades() {
             return (
               <div key={p.id} className="overflow-hidden rounded-2xl border" style={{ borderColor: K.line, background: "#FFFFFF" }}>
                 <div className="flex gap-3 p-3">
-                  <div className="h-28 w-36 shrink-0 overflow-hidden rounded-xl bg-[#F0EBE1]">
+                  <div className="h-28 w-36 shrink-0 overflow-hidden rounded-xl bg-[#F3F0E8]">
                     {p.fotos?.[0]
                       ? <img src={p.fotos[0]} alt="" className="h-full w-full object-cover" />
                       : <div className="grid h-full w-full place-items-center text-2xl">🏠</div>}
@@ -144,7 +141,7 @@ function MisPropiedades() {
                       )}
                       <span
                         className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-                        style={p.verificado ? { background: "#E1F5EE", color: K.tealDeep } : { background: "#FDF3E7", color: "#9A6A1F" }}
+                        style={p.verificado ? { background: "#E7F4EC", color: K.tealDeep } : { background: "#FDF3E7", color: "#9A6A1F" }}
                       >
                         {p.verificado ? <ShieldCheck className="h-3 w-3" /> : <Clock className="h-3 w-3" />}
                         {p.verificado ? "Verificada" : p.verificacion_label}

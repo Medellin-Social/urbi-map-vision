@@ -5,8 +5,8 @@ export const SCORE_OPACITY = {
 
 export const OPP_COLORS = {
   "PRECIO BAJO MERCADO": "#7B2FBE",
-  "ALTO RENDIMIENTO":    "#1D9E75",
-  "INVERSIÓN SEGURA":    "#085041",
+  "ALTO RENDIMIENTO":    "#0F8A4F",
+  "INVERSIÓN SEGURA":    "#0A5C36",
 } as const;
 
 // ── Score palettes ─────────────────────────────────────────────────────────────
@@ -27,33 +27,33 @@ export type ScorePalette = {
 export const SCORE_PALETTES: Record<ScorePaletteId, ScorePalette> = {
   urbi: {
     label: "Urbi (predeterminado)",
-    alto:      "#10b981",
-    medio:     "#2BBAA5",
-    bajo:      "#f59e0b",
-    muy_bajo:  "#ef4444",
-    sin_datos: "#00d4ff",
+    alto:      "#0F8A4F",
+    medio:     "#0F8A4F",
+    bajo:      "#F2B807",
+    muy_bajo:  "#CE1126",
+    sin_datos: "#1F5BC6",
     sin_datos_opacity: 0.2,
-    swatch: ["#10b981", "#2BBAA5", "#f59e0b", "#ef4444"],
+    swatch: ["#0F8A4F", "#0F8A4F", "#F2B807", "#CE1126"],
   },
   suave: {
     label: "Suave",
     alto:      "#99CDD8",
     medio:     "#DAEBE3",
-    bajo:      "#FDE8D3",
+    bajo:      "#FFF6D6",
     muy_bajo:  "#657166",
     sin_datos: "#CFD6C4",
     sin_datos_opacity: 0.3,
-    swatch: ["#99CDD8", "#DAEBE3", "#FDE8D3", "#657166"],
+    swatch: ["#99CDD8", "#DAEBE3", "#FFF6D6", "#657166"],
   },
   tropical: {
     label: "Tropical",
-    alto:      "#2BBAA5",
+    alto:      "#0F8A4F",
     medio:     "#93D3AE",
-    bajo:      "#F9A822",
-    muy_bajo:  "#F96635",
+    bajo:      "#F2B807",
+    muy_bajo:  "#CE1126",
     sin_datos: "#FAECB6",
     sin_datos_opacity: 0.3,
-    swatch: ["#2BBAA5", "#93D3AE", "#F9A822", "#F96635"],
+    swatch: ["#0F8A4F", "#93D3AE", "#F2B807", "#CE1126"],
   },
   nocturna: {
     label: "Nocturna",

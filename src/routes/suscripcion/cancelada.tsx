@@ -1,11 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  ink:   "#1A1208",
-  muted: "#6B5B45",
-  teal:  "#1D9E75",
-  serif: "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 export const Route = createFileRoute("/suscripcion/cancelada")({
   validateSearch: (s: Record<string, unknown>) => ({
@@ -18,7 +14,7 @@ function CanceladaPage() {
   return (
     <div style={{
       minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center",
-      background: "#FAF7F2", padding: 20,
+      background: "#FAF8F3", padding: 20,
     }}>
       <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
         <div style={{ fontSize: 52, marginBottom: 16 }}>💳</div>

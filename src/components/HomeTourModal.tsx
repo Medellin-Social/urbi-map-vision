@@ -190,29 +190,29 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
       exit={{ opacity: 0, scale: 0.95 }}
       transition={{ duration: 0.2 }}
       className="pointer-events-auto w-[320px] max-w-[92vw] rounded-2xl shadow-2xl"
-      style={{ background: "#FAF7F2", border: "1px solid #E8E0D0" }}
+      style={{ background: "#FAF8F3", border: "1px solid #E5E0D5" }}
     >
       <button
         onClick={finish}
         aria-label={tt("Cerrar guía", "Close guide")}
-        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#6B5B45] transition hover:bg-[#E8E0D0] hover:text-[#1A1208]"
+        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#5B5F5C] transition hover:bg-[#E5E0D5] hover:text-[#111418]"
       >
         <X className="h-3.5 w-3.5" />
       </button>
 
       <div className="p-5 pb-4">
-        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: "#E8E0D0" }}>
-          <div className="h-full rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: "#1D9E75" }} />
+        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: "#E5E0D5" }}>
+          <div className="h-full rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: "#0F8A4F" }} />
         </div>
 
-        <h2 data-i18n-skip className="mt-3 font-display text-lg font-semibold leading-tight text-[#1A1208]">{tr(s.title)}</h2>
-        <p data-i18n-skip className="mt-1.5 text-sm text-[#6B5B45]">{tr(s.body)}</p>
+        <h2 data-i18n-skip className="mt-3 font-display text-lg font-semibold leading-tight text-[#111418]">{tr(s.title)}</h2>
+        <p data-i18n-skip className="mt-1.5 text-sm text-[#5B5F5C]">{tr(s.body)}</p>
         {s.icon && <div className="mt-3 text-center text-3xl">{s.icon}</div>}
 
         <div className="mt-4 flex items-center justify-between">
           <button
             onClick={finish}
-            className="text-xs font-medium text-[#6B5B45] transition hover:text-[#1A1208] hover:underline"
+            className="text-xs font-medium text-[#5B5F5C] transition hover:text-[#111418] hover:underline"
           >
             {tt("Saltar recorrido", "Skip tour")}
           </button>
@@ -220,7 +220,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
             {step > 0 && (
               <button
                 onClick={() => setStep((n) => n - 1)}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#6B5B45] transition hover:bg-[#E8E0D0]"
+                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#5B5F5C] transition hover:bg-[#E5E0D5]"
               >
                 {tt("Atrás", "Back")}
               </button>
@@ -228,7 +228,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
             <button
               onClick={() => (isLast ? finish() : setStep((n) => n + 1))}
               className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-              style={{ background: "#1D9E75" }}
+              style={{ background: "#0F8A4F" }}
             >
               {isLast ? tt("Entendido", "Got it") : tt("Siguiente", "Next")}
             </button>
@@ -245,7 +245,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
         aria-label={tt("Tutorial del sitio", "Site tutorial")}
         data-tour="tour-replay-home"
         className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
-        style={{ bottom: 20, right: 20, background: "#FAF7F2", border: "1px solid #E8E0D0", color: "#1D9E75" }}
+        style={{ bottom: 20, right: 20, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
       >
         <GraduationCap size={14} />
         {tt("Tutorial del sitio", "Site tutorial")}
@@ -260,7 +260,7 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
                 style={{
                   left: rect.left - PAD, top: rect.top - PAD,
                   width: rect.width + PAD * 2, height: rect.height + PAD * 2,
-                  borderColor: "#1D9E75",
+                  borderColor: "#0F8A4F",
                   boxShadow: "0 0 0 9999px rgba(20,18,8,0.55)",
                   transition: "left .2s ease, top .2s ease, width .2s ease, height .2s ease",
                 }}

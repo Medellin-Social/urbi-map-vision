@@ -15,18 +15,18 @@ function BuildingPlaceholder() {
   return (
     <div
       className="flex w-full items-center justify-center"
-      style={{ height: PHOTO_H, background: "linear-gradient(135deg, #1D9E75 0%, #085041 100%)" }}
+      style={{ height: PHOTO_H, background: "linear-gradient(135deg, #0F8A4F 0%, #0A5C36 100%)" }}
     >
       <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ width: 40, height: 40, opacity: 0.45 }} aria-hidden>
         <rect x="6" y="12" width="24" height="30" rx="1" fill="white" />
         <rect x="30" y="20" width="14" height="22" rx="1" fill="white" />
-        <rect x="10" y="16" width="4" height="4" fill="#1D9E75" />
-        <rect x="18" y="16" width="4" height="4" fill="#1D9E75" />
-        <rect x="10" y="24" width="4" height="4" fill="#1D9E75" />
-        <rect x="18" y="24" width="4" height="4" fill="#1D9E75" />
-        <rect x="13" y="32" width="6" height="10" fill="#1D9E75" />
-        <rect x="34" y="24" width="4" height="4" fill="#1D9E75" />
-        <rect x="34" y="30" width="4" height="4" fill="#1D9E75" />
+        <rect x="10" y="16" width="4" height="4" fill="#0F8A4F" />
+        <rect x="18" y="16" width="4" height="4" fill="#0F8A4F" />
+        <rect x="10" y="24" width="4" height="4" fill="#0F8A4F" />
+        <rect x="18" y="24" width="4" height="4" fill="#0F8A4F" />
+        <rect x="13" y="32" width="6" height="10" fill="#0F8A4F" />
+        <rect x="34" y="24" width="4" height="4" fill="#0F8A4F" />
+        <rect x="34" y="30" width="4" height="4" fill="#0F8A4F" />
       </svg>
     </div>
   );

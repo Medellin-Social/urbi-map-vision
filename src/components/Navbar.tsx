@@ -4,16 +4,11 @@ import { auth } from "@/lib/auth";
 import { logout } from "@/hooks/useAuth";
 import { useLang, FlagCO, FlagUS } from "@/lib/i18n";
 import type { Neighborhood } from "@/lib/adapters";
+import { K as TOKENS } from "@/design/tokens";
+import { Wordmark } from "@/components/Wordmark";
 
-const K = {
-  ink:     '#14201d',
-  teal:    '#1D9E75',
-  amarillo:'#ffc928',
-  coral:   '#D85A30',
-  line:    'rgba(255,255,255,0.12)',
-  muted:   'rgba(255,255,255,0.65)',
-  serif:   "'Fraunces', Georgia, serif" as const,
-}
+// Navbar sits on the dark map chrome, so lines and muted text are white tints.
+const K = { ...TOKENS, line: 'rgba(255,255,255,0.12)', muted: 'rgba(255,255,255,0.65)' } as const;
 
 type NavbarProps = {
   mlsBarrio?: Neighborhood | null;
@@ -54,7 +49,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
       {/* LOGO */}
       <Link to="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
         <span style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.15rem', color: '#fff', letterSpacing: '-0.5px' }}>
-          Medellín <span style={{ color: K.teal }}>Social</span><span style={{ color: K.amarillo }}>.</span>
+          <Wordmark />
         </span>
       </Link>
 
@@ -117,7 +112,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
         <Link to="/perfil" title="Perfil" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 8 }}>
           <div style={{
             width: 28, height: 28, borderRadius: '50%',
-            background: `linear-gradient(135deg, ${K.teal}, #085041)`,
+            background: `linear-gradient(135deg, ${K.teal}, #0A5C36)`,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             fontSize: 11, fontWeight: 800, color: '#fff', overflow: 'hidden', flexShrink: 0,
           }}>

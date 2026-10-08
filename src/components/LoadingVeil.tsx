@@ -19,11 +19,11 @@ export function LoadingVeil({ label, show, className = "" }: { label?: string; s
     >
       {/* Mismo wordmark que el logo, pero con pin propio: el contexto del veil
           (line-height standalone) lo renderiza más arriba que en los logos. */}
-      <div data-i18n-skip style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 900, fontSize: 30, color: "#14201d", letterSpacing: "-0.02em" }}>
+      <div data-i18n-skip style={{ fontFamily: "'Fraunces', Georgia, serif", fontWeight: 900, fontSize: 30, color: "#111418", letterSpacing: "-0.02em" }}>
         <Wordmark pinTop="0.12em" />
       </div>
       <div className="load-bar" />
-      <div style={{ fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: "#6B5B45", fontWeight: 600 }}>
+      <div style={{ fontSize: 12, letterSpacing: ".16em", textTransform: "uppercase", color: "#5B5F5C", fontWeight: 600 }}>
         {label ? `Cargando ${label}` : "Cargando"}
       </div>
     </div>

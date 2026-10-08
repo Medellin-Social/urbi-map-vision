@@ -47,10 +47,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL = os.getenv(
-    "DATABASE_URL",
-    "postgresql://social:urbidata007@localhost:5433/social",
-)
+DB_URL = os.environ["DATABASE_URL"]
 
 # Pesos del índice nómada (reverse-engineered del dataset existente de Medellín)
 # indice = cafes*2 + gym*1.5 + yoga*4 + rest*1 + bar*0.5 + cowork*5

@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { auth } from "@/lib/auth";
+import { K as TOKENS } from "@/design/tokens";
 
 type AgentesSearch = { agente?: string };
 
@@ -29,11 +30,7 @@ type Agente = {
   n_resenas: number;
 };
 
-const K = {
-  paper: "#FAF7F2", ink: "#1A1208", muted: "#6B5B45", line: "#E8E0D0",
-  teal: "#1D9E75", tealDeep: "#085041", tealLight: "#E1F5EE",
-  serif: "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 type SortKey = "nombre" | "rating" | "verificado";
 
@@ -89,7 +86,7 @@ function Stars({ value, size = 14 }: { value: number; size?: number }) {
           width={size}
           height={size}
           fill={i <= Math.round(value) ? K.teal : "none"}
-          stroke={i <= Math.round(value) ? K.teal : "#C8BFB0"}
+          stroke={i <= Math.round(value) ? K.teal : "#C9C4B8"}
           strokeWidth={1.5}
         />
       ))}
@@ -112,7 +109,7 @@ function StarPicker({ value, onChange }: { value: number; onChange: (n: number) 
           onMouseLeave={() => setHover(0)}
           className="p-0.5"
         >
-          <Star width={22} height={22} fill={shown >= i ? K.teal : "none"} stroke={shown >= i ? K.teal : "#C8BFB0"} strokeWidth={1.5} />
+          <Star width={22} height={22} fill={shown >= i ? K.teal : "none"} stroke={shown >= i ? K.teal : "#C9C4B8"} strokeWidth={1.5} />
         </button>
       ))}
     </span>
@@ -287,7 +284,7 @@ function AgentePerfilModal({ agentId, onClose }: { agentId: string; onClose: () 
                   {p.agencia_nombre && (
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                      style={p.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: "#F5F0E8", color: K.muted }}
+                      style={p.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: "#F3F0E8", color: K.muted }}
                     >
                       {p.agencia_verificada && <ShieldCheck className="h-3 w-3" />} {p.agencia_nombre}
                     </span>
@@ -429,7 +426,7 @@ function AgenteRow({ a, onOpen }: { a: Agente; onOpen: () => void }) {
               {a.agencia_nombre && (
                 <span
                   className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                  style={a.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: "#F5F0E8", color: K.muted }}
+                  style={a.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: "#F3F0E8", color: K.muted }}
                 >
                   {a.agencia_verificada && <ShieldCheck className="h-3 w-3" />} {a.agencia_nombre}
                 </span>

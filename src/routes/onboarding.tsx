@@ -10,6 +10,7 @@ import {
   Globe2, TrendingUp,
 } from "@/lib/icons";
 import { LanguageToggle } from "@/lib/i18n";
+import { Wordmark } from "@/components/Wordmark";
 
 const GOAL_TO_OBJETIVO: Record<Goal, string> = {
   airbnb: "score_corto",
@@ -142,7 +143,7 @@ function OnboardingPage() {
           <div className="grid h-8 w-8 place-items-center rounded-md bg-primary/15 text-primary">
             <Building2 className="h-4 w-4" />
           </div>
-          <span className="font-display text-lg font-semibold">Medellin Social</span>
+          <span className="font-display text-lg font-black tracking-tight"><Wordmark /></span>
         </div>
 
         {/* Progress bar — only for investor steps 1–6 */}

@@ -115,9 +115,9 @@ function RegisterPage() {
           }}
           onError={setError}
         />
-        <p style={{ textAlign: "center", fontSize: 13, fontFamily: "'Manrope', system-ui, sans-serif", color: "#62736d", margin: 0 }}>
+        <p style={{ textAlign: "center", fontSize: 13, fontFamily: "'Inter', system-ui, sans-serif", color: "#5B5F5C", margin: 0 }}>
           ¿Ya tienes cuenta?{" "}
-          <Link to="/login" style={{ color: "#1D9E75", fontWeight: 700, textDecoration: "none" }}>
+          <Link to="/login" style={{ color: "#0F8A4F", fontWeight: 700, textDecoration: "none" }}>
             Inicia sesión
           </Link>
         </p>

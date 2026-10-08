@@ -37,7 +37,7 @@ from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DB_URL      = os.getenv("DATABASE_URL", "postgresql://social:urbidata007@localhost:5433/social")
+DB_URL      = os.environ["DATABASE_URL"]
 BUCKET      = os.getenv("S3_BUCKET", "")
 REGION      = os.getenv("AWS_REGION", "us-east-1")
 PUBLIC_URL  = os.getenv("S3_PUBLIC_URL", "")

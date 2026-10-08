@@ -1,19 +1,9 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { K as TOKENS } from "@/design/tokens";
 
-const K = {
-  paper:     "#FAF7F2",
-  ink:       "#1A1208",
-  muted:     "#6B5B45",
-  teal:      "#1D9E75",
-  tealDeep:  "#085041",
-  tealMid:   "#0D6E50",
-  tealLight: "#E8F5F0",
-  line:      "#E8E0D0",
-  faint:     "#F3EFE7",
-  serif:     "'Fraunces', Georgia, serif" as const,
-};
+const K = TOKENS;
 
 
 const FAQ = [
@@ -58,7 +48,7 @@ function PlanesPage() {
         textAlign: "center",
       }}>
         <h1 style={{ fontFamily: K.serif, fontSize: "clamp(1.6rem, 4vw, 2.3rem)", fontWeight: 900, color: "#fff", marginBottom: 10, lineHeight: 1.15 }}>
-          Medellín Social
+          Planes y precios
         </h1>
         <p style={{ color: "rgba(255,255,255,0.75)", fontSize: 15, maxWidth: 440, margin: "0 auto 28px", lineHeight: 1.6 }}>
           Productos distintos para agentes inmobiliarios y negocios locales en el Valle de Aburrá.
@@ -263,7 +253,7 @@ function ProductCard({ name, description, highlights, regularPrice, specialPrice
         <ul style={{ listStyle: "none", padding: 0, margin: "0 0 20px", display: "flex", flexDirection: "column", gap: 6 }}>
           {highlights.map(h => (
             <li key={h} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12.5, color: K.ink }}>
-              <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", background: "#D1FAE5", color: K.teal, fontSize: 10, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓</span>
+              <span style={{ flexShrink: 0, width: 18, height: 18, borderRadius: "50%", background: "#E7F4EC", color: K.teal, fontSize: 10, fontWeight: 900, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✓</span>
               {h}
             </li>
           ))}

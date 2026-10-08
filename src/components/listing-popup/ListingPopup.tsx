@@ -107,15 +107,15 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         className="fixed z-50 flex flex-col overflow-hidden outline-none rounded-2xl"
         style={{
           ...posStyle,
-          background: "#FAF7F2",
-          border: "0.5px solid #E8E0D0",
+          background: "#FAF8F3",
+          border: "0.5px solid #E5E0D5",
           boxShadow: "0 2px 6px rgba(26,18,8,0.10), 0 24px 48px -20px rgba(26,18,8,0.45)",
         }}
         onClick={(e) => e.stopPropagation()}
       >
         {isMobile && (
           <div className="flex shrink-0 justify-center pt-2 pb-1">
-            <div className="h-1 w-9 rounded-full" style={{ background: "#C8B8A2" }} />
+            <div className="h-1 w-9 rounded-full" style={{ background: "#C9C4B8" }} />
           </div>
         )}
         {/* 1. Gallery — pin photo instantly, fotos[] from the detail when loaded */}
@@ -138,8 +138,8 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
             <span
               className="absolute left-2 top-2 z-10 rounded px-2 py-0.5 text-[10px] font-bold"
               style={{
-                background: tipoOp === "arriendo" ? "#E1F5EE" : "#FAECE7",
-                color: tipoOp === "arriendo" ? "#1D9E75" : "#D85A30",
+                background: tipoOp === "arriendo" ? "#E7F4EC" : "#FCE8EA",
+                color: tipoOp === "arriendo" ? "#0F8A4F" : "#CE1126",
               }}
             >
               {tipoOp === "arriendo" ? "Arriendo" : "Venta"}
@@ -151,7 +151,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
               className="absolute left-2 top-9 z-10 rounded px-2 py-0.5 text-[10px] font-bold"
               style={
                 listing.verificado
-                  ? { background: "#085041", color: "#FFFFFF" }
+                  ? { background: "#0A5C36", color: "#FFFFFF" }
                   : { background: "rgba(0,0,0,0.55)", color: "#FFFFFF" }
               }
             >
@@ -165,18 +165,18 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
           {/* 2. Price */}
           <div>
             <div className="flex items-baseline gap-2">
-              <span className="text-xl font-bold leading-tight" style={{ color: "#1A1208" }}>
+              <span className="text-xl font-bold leading-tight" style={{ color: "#111418" }}>
                 {desdePrecio ? `Desde ${formatCOP(desdePrecio)}` : precioCop ? formatCOP(precioCop) : "—"}
               </span>
               {!desdePrecio && precioUsd != null && precioUsd > 0 && (
-                <span className="text-[11px]" style={{ color: "#9B8B75" }}>
+                <span className="text-[11px]" style={{ color: "#6E726E" }}>
                   ≈ US${Math.round(precioUsd).toLocaleString("en-US")}
                 </span>
               )}
             </div>
 
             {/* 3. Specs — each hidden individually when missing */}
-            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "#6B5B45" }}>
+            <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" style={{ color: "#5B5F5C" }}>
               {habitaciones != null && (
                 <span className="flex items-center gap-1"><Bed className="h-3.5 w-3.5 shrink-0" />{habitaciones} hab</span>
               )}
@@ -193,12 +193,12 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
 
             {/* 4. Location — never direccion_raw (corrupt text from the scraper) */}
             {ubicacion && (
-              <div className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: "#9B8B75" }}>
+              <div className="mt-1.5 flex items-center gap-1 text-[11px]" style={{ color: "#6E726E" }}>
                 <MapPin className="h-3 w-3 shrink-0" />{ubicacion}
               </div>
             )}
             {d?.nombre_edificio && (
-              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: "#6B5B45" }}>
+              <div className="mt-0.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: "#5B5F5C" }}>
                 <Building2 className="h-3 w-3 shrink-0" />{d.nombre_edificio}
               </div>
             )}
@@ -209,13 +209,13 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         </div>
 
         {/* 9. CTA único — Popup1 es muestra; el detalle + link a la fuente van en Popup2 */}
-        <div className="shrink-0 border-t p-3" style={{ borderColor: "#E8E0D0" }}>
+        <div className="shrink-0 border-t p-3" style={{ borderColor: "#E5E0D5" }}>
           <button
             type="button"
             onClick={() => onViewMore(listing.id)}
             data-tour="listing-popup-viewmore"
             className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#1D9E75" }}
+            style={{ background: "#0F8A4F" }}
           >
             Ver detalle del inmueble <ChevronRight className="h-4 w-4" />
           </button>

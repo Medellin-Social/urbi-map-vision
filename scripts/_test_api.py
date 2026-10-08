@@ -3,7 +3,6 @@ import sys
 sys.path.insert(0, "/home/edwlearn/urbi-map-vision")
 
 import os
-os.environ["DATABASE_URL"] = "postgresql://social:urbidata007@localhost:5433/social"
 
 async def test():
     from httpx import AsyncClient, ASGITransport

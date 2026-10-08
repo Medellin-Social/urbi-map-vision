@@ -6,6 +6,7 @@ import { BARRIOS } from '@/components/comunidad/BarrioContext'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { useNoticias } from '@/hooks/useNoticias'
 import { useIsMobile } from '@/hooks/use-mobile'
+import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/blog')({
   component: BlogPage,
@@ -17,13 +18,7 @@ export const Route = createFileRoute('/blog')({
   }),
 })
 
-const K = {
-  paper: '#fbf9f3', surface: '#f5f0e8', line: '#e9e4d8',
-  ink: '#14201d', muted: '#62736d',
-  teal: '#1D9E75', tealDeep: '#085041',
-  coral: '#D85A30', coralLight: '#FAECE7',
-  serif: "'Fraunces', Georgia, serif" as const,
-}
+const K = TOKENS;
 
 interface Post {
   id: number
@@ -52,7 +47,7 @@ function usePosts() {
 
 function BlogPage() {
   const isMobile = useIsMobile()
-  const { data: noticias = [] } = useNoticias(12)
+  const { data: noticias = [], isLoading: noticiasLoading } = useNoticias(12)
   const { data: posts = [] } = usePosts()
 
   // Form
@@ -121,7 +116,7 @@ function BlogPage() {
   )
 
   return (
-    <ComunidadLayout subNav={subNav} compact>
+    <ComunidadLayout subNav={subNav}>
 
       {/* HERO */}
       <section style={{
@@ -152,9 +147,9 @@ function BlogPage() {
           <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.5rem,3vw,2rem)', color: K.ink, margin: '0 0 24px' }}>
             Lo último del barrio
           </h2>
-          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fit, minmax(260px, 1fr))', gap: isMobile ? 10 : 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr 1fr' : 'repeat(auto-fill, minmax(260px, 1fr))', gap: isMobile ? 10 : 16 }}>
             {noticias.length === 0 ? (
-              <p style={{ color: K.muted, gridColumn: '1/-1' }}>Cargando noticias…</p>
+              <p style={{ color: K.muted, gridColumn: '1/-1' }}>{noticiasLoading ? 'Cargando noticias…' : 'Aún no hay noticias. Vuelve pronto.'}</p>
             ) : noticias.map((n, i) => (
               <a key={n.id ?? i} href={n.url} target="_blank" rel="noopener noreferrer" style={{
                 display: 'block', padding: isMobile ? '12px 12px 10px' : '18px 18px 16px',
@@ -198,7 +193,7 @@ function BlogPage() {
           {posts.length === 0 ? (
             <p style={{ color: K.muted }}>Aún no hay historias publicadas. Sé el primero abajo 👇</p>
           ) : (
-            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fit, minmax(320px, 1fr))', gap: 20 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(auto-fill, minmax(320px, 1fr))', gap: 20 }}>
               {posts.map(p => (
                 <article key={p.id} style={{
                   background: K.paper, borderRadius: 14, overflow: 'hidden',
