@@ -259,7 +259,7 @@ function buildListingPopupHTML(
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;">${tipoBadge}${inmBadge}</div>
   <div data-i18n-skip style="color:#6E726E;font-size:11px;margin-bottom:8px;">${barrio_nombre}</div>
   ${precio_cop  ? `<div style="font-size:18px;font-weight:700;color:#111418;">${_fmtCOP(precio_cop)} COP</div>` : ""}
-  ${precio_usd  ? `<div style="color:#6E726E;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd/1000)}k`} USD</div>` : ""}
+  ${precio_usd  ? `<div style="color:#6E726E;font-size:11px;margin-bottom:6px;">~${precio_usd >= 1000000 ? `$${(precio_usd/1000000).toFixed(1)}M` : `$${Math.round(precio_usd).toLocaleString("en-US")}`} USD</div>` : ""}
   ${specs       ? `<div style="font-size:12px;color:#5B5F5C;margin:6px 0;">${specs}</div>` : ""}
   ${precio_m2 && tipo_op === "venta" ? `<div style="font-size:11px;color:#6E726E;">Precio/m²: <strong style="color:#111418;">${_fmtM2(precio_m2)}</strong></div>` : ""}
   ${mediana && tipo_op === "venta" ? `<div style="font-size:11px;color:#6E726E;">Mediana zona: <strong style="color:#111418;">${_fmtM2(mediana)}</strong></div>` : ""}

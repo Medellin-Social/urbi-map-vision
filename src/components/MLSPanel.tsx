@@ -163,7 +163,10 @@ function ListingCard({
   const precioUSD = listing.precio_cop
     ? (() => {
         const u = listing.precio_cop / trm;
-        return `~${u >= 1_000_000 ? `$${(u / 1_000_000).toFixed(1)}M` : `$${Math.round(u / 1_000)}k`} USD`;
+        const s =
+          u >= 1_000_000 ? `$${(u / 1_000_000).toFixed(1)}M`
+          :                 `$${Math.round(u).toLocaleString("en-US")}`; // exacto: $1,574 no "$2k"
+        return `~${s} USD`;
       })()
     : null;
   const precio    = lang === "en" && precioUSD ? precioUSD : precioCOP;
