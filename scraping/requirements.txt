@@ -10,6 +10,7 @@ aiohttp>=3.9.0
 sqlalchemy>=2.0.0
 rapidfuzz>=3.0.0      # scraping/habi/config.py — fuzzy match de barrios (scrape_habi)
 Pillow>=10.0.0        # scripts/mirror_listings_media.py — resize webp (mirror_media_r2)
+curl_cffi>=0.7.0      # scraping/vrbo/vrbo_scraper.py — TLS impersonation chrome124 (bypass Akamai)
 
 # dbt — pasos dbt_run_incremental/full_refresh/test en el cron de Railway
 dbt-core==1.7.4
