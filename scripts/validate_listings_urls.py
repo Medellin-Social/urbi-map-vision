@@ -97,18 +97,28 @@ async def validate_all(batch_size: int = 500, concurrency: int = 50) -> dict:
     engine = create_engine(db_url)
 
     with engine.connect() as conn:
+        # Cuota por fuente (LIMIT por sub-SELECT): sin esto el LIMIT global lo
+        # consumía siempre fincaraiz (va primero + tiene un backlog enorme de
+        # url_validada_at NULL por scrapear a diario) y metrocuadrado NUNCA se
+        # validaba (last_validate congelado en Jul). Ahora cada fuente recibe la
+        # mitad del presupuesto, ORDER BY url_validada_at NULLS FIRST = lo más
+        # viejo/nunca-validado primero (rotación justa dentro de cada fuente).
+        half = batch_size // 2
         rows = conn.execute(text("""
-            SELECT url AS listing_uid, url, 'fincaraiz' AS fuente
-            FROM raw.listings_fincaraiz
-            WHERE url IS NOT NULL AND activo = TRUE
-              AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
+            (SELECT url AS listing_uid, url, 'fincaraiz' AS fuente
+             FROM raw.listings_fincaraiz
+             WHERE url IS NOT NULL AND activo = TRUE
+               AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
+             ORDER BY url_validada_at NULLS FIRST
+             LIMIT :half)
             UNION ALL
-            SELECT url, url, 'metrocuadrado'
-            FROM raw.listings_metrocuadrado
-            WHERE url IS NOT NULL AND activo = TRUE
-              AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
-            LIMIT :lim
-        """), {"lim": batch_size}).fetchall()
+            (SELECT url, url, 'metrocuadrado'
+             FROM raw.listings_metrocuadrado
+             WHERE url IS NOT NULL AND activo = TRUE
+               AND (url_validada_at IS NULL OR url_validada_at < NOW() - INTERVAL '7 days')
+             ORDER BY url_validada_at NULLS FIRST
+             LIMIT :half)
+        """), {"half": half}).fetchall()
 
     if not rows:
         print("No URLs pending validation.")
