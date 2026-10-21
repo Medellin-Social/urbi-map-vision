@@ -131,7 +131,16 @@ WITH todas_fuentes AS (
            precio                                   AS precio_cop,
            NULL::bigint                             AS precio_usd,
            area_m2, habitaciones, banos::numeric    AS banos,
-           barrio_raw, barrio_id, direccion_raw,
+           barrio_raw,
+           -- Resolver barrio_id espacialmente cuando el loader lo dejó NULL (coords
+           -- válidas pero sin barrio asignado) -> así el listing aparece en la vista
+           -- por-barrio, no solo en el mapa. COALESCE: solo corre el PIP para los NULL
+           -- (~14k mc, ~316ms indexado GIST). Mismo patrón que la rama 'propio'.
+           COALESCE(barrio_id, (SELECT b.id FROM raw.barrios b
+             WHERE lat IS NOT NULL AND lon IS NOT NULL
+               AND ST_Contains(b.geometry, ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326))
+             LIMIT 1))                               AS barrio_id,
+           direccion_raw,
            lat, lon,
            CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
@@ -147,7 +156,13 @@ WITH todas_fuentes AS (
            precio::bigint                            AS precio_cop,
            NULL::bigint                             AS precio_usd,
            area_m2, habitaciones, banos::numeric    AS banos,
-           barrio_raw, barrio_id, direccion_raw,
+           barrio_raw,
+           -- barrio_id espacial para los NULL (ver nota en la rama metrocuadrado arriba).
+           COALESCE(barrio_id, (SELECT b.id FROM raw.barrios b
+             WHERE lat IS NOT NULL AND lon IS NOT NULL
+               AND ST_Contains(b.geometry, ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326))
+             LIMIT 1))                               AS barrio_id,
+           direccion_raw,
            lat::double precision, lon::double precision,
            CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END AS geom,
