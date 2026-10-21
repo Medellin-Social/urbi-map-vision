@@ -13,7 +13,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import re
 from datetime import datetime
+from urllib.parse import urlparse
 
 import aiohttp
 from sqlalchemy import create_engine, text
@@ -21,12 +23,29 @@ from sqlalchemy import create_engine, text
 ACTIVE_STATUSES = {200, 301, 302}
 HEADERS = {"User-Agent": "Mozilla/5.0 (compatible; UrbiBot/1.0)"}
 
+# fincaraiz borra un listing -> HTTP 301 a una pagina de busqueda con ?addeletedid=<id>
+# que responde 200. Como seguimos redirects (allow_redirects=True), resp.status es ese
+# 200 final, NO el 301: el status NO delata al muerto, hay que mirar la URL final.
+# Medido 2026-10-20: ~15% de los fincaraiz "servidos" al mapa eran muertos de este tipo.
+# metrocuadrado hace 404 honesto (sus URLs finales son /inmueble/...); estos patrones no
+# matchean esa forma, asi que es un no-op para esa fuente. NO basta con exigir status 200
+# sin seguir redirects: 48% de los fincaraiz VIVOS llegan por 301/302 (redirect canonico
+# /ficha/<id> -> /<slug>/<id>), marcarlos muertos por el 301 esconderia la mitad del catalogo.
+_DEAD_SEARCH_PATH = re.compile(r"^/(venta|arriendo|proyectos)/[a-z-]+$")
+
+
+def _looks_dead(final_url: str) -> bool:
+    if "addeletedid=" in final_url:
+        return True
+    path = urlparse(final_url).path.rstrip("/")
+    return bool(_DEAD_SEARCH_PATH.match(path))
+
 
 async def _check(session: aiohttp.ClientSession, listing_uid: str, url: str, fuente: str) -> dict:
     try:
         timeout = aiohttp.ClientTimeout(total=10)
         async with session.get(url, timeout=timeout, allow_redirects=True, headers=HEADERS) as resp:
-            activo = resp.status in ACTIVE_STATUSES
+            activo = resp.status in ACTIVE_STATUSES and not _looks_dead(str(resp.url))
             return {"uid": listing_uid, "url": url, "fuente": fuente, "status": resp.status, "activo": activo}
     except Exception:
         return {"uid": listing_uid, "url": url, "fuente": fuente, "status": 0, "activo": False}
@@ -48,10 +67,15 @@ async def _validate_batch(rows: list, concurrency: int) -> list[dict]:
 def _update_results(conn, results: list[dict]) -> None:
     now = datetime.utcnow()
 
+    # status == 0 = timeout/excepcion de red, NO una respuesta negativa real. Antes caia en
+    # inactivos y marcaba url_activa=FALSE permanente: un timeout transitorio (10s a
+    # concurrency=50) escondia un listing VIVO ~85 dias (medido 2026-10-20: 18% de los
+    # fincaraiz con url_activa=FALSE estaban vivos). Ahora status 0 no escribe nada -> conserva
+    # el valor previo y se reintenta la proxima pasada (url_validada_at sigue viejo => en cola).
     activos_fr   = [r["uid"] for r in results if r["activo"] and r["fuente"] == "fincaraiz"]
-    inactivos_fr = [r["uid"] for r in results if not r["activo"] and r["fuente"] == "fincaraiz"]
+    inactivos_fr = [r["uid"] for r in results if not r["activo"] and r["status"] != 0 and r["fuente"] == "fincaraiz"]
     activos_mc   = [r["uid"] for r in results if r["activo"] and r["fuente"] == "metrocuadrado"]
-    inactivos_mc = [r["uid"] for r in results if not r["activo"] and r["fuente"] == "metrocuadrado"]
+    inactivos_mc = [r["uid"] for r in results if not r["activo"] and r["status"] != 0 and r["fuente"] == "metrocuadrado"]
 
     # fincaraiz — active
     if activos_fr:

@@ -214,7 +214,7 @@ WITH todas_fuentes AS (
            lat::double precision, lon::double precision,
            CASE WHEN lat IS NOT NULL AND lon IS NOT NULL
                 THEN ST_SetSRID(ST_MakePoint(lon::float, lat::float), 4326) END,
-           url, NULL::text[], fecha_scraping, dedup_hash, NULL::integer,
+           url, fotos, fecha_scraping, dedup_hash, NULL::integer,
            amoblado,
            NULL::text AS antiguedad, amenidades, NULL::numeric AS administracion,
            NULL::text AS nombre_edificio
