@@ -11,7 +11,7 @@ import jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api.db import get_pool
-from api.dependencies import JWT_ALGORITHM, JWT_SECRET, current_token, get_current_user, token_key
+from api.dependencies import JWT_ALGORITHM, JWT_SECRET, REQUIRE_EMAIL_VERIFICATION, current_token, get_current_user, token_key
 from api.limiter import email_throttle, limiter, login_fail_throttle
 
 _APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
@@ -292,7 +292,7 @@ async def login(request: Request, req: LoginRequest = Body(...)):
         raise HTTPException(status_code=401, detail="Credenciales inválidas")
     if not row["activo"]:
         raise HTTPException(status_code=403, detail="Cuenta desactivada")
-    if not row["email_verificado"]:
+    if REQUIRE_EMAIL_VERIFICATION and not row["email_verificado"]:
         # Only reachable by someone who knows the password, so it leaks nothing.
         raise HTTPException(
             status_code=403,
