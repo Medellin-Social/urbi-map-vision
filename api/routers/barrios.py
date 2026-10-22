@@ -1162,7 +1162,7 @@ SELECT
     med.m2_mediana::int           AS precio_m2_mediana_barrio,
     g.url_activa                  AS disponible_actualmente,
     g.estrato_real,
-    l.dias_en_mercado,
+    (CURRENT_DATE - g.fecha_primera_vez::date)::int AS dias_en_mercado,
     l.fecha_publicacion::text     AS fecha_publicacion,
     NULL::timestamp               AS fecha_ultima_verificacion,
     NULL::float8                  AS relevancia_score,
