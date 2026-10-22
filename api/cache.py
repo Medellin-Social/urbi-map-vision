@@ -396,7 +396,7 @@ for _k, _v in _PLAUSIBLE.items():
 
 _INSERT_LISTINGS_GEOREF = """
 INSERT INTO analytics.listings_georef_new
-    (url, lat, lon, url_activa, estrato_real, uso_suelo_pot, estrato_manzana, refreshed_at)
+    (url, lat, lon, url_activa, estrato_real, uso_suelo_pot, estrato_manzana, fecha_primera_vez, refreshed_at)
 SELECT DISTINCT ON (l.url)
     l.url,
     l.lat,
@@ -405,9 +405,21 @@ SELECT DISTINCT ON (l.url)
     l.estrato_real AS estrato_real,
     pot.areagraluso,
     em.estrato,
+    fpv.fecha_primera_vez,
     now()
 FROM staging.stg_listings_unificado l
 JOIN raw.barrios b ON b.id = l.barrio_id
+-- First-seen (dias_en_mercado universal): keyed por url desde cada tabla fuente.
+-- Corre por hora en el refresh (no per-request). Propios: url staging = id::text.
+LEFT JOIN (
+    SELECT url, fecha_primera_vez FROM raw.listings_metrocuadrado
+    UNION ALL SELECT url, fecha_primera_vez FROM raw.listings_fincaraiz
+    UNION ALL SELECT url, fecha_primera_vez FROM raw.listings_habi
+    UNION ALL SELECT url, fecha_primera_vez FROM raw.listings_casadolcecasa
+    UNION ALL SELECT url, fecha_primera_vez FROM raw.listings_premium
+    UNION ALL SELECT url, fecha_primera_vez FROM raw.listings_renta_media
+    UNION ALL SELECT id::text AS url, created_at AS fecha_primera_vez FROM public.listing
+) fpv ON fpv.url = l.url
 -- Uso de suelo POT: point-in-polygon con buffer 0.0003° (~30m) para costuras
 -- de reproyección — ST_Contains exacto llega a 72.6% de cobertura en
 -- Medellín, el buffer sube a ~96% (verificado 2026-08-25). ORDER BY prefiere

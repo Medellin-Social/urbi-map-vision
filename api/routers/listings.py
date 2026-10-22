@@ -363,7 +363,7 @@ SELECT
     m.m2_mediana::int             AS precio_m2_mediana_barrio,
     g.url_activa                  AS disponible_actualmente,
     CASE WHEN _llh.url_status IS NULL OR _llh.url_status = 'blocked' THEN 'unknown' ELSE _llh.url_status END AS link_status,
-    (CURRENT_DATE - _lm.fecha_primera_vez::date)::int
+    (CURRENT_DATE - g.fecha_primera_vez::date)::int
                                   AS dias_en_mercado,
     NULL::timestamp               AS fecha_ultima_verificacion,
     ctx.yield_bruto_pct,
@@ -395,7 +395,6 @@ LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
                AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc     ON bc.barrio_id = b.id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
-LEFT JOIN raw.listings_metrocuadrado _lm ON _lm.url = l.url AND l.fuente = 'metrocuadrado'
 LEFT JOIN (
     SELECT url, COUNT(*)::int AS favoritos_count
     FROM raw.favoritos_listings GROUP BY url
@@ -947,7 +946,7 @@ SELECT
     COALESCE(lm.descripcion, lf.descripcion, lp.descripcion) AS descripcion,
     dt.descripcion_trad                AS descripcion_trad,
     dt.src_lang                        AS descripcion_src_lang,
-    (CURRENT_DATE - lm.fecha_primera_vez::date)::int
+    (CURRENT_DATE - g.fecha_primera_vez::date)::int
                                        AS dias_en_mercado,
     l.fecha_publicacion::text,
     NULL::timestamp AS fecha_ultima_verificacion,
@@ -1116,14 +1115,10 @@ _VIEWPORT_PANEL_CAP = 200
 # $24 ocultar_destacados. The thinned-points SQL adds $25 = grid cell size (deg).
 # Clusters group by comuna/municipio — no extra param needed.
 
-# dias_en_mercado only exists for metrocuadrado listings (fecha_primera_vez).
-# Dedupe on url first (url is not unique in the raw table) so the LEFT JOIN can't
-# inflate cluster COUNT/AVG. MIN = earliest sighting = most days on market.
-_VIEWPORT_DM_JOIN = (
-    "LEFT JOIN (SELECT url, MIN(fecha_primera_vez) AS fecha_primera_vez\n"
-    "           FROM raw.listings_metrocuadrado GROUP BY url) _dm\n"
-    "       ON _dm.url = l.url AND l.fuente = 'metrocuadrado'"
-)
+# dias_en_mercado ahora sale de analytics.listings_georef (g, keyed por url, todas
+# las fuentes) — ya joineado en los queries de viewport. El viejo join metrocuadrado-
+# only queda vacío para no tocar los dos .format(dm_join=...).
+_VIEWPORT_DM_JOIN = ""
 
 # ONE definition of "featured" (hidden by ocultar_destacados) for clusters, points and
 # panel list: a premium tier, or an own listing whose owner is on a pro/agente plan.
@@ -1150,11 +1145,11 @@ _VIEWPORT_EXTRA_WHERE = """\
   AND ($17::text[] IS NULL OR EXISTS (
         SELECT 1 FROM unnest($17::text[]) _ti WHERE lower(l.tipo_inmueble) LIKE _ti || '%'))
   AND ($18::text   IS NULL OR CASE $18
-        WHEN 'nuevo'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 7
-        WHEN 'reciente' THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) < 30
-        WHEN 'demorado' THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 90
-        WHEN 'mas30'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 30
-        WHEN 'mas60'    THEN COALESCE((CURRENT_DATE - _dm.fecha_primera_vez::date), 999) >= 60
+        WHEN 'nuevo'    THEN COALESCE((CURRENT_DATE - g.fecha_primera_vez::date), 999) < 7
+        WHEN 'reciente' THEN COALESCE((CURRENT_DATE - g.fecha_primera_vez::date), 999) < 30
+        WHEN 'demorado' THEN COALESCE((CURRENT_DATE - g.fecha_primera_vez::date), 999) >= 90
+        WHEN 'mas30'    THEN COALESCE((CURRENT_DATE - g.fecha_primera_vez::date), 999) >= 30
+        WHEN 'mas60'    THEN COALESCE((CURRENT_DATE - g.fecha_primera_vez::date), 999) >= 60
         ELSE TRUE END)
   AND ($19::text   IS NULL OR l.direccion_raw ILIKE '%' || $19 || '%')
   AND ($20::text[] IS NULL OR EXISTS (
@@ -1292,7 +1287,8 @@ SELECT
     l.lat, l.lon, l.barrio_id,
     b.nombre                     AS barrio_nombre,
     b.municipio                  AS municipio,
-    g.estrato_real
+    g.estrato_real,
+    (CURRENT_DATE - g.fecha_primera_vez::date)::int AS dias_en_mercado
 FROM lraw l
 LEFT JOIN analytics.listings_georef g  ON g.url = l.url
 LEFT JOIN public.listing_link_health _llh ON _llh.url = l.url
