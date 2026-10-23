@@ -850,7 +850,7 @@ WITH listing AS (
            listing_uid,
            fuente, tier, tipo_operacion, tipo_inmueble,
            precio_cop, area_m2, NULLIF(habitaciones, -1) AS habitaciones, banos,
-           direccion_raw, barrio_id, url, fotos, amenidades,
+           direccion_raw, barrio_id, lat, lon, url, fotos, amenidades,
            amoblado, COALESCE(verificado, FALSE) AS verificado,
            fecha_scraping, n_duplicados,
            precio_variable, precio_min_cluster, precio_max_cluster,
@@ -863,6 +863,11 @@ WITH listing AS (
            END AS pm2
     FROM staging.stg_listings_unificado
     WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1
+    -- 402 listings devolvían popup VACÍO (HTTP 500): el id es hash 32-bit de md5(url) y el CTE
+    -- traía 2 filas con url duplicada en staging o colisión de hash → los subqueries escalares
+    -- (SELECT barrio_id/tipo_inmueble FROM listing) reventaban. LIMIT 1 garantiza 1 fila.
+    ORDER BY fecha_scraping DESC NULLS LAST
+    LIMIT 1
 ),
 p_range AS (
     SELECT
@@ -904,8 +909,8 @@ SELECT
     l.banos::float8,
     l.direccion_raw,
     l.url,
-    g.lat,
-    g.lon,
+    COALESCE(g.lat, l.lat) AS lat,
+    COALESCE(g.lon, l.lon) AS lon,
     g.url_activa AS disponible_actualmente,
     CASE WHEN _llh.url_status IS NULL OR _llh.url_status = 'blocked' THEN 'unknown' ELSE _llh.url_status END AS link_status,
     g.estrato_real,
@@ -986,7 +991,10 @@ SELECT
     COALESCE(_lp_owner.nombre_edificio, l.nombre_edificio) AS nombre_edificio
 FROM listing l
 JOIN raw.barrios b ON b.id = l.barrio_id
-JOIN analytics.listings_georef g ON g.url = l.url
+-- LEFT (no INNER): 5,326 staging listings (22% de los caros >p90) no están en
+-- listings_georef → el INNER los dropeaba y el detalle salía VACÍO (el mini-popup
+-- del pin sí, porque usa el viewport). Coords salen de staging vía COALESCE arriba.
+LEFT JOIN analytics.listings_georef g ON g.url = l.url
 LEFT JOIN public.listing_link_health _llh ON _llh.url = l.url
 LEFT JOIN analytics.barrios_medianas m
     ON m.barrio_id = l.barrio_id

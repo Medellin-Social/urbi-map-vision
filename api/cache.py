@@ -123,6 +123,11 @@ _PLAUSIBLE = {
     "PPM2_VENTA_MIN": 300000, "PPM2_VENTA_MAX": 60000000,
     "PPM2_ARRIENDO_MIN": 2000, "PPM2_ARRIENDO_MAX": 400000,
     "STACK_MIN": 5,
+    # Above STACK_NULL listings share the EXACT same raw coordinate: that is never a real building,
+    # it is a portal "city-centre" fallback for listings it could not geocode (metrocuadrado returned
+    # ~900 El Poblado/Laureles/etc. listings at the La Candelaria centroid). Jittering 45m still leaves
+    # a huge false downtown blob, so these get NO map pin (coord nulled); the listing stays in list/search.
+    "STACK_NULL": 50,
 }
 
 _REFRESH_STG_LISTINGS_TMPL = """
@@ -379,9 +384,12 @@ apilados AS (
 SELECT listing_uid, fuente, tier, tipo_operacion, tipo_inmueble, precio_cop, precio_usd,
        precio_min_cluster, precio_max_cluster, precio_variable,
        area_m2, precio_m2, habitaciones, banos, barrio_raw, barrio_id, direccion_raw,
-       CASE WHEN stack_n >= {STACK_MIN} THEN lat + jr * cos(ja) ELSE lat END AS lat,
-       CASE WHEN stack_n >= {STACK_MIN} THEN lon + jr * sin(ja) ELSE lon END AS lon,
-       CASE WHEN stack_n >= {STACK_MIN} AND lat IS NOT NULL
+       CASE WHEN stack_n >= {STACK_NULL} THEN NULL
+            WHEN stack_n >= {STACK_MIN} THEN lat + jr * cos(ja) ELSE lat END AS lat,
+       CASE WHEN stack_n >= {STACK_NULL} THEN NULL
+            WHEN stack_n >= {STACK_MIN} THEN lon + jr * sin(ja) ELSE lon END AS lon,
+       CASE WHEN stack_n >= {STACK_NULL} THEN NULL
+            WHEN stack_n >= {STACK_MIN} AND lat IS NOT NULL
             THEN ST_SetSRID(ST_MakePoint(lon + jr * sin(ja), lat + jr * cos(ja)), 4326)
             ELSE geom END AS geom,
        url, fotos, fecha_scraping, n_duplicados, estrato_real, amoblado, antiguedad, amenidades,
