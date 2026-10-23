@@ -96,7 +96,7 @@ RUN printf '%s\n' \
     "PATH=/usr/local/bin:/usr/bin:/bin" \
     "0 3 * * * app cd /app && python3 scripts/refresh_data.py >> /var/log/urbi/refresh.log 2>&1" \
     "0 */6 * * * app cd /app && python3 scraping/run_comunidad.py >> /var/log/urbi/comunidad.log 2>&1" \
-    "30 9 * * * app cd /app && python3 -m scraping.link_checker --limit 2000 >> /var/log/urbi/link_check.log 2>&1" \
+    "30 9 * * * app cd /app && python3 -m scraping.link_checker --limit 15000 >> /var/log/urbi/link_check.log 2>&1" \
     "0 8 * * * app cd /app && python3 scripts/run_listings_metrocuadrado.py >> /var/log/urbi/listings_m2.log 2>&1" \
     "0 13 * * * app cd /app && python3 scripts/data_quality_check.py >> /var/log/urbi/data_quality.log 2>&1" \
     "0 9 */3 * * app cd /app && python3 scripts/run_renta_corta.py >> /var/log/urbi/renta_corta.log 2>&1" \
