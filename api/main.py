@@ -20,6 +20,7 @@ from api import parametros
 from api.cache import refresh_listings_cache, run_periodic_cache_refresh
 from api.limiter import limiter
 from api.utils.body_limit import BodySizeLimitMiddleware
+from api.utils.anti_scrape import AntiScrapeMiddleware
 from api.utils.session_cookie import SessionCookieMiddleware
 from api.dependencies import auth_cookie_mode
 from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_leads, ghl_webhook, historial, intake, link_review, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
@@ -198,6 +199,9 @@ async def security_headers(request: Request, call_next):
 app.add_middleware(SessionCookieMiddleware)
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.add_middleware(BodySizeLimitMiddleware)
+# Added before CORS so CORSMiddleware (added last = outermost) still wraps the
+# 403 → the browser can read a rejection on cross-origin calls.
+app.add_middleware(AntiScrapeMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_build_origins(),
