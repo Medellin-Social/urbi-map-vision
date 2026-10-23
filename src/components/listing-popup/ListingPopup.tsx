@@ -220,6 +220,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         <div className="shrink-0 space-y-2 border-t p-3" style={{ borderColor: "#E5E0D5" }}>
           <OriginalListingLink
             listing={{ url: detail?.url ?? listing.url, fuente: detail?.fuente ?? listing.fuente }}
+            variant="secondary"
             className="w-full"
           />
           <button
