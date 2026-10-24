@@ -170,6 +170,8 @@ class Conectividad(BaseModel):
     score_icfes_municipio: Optional[float] = None
     dist_obra_publica_km: Optional[float] = None
     nombre_obra_cercana: Optional[str] = None
+    obra_tipo: Optional[str] = None
+    obra_fecha: Optional[str] = None
     # dB promedio de día de la estación/sensor SIATA más cercano (red oficial + ciudadana)
     db_ruido_dia_cercano: Optional[float] = None
     dist_ruido_km: Optional[float] = None
@@ -333,6 +335,8 @@ _BARRIO_MAP_SQL = """
         poi.score_icfes_municipio,
         poi.dist_obra_publica_km,
         poi.nombre_obra_cercana,
+        obra.tipo           AS obra_tipo,
+        obra.fecha_estimada AS obra_fecha,
         poi.db_ruido_dia_cercano,
         poi.dist_ruido_km,
         poi.walk_score,
@@ -341,6 +345,7 @@ _BARRIO_MAP_SQL = """
     LEFT JOIN analytics.barrios_score_consolidado sc  ON b.id = sc.barrio_id
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
     LEFT JOIN analytics.barrios_pois_distancia    poi ON b.id = poi.barrio_id
+    LEFT JOIN raw.obras_publicas_planeadas        obra ON obra.nombre = poi.nombre_obra_cercana
     LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
     LEFT JOIN analytics.barrios_oportunidades     op  ON b.id = op.barrio_id
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
@@ -413,6 +418,8 @@ _BARRIO_SQL = """
         poi.score_icfes_municipio,
         poi.dist_obra_publica_km,
         poi.nombre_obra_cercana,
+        obra.tipo           AS obra_tipo,
+        obra.fecha_estimada AS obra_fecha,
         poi.db_ruido_dia_cercano,
         poi.dist_ruido_km,
         poi.walk_score,
@@ -497,6 +504,7 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.barrios_mercado           bm  ON b.id = bm.barrio_id
     LEFT JOIN analytics.barrios_seguridad         seg ON b.id = seg.barrio_id
     LEFT JOIN analytics.barrios_pois_distancia    poi ON b.id = poi.barrio_id
+    LEFT JOIN raw.obras_publicas_planeadas        obra ON obra.nombre = poi.nombre_obra_cercana
     LEFT JOIN analytics.barrios_verde             vd  ON b.id = vd.barrio_id
     LEFT JOIN analytics.barrios_trafico_perfil    tp  ON b.id = tp.barrio_id
     LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
@@ -738,6 +746,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             score_icfes_municipio=_f(row, "score_icfes_municipio"),
             dist_obra_publica_km=_f(row, "dist_obra_publica_km"),
             nombre_obra_cercana=row.get("nombre_obra_cercana"),
+            obra_tipo=row.get("obra_tipo"),
+            obra_fecha=row.get("obra_fecha"),
             db_ruido_dia_cercano=_f(row, "db_ruido_dia_cercano"),
             dist_ruido_km=_f(row, "dist_ruido_km"),
             walk_score=_i(row, "walk_score"),

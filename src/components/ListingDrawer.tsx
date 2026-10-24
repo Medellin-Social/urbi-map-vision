@@ -261,6 +261,9 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
   const isVenta = normalizeTipoOp(listing.tipo_operacion) === "venta";
   const area = listing.area_m2;
   const barrio = listing.barrio_nombre ?? "el barrio";
+  // Casas: el método mediana €/m² × área estima mal (heterogéneas: terreno + tamaño
+  // no lineal, pocos comparables) → mostramos solo rango del barrio, no un punto.
+  const esCasa = /casa/i.test(listing.tipo_inmueble ?? "");
 
   // Valor estimado (Zestimate) + rango de venta, desde medianas del barrio × área.
   const p50 = listing.precio_m2_mediana_barrio;
@@ -298,13 +301,23 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
     <div className="space-y-3">
       <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Valor estimado</h3>
       <div>
-        {valor != null && (
+        {valor != null && !(esCasa && (rangoMin == null || rangoMax == null)) && (
           <Row label="Valor de mercado" tip={`Referencia del barrio, no una tasación: precio/m² típico de ${barrio} (de precios publicados, no de cierre) × los ${area}m² de este inmueble.`}>
-            <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#0F8A4F" }}>{formatCOP(valor)}</div>
-            {rangoMin != null && rangoMax != null && (
-              <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#6E726E" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
+            {esCasa ? (
+              <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(rangoMin!)} – {formatCOP(rangoMax!)}</div>
+            ) : (
+              <>
+                <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#0F8A4F" }}>{formatCOP(valor)}</div>
+                {rangoMin != null && rangoMax != null && (
+                  <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#6E726E" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
+                )}
+              </>
             )}
-            <div className="mt-1 text-[11px]" style={{ color: "#6E726E" }}>Estimado con precios publicados, no de cierre</div>
+            <div className="mt-1 text-[11px]" style={{ color: "#6E726E" }}>
+              {esCasa
+                ? "Rango del barrio — las casas varían mucho por tamaño y lote; tómalo como referencia amplia"
+                : "Estimado con precios publicados, no de cierre"}
+            </div>
           </Row>
         )}
         {renta != null && (
@@ -462,6 +475,8 @@ type BarrioFetch = {
     // "Entorno+" — señales del barrio ya en la respuesta, antes sin pintar.
     dist_obra_publica_km?: number | null;
     nombre_obra_cercana?: string | null;
+    obra_tipo?: string | null;
+    obra_fecha?: string | null;
     db_ruido_dia_cercano?: number | null;
     dist_ruido_km?: number | null;
     n_policia_1km?: number | null;
@@ -546,8 +561,11 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   // cercanía/relevancia → en otros municipios solo aparece lo que de verdad está cerca
   // (ej. EnCicla y obras son ~Medellín). Solo con barrio_id (vía /barrios/{id}).
   const facts: { icon: string; label: string; value: string }[] = [];
+  // #17 obra pública: línea dedicada (nombre largo) con tipo + fecha estimada. Sin
+  // % de valorización (no hay dato que lo respalde). Solo si está realmente cerca (<3km).
   const obra = c?.nombre_obra_cercana; const dObra = c?.dist_obra_publica_km;
-  if (obra && dObra != null && dObra <= 3) facts.push({ icon: "🏗️", label: "Obra pública", value: `${obra} · ${dObra.toFixed(1)} km` });
+  const obraVisible = !!obra && dObra != null && dObra <= 3;
+  const obraDist = dObra != null ? (dObra < 1 ? `${Math.round(dObra * 1000)} m` : `${dObra.toFixed(1)} km`) : "";
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
   if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido (día)", value: `${Math.round(ruidoDb)} dB` });
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
@@ -562,7 +580,7 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const nCanc = c?.n_canchas_1km;
   if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc} a 1 km` });
 
-  if (tiles.length === 0 && !hayTiempos && facts.length === 0) return null;
+  if (tiles.length === 0 && !hayTiempos && facts.length === 0 && !obraVisible) return null;
 
   return (
     <div className="space-y-2.5">
@@ -594,6 +612,13 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
               <span className="font-medium tabular-nums" style={{ color: "#111418" }} data-i18n-skip="true">{f.value}</span>
             </div>
           ))}
+        </div>
+      )}
+      {obraVisible && (
+        <div className="text-[11px]" style={{ color: "#6E726E" }} data-i18n-skip="true">
+          🏗️ A {obraDist} del proyecto <strong>{obra}</strong>
+          {c?.obra_tipo ? ` · ${c.obra_tipo}` : ""}
+          {c?.obra_fecha && !/sin fecha/i.test(c.obra_fecha) ? ` · ${c.obra_fecha}` : ""}
         </div>
       )}
     </div>
