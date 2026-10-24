@@ -556,20 +556,29 @@ _BARRIO_CTX_KEYS = (
 # (buena_oferta, pct_bajo_mediana), valor/renta estimados del barrio
 # (precio_m2_mediana_barrio, p25/p75, arriendo_p50_barrio, arr_p25/p75),
 # avaluo_m2_catastro y el historial (var_anual_pct) — NO se gatean.
-# Realtor-pago: los scores de inversión e inteligencia profunda de abajo.
-_MARKET_INTEL_FIELDS = (
+# Gate de 3 niveles (doc de roles):
+#   Registrado (inversionista, gratis con registro): rentabilidad/yields.
+#   Realtor (paga): scores de inversión + inteligencia profunda.
+_REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct")
+_REALTOR_FIELDS = (
     "liquidez_score", "seguridad_score",
     "score_corto", "score_mediano", "score_largo",
-    "yield_estimado", "yield_bruto_pct",
     "indice_nomada", "barrio_score", "barrio_yield",
     "tiempo_estimado_venta",
 )
+# Compat: algunos tests/refs esperan el set completo gated.
+_MARKET_INTEL_FIELDS = _REGISTERED_FIELDS + _REALTOR_FIELDS
 
 
-def _gate_market_fields(row_d: dict, agente: bool) -> dict:
-    """Único punto de gate server-side de inteligencia de mercado."""
-    if not agente:
-        for f in _MARKET_INTEL_FIELDS:
+def _gate_market_fields(row_d: dict, user: Optional[dict]) -> dict:
+    """Gate server-side de 3 niveles: público / registrado / realtor.
+    Anónimo no ve registrado+realtor; registrado no-agente no ve realtor; agente ve todo."""
+    if user is None:
+        for f in _REGISTERED_FIELDS + _REALTOR_FIELDS:
+            if f in row_d:
+                row_d[f] = None
+    elif not is_agente(user):
+        for f in _REALTOR_FIELDS:
             if f in row_d:
                 row_d[f] = None
     return row_d
@@ -813,7 +822,7 @@ async def get_all_listings(
         # Extraer ctx de barrio ANTES del gate — la personalización lo necesita
         # (comportamiento idéntico al actual para usuarios públicos).
         barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS} if perfil_dict else None
-        _gate_market_fields(row_d, _is_agente)
+        _gate_market_fields(row_d, current_user)
         _finalize_row(row_d, rate)
         if perfil_dict:
             score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
@@ -1754,7 +1763,7 @@ async def get_listing_by_id(
     _finalize_row(row_d, await get_usd_rate())
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []
     # Inteligencia de mercado/barrio — solo agentes; el front solo decide UI.
-    _gate_market_fields(row_d, is_agente(current_user))
+    _gate_market_fields(row_d, current_user)
     return ListingDetail(**row_d)
 
 

@@ -35,3 +35,16 @@ export function useIsAgente(): boolean {
   }, []);
   return isAgente;
 }
+
+// Nivel REGISTRADO (inversionista): logueado, sin importar plan. Mismo patrón
+// post-mount que useIsAgente para no romper la hidratación SSR.
+export function useIsRegistered(): boolean {
+  const [registered, setRegistered] = useState(false);
+  useEffect(() => {
+    const read = () => setRegistered(auth.get() != null);
+    read();
+    window.addEventListener("medellin-social:user", read);
+    return () => window.removeEventListener("medellin-social:user", read);
+  }, []);
+  return registered;
+}

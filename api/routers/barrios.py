@@ -1084,8 +1084,11 @@ _MERCADO_SERIE_SQL = """
 
 
 @router.get("/{barrio_id}/mercado-serie")
-async def get_mercado_serie(barrio_id: int):
-    """Serie anual de precio mediano del municipio (#14) + CAGR para el momentum."""
+async def get_mercado_serie(barrio_id: int, current_user: Optional[dict] = Depends(get_optional_user)):
+    """Serie anual de precio mediano del municipio (#14) + CAGR para el momentum.
+    Nivel registrado (inversionista): anónimo recibe serie vacía."""
+    if current_user is None:
+        return {"serie": [], "cagr_pct": None, "anios_cagr": None}
     pool = get_pool()
     rows = await pool.fetch(_MERCADO_SERIE_SQL, barrio_id)
     serie = [
@@ -1138,7 +1141,11 @@ async def get_barrio(
         raise HTTPException(status_code=503, detail="Datos temporalmente no disponibles")
     if row is None:
         raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
-    return _build_response(dict(row), score_col, perfil, usd_rate=await get_usd_rate())
+    resp = _build_response(dict(row), score_col, perfil, usd_rate=await get_usd_rate())
+    # Temperatura del mercado = nivel registrado (inversionista); anónimo no la ve.
+    if current_user is None:
+        resp.mercado_real = None
+    return resp
 
 
 _BARRIO_COUNT_SQL = """

@@ -17,7 +17,7 @@ import {
   Binoculars, Flame, Package, BookOpen, Drop, Road, Sun, Star,
 } from "@/lib/icons";
 import { useTarget } from "@/contexts/TargetContext";
-import { useIsPro, useIsAgente } from "@/components/LockedField";
+import { useIsPro, useIsAgente, useIsRegistered } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
@@ -1094,6 +1094,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // de buena_oferta/pct_bajo_mediana: desde #2 esos son públicos (los ve todo el mundo),
   // así que usarlos como señal de realtor abriría la sección paga a usuarios gratis.
   const isRealtor = useIsAgente();
+  const isRegistered = useIsRegistered();  // nivel inversionista: rentabilidad/yields
 
   useEffect(() => {
     if (!listingId) return;
@@ -1530,11 +1531,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
       <ValorEstimado listing={listing} />
 
-      {/* ── INVESTOR: rentabilidad (mercado → solo realtor) ── */}
-      {isRealtor && isInvestor && (
+      {/* ── INVESTOR: rentabilidad (yields → registrado; score desglosado → realtor) ── */}
+      {isRegistered && isInvestor && (
         <>
           <YieldMultiModal listing={listing} />
-          {isPro && listing.score_corto != null && (
+          {isRealtor && listing.score_corto != null && (
             <div className="flex items-center justify-between border-b py-3 text-[13px]" style={{ borderColor: "#E5E0D5" }}>
               <span style={{ color: "#5B5F5C" }}>Score de inversión</span>
               <span className="font-semibold tabular-nums" style={{ color: "#111418" }}>{Math.round(listing.score_corto / 10)}/10</span>
@@ -1543,8 +1544,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         </>
       )}
 
-      {/* ── LANDLORD: yield sin badge de compra (mercado → solo realtor) ────────── */}
-      {isRealtor && isLandlord && <YieldMultiModal listing={listing} />}
+      {/* ── LANDLORD: yield (rentabilidad → registrado) ────────── */}
+      {isRegistered && isLandlord && <YieldMultiModal listing={listing} />}
 
 
       {/* CTA único para usuarios free */}
