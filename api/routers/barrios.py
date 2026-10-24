@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user, is_agente
+from api.dependencies import get_optional_user
 from api.routers.listings import ListingFull, ListingsAllResponse, _finalize_row
 from api.services.trm_service import get_usd_rate
 from api.services.personalizacion import PRESUPUESTO_MAX
@@ -1204,14 +1204,11 @@ async def get_barrio_listings(
         *args,
     )
 
-    _agente = is_agente(current_user)
+    # buena_oferta / pct_bajo_mediana son públicos (#2: el usuario ve si está
+    # cara/barata). Los scores de inversión siguen gated en listings.py.
     rate = await get_usd_rate()
     items: list[ListingFull] = []
     for r in rows:
-        d = _finalize_row(dict(r), rate)
-        if not _agente:
-            d["buena_oferta"] = None
-            d["pct_bajo_mediana"] = None
-        items.append(ListingFull(**d))
+        items.append(ListingFull(**_finalize_row(dict(r), rate)))
 
     return ListingsAllResponse(total=total or 0, listings=items)

@@ -38,6 +38,9 @@ import { formatDate } from "@/lib/format";
 import { useLang, translateString, Name } from "@/lib/i18n";
 import { useUnit, formatArea } from "@/hooks/useUnit";
 
+// ponytail: flip a true cuando el cron notificador de alertas_precio exista (hoy no).
+const ALERTAS_NOTIFIER_READY = false;
+
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
 const TIPO_INMUEBLE_COLOR: Record<string, string> = {
@@ -296,15 +299,16 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
       <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Valor estimado</h3>
       <div>
         {valor != null && (
-          <Row label="Valor de mercado" tip={`Precio de venta probable, estimado con el precio/m² típico de ${barrio} multiplicado por los ${area}m² de este inmueble.`}>
+          <Row label="Valor de mercado" tip={`Referencia del barrio, no una tasación: precio/m² típico de ${barrio} (de precios publicados, no de cierre) × los ${area}m² de este inmueble.`}>
             <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#0F8A4F" }}>{formatCOP(valor)}</div>
             {rangoMin != null && rangoMax != null && (
               <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#6E726E" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
             )}
+            <div className="mt-1 text-[11px]" style={{ color: "#6E726E" }}>Estimado con precios publicados, no de cierre</div>
           </Row>
         )}
         {renta != null && (
-          <Row label="Renta estimada" tip={`Canon de arriendo mensual típico para inmuebles similares en ${barrio}.`}>
+          <Row label="Renta típica del barrio" tip={`Mediana de arriendo del barrio (${barrio}), no una tasación de este inmueble.`}>
             <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(renta)}<span className="text-[11px] font-normal" style={{ color: "#6E726E" }}>/mes</span></div>
           </Row>
         )}
@@ -1012,10 +1016,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   });
 
   // Regla de negocio: inmueble = público; inteligencia de barrio/mercado = solo realtor.
-  // Flag local (plan==='agente') OR señal server-side (buena_oferta/pct_bajo_mediana
-  // solo llegan non-null si is_agente() pasó — cubre aprobados en tabla `agentes`).
-  const isRealtor =
-    useIsAgente() || listing?.buena_oferta != null || listing?.pct_bajo_mediana != null;
+  // useIsAgente() cubre plan==='agente' Y filas aprobadas (esAgente). Ya NO se infiere
+  // de buena_oferta/pct_bajo_mediana: desde #2 esos son públicos (los ve todo el mundo),
+  // así que usarlos como señal de realtor abriría la sección paga a usuarios gratis.
+  const isRealtor = useIsAgente();
 
   useEffect(() => {
     if (!listingId) return;
@@ -1282,7 +1286,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           ¿Este inmueble es tuyo? Reclámalo
         </button>
       )}
-      {isPro && listing.barrio_id && (
+      {/* ponytail: notificador de alertas no existe (ningún cron lee alertas_precio);
+          botón escondido para no prometer avisos que nunca llegan. Flip a true cuando
+          salga el cron de match + canal de envío (email/GHL). */}
+      {ALERTAS_NOTIFIER_READY && isPro && listing.barrio_id && (
         <button
           onClick={() => setShowAlertModal(true)}
           className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-xs font-semibold transition hover:opacity-90"

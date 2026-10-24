@@ -551,15 +551,18 @@ _BARRIO_CTX_KEYS = (
 # Datos del inmueble (precio, specs, fotos, descripción, historial, estrato,
 # amenidades, dias_en_mercado) son públicos y NO se tocan. El shape no cambia:
 # los campos siguen existiendo, van null para el público.
+#
+# Público (gancho del usuario gratis, roles doc): si está cara/barata
+# (buena_oferta, pct_bajo_mediana), valor/renta estimados del barrio
+# (precio_m2_mediana_barrio, p25/p75, arriendo_p50_barrio, arr_p25/p75),
+# avaluo_m2_catastro y el historial (var_anual_pct) — NO se gatean.
+# Realtor-pago: los scores de inversión e inteligencia profunda de abajo.
 _MARKET_INTEL_FIELDS = (
-    "buena_oferta", "pct_bajo_mediana",
     "liquidez_score", "seguridad_score",
     "score_corto", "score_mediano", "score_largo",
-    "var_anual_pct", "precio_m2_mediana_barrio",
-    "precio_m2_p25", "precio_m2_p75", "arr_p25", "arr_p75",
-    "arriendo_p50_barrio", "yield_estimado", "yield_bruto_pct",
+    "yield_estimado", "yield_bruto_pct",
     "indice_nomada", "barrio_score", "barrio_yield",
-    "tiempo_estimado_venta", "avaluo_m2_catastro",
+    "tiempo_estimado_venta",
 )
 
 

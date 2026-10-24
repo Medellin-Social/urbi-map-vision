@@ -2370,7 +2370,8 @@ export const PHRASES: Array<[string, string]> = [
   // Valor estimado / catastro
   ["Valor estimado", "Estimated value"],
   ["Valor de mercado", "Market value"],
-  ["Renta estimada", "Estimated rent"],
+  ["Renta típica del barrio", "Typical rent in the area"],
+  ["Estimado con precios publicados, no de cierre", "Estimated from listed prices, not closings"],
   ["Avalúo catastral", "Cadastral value"],
   ["Predial estimado", "Estimated property tax"],
   ["Rango estimado de venta:", "Estimated sale range:"],
