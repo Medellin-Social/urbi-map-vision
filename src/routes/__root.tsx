@@ -4,7 +4,7 @@ import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { LanguageProvider } from "@/lib/i18n";
 import { refreshIfExpiringSoon } from "@/lib/auth";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingModal } from "@/components/OnboardingModal";
 import { TargetProvider } from "@/contexts/TargetContext";
@@ -188,11 +188,26 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+// Al cambiar de sesión (login/logout dispara "medellin-social:user") limpiamos la
+// caché de react-query: las queries gated por nivel (barrio/temperatura, listing/
+// yields, mercado-serie) se cachean por id SIN auth, así que sin esto un barrio
+// visto deslogueado seguía mostrando la versión pública tras loguear como inversionista.
+function AuthCacheSync() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    const onUserChange = () => qc.clear();
+    window.addEventListener("medellin-social:user", onUserChange);
+    return () => window.removeEventListener("medellin-social:user", onUserChange);
+  }, [qc]);
+  return null;
+}
+
 function RootComponent() {
   useEffect(() => { refreshIfExpiringSoon(); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
+      <AuthCacheSync />
       <LanguageProvider>
         <TargetProvider>
           <Outlet />
