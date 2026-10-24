@@ -688,6 +688,9 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
   const { target, setTarget } = useTarget();
   const scoreColor = getScoreColor(n.score_activo ?? null, undefined, perfil, risk);
   const scoreLbl = getScoreLabel(n.score_activo ?? null, perfil, risk);
+  // Población por zona (#5): comuna para Medellín, municipio para el resto.
+  const poblacion = n.poblacionComuna ?? n.poblacionMunicipio ?? null;
+  const poblacionZona = n.poblacionComuna != null ? "Comuna" : "Municipio";
 
   const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
   const apiListings = listingsData?.listings ?? [];
@@ -756,6 +759,7 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
         <div className="mt-2 flex flex-wrap gap-1.5">
           <Badge>Estrato {n.estrato}</Badge>
           <Badge>{n.municipio}</Badge>
+          {poblacion != null && <Badge>{poblacionZona}: {poblacion.toLocaleString("es-CO")} hab</Badge>}
           <Badge color={scoreColor}>{scoreLbl}</Badge>
         </div>
       </div>

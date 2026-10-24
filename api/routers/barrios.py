@@ -247,6 +247,8 @@ class BarrioResponse(BaseModel):
     comuna: Optional[str] = None
     municipio: Optional[str] = None
     estrato: Optional[int] = None
+    poblacion_comuna: Optional[int] = None
+    poblacion_municipio: Optional[int] = None
     geometry: Optional[dict[str, Any]] = None
     color_hex: Optional[str] = None
     excluir_inversion: Optional[bool] = None
@@ -280,6 +282,8 @@ _BARRIO_MAP_SQL = """
         b.comuna,
         b.municipio,
         sl.estrato_barrio                   AS estrato,
+        pcom.poblacion                      AS poblacion_comuna,
+        pmun.poblacion                      AS poblacion_municipio,
         ST_AsGeoJSON(ST_SimplifyPreserveTopology(b.geometry, 0.0003)) AS geometry_raw,
         sc.score_corto,
         sc.categoria_corto                  AS cat_corto,
@@ -336,6 +340,8 @@ _BARRIO_MAP_SQL = """
     LEFT JOIN analytics.barrios_liquidez          lq  ON b.id = lq.barrio_id
     LEFT JOIN analytics.barrios_oportunidades     op  ON b.id = op.barrio_id
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
+    LEFT JOIN raw.poblacion_comuna     pcom ON pcom.comuna    = b.comuna
+    LEFT JOIN raw.poblacion_municipio  pmun ON pmun.municipio = b.municipio
 """
 
 _BARRIO_SQL = """
@@ -345,6 +351,8 @@ _BARRIO_SQL = """
         b.comuna,
         b.municipio,
         sl.estrato_barrio                   AS estrato,
+        pcom.poblacion                      AS poblacion_comuna,
+        pmun.poblacion                      AS poblacion_municipio,
         ST_AsGeoJSON(b.geometry)            AS geometry_raw,
         -- scores
         sc.score_corto,
@@ -494,6 +502,10 @@ _BARRIO_SQL = """
     LEFT JOIN analytics.barrios_amenities         am  ON b.id = am.barrio_id
     LEFT JOIN analytics.catastro_comunas_stats cat
            ON UPPER(TRIM(b.comuna)) = cat.comuna
+    -- Población por zona (#5): comuna (Medellín) y municipio, join por nombre
+    -- mayúsculas (igual que raw.icfes_municipio). Tablas de referencia migr 0081.
+    LEFT JOIN raw.poblacion_comuna     pcom ON pcom.comuna    = b.comuna
+    LEFT JOIN raw.poblacion_municipio  pmun ON pmun.municipio = b.municipio
     LEFT JOIN LATERAL (
         WITH ultimo AS (
             SELECT anio, n_transacciones, valor_mediana
@@ -630,6 +642,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         comuna=row.get("comuna"),
         municipio=row.get("municipio"),
         estrato=row.get("estrato"),
+        poblacion_comuna=_i(row, "poblacion_comuna"),
+        poblacion_municipio=_i(row, "poblacion_municipio"),
         geometry=geometry,
         color_hex=color_hex,
         excluir_inversion=excluir,
