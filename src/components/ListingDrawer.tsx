@@ -453,6 +453,17 @@ type BarrioFetch = {
     dist_colegio_km?: number | null;
     walk_score?: number | null;
     transit_score?: number | null;
+    // "Entorno+" — señales del barrio ya en la respuesta, antes sin pintar.
+    dist_obra_publica_km?: number | null;
+    nombre_obra_cercana?: string | null;
+    db_ruido_dia_cercano?: number | null;
+    dist_ruido_km?: number | null;
+    n_policia_1km?: number | null;
+    dist_policia_km?: number | null;
+    n_bomberos_2km?: number | null;
+    avg_internet_mbps?: number | null;
+    dist_encicla_km?: number | null;
+    n_canchas_1km?: number | null;
   } | null;
   liquidez?: { score?: number | null } | null;
   trafico?: { nivel?: string | null; jam_prom?: number | null } | null;
@@ -524,7 +535,28 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const tPoblado = data?.tiempo_poblado_min ?? null;
   const tCentro = data?.tiempo_centro_min ?? null;
   const hayTiempos = tPoblado != null || tCentro != null;
-  if (tiles.length === 0 && !hayTiempos) return null;
+
+  // Entorno+ (combo): señales del barrio ya en la respuesta, cada una guardada por
+  // cercanía/relevancia → en otros municipios solo aparece lo que de verdad está cerca
+  // (ej. EnCicla y obras son ~Medellín). Solo con barrio_id (vía /barrios/{id}).
+  const facts: { icon: string; label: string; value: string }[] = [];
+  const obra = c?.nombre_obra_cercana; const dObra = c?.dist_obra_publica_km;
+  if (obra && dObra != null && dObra <= 3) facts.push({ icon: "🏗️", label: "Obra pública", value: `${obra} · ${dObra.toFixed(1)} km` });
+  const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido (día)", value: `${Math.round(ruidoDb)} dB` });
+  const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
+  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol} a 1 km` });
+  else if (dPol != null && dPol <= 2) facts.push({ icon: "🚓", label: "Policía", value: `a ${dPol.toFixed(1)} km` });
+  const nBomb = c?.n_bomberos_2km;
+  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb} a 2 km` });
+  const net = c?.avg_internet_mbps;
+  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)} Mbps` });
+  const dEnc = c?.dist_encicla_km;
+  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: `a ${dEnc.toFixed(1)} km` });
+  const nCanc = c?.n_canchas_1km;
+  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc} a 1 km` });
+
+  if (tiles.length === 0 && !hayTiempos && facts.length === 0) return null;
 
   return (
     <div className="space-y-2.5">
@@ -543,6 +575,19 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
             {tPoblado != null && tCentro != null && " ·"}
             {tCentro != null && <> Centro ~{tCentro} min</>}
           </span>
+        </div>
+      )}
+      {facts.length > 0 && (
+        <div
+          className="grid gap-x-4 gap-y-1 text-[11px]"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", color: "#5B5F5C" }}
+        >
+          {facts.map((f) => (
+            <div key={f.label} className="flex items-center justify-between gap-2 border-b py-1 last:border-0" style={{ borderColor: "#EFEADF" }}>
+              <span data-i18n-skip="true">{f.icon} {f.label}</span>
+              <span className="font-medium tabular-nums" style={{ color: "#111418" }} data-i18n-skip="true">{f.value}</span>
+            </div>
+          ))}
         </div>
       )}
     </div>
