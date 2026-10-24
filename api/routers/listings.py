@@ -1904,6 +1904,84 @@ async def get_similares(request: Request, listing_id: int):
     return [SimilarListing(**dict(r)) for r in rows]
 
 
+# ── "Entorno" por radio desde las coords del listing (#1) ─────────────────────
+# Los listings fuera de georef (otros municipios, sin barrio_id) no tienen fila en
+# analytics.barrios_pois_distancia → el drawer no mostraba POIs. Aquí calculamos
+# walk/transit/colegios por radio desde las coords del propio inmueble sobre raw.pois.
+# Fórmula y radios IDÉNTICOS a scripts/compute_barrios_pois.py para que un mismo punto
+# puntúe igual por barrio o por radio. Devuelve la MISMA forma que /barrios/{id}
+# (clave `conectividad`) para reusar el componente GettingAround sin cambios de UI.
+_LISTING_ENTORNO_SQL = """
+WITH listing AS (
+    SELECT COALESCE(g.lat, l.lat) AS lat, COALESCE(g.lon, l.lon) AS lon
+    FROM staging.stg_listings_unificado l
+    LEFT JOIN analytics.listings_georef g ON g.url = l.url
+    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1 AND l.url IS NOT NULL
+    ORDER BY l.fecha_scraping DESC NULLS LAST
+    LIMIT 1
+),
+pt AS (
+    SELECT ST_SetSRID(ST_MakePoint(lon, lat), 4326)            AS geom,
+           ST_SetSRID(ST_MakePoint(lon, lat), 4326)::geography AS geog
+    FROM listing
+    -- Guard contra coords basura: ~1% de staging trae lat/lon invertidos (lat≈-75,
+    -- lon≈6). Si el punto cae fuera del Valle de Aburrá, pt queda vacío → entorno
+    -- null → sección oculta (mejor nada que "colegio a 10.000 km").
+    WHERE lat BETWEEN 5.5 AND 7.0 AND lon BETWEEN -76.0 AND -75.0
+),
+facts AS (
+    SELECT
+        (SELECT count(*) FROM raw.pois p WHERE p.tipo='cafe'        AND ST_DWithin(p.geometry::geography, pt.geog, 500))  AS n_cafe,
+        (SELECT count(*) FROM raw.pois p WHERE p.tipo='restaurante' AND ST_DWithin(p.geometry::geography, pt.geog, 500))  AS n_rest,
+        (SELECT count(*) FROM raw.pois p WHERE p.tipo='bar'         AND ST_DWithin(p.geometry::geography, pt.geog, 500))  AS n_bar,
+        (SELECT count(*) FROM raw.pois p WHERE p.tipo='gimnasio'    AND ST_DWithin(p.geometry::geography, pt.geog, 1000)) AS n_gym,
+        (SELECT count(*) FROM raw.pois p WHERE p.tipo='colegio'     AND ST_DWithin(p.geometry::geography, pt.geog, 1000)) AS n_colegios_1km,
+        (SELECT round((ST_Distance(p.geometry::geography, pt.geog)/1000)::numeric, 3)
+            FROM raw.pois p WHERE p.tipo='colegio' ORDER BY p.geometry <-> pt.geom LIMIT 1) AS dist_colegio_km,
+        (SELECT round((ST_Distance(p.geometry::geography, pt.geog)/1000)::numeric, 3)
+            FROM raw.pois p WHERE p.tipo='metro'   ORDER BY p.geometry <-> pt.geom LIMIT 1) AS dist_metro_km,
+        (SELECT round((ST_Distance(p.geometry::geography, pt.geog)/1000)::numeric, 3)
+            FROM raw.pois p WHERE p.tipo='parque'  ORDER BY p.geometry <-> pt.geom LIMIT 1) AS dist_parque_km,
+        (SELECT round((ST_Distance(p.geometry::geography, pt.geog)/1000)::numeric, 3)
+            FROM raw.pois p WHERE p.tipo='mall'    ORDER BY p.geometry <-> pt.geom LIMIT 1) AS dist_mall_km
+    FROM pt
+)
+SELECT
+    n_colegios_1km,
+    dist_colegio_km,
+    dist_metro_km,
+    LEAST(100, (
+        LEAST(20, n_cafe * 4)
+        + LEAST(20, n_rest * 2)
+        + LEAST(10, n_bar  * 2)
+        + LEAST(15, n_gym  * 3)
+        + LEAST(15, n_colegios_1km * 2)
+        + CASE WHEN dist_parque_km IS NOT NULL AND dist_parque_km < 1.0 THEN 10 ELSE 0 END
+        + CASE WHEN dist_mall_km   IS NOT NULL AND dist_mall_km   < 1.5 THEN 10 ELSE 0 END
+    ))::int AS walk_score,
+    CASE WHEN dist_metro_km IS NULL THEN NULL
+         ELSE GREATEST(0, LEAST(100, ROUND(100 - dist_metro_km * 40)))::int END AS transit_score
+FROM facts
+"""
+
+
+@router.get("/{listing_id}/entorno")
+@limiter.limit("60/minute")
+async def get_listing_entorno(request: Request, listing_id: int):
+    """POIs por radio desde las coords del listing (#1) — para inmuebles sin barrio_id."""
+    pool = get_pool()
+    row = await pool.fetchrow(_LISTING_ENTORNO_SQL, listing_id)
+    if row is None:  # sin coords válidas → no hay entorno que mostrar
+        return {"conectividad": None}
+    return {"conectividad": {
+        "walk_score": row["walk_score"],
+        "transit_score": row["transit_score"],
+        "n_colegios_1km": row["n_colegios_1km"],
+        "dist_colegio_km": float(row["dist_colegio_km"]) if row["dist_colegio_km"] is not None else None,
+        "dist_metro_km": float(row["dist_metro_km"]) if row["dist_metro_km"] is not None else None,
+    }}
+
+
 # ── Slots de visita disponibles (horario del agente de zona, sin Google) ──────
 _LISTING_AGENT_ID_SQL = """
 WITH lz AS (

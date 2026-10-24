@@ -474,11 +474,15 @@ function ScoreBar({ label, score, sub }: { label: string; score: number; sub: st
   );
 }
 
-/** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow. */
-function GettingAround({ barrioId }: { barrioId: number }) {
+/** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow.
+ *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
+ *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
+function GettingAround({ listingId, barrioId }: { listingId: number; barrioId?: number | null }) {
   const { data } = useQuery<BarrioFetch>({
-    queryKey: ["barrio-full", barrioId],
-    queryFn: () => apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId)),
+    queryKey: barrioId ? ["barrio-full", barrioId] : ["listing-entorno", listingId],
+    queryFn: () => barrioId
+      ? apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId))
+      : apiFetch<BarrioFetch>(API_ENDPOINTS.listingEntorno(listingId)),
     staleTime: 300_000,
   });
   const c = data?.conectividad;
@@ -1447,7 +1451,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       })()}
 
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
-      {listing.barrio_id && <GettingAround barrioId={listing.barrio_id} />}
+      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} />}
 
       {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
       <ValorEstimado listing={listing} />

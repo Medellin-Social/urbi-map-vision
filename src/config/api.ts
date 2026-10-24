@@ -39,6 +39,7 @@ export const API_ENDPOINTS = {
   listingReportBrokenLink: (id: number) => `${API_BASE_URL}/listings/${id}/report-broken-link`,
   listingReclamar: (id: number) => `${API_BASE_URL}/listings/${id}/reclamar`,
   listingSimilares: (id: number) => `${API_BASE_URL}/listings/${id}/similares`,
+  listingEntorno: (id: number) => `${API_BASE_URL}/listings/${id}/entorno`,
   listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
   agentesDirectorio: `${API_BASE_URL}/listings/agentes`,
   agentePerfil: (id: string) => `${API_BASE_URL}/listings/agentes/${id}`,
