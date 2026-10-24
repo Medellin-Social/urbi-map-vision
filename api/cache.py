@@ -29,10 +29,12 @@ SELECT
         )
     )::bigint AS m2_mediana,
     CASE
-        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo'
+                              AND precio_cop BETWEEN 300000 AND 50000000) >= 3
         THEN PERCENTILE_CONT(0.5) WITHIN GROUP (
                  ORDER BY precio_cop::float
-             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+             ) FILTER (WHERE tipo_operacion = 'arriendo'
+                       AND precio_cop BETWEEN 300000 AND 50000000)::bigint
         ELSE NULL
     END AS arr_mediana,
     ROUND(
@@ -56,17 +58,21 @@ SELECT
         )
     )::bigint AS m2_p75,
     CASE
-        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo'
+                              AND precio_cop BETWEEN 300000 AND 50000000) >= 3
         THEN PERCENTILE_CONT(0.25) WITHIN GROUP (
                  ORDER BY precio_cop::float
-             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+             ) FILTER (WHERE tipo_operacion = 'arriendo'
+                       AND precio_cop BETWEEN 300000 AND 50000000)::bigint
         ELSE NULL
     END AS arr_p25,
     CASE
-        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo') >= 3
+        WHEN COUNT(*) FILTER (WHERE tipo_operacion = 'arriendo'
+                              AND precio_cop BETWEEN 300000 AND 50000000) >= 3
         THEN PERCENTILE_CONT(0.75) WITHIN GROUP (
                  ORDER BY precio_cop::float
-             ) FILTER (WHERE tipo_operacion = 'arriendo')::bigint
+             ) FILTER (WHERE tipo_operacion = 'arriendo'
+                       AND precio_cop BETWEEN 300000 AND 50000000)::bigint
         ELSE NULL
     END AS arr_p75,
     now()
