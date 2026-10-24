@@ -1276,6 +1276,10 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     activityParts.push(listing.dias_en_mercado === 0 ? "Publicado hoy" : `${listing.dias_en_mercado} días en el mercado`);
   if (listing?.vistas) activityParts.push(`${listing.vistas} vistas`);
   if (listing?.favoritos_count) activityParts.push(`${listing.favoritos_count} guardados`);
+  // #9: agrupamos duplicados cross-portal (cache.py geo+características) → n_duplicados.
+  // Dato ya calculado y expuesto, antes sin pintar. Hash perceptual de fotos = diferido.
+  if (listing?.n_duplicados != null && listing.n_duplicados > 1)
+    activityParts.push(`visto en ${listing.n_duplicados} portales`);
   // Solo afirmamos "se vende más rápido" cuando el barrio es realmente líquido
   // (score ≥ 65, por encima del promedio); si no, no hacemos la afirmación.
   if (isRealtor && listing?.liquidez_score != null && listing.liquidez_score >= 65)
