@@ -446,6 +446,12 @@ type BarrioFetch = {
   seguridad?: { score?: number | null } | null;
   tiempo_poblado_min?: number | null;
   tiempo_centro_min?: number | null;
+  mercado_real?: {
+    clasificacion_mercado?: string | null;   // comprador | balanceado | vendedor
+    meses_inventario?: number | null;
+    var_anual_pct?: number | null;
+    anio_dato?: number | null;
+  } | null;
   conectividad?: {
     dist_metro_km?: number | null;
     indice_nomada?: number | null;
@@ -594,6 +600,36 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   );
 }
 
+
+// ─── Temperatura del mercado (#15) — en el drawer, nivel REGISTRADO (inversionista) ──
+function TemperaturaMercado({ barrioId }: { barrioId: number }) {
+  const isRegistered = useIsRegistered();
+  const { data } = useQuery<BarrioFetch>({
+    queryKey: ["barrio-full", barrioId],
+    queryFn: () => apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId)),
+    staleTime: 300_000,
+    enabled: isRegistered,  // solo registrado trae mercado_real del backend
+  });
+  const mr = data?.mercado_real;
+  if (!isRegistered || !mr?.clasificacion_mercado) return null;
+  const label = mr.clasificacion_mercado === "vendedor" ? "Mercado de vendedor"
+    : mr.clasificacion_mercado === "comprador" ? "Mercado de comprador"
+    : "Mercado balanceado";
+  // comprador = sobreoferta (favorable al comprador) → verde; vendedor = demanda manda → rojo.
+  const color = mr.clasificacion_mercado === "comprador" ? "#0F8A4F"
+    : mr.clasificacion_mercado === "vendedor" ? "#CE1126" : "#8A6A00";
+  return (
+    <div className="space-y-2">
+      <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Temperatura del mercado</h3>
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-bold uppercase tracking-wider" style={{ background: `${color}1A`, color }}>{label}</span>
+        {mr.meses_inventario != null && <span className="text-[12px] tabular-nums" style={{ color: "#5B5F5C" }}>{mr.meses_inventario} meses de inventario</span>}
+        {mr.var_anual_pct != null && <span className="text-[12px] tabular-nums" style={{ color: "#5B5F5C" }}>· precios {mr.var_anual_pct > 0 ? "+" : ""}{mr.var_anual_pct}%/año</span>}
+      </div>
+      <p className="text-[11px]" style={{ color: "#6E726E" }}>Compraventas reales del municipio (SNR/ORIPS) — oferta vs demanda. Nivel municipio.</p>
+    </div>
+  );
+}
 
 // ─── Agendar visita — popup estilo Zillow (día con flechas + hora desplegable) ──
 
@@ -1530,6 +1566,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
 
       {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
       <ValorEstimado listing={listing} />
+
+      {/* Temperatura del mercado (#15) — registrado; se auto-oculta para anónimo/sin barrio */}
+      {listing.barrio_id && <TemperaturaMercado barrioId={listing.barrio_id} />}
 
       {/* ── INVESTOR: rentabilidad (yields → registrado; score desglosado → realtor) ── */}
       {isRegistered && isInvestor && (
