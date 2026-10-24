@@ -477,7 +477,7 @@ function ScoreBar({ label, score, sub }: { label: string; score: number; sub: st
 /** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow.
  *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
  *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
-function GettingAround({ listingId, barrioId }: { listingId: number; barrioId?: number | null }) {
+function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
   const { data } = useQuery<BarrioFetch>({
     queryKey: barrioId ? ["barrio-full", barrioId] : ["listing-entorno", listingId],
     queryFn: () => barrioId
@@ -505,11 +505,17 @@ function GettingAround({ listingId, barrioId }: { listingId: number; barrioId?: 
   const traficoScore = trafico?.jam_prom != null ? Math.max(0, Math.min(100, (10 - trafico.jam_prom) * 10)) : null;
   const traficoSub = trafico?.nivel === "bajo" ? "Vías fluidas" : trafico?.nivel === "alto" ? "Tráfico pesado" : "Tráfico moderado";
 
+  // Orden transporte vs tráfico según parqueadero (#27): con garaje el comprador
+  // probablemente anda en carro → tráfico primero; sin garaje → transporte primero.
+  // parqueaderos null (común en scrapeados) → orden default (transporte primero).
+  const transitTile = transit != null ? { label: "Transporte público", score: transit, sub: transitSub(transit) } : null;
+  const traficoTile = traficoScore != null ? { label: "Tráfico", score: traficoScore, sub: traficoSub } : null;
+  const movilidad = (parqueaderos ?? 0) > 0 ? [traficoTile, transitTile] : [transitTile, traficoTile];
+
   const tiles: { label: string; score: number; sub: string }[] = [];
   if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
-  if (transit != null) tiles.push({ label: "Transporte público", score: transit, sub: transitSub(transit) });
+  for (const t of movilidad) if (t) tiles.push(t);
   if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
-  if (traficoScore != null) tiles.push({ label: "Tráfico", score: traficoScore, sub: traficoSub });
   if (tiles.length === 0) return null;
 
   return (
@@ -1451,7 +1457,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       })()}
 
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
-      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} />}
+      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} />}
 
       {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
       <ValorEstimado listing={listing} />
