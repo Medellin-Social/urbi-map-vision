@@ -46,7 +46,7 @@ import { formatCOP, formatNumber, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLang, AutoTranslate } from "@/lib/i18n";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
-import { useListings, useCiudadStats, useBarrios, useBarriosRaw } from "@/hooks/useBarrios";
+import { useListings, useCiudadStats, useBarrios, useBarriosRaw, useBarrio } from "@/hooks/useBarrios";
 import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
 import type { ApiListing } from "@/lib/adapters";
 
@@ -1591,7 +1591,11 @@ function CatastroSection({ n }: { n: Neighborhood }) {
 /* ------------- Mercado real (compraventas SNR/ORIPS) ------------- */
 
 function MercadoRealSection({ n }: { n: Neighborhood }) {
-  const mr = n.mercado_real;
+  // #15 Temperatura: mercado_real (clasificacion vendedor/comprador) sólo viene en
+  // el detalle get_barrio — el LATERAL de compraventas es caro, por eso el mapa no
+  // lo trae. Barrios reales (<800k) piden el detalle; sintéticos quedan sin sección.
+  const { data: detalle } = useBarrio(n.id < 800_000 ? n.id : null);
+  const mr = detalle?.mercado_real ?? n.mercado_real;
   if (!mr || mr.anio_dato == null) return null;
 
   const color = mr.clasificacion_mercado ? MERCADO_REAL_COLORS[mr.clasificacion_mercado] ?? "#5B5F5C" : "#5B5F5C";
