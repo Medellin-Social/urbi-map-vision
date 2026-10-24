@@ -38,8 +38,10 @@ import { formatDate } from "@/lib/format";
 import { useLang, translateString, Name } from "@/lib/i18n";
 import { useUnit, formatArea } from "@/hooks/useUnit";
 
-// ponytail: flip a true cuando el cron notificador de alertas_precio exista (hoy no).
-const ALERTAS_NOTIFIER_READY = false;
+// #4: cron notificador ya existe (scripts/alertas_notificar.py, agendado en
+// Dockerfile.cron 14:00 UTC diario) → botón visible. Requiere redeploy de
+// social-cron para que efectivamente dispare.
+const ALERTAS_NOTIFIER_READY = true;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 

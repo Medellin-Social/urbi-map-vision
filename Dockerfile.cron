@@ -110,6 +110,7 @@ RUN printf '%s\n' \
     "0 12 1 * * app cd /app && python3 scripts/run_seguridad_mensual.py >> /var/log/urbi/seguridad_mensual.log 2>&1" \
     "0 11 * * * app cd /app && python3 scripts/fetch_usd_rate.py >> /var/log/urbi/parametros_diario.log 2>&1" \
     "15 11 * * 1 app cd /app && python3 scripts/fetch_trm.py >> /var/log/urbi/trm_semanal.log 2>&1" \
+    "0 14 * * * app cd /app && python3 scripts/alertas_notificar.py >> /var/log/urbi/alertas.log 2>&1" \
     > /etc/cron.d/urbidata \
     && chmod 0644 /etc/cron.d/urbidata \
     && crontab /etc/cron.d/urbidata
