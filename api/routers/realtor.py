@@ -352,6 +352,9 @@ async def cerrar_listing(
             # llaves: las del request mandan; si no, las que ya tenía el listing
             matricula = (req.matricula_inmobiliaria or lst["matricula_inmobiliaria"] or "").strip() or None
             catastral = (req.cedula_catastral or lst["cedula_catastral"] or "").strip() or None
+            # #11: matrícula obligatoria en cierres (llave del evento de propiedad durable).
+            if not matricula:
+                raise HTTPException(status_code=400, detail="La matrícula inmobiliaria es obligatoria para reportar el cierre")
 
             await conn.execute(
                 "UPDATE listing SET estado = 'cerrado', "

@@ -264,6 +264,10 @@ async def crear_listing(
         raise HTTPException(400, "Falta la ubicación (pin en el mapa)")
     if not (direccion or "").strip():
         raise HTTPException(400, "La dirección exacta es obligatoria")
+    # #11: matrícula obligatoria solo en listings NUEVOS (identidad de propiedad +
+    # dedup). Los existentes no se tocan.
+    if not (matricula_inmobiliaria or "").strip():
+        raise HTTPException(400, "La matrícula inmobiliaria es obligatoria para publicar")
 
     pool = get_pool()
     operacion = _OPERACION_MAP.get(tipo_operacion)
