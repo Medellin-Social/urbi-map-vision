@@ -46,7 +46,7 @@ import { formatCOP, formatNumber, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useLang, AutoTranslate } from "@/lib/i18n";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
-import { useListings, useCiudadStats, useBarrios, useBarriosRaw, useBarrio } from "@/hooks/useBarrios";
+import { useListings, useCiudadStats, useBarrios, useBarriosRaw, useBarrio, useBarrioMercadoSerie } from "@/hooks/useBarrios";
 import { useFavoritos, useToggleFavorito } from "@/hooks/useUser";
 import type { ApiListing } from "@/lib/adapters";
 
@@ -1595,6 +1595,10 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
   // el detalle get_barrio — el LATERAL de compraventas es caro, por eso el mapa no
   // lo trae. Barrios reales (<800k) piden el detalle; sintéticos quedan sin sección.
   const { data: detalle } = useBarrio(n.id < 800_000 ? n.id : null);
+  // #14: serie de precios del municipio (9 años) → momentum que da firmeza a la temperatura.
+  const { data: serieData } = useBarrioMercadoSerie(n.id < 800_000 ? n.id : null);
+  const serie = serieData?.serie ?? [];
+  const cagr = serieData?.cagr_pct ?? null;
   const mr = detalle?.mercado_real ?? n.mercado_real;
   if (!mr || mr.anio_dato == null) return null;
 
@@ -1637,6 +1641,37 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
             >
               {clasifLabel}
             </span>
+          </div>
+        )}
+        {serie.length >= 2 && (
+          <div className="border-t border-border pt-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                Precios {serie[0].anio}–{serie[serie.length - 1].anio}
+              </span>
+              {cagr != null && (
+                <span
+                  className="text-[11px] font-bold tabular-nums"
+                  style={{ color: cagr > 3 ? "#0F8A4F" : cagr < -3 ? "#CE1126" : "#5B5F5C" }}
+                >
+                  {cagr > 0 ? "+" : ""}{cagr}%/año {cagr > 3 ? "↑" : cagr < -3 ? "↓" : "→"}
+                </span>
+              )}
+            </div>
+            <div className="mt-1 h-10 w-full">
+              <ResponsiveContainer>
+                <BarChart data={serie} margin={{ top: 2, right: 0, left: 0, bottom: 0 }}>
+                  <XAxis dataKey="anio" hide />
+                  <Tooltip
+                    cursor={{ fill: "transparent" }}
+                    contentStyle={{ fontSize: 11, padding: "2px 8px" }}
+                    formatter={(v) => [formatCOP(Number(v)), "Mediana"]}
+                    labelFormatter={(l) => `${l}`}
+                  />
+                  <Bar dataKey="valor_mediana" fill={color} radius={[2, 2, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
       </div>

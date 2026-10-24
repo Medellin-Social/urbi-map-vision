@@ -1067,6 +1067,45 @@ async def get_barrio_info(barrio_id: int):
     return BarrioInfo(**dict(row))
 
 
+# ── Serie de precios por municipio (#14) — da firmeza a la temperatura (#15) ──────
+# compraventas reales SNR/ORIPS, mediana por año. Nivel municipio (no barrio, no hay
+# dato por barrio). Excluye el año en curso (parcial) y años con <30 transacciones.
+_MERCADO_SERIE_SQL = """
+    SELECT cs.anio, cs.valor_mediana, cs.n_transacciones
+    FROM analytics.compraventas_municipio_stats cs
+    JOIN raw.barrios b ON cs.municipio = UPPER(b.municipio)
+    WHERE b.id = $1
+      AND cs.anio IS NOT NULL
+      AND cs.anio < EXTRACT(YEAR FROM CURRENT_DATE)::int
+      AND cs.n_transacciones >= 30
+      AND cs.valor_mediana > 0
+    ORDER BY cs.anio
+"""
+
+
+@router.get("/{barrio_id}/mercado-serie")
+async def get_mercado_serie(barrio_id: int):
+    """Serie anual de precio mediano del municipio (#14) + CAGR para el momentum."""
+    pool = get_pool()
+    rows = await pool.fetch(_MERCADO_SERIE_SQL, barrio_id)
+    serie = [
+        {"anio": r["anio"], "valor_mediana": int(r["valor_mediana"]),
+         "n_transacciones": int(r["n_transacciones"])}
+        for r in rows
+    ]
+    # CAGR: último año completo vs ~3 años antes (lo disponible). %/año.
+    cagr_pct = None
+    anios_cagr = None
+    if len(serie) >= 2:
+        last = serie[-1]
+        base = serie[max(0, len(serie) - 4)]
+        n = last["anio"] - base["anio"]
+        if n > 0 and base["valor_mediana"] > 0:
+            cagr_pct = round(((last["valor_mediana"] / base["valor_mediana"]) ** (1 / n) - 1) * 100, 1)
+            anios_cagr = n
+    return {"serie": serie, "cagr_pct": cagr_pct, "anios_cagr": anios_cagr}
+
+
 @router.get("/comparar", response_model=list[BarrioResponse])
 async def comparar_barrios(
     ids: str = Query(description="IDs separados por coma: 1,2,3 (máx 3)"),
