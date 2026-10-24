@@ -444,6 +444,8 @@ function AlertModal({ listing, onClose }: { listing: ApiListingDetail; onClose: 
 
 type BarrioFetch = {
   seguridad?: { score?: number | null } | null;
+  tiempo_poblado_min?: number | null;
+  tiempo_centro_min?: number | null;
   conectividad?: {
     dist_metro_km?: number | null;
     indice_nomada?: number | null;
@@ -516,7 +518,13 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
   for (const t of movilidad) if (t) tiles.push(t);
   if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
-  if (tiles.length === 0) return null;
+
+  // Tiempo en auto a puntos clave, hora pico (#27). Minutos, no score. Solo
+  // llega con barrio_id (vía /barrios/{id}); los listings sin barrio no lo traen.
+  const tPoblado = data?.tiempo_poblado_min ?? null;
+  const tCentro = data?.tiempo_centro_min ?? null;
+  const hayTiempos = tPoblado != null || tCentro != null;
+  if (tiles.length === 0 && !hayTiempos) return null;
 
   return (
     <div className="space-y-2.5">
@@ -526,6 +534,17 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
           <ScoreBar key={t.label} label={t.label} score={t.score} sub={t.sub} />
         ))}
       </div>
+      {hayTiempos && (
+        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#6E726E" }}>
+          <Car className="h-3.5 w-3.5 shrink-0" />
+          <span>
+            En carro, hora pico:
+            {tPoblado != null && <> El Poblado ~{tPoblado} min</>}
+            {tPoblado != null && tCentro != null && " ·"}
+            {tCentro != null && <> Centro ~{tCentro} min</>}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

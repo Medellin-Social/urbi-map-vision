@@ -249,6 +249,8 @@ class BarrioResponse(BaseModel):
     estrato: Optional[int] = None
     poblacion_comuna: Optional[int] = None
     poblacion_municipio: Optional[int] = None
+    tiempo_poblado_min: Optional[int] = None
+    tiempo_centro_min: Optional[int] = None
     geometry: Optional[dict[str, Any]] = None
     color_hex: Optional[str] = None
     excluir_inversion: Optional[bool] = None
@@ -284,6 +286,8 @@ _BARRIO_MAP_SQL = """
         sl.estrato_barrio                   AS estrato,
         pcom.poblacion                      AS poblacion_comuna,
         pmun.poblacion                      AS poblacion_municipio,
+        ztr.tiempo_poblado_min,
+        ztr.tiempo_centro_min,
         ST_AsGeoJSON(ST_SimplifyPreserveTopology(b.geometry, 0.0003)) AS geometry_raw,
         sc.score_corto,
         sc.categoria_corto                  AS cat_corto,
@@ -342,6 +346,9 @@ _BARRIO_MAP_SQL = """
     LEFT JOIN analytics.score_largo_plazo         sl  ON b.id = sl.barrio_id
     LEFT JOIN raw.poblacion_comuna     pcom ON pcom.comuna    = b.comuna
     LEFT JOIN raw.poblacion_municipio  pmun ON pmun.municipio = b.municipio
+    LEFT JOIN analytics.zona_tiempos_recorrido ztr
+           ON ztr.zona_tipo   = CASE WHEN upper(b.municipio) = 'MEDELLIN' THEN 'comuna' ELSE 'municipio' END
+          AND ztr.zona_codigo = CASE WHEN upper(b.municipio) = 'MEDELLIN' THEN upper(b.comuna) ELSE upper(b.municipio) END
 """
 
 _BARRIO_SQL = """
@@ -353,6 +360,8 @@ _BARRIO_SQL = """
         sl.estrato_barrio                   AS estrato,
         pcom.poblacion                      AS poblacion_comuna,
         pmun.poblacion                      AS poblacion_municipio,
+        ztr.tiempo_poblado_min,
+        ztr.tiempo_centro_min,
         ST_AsGeoJSON(b.geometry)            AS geometry_raw,
         -- scores
         sc.score_corto,
@@ -506,6 +515,9 @@ _BARRIO_SQL = """
     -- mayúsculas (igual que raw.icfes_municipio). Tablas de referencia migr 0081.
     LEFT JOIN raw.poblacion_comuna     pcom ON pcom.comuna    = b.comuna
     LEFT JOIN raw.poblacion_municipio  pmun ON pmun.municipio = b.municipio
+    LEFT JOIN analytics.zona_tiempos_recorrido ztr
+           ON ztr.zona_tipo   = CASE WHEN upper(b.municipio) = 'MEDELLIN' THEN 'comuna' ELSE 'municipio' END
+          AND ztr.zona_codigo = CASE WHEN upper(b.municipio) = 'MEDELLIN' THEN upper(b.comuna) ELSE upper(b.municipio) END
     LEFT JOIN LATERAL (
         WITH ultimo AS (
             SELECT anio, n_transacciones, valor_mediana
@@ -644,6 +656,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
         estrato=row.get("estrato"),
         poblacion_comuna=_i(row, "poblacion_comuna"),
         poblacion_municipio=_i(row, "poblacion_municipio"),
+        tiempo_poblado_min=_i(row, "tiempo_poblado_min"),
+        tiempo_centro_min=_i(row, "tiempo_centro_min"),
         geometry=geometry,
         color_hex=color_hex,
         excluir_inversion=excluir,
