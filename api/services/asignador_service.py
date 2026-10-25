@@ -30,7 +30,7 @@ class AsignadorError(ValueError):
 # Horas que un intake puede quedarse en 'asignado' sin que el realtor lo acepte
 # antes de volver al pool (equivalente a "si no contesta la llamada, va a
 # moderación" de Zillow: el proceso nunca se atasca en un humano).
-ASIGNADO_TIMEOUT_HORAS = int(os.getenv("ASIGNADO_TIMEOUT_HORAS", "48"))
+ASIGNADO_TIMEOUT_HORAS = int(os.getenv("ASIGNADO_TIMEOUT_HORAS", "24"))  # #23: 48->24 (más agresivo con lentos)
 
 
 async def sweep_asignados_vencidos(pool: Any) -> int:
