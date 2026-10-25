@@ -189,6 +189,7 @@ type AgentePerfil = {
   id: string; nombre: string; foto_url: string | null; bio: string | null;
   telefono: string | null; agencia_nombre: string | null; agencia_verificada: boolean;
   miembro_desde: string | null; rating_promedio: number | null; n_resenas: number;
+  responde_rapido?: boolean; mediana_resp_horas?: number | null;
   zonas: PerfilZona[]; activos: PerfilListing[]; cierres: PerfilListing[];
   n_activos: number; n_cierres: number; precio_min: number | null; precio_max: number | null;
   resenas: PerfilResena[];
@@ -285,6 +286,15 @@ function AgentePerfilModal({ agentId, onClose }: { agentId: string; onClose: () 
                   <div className="mt-0.5 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>
                 )}
                 <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                  {p.responde_rapido && (
+                    <span
+                      className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
+                      style={{ background: K.tealLight, color: K.tealDeep }}
+                      title="Responde rápido a los interesados"
+                    >
+                      ⚡ Responde rápido{p.mediana_resp_horas != null ? ` (~${Math.round(p.mediana_resp_horas)}h)` : ""}
+                    </span>
+                  )}
                   {p.agencia_nombre && (
                     <span
                       className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"

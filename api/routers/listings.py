@@ -1623,6 +1623,8 @@ class AgentePerfil(BaseModel):
     miembro_desde: Optional[datetime] = None
     rating_promedio: Optional[float] = None
     n_resenas: int = 0
+    responde_rapido: bool = False            # #23: sello si mediana respuesta <= 12h (>=3 visitas)
+    mediana_resp_horas: Optional[float] = None
     zonas: list[AgentePerfilZona] = []
     activos: list[AgentePerfilListing] = []
     cierres: list[AgentePerfilListing] = []
@@ -1636,7 +1638,8 @@ class AgentePerfil(BaseModel):
 _AGENTE_PERFIL_SQL = """
 SELECT a.id::text, a.nombre, a.foto_url, a.bio, a.telefono, a.created_at AS miembro_desde,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
-       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
+       resp.mediana_resp_horas, COALESCE(resp.n_resp, 0) AS n_resp
 FROM agent a
 LEFT JOIN LATERAL (
     SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
@@ -1648,6 +1651,17 @@ LEFT JOIN (
            COUNT(*)::int AS n_resenas
     FROM agent_review GROUP BY agent_id
 ) rev ON rev.agent_id = a.id
+-- #23 responsividad: mediana de horas en responder visitas (updated_at proxy de
+-- 1ra respuesta, igual que el SLA de /desempeno). Solo cuenta si hay historial.
+LEFT JOIN LATERAL (
+    SELECT percentile_cont(0.5) WITHIN GROUP (
+             ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0
+           ) AS mediana_resp_horas,
+           count(*) AS n_resp
+    FROM visita_solicitud v
+    WHERE v.agent_id = a.id AND v.estado <> 'pendiente'
+      AND v.created_at > NOW() - INTERVAL '180 days'
+) resp ON true
 WHERE a.id = $1 AND a.estado = 'activo'
 """
 
@@ -1711,6 +1725,9 @@ async def get_agente_perfil(request: Request, agent_id: str):
         telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
         agencia_verificada=base["agencia_verificada"], miembro_desde=base["miembro_desde"],
         rating_promedio=base["rating_promedio"], n_resenas=base["n_resenas"],
+        responde_rapido=((base["n_resp"] or 0) >= 3 and base["mediana_resp_horas"] is not None
+                         and base["mediana_resp_horas"] <= 12),
+        mediana_resp_horas=round(float(base["mediana_resp_horas"]), 1) if base["mediana_resp_horas"] is not None else None,
         zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
                if z["nombre"]],
         activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
