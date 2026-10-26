@@ -657,7 +657,7 @@ function TemperaturaMercado({ barrioId }: { barrioId: number }) {
         {mr.meses_inventario != null && <span className="text-[12px] tabular-nums" style={{ color: "#5B5F5C" }}>{mr.meses_inventario} meses de inventario</span>}
         {mr.var_anual_pct != null && <span className="text-[12px] tabular-nums" style={{ color: "#5B5F5C" }}>· precios {mr.var_anual_pct > 0 ? "+" : ""}{mr.var_anual_pct}%/año</span>}
       </div>
-      <p className="text-[11px]" style={{ color: "#6E726E" }}>Compraventas reales del municipio (SNR/ORIPS) — oferta vs demanda. Nivel municipio.</p>
+      <p className="text-[11px]" style={{ color: "#6E726E" }}>Compraventas reales del municipio (SNR/ORIPS) — oferta vs demanda. Nivel municipio. Basado en valores de escritura: puede estar por debajo del precio real de venta.</p>
     </div>
   );
 }

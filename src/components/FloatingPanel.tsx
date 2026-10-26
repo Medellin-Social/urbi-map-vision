@@ -1680,6 +1680,7 @@ function MercadoRealSection({ n }: { n: Neighborhood }) {
         Fuente: registro notarial SNR/ORIPS, nivel municipio (no barrio) — {mr.n_transacciones_anual != null ? formatNumber(mr.n_transacciones_anual) : "—"} transacciones reales de {n.municipio} en {mr.anio_dato}.
         {mr.ipvn_dane_pct != null && ` Índice DANE nacional del mismo año: ${mr.ipvn_dane_pct > 0 ? "+" : ""}${mr.ipvn_dane_pct}% (referencia, no aplicado como ajuste).`}
         {" "}Valor absoluto, no controla mezcla de tipo/tamaño de inmueble.
+        {" "}Basado en valores de escritura: puede estar por debajo del precio real de venta.
       </p>
     </Section>
   );
@@ -1761,7 +1762,7 @@ function ValorizacionSection({ n }: { n: Neighborhood }) {
       <p className="mt-1.5 text-[10px] text-muted-foreground">
         {isReal
           ? "Fuente: datos reales del barrio"
-          : `Fuente: DANE IPVN · Ajustado por estrato ${n.estrato}`}
+          : `Estimación (no tasación) — proyección basada en DANE IPVN, ajustada por estrato ${n.estrato}`}
       </p>
     </Section>
   );
