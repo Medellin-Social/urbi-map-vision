@@ -1625,6 +1625,9 @@ class AgentePerfil(BaseModel):
     n_resenas: int = 0
     responde_rapido: bool = False            # #23: sello si mediana respuesta <= 12h (>=3 visitas)
     mediana_resp_horas: Optional[float] = None
+    n_leads: int = 0                         # #23: leads (visitas) maduros 180d — base de las tasas
+    tasa_respuesta: Optional[float] = None   # % de leads respondidos (= contacto); None si <3 leads
+    tasa_oferta: Optional[float] = None      # % de leads que llegaron a oferta (NO venta); None si <3
     zonas: list[AgentePerfilZona] = []
     activos: list[AgentePerfilListing] = []
     cierres: list[AgentePerfilListing] = []
@@ -1639,7 +1642,8 @@ _AGENTE_PERFIL_SQL = """
 SELECT a.id::text, a.nombre, a.foto_url, a.bio, a.telefono, a.created_at AS miembro_desde,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
-       resp.mediana_resp_horas, COALESCE(resp.n_resp, 0) AS n_resp
+       resp.mediana_resp_horas, COALESCE(resp.n_resp, 0) AS n_resp,
+       COALESCE(resp.n_leads, 0) AS n_leads, COALESCE(resp.n_ofertas, 0) AS n_ofertas
 FROM agent a
 LEFT JOIN LATERAL (
     SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
@@ -1651,16 +1655,22 @@ LEFT JOIN (
            COUNT(*)::int AS n_resenas
     FROM agent_review GROUP BY agent_id
 ) rev ON rev.agent_id = a.id
--- #23 responsividad: mediana de horas en responder visitas (updated_at proxy de
--- 1ra respuesta, igual que el SLA de /desempeno). Solo cuenta si hay historial.
+-- #23 responsividad estilo Zillow, sobre los leads (visitas) de 180 días,
+-- excluyendo los <48h (aún sin tiempo justo de responder):
+--   n_leads   = denominador      n_resp = estado<>'pendiente' (tasa de respuesta = contacto)
+--   n_ofertas = resultado='oferta' → tasa de OFERTA, no venta (no hay link lead→cierre)
+--   mediana   = horas en responder (solo respondidos; updated_at proxy de 1ra resp)
 LEFT JOIN LATERAL (
-    SELECT percentile_cont(0.5) WITHIN GROUP (
+    SELECT count(*) AS n_leads,
+           count(*) FILTER (WHERE v.estado <> 'pendiente') AS n_resp,
+           count(*) FILTER (WHERE v.resultado = 'oferta') AS n_ofertas,
+           percentile_cont(0.5) WITHIN GROUP (
              ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0
-           ) AS mediana_resp_horas,
-           count(*) AS n_resp
+           ) FILTER (WHERE v.estado <> 'pendiente') AS mediana_resp_horas
     FROM visita_solicitud v
-    WHERE v.agent_id = a.id AND v.estado <> 'pendiente'
+    WHERE v.agent_id = a.id
       AND v.created_at > NOW() - INTERVAL '180 days'
+      AND v.created_at < NOW() - INTERVAL '48 hours'
 ) resp ON true
 WHERE a.id = $1 AND a.estado = 'activo'
 """
@@ -1720,6 +1730,12 @@ async def get_agente_perfil(request: Request, agent_id: str):
             precios.append(r["precio"])
         (cierres if r["estado"] == "cerrado" else activos).append(item)
 
+    # #23 tasas estilo Zillow: solo con >=3 leads maduros (cold-start neutral, no
+    # penaliza al agente nuevo). None -> el front las oculta.
+    n_leads = base["n_leads"]
+    def _tasa(n):
+        return round(n * 100.0 / n_leads, 1) if n_leads >= 3 else None
+
     return AgentePerfil(
         id=base["id"], nombre=base["nombre"], foto_url=base["foto_url"], bio=base["bio"],
         telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
@@ -1728,6 +1744,7 @@ async def get_agente_perfil(request: Request, agent_id: str):
         responde_rapido=((base["n_resp"] or 0) >= 3 and base["mediana_resp_horas"] is not None
                          and base["mediana_resp_horas"] <= 12),
         mediana_resp_horas=round(float(base["mediana_resp_horas"]), 1) if base["mediana_resp_horas"] is not None else None,
+        n_leads=n_leads, tasa_respuesta=_tasa(base["n_resp"]), tasa_oferta=_tasa(base["n_ofertas"]),
         zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
                if z["nombre"]],
         activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
