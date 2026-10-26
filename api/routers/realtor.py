@@ -363,12 +363,22 @@ async def cerrar_listing(
                 "updated_at = NOW() WHERE id = $1",
                 listing_id, matricula, catastral,
             )
+            # #23 conversión real: atribuir la venta al lead que la originó — de las
+            # visitas del agente sobre este listing, la que llegó a oferta (o la más
+            # reciente). NULL si la venta no vino de un lead de la plataforma, para no
+            # inflar la tasa con cierres off-platform.
+            lead_id = await conn.fetchval(
+                "SELECT id FROM visita_solicitud "
+                "WHERE agent_id = $1 AND listing_url = $2 "
+                "ORDER BY (resultado = 'oferta') DESC NULLS LAST, created_at DESC LIMIT 1",
+                agent.id, listing_id,
+            )
             await conn.execute(
                 "INSERT INTO propiedad_evento "
                 "(matricula_inmobiliaria, cedula_catastral, listing_id, tipo_evento, "
-                " precio, fecha, agent_id) "
-                "VALUES ($1, $2, $3, 'venta', $4, COALESCE($5, CURRENT_DATE), $6)",
-                matricula, catastral, listing_id, req.precio_cierre, req.fecha_cierre, agent.id,
+                " precio, fecha, agent_id, visita_solicitud_id) "
+                "VALUES ($1, $2, $3, 'venta', $4, COALESCE($5, CURRENT_DATE), $6, $7)",
+                matricula, catastral, listing_id, req.precio_cierre, req.fecha_cierre, agent.id, lead_id,
             )
     await ghl_client.sync_listing(listing_id)
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}

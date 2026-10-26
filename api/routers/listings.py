@@ -1627,7 +1627,8 @@ class AgentePerfil(BaseModel):
     mediana_resp_horas: Optional[float] = None
     n_leads: int = 0                         # #23: leads (visitas) maduros 180d — base de las tasas
     tasa_respuesta: Optional[float] = None   # % de leads respondidos (= contacto); None si <3 leads
-    tasa_oferta: Optional[float] = None      # % de leads que llegaron a oferta (NO venta); None si <3
+    tasa_oferta: Optional[float] = None      # % de leads que llegaron a oferta (etapa embudo); None si <3
+    tasa_conversion: Optional[float] = None  # % de leads que terminaron en venta atribuida; None si <3
     zonas: list[AgentePerfilZona] = []
     activos: list[AgentePerfilListing] = []
     cierres: list[AgentePerfilListing] = []
@@ -1643,7 +1644,8 @@ SELECT a.id::text, a.nombre, a.foto_url, a.bio, a.telefono, a.created_at AS miem
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
        resp.mediana_resp_horas, COALESCE(resp.n_resp, 0) AS n_resp,
-       COALESCE(resp.n_leads, 0) AS n_leads, COALESCE(resp.n_ofertas, 0) AS n_ofertas
+       COALESCE(resp.n_leads, 0) AS n_leads, COALESCE(resp.n_ofertas, 0) AS n_ofertas,
+       COALESCE(resp.n_conversiones, 0) AS n_conversiones
 FROM agent a
 LEFT JOIN LATERAL (
     SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
@@ -1658,12 +1660,17 @@ LEFT JOIN (
 -- #23 responsividad estilo Zillow, sobre los leads (visitas) de 180 días,
 -- excluyendo los <48h (aún sin tiempo justo de responder):
 --   n_leads   = denominador      n_resp = estado<>'pendiente' (tasa de respuesta = contacto)
---   n_ofertas = resultado='oferta' → tasa de OFERTA, no venta (no hay link lead→cierre)
+--   n_ofertas = resultado='oferta' → tasa de oferta (etapa del embudo)
+--   n_conversiones = leads con una venta atribuida (propiedad_evento) → conversión real
 --   mediana   = horas en responder (solo respondidos; updated_at proxy de 1ra resp)
 LEFT JOIN LATERAL (
     SELECT count(*) AS n_leads,
            count(*) FILTER (WHERE v.estado <> 'pendiente') AS n_resp,
            count(*) FILTER (WHERE v.resultado = 'oferta') AS n_ofertas,
+           count(*) FILTER (WHERE EXISTS (
+             SELECT 1 FROM propiedad_evento pe
+             WHERE pe.visita_solicitud_id = v.id AND pe.tipo_evento = 'venta'
+           )) AS n_conversiones,
            percentile_cont(0.5) WITHIN GROUP (
              ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0
            ) FILTER (WHERE v.estado <> 'pendiente') AS mediana_resp_horas
@@ -1745,6 +1752,7 @@ async def get_agente_perfil(request: Request, agent_id: str):
                          and base["mediana_resp_horas"] <= 12),
         mediana_resp_horas=round(float(base["mediana_resp_horas"]), 1) if base["mediana_resp_horas"] is not None else None,
         n_leads=n_leads, tasa_respuesta=_tasa(base["n_resp"]), tasa_oferta=_tasa(base["n_ofertas"]),
+        tasa_conversion=_tasa(base["n_conversiones"]),
         zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
                if z["nombre"]],
         activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
