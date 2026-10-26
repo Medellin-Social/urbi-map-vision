@@ -38,10 +38,14 @@ import { formatDate } from "@/lib/format";
 import { useLang, translateString, Name } from "@/lib/i18n";
 import { useUnit, formatArea } from "@/hooks/useUnit";
 
-// #4: cron notificador ya existe (scripts/alertas_notificar.py, agendado en
-// Dockerfile.cron 14:00 UTC diario) → botón visible. Requiere redeploy de
-// social-cron para que efectivamente dispare.
-const ALERTAS_NOTIFIER_READY = true;
+// #4 / To-do §1.2: el cron notificador existe (scripts/alertas_notificar.py,
+// Dockerfile.cron 14:00 UTC) PERO la alerta no llega end-to-end: api/utils/email
+// cae en [EMAIL STUB] (no hay SMTP_USER/PASS ni Gmail API configurado → imprime,
+// no envía) y el social-cron no está redeployado. Botón OCULTO hasta que:
+//   1) email transport real (SMTP_USER/PASS o Gmail OAuth) esté configurado, y
+//   2) social-cron redeployado, y 3) una alerta de prueba llegue de verdad.
+// Probado 2026-10-26: send_email a ADMIN_EMAIL → [EMAIL STUB], no se entregó.
+const ALERTAS_NOTIFIER_READY = false;
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
