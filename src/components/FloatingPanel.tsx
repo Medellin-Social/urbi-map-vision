@@ -44,6 +44,7 @@ import { auth, GOAL_LABEL, recommendation, type Goal } from "@/lib/auth";
 import { useTarget, TARGET_OPTIONS } from "@/contexts/TargetContext";
 import { formatCOP, formatNumber, formatPct, yieldColor } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsAgente } from "@/components/LockedField";
 import { useLang, AutoTranslate } from "@/lib/i18n";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { useListings, useCiudadStats, useBarrios, useBarriosRaw, useBarrio, useBarrioMercadoSerie } from "@/hooks/useBarrios";
@@ -1705,6 +1706,9 @@ function ValorizacionSection({ n }: { n: Neighborhood }) {
   const api = n.valorizacion_api;
   const fallback = calcValorizStats(n.estrato);
   const isReal = api?.var_anual_pct != null;
+  // To-do §2: la PROYECCIÓN de valorización es solo para agentes. Lo histórico
+  // (último año, acumulado desde 2015) queda público — es historial de precios.
+  const isAgente = useIsAgente();
 
   const varAnual = api?.var_anual_pct ?? fallback.ultimoAnio;
   const proy5 = api?.proyeccion_5anos_pct != null ? Math.round(api.proyeccion_5anos_pct) : fallback.proj5;
@@ -1722,7 +1726,7 @@ function ValorizacionSection({ n }: { n: Neighborhood }) {
             <div className="text-[10px] text-muted-foreground mt-0.5">último año</div>
           </div>
           <div className="text-center">
-            {proy3 != null ? (
+            {isAgente && proy3 != null ? (
               <>
                 <div className="font-display text-xl font-bold text-success">+{Math.round(proy3)}%</div>
                 <div className="text-[10px] text-muted-foreground mt-0.5">proy. 3 años</div>
@@ -1738,9 +1742,13 @@ function ValorizacionSection({ n }: { n: Neighborhood }) {
         <div className="border-t border-border pt-2 flex items-center justify-between text-xs text-muted-foreground">
           <span>
             Proyección 5 años:{" "}
-            <span className="font-semibold text-foreground">+{proy5}%</span>
+            {isAgente ? (
+              <span className="font-semibold text-foreground">+{proy5}%</span>
+            ) : (
+              <span className="font-semibold text-muted-foreground">🔒 Solo agentes</span>
+            )}
           </span>
-          {badge && (
+          {isAgente && badge && (
             <span
               className="rounded-md px-2 py-0.5 text-[11px] font-semibold"
               style={{ color: badge.color, background: `${badge.color}20` }}

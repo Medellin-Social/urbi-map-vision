@@ -560,8 +560,10 @@ _BARRIO_CTX_KEYS = (
 #   Registrado (inversionista, gratis con registro): rentabilidad/yields.
 #   Realtor (paga): scores de inversión + inteligencia profunda.
 _REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct")
+# To-do §2: seguridad pasó de realtor-only a PÚBLICA (gratis para todos) — ya no
+# está en esta lista. Los scores de inversión y liquidez siguen siendo realtor.
 _REALTOR_FIELDS = (
-    "liquidez_score", "seguridad_score",
+    "liquidez_score",
     "score_corto", "score_mediano", "score_largo",
     "indice_nomada", "barrio_score", "barrio_yield",
     "tiempo_estimado_venta",
