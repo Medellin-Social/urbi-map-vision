@@ -612,7 +612,7 @@ function MapPageInner() {
     if (listing.lat && listing.lon) {
       flyToListingRef.current?.(listing.lat, listing.lon);
     }
-    track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 
@@ -621,7 +621,7 @@ function MapPageInner() {
     setHighlightedListingId(id);
     const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
     if (!listing) return;
-    track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
     setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 
@@ -630,8 +630,7 @@ function MapPageInner() {
     setHighlightedListingId(id);
     setMiniPopupData(null);
     const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
-    if (listing) track('listing_view', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
-    openListingDetail(id);
+    openListingDetail(id);  // listing_detail lo emite el ListingDrawer al montar
   }
 
 
