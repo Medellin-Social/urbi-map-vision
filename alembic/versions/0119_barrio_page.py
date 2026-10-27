@@ -7,13 +7,13 @@
                                              eventos y tiendas (0079), editable con el
                                              mismo PATCH de admin.
 
-Revision ID: 0113
-Revises: 0112
+Revision ID: 0119
+Revises: 0118
 """
 from alembic import op
 
-revision = "0113"
-down_revision = "0112"
+revision = "0119"
+down_revision = "0118"
 branch_labels = None
 depends_on = None
 
