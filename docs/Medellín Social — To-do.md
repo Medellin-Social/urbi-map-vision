@@ -18,18 +18,19 @@ Lo que falta según el estado de funciones del 26 de octubre. El cobro real qued
 
 ## 3. Revisión de métricas y supuestos
 
-- [ ] Precio justo: revisar cuántos barrios salen como sobreprecio, normal y oportunidad con la regla del 0,6% mensual. Si los barrios caros salen casi todos en sobreprecio, ajustar la tasa por estrato.
-- [ ] Valorización: investigar una fuente para los factores por estrato (×0,90 a ×1,15). Mientras tanto, rotular la proyección como estimación.
-- [ ] Datos de la SNR (cierres por zona): dejar visibles con la nota "basado en valores de escritura, puede estar por debajo del precio real".
-- [ ] Rotular el arriendo estimado (mediana del barrio) y el valor de mercado (estimado con precios publicados).
+- [x] Precio justo: revisar cuántos barrios salen como sobreprecio, normal y oportunidad con la regla del 0,6% mensual. Si los barrios caros salen casi todos en sobreprecio, ajustar la tasa por estrato. — **Confirmado y arreglado** (commit 6c6fcc4). El 0,6% fijo marcaba 68% SOBRE (estratos 4/5/6 = 100% SOBRE) porque el yield real cae con el estrato (~0,33%/mes en altos). Ahora `estado_precio` usa el rendimiento mediano REAL de cada estrato como benchmark (CTEs en `barrios_mercado.sql`, auto-calibra; satélites sin estrato → mediana global). Distribución: SOBRE 404→180, NORMAL 137→201, BAJO 49→209. Rebuilt en DEV (barrios_mercado+ → 11 modelos).
+- [x] Valorización: investigar una fuente para los factores por estrato (×0,90 a ×1,15). Mientras tanto, rotular la proyección como estimación. — Rotulada "Estimación (no tasación) — proyección basada en DANE IPVN, ajustada por estrato" (commit d9d4c47). Fuente de factores: pendiente investigar (sigue siendo heurístico DANE+estrato). La proyección además quedó solo-agentes (§2).
+- [x] Datos de la SNR (cierres por zona): dejar visibles con la nota "basado en valores de escritura, puede estar por debajo del precio real". — Nota agregada en drawer y panel (commit d9d4c47).
+- [x] Rotular el arriendo estimado (mediana del barrio) y el valor de mercado (estimado con precios publicados). — Ya estaban: "Renta típica del barrio · mediana" y "Estimado con precios publicados, no de cierre".
+- [ ] (Pendiente, derivado de §1) Recalibrar umbrales categoría catastro (SOBRE/NORMAL/CERCANO 3,0/1,5): el catastro de Medellín va ~5-8x bajo mercado → casi todo cae SOBRE_CATASTRO. Mismo tipo de ajuste que el precio justo.
 
 ## 4. Ajustes técnicos
 
-- [ ] Índice verde: calcular con el área real de cada parque en OpenStreetMap, no 5.000 m² fijos.
-- [ ] Seguridad en municipios satélite: revisar la regla de +5 puntos por estación de policía cerca (puede estar al revés).
-- [ ] "Publicado en N portales": comparar fotos (hash perceptual) para no juntar apartamentos distintos del mismo edificio.
-- [ ] Tiempos de recorrido: re-correr HERE periódicamente y explorar la franja de la tarde y más destinos.
-- [ ] Confirmar en producción el perfil público del agente (tasas y sello "responde rápido").
+- [~] Índice verde: calcular con el área real de cada parque en OpenStreetMap, no 5.000 m² fijos. — **Diferido** (decisión 26 oct): es un estimado de sub-score secundario, no vale el build (raw.pois es POINT/centroide; "área real" = re-ingerir polígonos OSM + reescribir modelo + re-run DEV/prod). El 5.000 m² fijo se queda; es suficiente para un estimado.
+- [x] Seguridad en municipios satélite: revisar la regla de +5 puntos por estación de policía cerca (puede estar al revés). — **Revisado: NO está invertido.** `barrios_seguridad.sql` suma +5 SÓLO a scores estimados de satélites con policía <1 km (dirección = más seguro, defendible por disuasión); nunca aplica a comunas de Medellín con dato oficial. Sin cambio.
+- [ ] "Publicado en N portales": comparar fotos (hash perceptual) para no juntar apartamentos distintos del mismo edificio. — (#9) Excluido por ahora (build grande).
+- [x] Tiempos de recorrido: re-correr HERE periódicamente y explorar la franja de la tarde y más destinos. — **Prod estaba VACÍO** (el script nunca corrió en prod → tiempos no funcionaban). Poblé prod (25 zonas, HERE Routing v8, pico AM). DEV ya estaba fresco. **PM + más destinos = feature futura** (columnas nuevas + migración + API + frontend).
+- [~] Confirmar en producción el perfil público del agente (tasas y sello "responde rápido"). — **Diferido**: ya desplegado (código+migr en prod) pero es data-conditional → invisible hasta que onboarden agentes con leads (prod tiene 0). Verificar cuando haya dato real.
 
 ## 5. Por construir (sin prioridad definida)
 
@@ -80,4 +81,4 @@ De los 27 puntos de "Pendientes y roles". La mayoría ya está arriba o hecha en
 - [ ] **#7 Conexión vencida de la fuente de seguridad** — bloqueado por certificado vencido de medata (externo). El monitoreo de fuentes (§6) lo avisaría, pero falta reconectar o reemplazar la fuente.
 - [ ] **#8 Calidad de colegios (ICFES)** — diferido: métrica floja + fuente bloqueada. Se decidió dar "N colegios a ≤1 km" vía los POIs del detalle (#1) en vez del puntaje ICFES. Reactivar solo si aparece una fuente limpia.
 
-Ya hechas en la rama (no re-listadas arriba, falta desplegar a DEV/prod): #1 POIs otros municipios · #2 cara/barata gratis · #3 arriendo rotulado · #5 población · #11 matrícula obligatoria (publicar + cierre) · #12 precio de cierre · #13 valor estimado de venta · #14 serie de precios por barrio · #15 temperatura del mercado · #17 obras cercanas (nombre + etapa) · #21 base de realtors e incentivos · #22 perfil público + reseñas · #23 tiempo de respuesta + tasas estilo Zillow + conversión · #24 calificación de prospectos · #27 movilidad (reorder por parqueadero + tiempos HERE).
+Ya hechas y **desplegadas a main + prod** (merge Oct-23 + recompute dbt/catastro + HERE prod 26 oct): #1 POIs otros municipios · #2 cara/barata gratis · #3 arriendo rotulado · #5 población · #11 matrícula obligatoria (publicar + cierre) · #12 precio de cierre · #13 valor estimado de venta · #14 serie de precios por barrio · #15 temperatura del mercado · #17 obras cercanas (nombre + etapa) · #21 base de realtors e incentivos · #22 perfil público + reseñas · #23 tiempo de respuesta + tasas estilo Zillow + conversión · #24 calificación de prospectos · #27 movilidad (reorder por parqueadero + tiempos HERE, prod poblado).

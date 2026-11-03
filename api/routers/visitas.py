@@ -72,6 +72,31 @@ class VisitaRequest(BaseModel):
     credito: Optional[Literal["contado", "aprobado", "en_tramite", "no"]] = None
 
 
+# Prospecto (#7): resuelve el realtor patrocinador de la zona del inmueble a partir
+# del listing_url (staging → barrio_id/comuna → sponsorship vigente). Prioriza
+# patrocinio de comuna sobre barrio y al owner de la agencia. Mismo criterio que
+# _LISTING_AGENT_ID_SQL (listings.py, slots de visita) pero keyando por url.
+_VISITA_ZONA_AGENT_SQL = """
+WITH lz AS (
+    SELECT l.barrio_id, bc.cd_comuna
+    FROM staging.stg_listings_unificado l
+    LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+    WHERE l.url = $1
+    LIMIT 1
+)
+SELECT a.id
+FROM sponsorship s
+JOIN agency_member am ON am.agency_id = s.agency_id
+JOIN agent a ON a.id = am.agent_id AND a.estado = 'activo'
+JOIN lz ON ((s.zona_nivel = 'barrio' AND s.zona_codigo = lz.barrio_id::text)
+         OR (s.zona_nivel = 'comuna' AND s.zona_codigo = lz.cd_comuna::text))
+WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+ORDER BY CASE WHEN s.zona_nivel = 'comuna' THEN 0 ELSE 1 END,
+         CASE WHEN am.rol::text = 'owner' THEN 0 ELSE 1 END, s.fecha_inicio
+LIMIT 1
+"""
+
+
 @router.post("", status_code=201)
 @limiter.limit("5/minute")
 async def crear_visita(
@@ -92,6 +117,12 @@ async def crear_visita(
             "SELECT agent_id FROM listing WHERE id::text = $1",
             req.listing_url,
         )
+        # Prospecto (#7): si no es un listing propio, rutear al realtor PATROCINADOR
+        # de la zona del inmueble (barrio → comuna). Así una visita sobre un aviso
+        # scrapeado en zona patrocinada igual aterriza en el realtor que paga la zona
+        # — sin esto el agent_id quedaba NULL y la visita no le llegaba a nadie.
+        if agent_id is None:
+            agent_id = await conn.fetchval(_VISITA_ZONA_AGENT_SQL, req.listing_url)
         row = await conn.fetchrow(
             """
             INSERT INTO visita_solicitud
