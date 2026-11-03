@@ -384,13 +384,15 @@ SELECT
     l.amoblado,
     l.verificado,
     COALESCE(_fav.favoritos_count, 0) AS favoritos_count,
-    COALESCE(mm.portada_r2, l.foto_principal) AS foto_principal,
+    -- ponytail: el backfill del espejo R2 corrió en modo STUB (bucket vacío) →
+    -- portada_r2 guardó URLs rotas (host vacío, objeto inexistente). Servir el CDN
+    -- original hasta que R2 esté realmente poblado; re-añadir COALESCE(mm.portada_r2,…) ahí.
+    l.foto_principal AS foto_principal,
     l.nombre_edificio
 FROM lraw l
 LEFT JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.listings_georef g  ON g.url = l.url
 LEFT JOIN public.listing_link_health _llh ON _llh.url = l.url
-LEFT JOIN raw.listing_media_mirror mm ON mm.url = l.url AND mm.activa
 LEFT JOIN analytics.barrios_medianas m ON m.barrio_id = l.barrio_id
                AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
 LEFT JOIN analytics.barrios_cd bc     ON bc.barrio_id = b.id
@@ -986,7 +988,8 @@ SELECT
          THEN (lm.raw_data->>'nroGarajes')::int END AS parqueaderos,
     CASE WHEN lm.raw_data->>'nroPiso' ~ '^\d+$'
          THEN (lm.raw_data->>'nroPiso')::int END    AS piso,
-    COALESCE(mm.fotos_r2, l.fotos, lp.fotos) AS fotos,
+    -- ponytail: backfill R2 en STUB → fotos_r2 = URLs rotas; servir galería original.
+    COALESCE(l.fotos, lp.fotos) AS fotos,
     pr.m2_p25::int  AS precio_m2_p25,
     pr.m2_p75::int  AS precio_m2_p75,
     pr.arr_p25::int AS arr_p25,
@@ -1016,8 +1019,6 @@ LEFT JOIN analytics.barrios_medianas m
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_liquidez liq ON liq.barrio_id = l.barrio_id
--- Espejo R2: galería redimensionada (webp) — prioridad sobre el CDN original.
-LEFT JOIN raw.listing_media_mirror mm ON mm.url = l.url AND mm.activa
 -- Avalúo catastral (Medellín) — agregado por comuna en listings_vs_catastro.
 LEFT JOIN (
     SELECT cd_comuna, MAX(avaluo_m2_catastro) AS avaluo_m2_catastro
