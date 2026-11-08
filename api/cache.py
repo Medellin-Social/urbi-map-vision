@@ -563,6 +563,11 @@ async def refresh_listings_cache(pool: Any) -> None:
                 await conn.execute("CREATE INDEX ON staging.stg_listings_unificado_new (url)")
                 await conn.execute("CREATE INDEX ON staging.stg_listings_unificado_new (barrio_id)")
                 await _create_listing_filter_indexes(conn, "staging.stg_listings_unificado_new")
+                # Un swap previo que murió entre el rename y el DROP deja un _old
+                # huérfano → el rename de abajo revienta ("relation ..._old already
+                # exists") y el refresh falla CADA vez (startup + horario) → stale.
+                # Dropearlo aquí hace el swap idempotente frente a ese residuo.
+                await conn.execute("DROP TABLE IF EXISTS staging.stg_listings_unificado_old")
                 async with conn.transaction():
                     await conn.execute(
                         "ALTER TABLE staging.stg_listings_unificado RENAME TO stg_listings_unificado_old"
@@ -591,6 +596,7 @@ async def refresh_listings_cache(pool: Any) -> None:
                         "INSERT INTO analytics.barrios_medianas_new ", 1),
                     timeout=heavy_timeout,
                 )
+                await conn.execute("DROP TABLE IF EXISTS analytics.barrios_medianas_old")
                 async with conn.transaction():
                     await conn.execute("ALTER TABLE analytics.barrios_medianas RENAME TO barrios_medianas_old")
                     await conn.execute("ALTER TABLE analytics.barrios_medianas_new RENAME TO barrios_medianas")
@@ -610,6 +616,7 @@ async def refresh_listings_cache(pool: Any) -> None:
                     "(LIKE analytics.listings_georef INCLUDING ALL)"
                 )
                 await conn.execute(_INSERT_LISTINGS_GEOREF, timeout=heavy_timeout)
+                await conn.execute("DROP TABLE IF EXISTS analytics.listings_georef_old")
                 async with conn.transaction():
                     await conn.execute(
                         "ALTER TABLE analytics.listings_georef RENAME TO listings_georef_old"
