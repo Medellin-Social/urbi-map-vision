@@ -551,7 +551,7 @@ function LocalBusinessPage() {
       <div style={{ padding: isMobile ? '1.25rem 1rem 1rem' : '2rem 2rem 1.5rem', background: '#FAF8F3', borderBottom: '0.5px solid #E5E0D5' }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <p style={{ fontSize: 11, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em', color: '#6E726E', margin: '0 0 4px' }}>
-            <Name>{barrio.nombre}</Name> · Medellín
+            <Name>{barrio.nombre}</Name> · {!barrio.municipio_nombre ? 'Medellín' : barrio.slug === 'todos' ? 'Antioquia' : t('Valle de Aburrá', 'Aburrá Valley')}
           </p>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
@@ -597,12 +597,14 @@ function LocalBusinessPage() {
                   {t('Patrocinado', 'Sponsored')}
                 </span>
               </div>
-              <div style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4 }}>
-                {featured.map(neg => (
-                  <div key={neg.id} style={{ minWidth: 240, maxWidth: 240, flexShrink: 0 }}>
-                    <BusinessCardDirectory tienda={neg} />
-                  </div>
-                ))}
+              <div className="flt-fade">
+                <div className="filtros-tabs" style={{ display: 'flex', gap: 14, overflowX: 'auto', paddingBottom: 4 }}>
+                  {featured.map(neg => (
+                    <div key={neg.id} style={{ minWidth: 240, maxWidth: 240, flexShrink: 0 }}>
+                      <BusinessCardDirectory tienda={neg} />
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           </div>
@@ -693,7 +695,11 @@ function LocalBusinessPage() {
 
           {!isLoading && hasArea && tiendas.length > 0 && (
             <>
-              <div style={{ padding: '12px 16px', fontSize: 12, color: K.muted, fontWeight: 600 }}>
+              <div style={{
+                position: 'sticky', top: 0, zIndex: 2,
+                padding: '12px 16px', fontSize: 12, color: K.muted, fontWeight: 600,
+                background: K.surface, borderBottom: `1px solid ${K.line}`,
+              }}>
                 {tiendas.length} {t('de', 'of')} {total} {t('negocios', 'businesses')}
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: '0 14px 14px' }}>

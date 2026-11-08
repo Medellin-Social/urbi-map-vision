@@ -239,6 +239,12 @@ body {
 /* Hover de ítem de menú (FilterDropdown); el ítem seleccionado trae bg inline */
 .flt-opt:hover { background: #F3F0E8; }
 
+/* Tarjeta de negocio (lista + destacados): la transition ya estaba declarada
+   inline pero no animaba nada. Hover "gentle" — sombra más honda + borde cálido,
+   SIN levantar ni cursor:pointer (el click del cuerpo solo trackea, no navega). */
+.neg-card { transition: box-shadow .15s, border-color .15s; }
+.neg-card:hover { box-shadow: 0 6px 20px rgba(20,32,29,.13); border-color: #D3C7AF; }
+
 /* ── Map navbar tabs: scroll instead of colliding with the centered logo on laptop widths ── */
 .map-nav-tabs { scrollbar-width: none; -ms-overflow-style: none; }
 .map-nav-tabs::-webkit-scrollbar { display: none; }

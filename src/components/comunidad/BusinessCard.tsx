@@ -3,9 +3,21 @@ import { Name } from "@/lib/i18n";
 import type { TiendaData } from '@/hooks/useTiendas'
 import { CATEGORIA_LABELS, CATEGORIA_COLORS, CATEGORIA_EMOJI } from '@/lib/categorias_comunidad'
 import { safeHref } from '@/lib/utils'
+import { track } from '@/lib/tracking'
 import { K as TOKENS } from "@/design/tokens";
 
 const K = TOKENS;
+
+// Click anywhere on a business card = category engagement. Feeds the B2B funnel
+// (and user_interests.categorias_tiendas_top once the cron reads 'negocio_%').
+function trackNegocioView(tienda: TiendaData) {
+  track('negocio_view', {
+    entity_type: 'negocio',
+    entity_id: String(tienda.id),
+    barrio_id: tienda.barrio_id ?? undefined,
+    metadata: { categoria: tienda.categoria ?? null },
+  })
+}
 
 function Stars({ rating }: { rating: number | null | undefined }) {
   if (!rating) return null
@@ -89,7 +101,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
   const secondaryBtn = wa ? mapsUrl : null
 
   return (
-    <div style={{
+    <div className="neg-card" onClick={() => trackNegocioView(tienda)} style={{
       background: '#fff',
       border: '1px solid #E5E0D5',
       borderRadius: 12,
@@ -123,7 +135,7 @@ export function BusinessCardDirectory({ tienda }: { tienda: TiendaData }) {
             borderRadius: 4, letterSpacing: '0.4px', whiteSpace: 'nowrap',
             maxWidth: 'calc(100% - 16px)', overflow: 'hidden', textOverflow: 'ellipsis',
           }}>
-            ★ {catLabel}
+            {catLabel}
           </div>
         )}
       </div>
@@ -228,11 +240,10 @@ export function BusinessCardList({ tienda }: { tienda: TiendaData }) {
   const catEmoji = tienda.categoria ? (CATEGORIA_EMOJI[tienda.categoria] ?? '⭐') : '⭐'
 
   return (
-    <div style={{
+    <div className="neg-card" onClick={() => trackNegocioView(tienda)} style={{
       display: 'flex', gap: 14, padding: 14,
       background: '#fff', border: `1px solid ${K.line}`, borderRadius: 12,
       boxShadow: '0 1px 3px rgba(20,32,29,.05)',
-      transition: 'box-shadow .15s, border-color .15s',
     }}>
       {/* Foto */}
       <div style={{
