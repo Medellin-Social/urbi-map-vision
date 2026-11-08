@@ -639,6 +639,76 @@ async def refresh_listings_cache(pool: Any) -> None:
             logger.error("[cache] no se pudo enviar alerta de fallo de cache", exc_info=True)
 
 
+# ── Insert incremental on-publish ────────────────────────────────────────────
+# Un listing propio recién publicado aparecía en el mapa solo tras el refresh
+# horario (hasta ~1h de espera). Estas dos inserciones de UNA fila meten el
+# listing a las tablas vivas al instante; el refresh horario lo re-deriva igual
+# desde `listing` (estado='publicado') → sin doble conteo, es solo el puente.
+# INSERT de 1 fila toma ROW EXCLUSIVE (no ACCESS EXCLUSIVE) → no bloquea lectores.
+#
+# keep in sync con la rama '_ls' de _REFRESH_STG_LISTINGS_TMPL (misma lista de 31
+# columnas, mismos mapeos). Sin dedup/cluster/stacking: una fila nueva no agrupa
+# con nada (n_duplicados=1, precio_variable=false, geo_aproximada=false).
+_INSERT_ONE_LISTING_STG = """
+INSERT INTO staging.stg_listings_unificado
+    (listing_uid, fuente, tier, tipo_operacion, tipo_inmueble,
+     precio_cop, precio_usd, precio_min_cluster, precio_max_cluster, precio_variable,
+     area_m2, precio_m2, habitaciones, banos, barrio_raw, barrio_id,
+     direccion_raw, lat, lon, geom, url, fotos, fecha_scraping, n_duplicados, estrato_real,
+     amoblado, antiguedad, amenidades, administracion, nombre_edificio, geo_aproximada)
+SELECT
+    l.id::text || '_ls',
+    'propio',
+    CASE WHEN l.destacado THEN 'agente_premium' ELSE 'standard' END,
+    lower(trim(l.operacion::text)), lower(trim(l.tipo_inmueble::text)),
+    l.precio::bigint, NULL::bigint,
+    l.precio::bigint, l.precio::bigint, false,
+    COALESCE(l.area_m2, 0)::numeric,
+    CASE WHEN COALESCE(l.area_m2, 0) > 0 THEN l.precio / l.area_m2 END,
+    l.habitaciones, l.banos::numeric, l.barrio,
+    (SELECT b.id FROM raw.barrios b
+       WHERE l.geom IS NOT NULL AND ST_Contains(b.geometry, l.geom) LIMIT 1),
+    l.direccion_aprox,
+    ST_Y(l.geom)::double precision, ST_X(l.geom)::double precision, l.geom,
+    l.id::text,
+    (SELECT array_agg(m.url ORDER BY m.orden) FROM listing_media m WHERE m.listing_id = l.id),
+    COALESCE(l.published_at, l.created_at), 1, l.estrato,
+    l.amoblado, l.antiguedad_anios::text, l.amenidades, l.administracion,
+    l.nombre_edificio, false
+FROM listing l
+WHERE l.id = $1::uuid AND l.estado = 'publicado' AND l.precio > 0
+"""
+
+# georef: reutiliza _INSERT_LISTINGS_GEOREF (una sola fuente de verdad) retargeteado
+# a la tabla viva y filtrado a este url. Lee de staging → la fila de staging ya
+# debe existir (se inserta antes, misma txn).
+_INSERT_ONE_LISTING_GEOREF = (
+    _INSERT_LISTINGS_GEOREF
+    .replace("analytics.listings_georef_new", "analytics.listings_georef", 1)
+    .replace("ORDER BY l.url", "AND l.url = $1\nORDER BY l.url", 1)
+)
+
+
+async def insert_listing_into_cache(pool: Any, listing_id: str) -> None:
+    """Mete un listing recién-publicado a las tablas vivas del mapa al instante
+    (sin esperar el refresh horario). Idempotente: borra la fila previa primero.
+    Best-effort — el caller la envuelve en try/except; el refresh horario es el
+    respaldo si esto falla. ponytail: si cae justo durante un refresh (swap), la
+    fila entra a la tabla _old por descartar → el listing sale ≤1h tarde, nunca
+    rompe nada."""
+    url = str(listing_id)
+    uid = url + "_ls"
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            await conn.execute(
+                "DELETE FROM staging.stg_listings_unificado WHERE listing_uid = $1", uid)
+            await conn.execute(
+                "DELETE FROM analytics.listings_georef WHERE url = $1", url)
+            await conn.execute(_INSERT_ONE_LISTING_STG, url)
+            await conn.execute(_INSERT_ONE_LISTING_GEOREF, url)
+    logger.info("[cache] listing %s insertado al mapa (on-publish)", url)
+
+
 async def _cleanup_token_blacklist(pool: Any) -> None:
     # token_blacklist crece con cada logout/refresh; a los 30 días (JWT_EXPIRY_DAYS)
     # el token ya expiró por sí solo → la fila es inútil. Purga en la tarea horaria.

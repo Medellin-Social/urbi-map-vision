@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, Upload
 from api.limiter import limiter
 from pydantic import BaseModel, Field
 
+from api.cache import insert_listing_into_cache
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.schemas.intake_cuestionario import DECLARACIONES_KEYS, cuestionario_para
@@ -432,6 +433,11 @@ async def crear_listing(
     )
 
     if es_agente:
+        # Publica directo → al mapa al instante (sin esperar el refresh horario).
+        try:
+            await insert_listing_into_cache(pool, listing_id)
+        except Exception:
+            logger.exception("crear_listing: insert_listing_into_cache falló para %s", listing_id)
         return {
             "id": listing_id,
             "estado": "publicado",
