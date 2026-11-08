@@ -1,7 +1,8 @@
 import { OG_IMAGE, SITE_URL } from "@/lib/seo";
-import { Outlet, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
+import { Outlet, createRootRoute, HeadContent, Scripts, useRouterState } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { track } from "@/lib/tracking";
 import { LanguageProvider } from "@/lib/i18n";
 import { refreshIfExpiringSoon } from "@/lib/auth";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
@@ -202,12 +203,26 @@ function AuthCacheSync() {
   return null;
 }
 
+// Site-wide page_view: one fire per route change, for every page, authenticated
+// or not. The API resolves usuario_id from the auth header (see lib/tracking),
+// so each row is attributable to a logged-in user or left anonymous.
+// ponytail: path only; semantic events (categoria, tipo_inversion) are emitted
+// separately where that context lives.
+function PageViewTracker() {
+  const path = useRouterState({ select: s => s.location.pathname });
+  useEffect(() => {
+    track("page_view", { metadata: { path } });
+  }, [path]);
+  return null;
+}
+
 function RootComponent() {
   useEffect(() => { refreshIfExpiringSoon(); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
       <AuthCacheSync />
+      <PageViewTracker />
       <LanguageProvider>
         <TargetProvider>
           <Outlet />

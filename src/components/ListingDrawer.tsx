@@ -24,6 +24,7 @@ import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { formatCOP } from "@/lib/format";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
+import { track } from "@/lib/tracking";
 import { auth } from "@/lib/auth";
 import { ReclamarListingModal } from "@/components/ReclamarListingModal";
 import { toast } from "sonner";
@@ -518,13 +519,18 @@ function ScoreBar({ label, score, sub }: { label: string; score: number; sub: st
  *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
  *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
 function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
+  const isRegistered = useIsRegistered();
   const { data } = useQuery<BarrioFetch>({
     queryKey: barrioId ? ["barrio-full", barrioId] : ["listing-entorno", listingId],
     queryFn: () => barrioId
       ? apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId))
       : apiFetch<BarrioFetch>(API_ENDPOINTS.listingEntorno(listingId)),
     staleTime: 300_000,
+    enabled: isRegistered,  // entorno del inmueble = gancho de registro (gated)
   });
+  // Anónimo: entorno gated → se oculta. El CTA de registro vive bajo "Valor
+  // estimado" (un solo CTA en el pop-up grande, no uno por sección).
+  if (!isRegistered) return null;
   const c = data?.conectividad;
   const trafico = data?.trafico;
   if (!c && trafico?.nivel == null) return null;
@@ -1005,8 +1011,8 @@ function waLink(agente: ApiListingAgente, listingId: number): string {
 /** Realtor de comuna — patrocinio principal ($1k), tarjeta prominente. El de
  *  barrio (secundario) aparece discreto como un botón al lado, estilo agendar. */
 function RealtorPrimaryCard({
-  listingId, agente, secondary, onSchedule,
-}: { listingId: number; agente: ApiListingAgente; secondary?: ApiListingAgente | null; onSchedule: () => void }) {
+  listingId, agente, secondary, onSchedule, onContactWa,
+}: { listingId: number; agente: ApiListingAgente; secondary?: ApiListingAgente | null; onSchedule: () => void; onContactWa: () => void }) {
   const esComuna = agente.zona_nivel === "comuna";
   return (
     <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #0F8A4F", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
@@ -1028,6 +1034,7 @@ function RealtorPrimaryCard({
           href={waLink(agente, listingId)}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={onContactWa}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
           style={{ background: "#0F8A4F" }}
         >
@@ -1046,6 +1053,7 @@ function RealtorPrimaryCard({
             href={waLink(secondary, listingId)}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={onContactWa}
             className="flex w-full items-center justify-center gap-1.5 pt-1 text-[11px] transition hover:opacity-70"
             style={{ color: "#6E726E" }}
           >
@@ -1059,7 +1067,7 @@ function RealtorPrimaryCard({
 }
 
 /** Fallback sin patrocinio: contacto genérico del equipo. */
-function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule: () => void }) {
+function RealtorFallbackCard({ waUrl, onSchedule, onContactWa }: { waUrl: string; onSchedule: () => void; onContactWa: () => void }) {
   return (
     <div className="overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
       <div className="flex items-center gap-3 px-4 pt-4 pb-3">
@@ -1076,6 +1084,7 @@ function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule:
           href={waUrl}
           target="_blank"
           rel="noopener noreferrer"
+          onClick={onContactWa}
           className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90"
           style={{ background: "#0F8A4F" }}
         >
@@ -1095,16 +1104,16 @@ function RealtorFallbackCard({ waUrl, onSchedule }: { waUrl: string; onSchedule:
 
 /** Columna 2 completa: comuna (principal) + barrio (secundario), o fallback. */
 function RealtorColumn({
-  listingId, agentes, waUrl, onSchedule,
-}: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void }) {
+  listingId, agentes, waUrl, onSchedule, onContactWa,
+}: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void; onContactWa: () => void }) {
   const comuna = agentes?.comuna ?? null;
   const barrio = agentes?.barrio ?? null;
-  if (!comuna && !barrio) return <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} />;
+  if (!comuna && !barrio) return <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} onContactWa={onContactWa} />;
   // Comuna = principal; barrio = botón discreto al lado. Sin comuna, barrio sube a principal.
   const principal = comuna ?? barrio!;
   const secundario = comuna ? barrio : null;
   return (
-    <RealtorPrimaryCard listingId={listingId} agente={principal} secondary={secundario} onSchedule={onSchedule} />
+    <RealtorPrimaryCard listingId={listingId} agente={principal} secondary={secundario} onSchedule={onSchedule} onContactWa={onContactWa} />
   );
 }
 
@@ -1230,6 +1239,14 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     `Hola, me interesa este inmueble en ${listing?.barrio_nombre ?? "Medellín"} por ${formatPrice(listing?.precio_cop)}. ID: ${listingId}`,
   );
   const waUrl = `https://wa.me/+573122502394?text=${waText}`;
+
+  // Lead (capa 4): click a "Contactar" (WhatsApp al agente) = el realtor recibe
+  // un lead. event_type='listing_contact_wa' (no _click → va a Lead, no Intención).
+  const onContactWa = () => track("listing_contact_wa", {
+    entity_type: "listing", entity_id: listing?.url ?? undefined,
+    barrio_id: listing?.barrio_id ?? undefined,
+    metadata: { tipo_inmueble: listing?.tipo_inmueble ?? null, operacion: listing?.tipo_operacion ?? null },
+  });
 
   function handleShare() {
     const url = `${window.location.origin}/map?listing=${listingId}`;
@@ -1360,7 +1377,18 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // enterrado al fondo del drawer, en ctaButtons).
   const favButton = listing ? (
     <button
-      onClick={() => { if (!auth.get()) return; toggleFav(favKey(listing), listing.barrio_id); }}
+      onClick={() => {
+        if (!auth.get()) return;
+        // Intención (capa 3): guardar = señal fuerte. Solo al marcar (no al quitar).
+        if (!isFav(favKey(listing))) {
+          track("listing_save", {
+            entity_type: "listing", entity_id: listing.url ?? undefined,
+            barrio_id: listing.barrio_id ?? undefined,
+            metadata: { tipo_inmueble: listing.tipo_inmueble ?? null, operacion: listing.tipo_operacion ?? null },
+          });
+        }
+        toggleFav(favKey(listing), listing.barrio_id);
+      }}
       title={isFav(favKey(listing)) ? "Quitar de favoritos" : "Guardar"}
       className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition"
       style={{ border: "0.5px solid #E5E0D5", background: isFav(favKey(listing)) ? "#FCE8EA" : "#FFFFFF" }}
@@ -1598,6 +1626,29 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
       <ValorEstimado listing={listing} />
 
+      {/* CTA registro (solo anónimo) — bajo "Valor estimado", sobre "Ubicación".
+          El entorno/historial del detalle está gated a nivel registrado gratis. */}
+      {!isRegistered && (
+        <a
+          href="/register"
+          onClick={() => { try { localStorage.setItem("registro_origen", "mls"); } catch { /* storage bloqueado */ } }}
+          className="block rounded-xl p-4 text-center transition hover:opacity-95"
+          style={{ background: "#E7F4EC", border: "1px solid #0F8A4F" }}
+        >
+          <div className="text-[14px] font-bold" style={{ color: "#0A5C36" }}>
+            {lang === "en" ? "Want the full picture?" : "¿Quieres ver más para decidir mejor?"}
+          </div>
+          <div className="mt-1 text-[12px] leading-snug" style={{ color: "#0A5C36" }}>
+            {lang === "en"
+              ? "Sign up free to unlock the neighborhood (walkability, schools, transit), price history and more."
+              : "Regístrate gratis y desbloquea el entorno (caminabilidad, colegios, transporte), el historial de precio y más datos del inmueble."}
+          </div>
+          <span className="mt-3 inline-flex items-center justify-center gap-1 rounded-lg px-5 py-2 text-[13px] font-bold text-white" style={{ background: "#0F8A4F" }}>
+            {lang === "en" ? "Sign up free" : "Regístrate gratis"} <ChevronRight className="h-4 w-4" />
+          </span>
+        </a>
+      )}
+
       {/* Temperatura del mercado (#15) — registrado; se auto-oculta para anónimo/sin barrio */}
       {listing.barrio_id && <TemperaturaMercado barrioId={listing.barrio_id} />}
 
@@ -1796,6 +1847,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                           agentes={agentes}
                           waUrl={waUrl}
                           onSchedule={() => setShowScheduleModal(true)}
+                          onContactWa={onContactWa}
                         />
                         {analysisContent}
                         {similaresSection}
@@ -1825,6 +1877,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
         agentes={agentes}
         waUrl={waUrl}
         onSchedule={() => setShowScheduleModal(true)}
+        onContactWa={onContactWa}
       />
     </div>
   ) : null;

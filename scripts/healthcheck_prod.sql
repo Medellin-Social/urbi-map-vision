@@ -58,6 +58,29 @@ FROM raw.listings_metrocuadrado;
 SELECT fuente,
        count(*) servidos,
        count(*) FILTER (WHERE fotos IS NULL OR array_length(fotos,1) IS NULL) sin_foto,
-       round(100.0*count(*) FILTER (WHERE fotos IS NOT NULL AND array_length(fotos,1)>0)/count(*),1) AS pct_con_foto
+       round(100.0*count(*) FILTER (WHERE fotos IS NOT NULL AND array_length(fotos,1)>0)/count(*),1) AS pct_con_foto,
+       count(*) FILTER (WHERE barrio_id IS NULL) sin_barrio
 FROM staging.stg_listings_unificado
 GROUP BY fuente ORDER BY servidos DESC;
+
+\echo
+\echo ====================================================================
+\echo  4. MONEDA / TRM  (USD depende 100% de esto; sin fila fresca = todo en COP)
+\echo ====================================================================
+SELECT 'public.trm' fuente, max(vigencia) ultima_vigencia,
+       (now()::date - max(vigencia)) AS dias_atras,
+       CASE WHEN max(vigencia) > now()::date - interval '10 days' THEN 'OK' ELSE 'STALE (USD en riesgo)' END verdicto
+FROM public.trm;
+
+\echo
+\echo ====================================================================
+\echo  5. HISTORIAL DE PRECIOS  (cobertura: el chart necesita >=2 puntos por url)
+\echo ====================================================================
+SELECT fuente,
+       count(DISTINCT listing_url)                                       urls_con_historial,
+       count(*)                                                          puntos_totales,
+       count(DISTINCT listing_url) FILTER (WHERE listing_url IN (
+           SELECT listing_url FROM raw.listings_precio_historial
+           GROUP BY listing_url HAVING count(*) >= 2))                   urls_con_chart
+FROM raw.listings_precio_historial
+GROUP BY fuente ORDER BY urls_con_historial DESC;

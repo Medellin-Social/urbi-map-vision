@@ -49,7 +49,7 @@ export type RegisterResponse = { ok: boolean; verification_required: boolean; me
 
 export function useRegister() {
   return useMutation({
-    mutationFn: async (data: { email: string; password: string; nombre?: string; telefono?: string; origen?: string }) => {
+    mutationFn: async (data: { email: string; password: string; nombre?: string; telefono?: string; origen?: string; habeas_data: boolean; consent_whatsapp?: boolean }) => {
       return apiFetch<RegisterResponse>(API_ENDPOINTS.register, {
         method: "POST",
         body: JSON.stringify(data),
@@ -86,7 +86,7 @@ export function useLogin() {
 
 export function useGoogleLogin() {
   return useMutation({
-    mutationFn: async (data: { id_token: string }) => {
+    mutationFn: async (data: { id_token: string; habeas_data?: boolean; consent_whatsapp?: boolean }) => {
       const res = await apiFetch<AuthResponse & { challenge?: string; message?: string }>(API_ENDPOINTS.googleLogin, {
         method: "POST",
         body: JSON.stringify(data),

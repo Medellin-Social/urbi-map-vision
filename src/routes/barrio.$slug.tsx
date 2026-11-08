@@ -9,6 +9,7 @@ import { EventCardFeatured, EventCardMini } from '@/components/comunidad/EventCa
 import { Carousel as UiCarousel, CarouselContent, CarouselItem, CarouselNext, CarouselPrevious } from '@/components/ui/carousel'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { useDeals } from '@/hooks/useDeals'
+import { observeImpression } from '@/lib/impressions'
 import { useDirectorio } from '@/hooks/useDirectorio'
 import { useNoticias } from '@/hooks/useNoticias'
 import { useEventosZona } from '@/hooks/useEventosZona'
@@ -395,7 +396,10 @@ function BarrioPage({ slug }: { slug: string }) {
           <Carousel label={t('Negocios', 'Businesses')}>
             {deals.map((d) => (
               <Slide key={`d-${d.id}`} width={230}>
-                <div style={{ background: K.paper, borderRadius: 14, border: `2px solid ${K.rojo}`, overflow: 'hidden' }}>
+                <div
+                  ref={(el) => observeImpression(el, { entity_type: 'deal', entity_id: String(d.id), categoria: d.categoria })}
+                  style={{ background: K.paper, borderRadius: 14, border: `2px solid ${K.rojo}`, overflow: 'hidden' }}
+                >
                   <ImgBox src={d.foto_url} alt={d.tienda_nombre} height={120} fallback="🏷️" />
                   <div style={cardBody}>
                     <span style={{ fontSize: 10, fontWeight: 800, color: '#fff', background: K.rojo, padding: '3px 8px', borderRadius: 999 }}>{d.tipo_deal}</span>

@@ -26,6 +26,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PasantiasRouteImport } from './routes/pasantias'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as PlanesRouteImport } from './routes/planes'
+import { Route as PoliticaPrivacidadRouteImport } from './routes/politica-privacidad'
 import { Route as PublicarRouteImport } from './routes/publicar'
 import { Route as RealEstateRouteImport } from './routes/real-estate'
 import { Route as RegisterRouteImport } from './routes/register'
@@ -137,6 +138,11 @@ const PerfilRoute = PerfilRouteImport.update({
 const PlanesRoute = PlanesRouteImport.update({
   id: '/planes',
   path: '/planes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PoliticaPrivacidadRoute = PoliticaPrivacidadRouteImport.update({
+  id: '/politica-privacidad',
+  path: '/politica-privacidad',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PublicarRoute = PublicarRouteImport.update({
@@ -294,6 +300,7 @@ export interface FileRoutesByFullPath {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
@@ -340,6 +347,7 @@ export interface FileRoutesByTo {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
@@ -387,6 +395,7 @@ export interface FileRoutesById {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
   '/register': typeof RegisterRoute
@@ -435,6 +444,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
     | '/register'
@@ -481,6 +491,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
     | '/register'
@@ -527,6 +538,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
     | '/register'
@@ -574,6 +586,7 @@ export interface RootRouteChildren {
   PasantiasRoute: typeof PasantiasRoute
   PerfilRoute: typeof PerfilRoute
   PlanesRoute: typeof PlanesRoute
+  PoliticaPrivacidadRoute: typeof PoliticaPrivacidadRoute
   PublicarRoute: typeof PublicarRoute
   RealEstateRoute: typeof RealEstateRoute
   RegisterRoute: typeof RegisterRoute
@@ -722,6 +735,13 @@ declare module '@tanstack/react-router' {
       path: '/planes'
       fullPath: '/planes'
       preLoaderRoute: typeof PlanesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/politica-privacidad': {
+      id: '/politica-privacidad'
+      path: '/politica-privacidad'
+      fullPath: '/politica-privacidad'
+      preLoaderRoute: typeof PoliticaPrivacidadRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/publicar': {
@@ -934,6 +954,7 @@ const rootRouteChildren: RootRouteChildren = {
   PasantiasRoute: PasantiasRoute,
   PerfilRoute: PerfilRoute,
   PlanesRoute: PlanesRoute,
+  PoliticaPrivacidadRoute: PoliticaPrivacidadRoute,
   PublicarRoute: PublicarRoute,
   RealEstateRoute: RealEstateRoute,
   RegisterRoute: RegisterRoute,

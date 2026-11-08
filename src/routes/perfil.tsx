@@ -29,6 +29,7 @@ import {
 } from "@/lib/auth";
 import { useUpdateAuthPerfil, logout } from "@/hooks/useAuth";
 import { useTarget } from "@/contexts/TargetContext";
+import { useT } from "@/lib/i18n";
 import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
 import { formatCOP } from "@/lib/format";
 
@@ -42,11 +43,11 @@ export const Route = createFileRoute("/perfil")({
   component: PerfilRoute,
 });
 
-// Envuelto en ComunidadLayout (compact) → mismo navbar/footer que el resto del
-// sitio, en vez de una página suelta sin barra de navegación.
+// Mismo navbar/footer que el home (ComunidadLayout sin compact: masthead + barra
+// + ticker), no la versión slim.
 function PerfilRoute() {
   return (
-    <ComunidadLayout compact>
+    <ComunidadLayout initialSlug="todos">
       <PerfilPage />
     </ComunidadLayout>
   );
@@ -244,13 +245,18 @@ function StatBlock({ label, value }: { label: string; value: number }) {
 
 /* ---------------- Cuenta ---------------- */
 
+const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
+
 function CuentaTab({ user }: { user: UrbiUser }) {
+  const t = useT();
   const [name, setName] = useState(user.name);
   const [email, setEmail] = useState(user.email);
-  const [pwd, setPwd] = useState("");
-  const [pwd2, setPwd2] = useState("");
   const [avatar, setAvatar] = useState<string | undefined>(user.avatar);
   const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+  const [emailNote, setEmailNote] = useState(false);
+  const [reset, setReset] = useState<"idle" | "sending" | "sent">("idle");
   const fileRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
 
@@ -263,18 +269,43 @@ function CuentaTab({ user }: { user: UrbiUser }) {
     reader.readAsDataURL(file);
   };
 
-  const save = () => {
-    if (pwd && pwd !== pwd2) return alert("Las contraseñas no coinciden");
-    auth.patch({
-      name: name.trim(),
-      email: email.trim(),
-      avatar,
-      ...(pwd ? { password: pwd } : {}),
-    });
-    setPwd("");
-    setPwd2("");
-    setSaved(true);
-    setTimeout(() => setSaved(false), 1800);
+  // Persiste de verdad en el backend (antes solo tocaba localStorage → "✓ Guardado"
+  // mentía). El avatar sigue siendo local al dispositivo (ver nota debajo).
+  const save = async () => {
+    setErr("");
+    const nm = name.trim();
+    const em = email.trim().toLowerCase();
+    if (!nm) return setErr(t("El nombre no puede estar vacío.", "Name can't be empty."));
+    if (!EMAIL_RE.test(em)) return setErr(t("Correo inválido.", "Invalid email."));
+    setSaving(true);
+    try {
+      const res = await apiFetch<{ ok: boolean; email_verificacion_enviada?: boolean }>(
+        API_ENDPOINTS.authPerfil,
+        { method: "PATCH", body: JSON.stringify({ nombre: nm, email: em }) },
+      );
+      auth.patch({ name: nm, email: em, avatar });
+      setEmailNote(!!res?.email_verificacion_enviada);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 1800);
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : t("No se pudo guardar. Intenta de nuevo.", "Couldn't save. Please try again."));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // Cambio de contraseña = flujo seguro por correo (el mismo /forgot-password).
+  // No hay endpoint de cambio-logueado y falsear uno inline sería otra mentira.
+  const sendPasswordReset = async () => {
+    setReset("sending");
+    try {
+      await apiFetch(API_ENDPOINTS.forgotPassword, {
+        method: "POST",
+        body: JSON.stringify({ email: user.email }),
+        skipAuth: true,
+      });
+    } catch { /* forgot-password responde 200 aunque el correo no exista; da igual */ }
+    setReset("sent");
   };
 
   return (
@@ -322,23 +353,65 @@ function CuentaTab({ user }: { user: UrbiUser }) {
         <Field label="Correo">
           <input className={inputCls} type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
         </Field>
-        <Field label="Nueva contraseña">
-          <input className={inputCls} type="password" value={pwd} onChange={(e) => setPwd(e.target.value)} placeholder="Dejar en blanco para no cambiar" />
-        </Field>
-        <Field label="Confirmar contraseña">
-          <input className={inputCls} type="password" value={pwd2} onChange={(e) => setPwd2(e.target.value)} />
-        </Field>
       </div>
 
+      {err && (
+        <div className="rounded-md border border-[#CE1126]/40 bg-[#FCE8EA] px-3 py-2 text-xs text-[#8B2A10]">
+          {err}
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-3">
-        <button onClick={save} className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan">
-          Guardar cambios
+        <button
+          onClick={save}
+          disabled={saving}
+          className="rounded-md bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 glow-cyan disabled:opacity-60"
+        >
+          {saving ? "Guardando…" : "Guardar cambios"}
         </button>
         {saved && (
           <motion.span initial={{ opacity: 0, x: -6 }} animate={{ opacity: 1, x: 0 }} className="text-xs text-success">
             ✓ Guardado
           </motion.span>
         )}
+      </div>
+
+      {emailNote && (
+        <div className="rounded-md border border-[#0F8A4F]/40 bg-[#E7F4EC] px-3 py-2 text-xs text-[#0A5C36]">
+          {t(
+            `Cambiaste tu correo. Te enviamos un enlace a ${email.trim().toLowerCase()} para confirmarlo. Tu sesión actual sigue activa.`,
+            `You changed your email. We sent a confirmation link to ${email.trim().toLowerCase()}. Your current session stays active.`,
+          )}
+        </div>
+      )}
+
+      {/* Contraseña — flujo seguro por correo, no un campo que miente */}
+      <div className="rounded-xl border border-[#E5E0D5] bg-[#FDFBF7] p-4">
+        <div className="text-sm font-semibold text-[#111418]">{t("Contraseña", "Password")}</div>
+        {reset === "sent" ? (
+          <p className="mt-1 text-xs text-[#5B5F5C]">
+            {t(
+              `Te enviamos un enlace a ${user.email} para cambiar tu contraseña. Es válido por 1 hora.`,
+              `We sent a link to ${user.email} to change your password. It's valid for 1 hour.`,
+            )}
+          </p>
+        ) : (
+          <>
+            <p className="mt-1 text-xs text-[#5B5F5C]">
+              {t("Por seguridad, la contraseña se cambia con un enlace que te enviamos a tu correo.", "For security, your password is changed through a link we email you.")}
+            </p>
+            <button
+              onClick={sendPasswordReset}
+              disabled={reset === "sending"}
+              className="mt-3 rounded-md border border-[#0F8A4F] px-4 py-1.5 text-xs font-semibold text-[#0A5C36] transition hover:bg-[#E7F4EC] disabled:opacity-60"
+            >
+              {reset === "sending" ? t("Enviando…", "Sending…") : t("Enviar enlace para cambiar contraseña", "Send link to change password")}
+            </button>
+          </>
+        )}
+      </div>
+
+      <div className="flex justify-end">
         <button
           onClick={() => {
             if (confirm("¿Cerrar sesión?")) {
@@ -346,7 +419,7 @@ function CuentaTab({ user }: { user: UrbiUser }) {
               navigate({ to: "/login" });
             }
           }}
-          className="ml-auto text-xs text-muted-foreground hover:text-danger"
+          className="text-xs text-muted-foreground hover:text-danger"
         >
           Cerrar sesión
         </button>

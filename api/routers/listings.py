@@ -559,9 +559,10 @@ _BARRIO_CTX_KEYS = (
 # (precio_m2_mediana_barrio, p25/p75, arriendo_p50_barrio, arr_p25/p75),
 # avaluo_m2_catastro y el historial (var_anual_pct) — NO se gatean.
 # Gate de 3 niveles (doc de roles):
-#   Registrado (inversionista, gratis con registro): rentabilidad/yields.
+#   Registrado (inversionista, gratis con registro): rentabilidad/yields +
+#     historial de precio (gancho de registro; anónimo ve el fallback degradado).
 #   Realtor (paga): scores de inversión + inteligencia profunda.
-_REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct")
+_REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct", "precio_historia")
 # To-do §2: seguridad pasó de realtor-only a PÚBLICA (gratis para todos) — ya no
 # está en esta lista. Los scores de inversión y liquidez siguen siendo realtor.
 _REALTOR_FIELDS = (
@@ -851,6 +852,33 @@ async def get_all_listings(
     if perfil_dict:
         items.sort(key=lambda x: x.relevancia_score or 0.0, reverse=True)
         items = items[offset: offset + limit]
+
+    # Demanda insatisfecha (funnel): una búsqueda LOCALIZADA y CON FILTROS que no
+    # devolvió nada = un lead de venta ("N quieren X en barrio Y y no hay oferta").
+    # Se gatea para no registrar cargas por defecto ni paneos de viewport vacíos.
+    _tiene_filtro = any(v is not None for v in (tipo_inmueble, precio_min, precio_max, habitaciones, estrato_real))
+    _localizada = barrio_id is not None or cd_comuna is not None or bool(municipio)
+    if total == 0 and _localizada and _tiene_filtro:
+        try:
+            _ip = _client_ip(request)
+            _sid = f"anon-{hashlib.sha256(_ip.encode()).hexdigest()[:16]}" if _ip else "anon-unknown"
+            await pool.execute(
+                """INSERT INTO public.user_events
+                       (usuario_id, session_id, event_type, entity_type, barrio_id, metadata)
+                   VALUES ($1, $2, 'search_no_results', 'search', $3, $4::jsonb)""",
+                current_user["id"] if current_user else None,
+                _sid,
+                barrio_id,
+                json.dumps({
+                    "tipo_operacion": tipo_operacion,
+                    "tipo_inmueble": tipo_inmueble,
+                    "precio_min": precio_min, "precio_max": precio_max,
+                    "habitaciones": habitaciones, "estrato_real": estrato_real,
+                    "cd_comuna": cd_comuna, "municipio": municipio,
+                }, default=str),
+            )
+        except Exception:
+            logger.warning("search_no_results insert falló", exc_info=True)
 
     return ListingsAllResponse(
         total=total,
@@ -2021,8 +2049,15 @@ FROM facts
 
 @router.get("/{listing_id}/entorno")
 @limiter.limit("60/minute")
-async def get_listing_entorno(request: Request, listing_id: int):
-    """POIs por radio desde las coords del listing (#1) — para inmuebles sin barrio_id."""
+async def get_listing_entorno(
+    request: Request,
+    listing_id: int,
+    current_user: Optional[dict] = Depends(get_optional_user),
+):
+    """POIs por radio desde las coords del listing (#1) — para inmuebles sin barrio_id.
+    Gated a nivel registrado: el entorno del inmueble es gancho de registro."""
+    if current_user is None:
+        return {"conectividad": None, "gated": True}
     pool = get_pool()
     row = await pool.fetchrow(_LISTING_ENTORNO_SQL, listing_id)
     if row is None:  # sin coords válidas → no hay entorno que mostrar
@@ -2137,7 +2172,7 @@ async def registrar_vista(
 ):
     pool = get_pool()
     url_row = await pool.fetchrow(
-        """SELECT url FROM staging.stg_listings_unificado
+        """SELECT url, tipo_inmueble, tipo_operacion, barrio_id FROM staging.stg_listings_unificado
            WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = $1
            LIMIT 1""",
         listing_id,
@@ -2165,16 +2200,20 @@ async def registrar_vista(
         return {"ok": True, "vistas": vistas or 0}
 
     try:
+        # Capa 2 (Interés): metadata normalizada. tipo_inmueble alimenta
+        # user_interests.tipo_inmueble_top y da dimensiones al funnel de listings.
         await pool.execute(
             """INSERT INTO public.user_events
-                   (usuario_id, session_id, event_type, entity_type, entity_id)
-               VALUES ($1, $2, 'listing_view', 'listing', $3)""",
+                   (usuario_id, session_id, event_type, entity_type, entity_id, barrio_id, metadata)
+               VALUES ($1, $2, 'listing_view', 'listing', $3, $4, $5::jsonb)""",
             usuario_id,
             session_id,
             listing_url,
+            url_row["barrio_id"],
+            json.dumps({"tipo_inmueble": url_row["tipo_inmueble"], "operacion": url_row["tipo_operacion"]}),
         )
     except Exception:
-        pass
+        logger.warning("listing_view insert falló (url=%s)", listing_url, exc_info=True)
 
     vistas = await pool.fetchval(
         """SELECT COUNT(*)::int FROM public.user_events

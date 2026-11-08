@@ -1,4 +1,5 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback } from "react";
+import { useImpression } from "@/lib/impressions";
 import { OriginalListingLink } from "@/components/OriginalListingLink";
 import { originalListingUrl } from "@/lib/originalListing";
 import { motion, AnimatePresence } from "framer-motion";
@@ -160,6 +161,13 @@ function ListingCard({
   const isPro = useIsPro();
   const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
+  // Alcance (capa 1): impresión de la tarjeta de listing. Merge con cardRef
+  // (que el panel usa para scroll/highlight) en un solo ref callback.
+  const impRef = useImpression({ entity_type: "listing", entity_id: listing.url ?? "", barrio_id: listing.barrio_id ?? undefined });
+  const mergedRef = useCallback(
+    (el: HTMLDivElement | null) => { cardRef?.(el); if (listing.url) impRef(el); },
+    [cardRef, impRef, listing.url],
+  );
   const { addListing, removeListing, isSelected, canAdd } = useComparadorStore();
   const selected = isSelected(listing.id);
   const { formatPrice, formatSecondary, formatPricePerArea } = usePriceFormat();
@@ -185,7 +193,7 @@ function ListingCard({
   if (isMobile) {
     return (
       <div
-        ref={cardRef}
+        ref={mergedRef}
         onClick={(e) => onSelect(e)}
         data-tour="listing-card"
         className="cursor-pointer rounded-lg border overflow-hidden"
@@ -238,7 +246,7 @@ function ListingCard({
 
   return (
     <div
-      ref={cardRef}
+      ref={mergedRef}
       onMouseEnter={() => onHover?.(true)}
       onMouseLeave={() => onHover?.(false)}
       onClick={(e) => onSelect(e)}

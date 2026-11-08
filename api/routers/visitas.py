@@ -1,5 +1,6 @@
 """Solicitudes de visita a un listing — POST público desde el drawer del mapa."""
 import asyncio
+import json
 import logging
 import os
 import smtplib
@@ -143,6 +144,21 @@ async def crear_visita(
             req.plazo,
             req.credito,
         )
+        # Lead (capa 4 del funnel): la visita agendada es la señal de lead más
+        # fuerte. event_type='visit_request' (no termina en _click/_save → no se
+        # confunde con Intención). Ver docs/FUNNEL_B2B.md.
+        try:
+            await conn.execute(
+                """INSERT INTO public.user_events
+                       (usuario_id, session_id, event_type, entity_type, entity_id, metadata)
+                   VALUES ($1, $2, 'visit_request', 'listing', $3, $4::jsonb)""",
+                user["id"] if user else None,
+                f"visit-{row['id']}",
+                req.listing_url,
+                json.dumps({"intencion": req.intencion} if req.intencion else {}),
+            )
+        except Exception:
+            log.warning("visit_request event insert falló (listing=%s)", req.listing_url, exc_info=True)
     # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
     if req.sin_agente:
         await asyncio.to_thread(_send_visita_email, req, fecha)

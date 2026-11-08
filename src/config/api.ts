@@ -48,6 +48,7 @@ export const API_ENDPOINTS = {
   listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
   visitas: `${API_BASE_URL}/visitas`,
   track: `${API_BASE_URL}/track`,
+  trackImpressions: `${API_BASE_URL}/track/impressions`,
 
   // Usuario
   onboarding: `${API_BASE_URL}/usuario/onboarding`,

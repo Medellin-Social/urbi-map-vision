@@ -44,6 +44,12 @@ export const Route = createFileRoute("/map")({
 // Zillow-style popup rollout flag — false restores the old ListingMiniPopup.
 const NEW_POPUP = true;
 
+// Capa 2 (Interés): metadata normalizada del listing. tipo_inmueble revive
+// user_interests.tipo_inmueble_top (el cron lo lee) y da dimensiones al funnel.
+function listingInteresMeta(listing: ApiListing) {
+  return { tipo_inmueble: listing.tipo_inmueble ?? null, operacion: listing.tipo_operacion ?? null };
+}
+
 const GOAL_TO_PERFIL: Record<string, string> = {
   airbnb: "airbnb",
   "renta-larga": "largo_plazo",
@@ -612,7 +618,7 @@ function MapPageInner() {
     if (listing.lat && listing.lon) {
       flyToListingRef.current?.(listing.lat, listing.lon);
     }
-    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined, metadata: listingInteresMeta(listing) });
     setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 
@@ -621,7 +627,7 @@ function MapPageInner() {
     setHighlightedListingId(id);
     const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
     if (!listing) return;
-    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined, metadata: listingInteresMeta(listing) });
     setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 

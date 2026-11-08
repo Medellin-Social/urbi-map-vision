@@ -5,6 +5,7 @@ public.user_events (event_type='listing_view', entity_id = listing.id::text | sl
 """
 from __future__ import annotations
 
+import logging
 from datetime import date, time as _time
 from types import SimpleNamespace
 
@@ -20,6 +21,8 @@ from api.utils import ghl_client
 from api.utils.storage import read_upload_bounded, upload_file
 
 from api.services.trm_service import get_usd_rate
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -380,6 +383,22 @@ async def cerrar_listing(
                 "VALUES ($1, $2, $3, 'venta', $4, COALESCE($5, CURRENT_DATE), $6, $7)",
                 matricula, catastral, listing_id, req.precio_cierre, req.fecha_cierre, agent.id, lead_id,
             )
+    # Conversión (capa 5 del funnel): el cierre real. Best-effort y FUERA de la
+    # transacción del cierre para no arriesgarlo. from_lead=True si la venta se
+    # atribuyó a un lead de la plataforma (no infla la tasa con cierres off-platform).
+    # Ver docs/FUNNEL_B2B.md.
+    try:
+        import json
+        await pool.execute(
+            """INSERT INTO public.user_events
+                   (usuario_id, session_id, event_type, entity_type, entity_id, metadata)
+               VALUES (NULL, $1, 'conversion', 'listing', $2, $3::jsonb)""",
+            f"cerrar-{listing_id}",
+            listing_id,
+            json.dumps({"from_lead": lead_id is not None, "precio_cierre": req.precio_cierre}, default=str),
+        )
+    except Exception:
+        log.warning("conversion event insert falló (listing=%s)", listing_id, exc_info=True)
     await ghl_client.sync_listing(listing_id)
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
 
