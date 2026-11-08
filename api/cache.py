@@ -573,11 +573,29 @@ async def refresh_listings_cache(pool: Any) -> None:
                 await conn.execute("DROP TABLE staging.stg_listings_unificado_old")
                 logger.info("[cache] stg_listings_unificado refreshed (swap)")
 
-                # barrios_medianas queries stg_listings_unificado — only run when stg exists
+                # barrios_medianas: swap-table en vez de TRUNCATE+INSERT. El TRUNCATE
+                # toma ACCESS EXCLUSIVE; con lectores constantes de /barrios no conseguía
+                # el lock → statement_timeout (600s) → el refresh fallaba a mitad y dejaba
+                # las medianas congeladas (pasó: 12 días stale desde 2026-10-27). El INSERT
+                # en sí tarda <1s; el problema era el lock, no la query. Se llena una tabla
+                # nueva y el RENAME final es instantáneo; los lectores golpean la vieja
+                # hasta el swap. Mismo patrón que stg_listings_unificado / listings_georef.
+                await conn.execute("DROP TABLE IF EXISTS analytics.barrios_medianas_new")
+                await conn.execute(
+                    "CREATE TABLE analytics.barrios_medianas_new "
+                    "(LIKE analytics.barrios_medianas INCLUDING DEFAULTS INCLUDING INDEXES)"
+                )
+                await conn.execute(
+                    _INSERT_BARRIOS_MEDIANAS.replace(
+                        "INSERT INTO analytics.barrios_medianas ",
+                        "INSERT INTO analytics.barrios_medianas_new ", 1),
+                    timeout=heavy_timeout,
+                )
                 async with conn.transaction():
-                    await conn.execute("TRUNCATE analytics.barrios_medianas")
-                    await conn.execute(_INSERT_BARRIOS_MEDIANAS, timeout=heavy_timeout)
-                logger.info("[cache] barrios_medianas refreshed")
+                    await conn.execute("ALTER TABLE analytics.barrios_medianas RENAME TO barrios_medianas_old")
+                    await conn.execute("ALTER TABLE analytics.barrios_medianas_new RENAME TO barrios_medianas")
+                await conn.execute("DROP TABLE analytics.barrios_medianas_old")
+                logger.info("[cache] barrios_medianas refreshed (swap)")
 
                 # listings_georef queries stg_listings_unificado — only run when stg exists.
                 # Swap-table instead of TRUNCATE+INSERT: el INSERT hace 2 LATERAL joins
