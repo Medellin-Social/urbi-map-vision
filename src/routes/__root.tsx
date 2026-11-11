@@ -5,6 +5,7 @@ import { useEffect } from "react";
 import { track } from "@/lib/tracking";
 import { LanguageProvider } from "@/lib/i18n";
 import { refreshIfExpiringSoon } from "@/lib/auth";
+import { refreshMe } from "@/hooks/useAuth";
 import { QueryClient, QueryClientProvider, useQueryClient } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/sonner";
 import { OnboardingModal } from "@/components/OnboardingModal";
@@ -217,7 +218,9 @@ function PageViewTracker() {
 }
 
 function RootComponent() {
-  useEffect(() => { refreshIfExpiringSoon(); }, []);
+  // Refresca token si expira, LUEGO trae plan/esAgente frescos de /auth/me → los
+  // gates de suscripción dejan de mentir cuando el user se suscribió tras loguearse.
+  useEffect(() => { refreshIfExpiringSoon().then(() => refreshMe()); }, []);
 
   return (
     <QueryClientProvider client={queryClient}>
