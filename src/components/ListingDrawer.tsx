@@ -17,12 +17,13 @@ import {
   Binoculars, Flame, Package, BookOpen, Drop, Road, Sun, Star,
 } from "@/lib/icons";
 import { useTarget } from "@/contexts/TargetContext";
-import { useIsPro, useIsAgente, useIsRegistered } from "@/components/LockedField";
+import { useIsPro, useIsAgente, useIsRegistered, useIsSuscriptor } from "@/components/LockedField";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { formatCOP } from "@/lib/format";
 import { zonePriceTrend, calcValorizStats } from "@/lib/valoriz";
+import { scaleRatio } from "@/lib/entornoScale";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { track } from "@/lib/tracking";
@@ -491,6 +492,8 @@ type BarrioFetch = {
   } | null;
   conectividad?: {
     dist_metro_km?: number | null;
+    dist_parque_km?: number | null;
+    dist_mall_km?: number | null;
     indice_nomada?: number | null;
     n_colegios_1km?: number | null;
     dist_colegio_km?: number | null;
@@ -512,6 +515,7 @@ type BarrioFetch = {
   } | null;
   liquidez?: { score?: number | null } | null;
   trafico?: { nivel?: string | null; jam_prom?: number | null } | null;
+  verde?: { score_verde?: number | null; indice_verde_pct?: number | null; categoria_verde?: string | null } | null;
 };
 
 /** Score bar en escala 1-10 estilo Zillow. Recibe score interno 0-100. Público. */
@@ -560,14 +564,93 @@ function FactCircle({ icon, label, value, unit, ratio }: EntornoFact) {
   );
 }
 
+// Dial de trayecto en hora pico (#27): minutos al centro + El Poblado. Más
+// prominente que FactCircle — color por congestión, estado legible y arco que se
+// dibuja al montar. ratio 0-1 (1 = fluido). Verde ≤~21min, ámbar ≤~32min, rojo +.
+function CommuteDial({ icon, dest, min, ratio }: { icon: string; dest: string; min: number; ratio: number }) {
+  const r = Math.max(0, Math.min(1, ratio));
+  const color = r >= 0.6 ? "#0F8A4F" : r >= 0.33 ? "#C98A00" : "#CE1126";
+  const estado = r >= 0.6 ? "Fluido" : r >= 0.33 ? "Moderado" : "Pesado";
+  const R = 27;
+  const CIRC = 2 * Math.PI * R;
+  const dash = CIRC * Math.max(0.06, r); // mínimo visible aunque ratio≈0
+  return (
+    <div className="flex flex-col items-center gap-1.5" style={{ width: 96 }}>
+      <div className="relative" style={{ width: 76, height: 76 }}>
+        <svg width={76} height={76} viewBox="0 0 76 76">
+          <circle cx={38} cy={38} r={R} fill="none" stroke="#EFEADF" strokeWidth={6} />
+          <motion.circle
+            cx={38} cy={38} r={R} fill="none" stroke={color} strokeWidth={6} strokeLinecap="round"
+            transform="rotate(-90 38 38)" strokeDasharray={`${dash} ${CIRC}`}
+            initial={{ strokeDashoffset: dash }}
+            animate={{ strokeDashoffset: 0 }}
+            transition={{ duration: 1.1, ease: "easeOut" }}
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[20px] font-bold leading-none tabular-nums" style={{ color: "#111418" }}>{min}</span>
+          <span className="text-[8px] leading-none" style={{ color: "#6E726E" }}>min</span>
+        </div>
+      </div>
+      <div className="flex flex-col items-center leading-tight">
+        <span className="text-center text-[10.5px] font-medium" style={{ color: "#5B5F5C" }} data-i18n-skip="true">{icon} {dest}</span>
+        <span className="text-[8.5px] font-semibold uppercase tracking-wider" style={{ color }}>{estado}</span>
+      </div>
+    </div>
+  );
+}
+
+// Gráfica de precio en el tiempo (X=label, Y=precio) con reveal animado al montar.
+// Compartida por el historial real del inmueble y la tendencia de la zona (DANE).
+function PriceAreaChart({ data, highlightLabel, lang, gradId }: {
+  data: { label: string; precio: number }[];
+  highlightLabel?: string;
+  lang: string;
+  gradId: string;
+}) {
+  const { formatPrice } = usePriceFormat();
+  const current = highlightLabel ? data.find((d) => d.label === highlightLabel)?.precio : undefined;
+  return (
+    <div style={{ height: 150 }}>
+      <ResponsiveContainer width="100%" height="100%">
+        <AreaChart data={data} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
+          <defs>
+            <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0F8A4F" stopOpacity={0.18} />
+              <stop offset="100%" stopColor="#0F8A4F" stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis dataKey="label" tick={{ fontSize: 10, fill: "#6E726E" }} tickLine={false} axisLine={false} dy={4} minTickGap={14} />
+          <YAxis hide domain={["auto", "auto"]} />
+          <RechartsTooltip
+            formatter={(val: unknown) => [formatPrice(Number(val)), lang === "en" ? "Price" : "Precio"]}
+            contentStyle={{ background: "#111418", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, padding: "6px 10px" }}
+            labelStyle={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}
+          />
+          <Area
+            type="monotone" dataKey="precio"
+            stroke="#0F8A4F" strokeWidth={2.5} fill={`url(#${gradId})`}
+            dot={{ r: 2.5, fill: "#0F8A4F", strokeWidth: 0 }}
+            activeDot={{ r: 4, fill: "#0F8A4F" }}
+            isAnimationActive animationDuration={1400} animationEasing="ease-out"
+          />
+          {highlightLabel && current != null && (
+            <ReferenceDot x={highlightLabel} y={current} r={4} fill="#111418" stroke="#fff" strokeWidth={2} />
+          )}
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 /** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow.
  *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
  *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
 function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
-  const isRegistered = useIsRegistered();
-  // Scores del entorno (caminabilidad/transporte/colegios/tráfico) = PÚBLICOS,
-  // estilo Zillow (gancho de atención para el usuario gratis). El DETALLE
-  // (tiempos, ruido, policía, servicios, obras) sigue gated a registrado.
+  const isSuscriptor = useIsSuscriptor();
+  // Los 4 scores (caminabilidad/transporte/tráfico/colegios) = PÚBLICOS para todos
+  // (gancho estilo Zillow). El DETALLE (tiempos hora pico, ruido, policía/bomberos,
+  // internet, EnCicla, canchas, zonas verdes, obras) = SUSCRIPCIÓN.
   const { data } = useQuery<BarrioFetch>({
     queryKey: barrioId ? ["barrio-full", barrioId] : ["listing-entorno", listingId],
     queryFn: () => barrioId
@@ -619,30 +702,48 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   // Detalle del entorno como meters circulares (valor real al centro + arco por
   // "bondad" 0-1). ruido: menos=mejor; internet: más=mejor; policía/bomberos:
   // más/cerca=mejor; EnCicla: cerca=mejor.
-  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
   const facts: EntornoFact[] = [];
   // #17 obra pública: línea dedicada (nombre largo) con tipo + fecha estimada. Sin
   // % de valorización (no hay dato que lo respalde). Solo si está realmente cerca (<3km).
   const obra = c?.nombre_obra_cercana; const dObra = c?.dist_obra_publica_km;
   const obraVisible = !!obra && dObra != null && dObra <= 3;
   const obraDist = dObra != null ? (dObra < 1 ? `${Math.round(dObra * 1000)} m` : `${dObra.toFixed(1)} km`) : "";
+  // Cada métrica se colorea por su PERCENTIL real en Medellín (scaleRatio), no por un
+  // tope inventado. Dist en metros si <1km. Helper para formatear distancias:
+  const km = (d: number) => d < 1 ? { value: `${Math.round(d * 1000)}`, unit: "m" } : { value: d.toFixed(1), unit: "km" };
+  // Metro / parque / mall: MÁS CERCA = mejor.
+  const dMetro = c?.dist_metro_km;
+  if (dMetro != null) facts.push({ icon: "🚇", label: "Metro", ...km(dMetro), ratio: scaleRatio(dMetro, "metro") });
+  const dParque = c?.dist_parque_km;
+  if (dParque != null) facts.push({ icon: "🏞️", label: "Parque", ...km(dParque), ratio: scaleRatio(dParque, "parque") });
+  const dMall = c?.dist_mall_km;
+  if (dMall != null) facts.push({ icon: "🛍️", label: "Centro comercial", ...km(dMall), ratio: scaleRatio(dMall, "mall") });
+  // Zonas verdes: % de cobertura (indice_verde_pct). Mediana Medellín = 2.4%, p90 = 11.7%
+  // → un 3% está sobre la mitad de los barrios (ámbar), NO rojo. Antes un tope de 35%
+  // pintaba de rojo barrios realmente verdes.
+  const verde = data?.verde;
+  if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: "Zonas verdes", value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde") });
+  // Ruido día: MENOS dB = mejor. Medellín es ruidosa (mediana 65dB) → la escala lo refleja.
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
-  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido día", value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: clamp01(1 - (ruidoDb - 35) / 40) });
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido día", value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") });
+  // Policía / bomberos: MÁS cerca = mejor.
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
-  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol}`, unit: "a 1 km", ratio: clamp01(nPol / 3) });
-  else if (dPol != null && dPol <= 2) facts.push({ icon: "🚓", label: "Policía", value: `${dPol.toFixed(1)}`, unit: "km", ratio: clamp01(1 - dPol / 2) });
+  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN") });
+  else if (dPol != null) facts.push({ icon: "🚓", label: "Policía", ...km(dPol), ratio: scaleRatio(dPol, "policiaD") });
   const nBomb = c?.n_bomberos_2km;
-  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb}`, unit: "a 2 km", ratio: clamp01(nBomb / 2) });
+  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb}`, unit: "en 2 km", ratio: scaleRatio(nBomb, "bomberos") });
+  // Internet: MÁS Mbps = mejor. EnCicla: MÁS cerca = mejor. Canchas: MÁS = mejor.
   const net = c?.avg_internet_mbps;
-  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)}`, unit: "Mbps", ratio: clamp01(net / 300) });
+  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)}`, unit: "Mbps", ratio: scaleRatio(net, "internet") });
   const dEnc = c?.dist_encicla_km;
-  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: `${dEnc.toFixed(1)}`, unit: "km", ratio: clamp01(1 - dEnc / 1.5) });
+  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
   const nCanc = c?.n_canchas_1km;
-  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc}`, unit: "a 1 km", ratio: clamp01(nCanc / 3) });
+  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
 
-  // Anon: sin scores no hay sección (el detalle no se le muestra). Registrado:
-  // oculta solo si no hay nada (scores ni detalle).
-  if (tiles.length === 0 && (!isRegistered || (!hayTiempos && facts.length === 0 && !obraVisible))) return null;
+  // Free: solo los 4 scores (tiles). Si no hay tiles y el usuario no es suscriptor
+  // (o no hay detalle que mostrarle), no hay sección.
+  if (tiles.length === 0 && (!isSuscriptor || (!hayTiempos && facts.length === 0 && !obraVisible))) return null;
+  const hayDetalle = hayTiempos || facts.length > 0 || obraVisible;
 
   return (
     <div className="space-y-2.5">
@@ -652,36 +753,43 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
           <ScoreBar key={t.label} label={t.label} score={t.score} sub={t.sub} />
         ))}
       </div>
-      {isRegistered && hayTiempos && (
+      {isSuscriptor && hayTiempos && (
         <div>
           <div className="mb-1.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: "#6E726E" }}>
             <Car className="h-3.5 w-3.5 shrink-0" /> En carro, hora pico
           </div>
-          <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+          <div className="flex flex-wrap justify-center gap-x-5 gap-y-3 rounded-xl py-3" style={{ background: "#F3F0E8", border: "0.5px solid #E5E0D5" }}>
             {tPoblado != null && (
-              <FactCircle icon="🏙️" label="El Poblado" value={`${tPoblado}`} unit="min"
-                ratio={Math.max(0, Math.min(1, 1 - (tPoblado - 5) / 40))} />
+              <CommuteDial icon="🏙️" dest="El Poblado" min={tPoblado}
+                ratio={1 - (tPoblado - 5) / 40} />
             )}
             {tCentro != null && (
-              <FactCircle icon="🏛️" label="Centro" value={`${tCentro}`} unit="min"
-                ratio={Math.max(0, Math.min(1, 1 - (tCentro - 5) / 40))} />
+              <CommuteDial icon="🏛️" dest="Centro" min={tCentro}
+                ratio={1 - (tCentro - 5) / 40} />
             )}
           </div>
         </div>
       )}
-      {isRegistered && facts.length > 0 && (
+      {isSuscriptor && facts.length > 0 && (
         <div className="flex flex-wrap justify-center gap-x-3 gap-y-3 pt-1">
           {facts.map((f) => (
             <FactCircle key={f.label} {...f} />
           ))}
         </div>
       )}
-      {isRegistered && obraVisible && (
+      {isSuscriptor && obraVisible && (
         <div className="text-[11px]" style={{ color: "#6E726E" }} data-i18n-skip="true">
           🏗️ A {obraDist} del proyecto <strong>{obra}</strong>
           {c?.obra_tipo ? ` · ${c.obra_tipo}` : ""}
           {c?.obra_fecha && !/sin fecha/i.test(c.obra_fecha) ? ` · ${c.obra_fecha}` : ""}
         </div>
+      )}
+      {!isSuscriptor && hayDetalle && (
+        <a href="/suscribirse" className="block rounded-xl px-4 py-2.5 text-center transition hover:opacity-95"
+          style={{ background: "#F3F0E8", border: "1px dashed #C9B896" }}>
+          <div className="text-[12px] font-semibold" style={{ color: "#8A6A00" }}>🔒 Suscríbete para ver el detalle del entorno</div>
+          <div className="mt-0.5 text-[11px]" style={{ color: "#6E726E" }}>Tiempos en hora pico, ruido, seguridad, servicios, zonas verdes y obras de la zona.</div>
+        </a>
       )}
     </div>
   );
@@ -1221,6 +1329,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // así que usarlos como señal de realtor abriría la sección paga a usuarios gratis.
   const isRealtor = useIsAgente();
   const isRegistered = useIsRegistered();  // nivel inversionista: rentabilidad/yields
+  const isSuscriptor = useIsSuscriptor();  // suscripción paga: valor estimado + detalle entorno
 
   useEffect(() => {
     if (!listingId) return;
@@ -1568,9 +1677,12 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {(() => {
         const historia = listing.precio_historia ?? [];
         const fmtFecha = (d: Date) => formatDate(d, lang);
+        const estrato = listing.estrato_real ?? null;
+        const precioActual = listing.precio_cop ?? 0;
 
-        // Sin historial (≈97% de los inmuebles): mostramos precio actual + fecha/año
-        // y avisamos que estamos recopilando el histórico completo.
+        // Sin historial propio (≈97% de los inmuebles): precio actual + fecha, y una
+        // gráfica de la TENDENCIA DE LA ZONA (DANE, modelo) — no ventas de este
+        // inmueble, va etiquetada. Da al usuario la curva de precio en el tiempo.
         if (historia.length === 0) {
           const fechaListado =
             listing.dias_en_mercado != null && listing.dias_en_mercado >= 0
@@ -1578,6 +1690,13 @@ export function ListingDrawer({ listingId, onClose }: Props) {
               : listing.fecha_scraping
                 ? new Date(`${listing.fecha_scraping}T00:00:00`)
                 : null;
+          // Tendencia DANE = valorización de VENTA: no aplica a arriendo (el canon
+          // no "valoriza" igual). Solo venta con estrato válido (1-6) y precio real.
+          const esVenta = normalizeTipoOp(listing.tipo_operacion) === "venta";
+          const zona = esVenta && estrato != null && estrato >= 1 && estrato <= 6 && precioActual > 0
+            ? zonePriceTrend(precioActual, estrato).map((p) => ({ label: String(p.year), precio: p.precio }))
+            : null;
+          const stats = estrato != null ? calcValorizStats(estrato) : null;
           return (
             <div className="space-y-3">
               <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
@@ -1591,26 +1710,38 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 </div>
               </div>
               <p className="text-[11px] leading-relaxed" style={{ color: "#6E726E" }}>
-                Aún no hay cambios de precio registrados para este inmueble. Registramos cada variación desde su publicación.
+                Aún no hay cambios de precio registrados para este inmueble.
               </p>
+              {zona && (
+                <div className="space-y-1.5 pt-0.5">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <h4 className="text-[12px] font-semibold tracking-tight" style={{ color: "#111418" }} data-i18n-skip="true">📈 Tendencia de la zona</h4>
+                    {stats && (
+                      <span className="text-[11px] font-semibold tabular-nums" style={{ color: "#B4462F" }}>
+                        ▲ {stats.acumulado}% <span className="font-normal" style={{ color: "#8A8E8A" }}>2015–2025</span>
+                      </span>
+                    )}
+                  </div>
+                  <PriceAreaChart data={zona} highlightLabel={zona[zona.length - 1].label} lang={lang} gradId="zonaFill" />
+                  <p className="text-[10px] leading-relaxed" style={{ color: "#8A8E8A" }}>
+                    Cómo ha valorizado la zona (DANE, estrato {estrato}), anclada al precio de hoy. No es el historial de ventas de este inmueble.
+                  </p>
+                </div>
+              )}
             </div>
           );
         }
 
-        // Cualquier historial (≥1 cambio) → gráfica de precio en el tiempo
-        // (X=fecha, Y=precio). Crece punto a punto a medida que se registran cambios.
+        // Con historial real (≥1 cambio) → gráfica del precio del inmueble en el tiempo.
         const sorted = [...historia].sort((a, b) => a.fecha.localeCompare(b.fecha));
+        const hoyLabel = lang === "en" ? "Today" : "Hoy";
         const chartData = [
-          ...sorted.map(h => ({
-            fecha: h.fecha.slice(5, 10).replace("-", "/"), // MM/DD
-            precio: h.precio,
-          })),
-          { fecha: lang === "en" ? "Today" : "Hoy", precio: listing.precio_cop ?? 0 },
+          ...sorted.map((h) => ({ label: h.fecha.slice(5, 10).replace("-", "/"), precio: h.precio })),
+          { label: hoyLabel, precio: precioActual },
         ];
-        const currentPrecioM = listing.precio_cop ?? 0;
         // % neto desde el primer precio registrado hasta hoy (resumen sobre la gráfica).
         const primerPrecio = sorted[0]?.precio ?? null;
-        const netPct = primerPrecio && primerPrecio > 0 ? ((currentPrecioM - primerPrecio) / primerPrecio) * 100 : null;
+        const netPct = primerPrecio && primerPrecio > 0 ? ((precioActual - primerPrecio) / primerPrecio) * 100 : null;
         const subeNet = (netPct ?? 0) >= 0;
 
         return (
@@ -1623,32 +1754,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                 </span>
               )}
             </div>
-            <div style={{ height: 150 }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={chartData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#0F8A4F" stopOpacity={0.16} />
-                      <stop offset="100%" stopColor="#0F8A4F" stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="fecha" tick={{ fontSize: 10, fill: "#6E726E" }} tickLine={false} axisLine={false} dy={4} />
-                  <YAxis hide domain={["auto", "auto"]} />
-                  <RechartsTooltip
-                    formatter={(val: unknown) => [formatPrice(Number(val)), lang === "en" ? "Price" : "Precio"]}
-                    contentStyle={{ background: "#111418", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, padding: "6px 10px" }}
-                    labelStyle={{ color: "rgba(255,255,255,0.6)", fontSize: 10 }}
-                  />
-                  <Area
-                    type="monotone" dataKey="precio"
-                    stroke="#0F8A4F" strokeWidth={2} fill="url(#priceFill)"
-                    dot={{ r: 2.5, fill: "#0F8A4F", strokeWidth: 0 }}
-                    activeDot={{ r: 4, fill: "#0F8A4F" }}
-                  />
-                  <ReferenceDot x={lang === "en" ? "Today" : "Hoy"} y={currentPrecioM} r={4} fill="#111418" stroke="#fff" strokeWidth={2} />
-                </AreaChart>
-              </ResponsiveContainer>
-            </div>
+            <PriceAreaChart data={chartData} highlightLabel={hoyLabel} lang={lang} gradId="priceFill" />
           </div>
         );
       })()}
@@ -1656,8 +1762,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
       {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} />}
 
-      {/* Valor estimado de mercado (Zestimate) — se auto-oculta si no hay medianas (público) */}
-      <ValorEstimado listing={listing} />
+      {/* Valor estimado de mercado (Zestimate) — SUSCRIPCIÓN (antes público) */}
+      {isSuscriptor && <ValorEstimado listing={listing} />}
 
       {/* CTA registro (solo anónimo) — bajo "Valor estimado", sobre "Ubicación".
           El entorno/historial del detalle está gated a nivel registrado gratis. */}

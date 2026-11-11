@@ -1,6 +1,26 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { realtorApi, type ItemPool, type ZonaNivel } from "@/lib/realtorApi";
+import { apiFetch } from "@/lib/apiClient";
+import { API_BASE_URL } from "@/config/api";
+
+export type EmbudoZona = {
+  zona_codigo: string; zona_nombre: string; nivel: string;
+  vistas_mapa: number; aperturas_detalle: number; favoritos: number; visitas: number;
+};
+export type Embudo = {
+  vistas_mapa: number; aperturas_detalle: number; favoritos: number; visitas: number;
+  zonas: EmbudoZona[];
+};
+
+/** Embudo de demanda (30d) de las zonas patrocinadas: vistas→detalle→favoritos→visitas. */
+export function useEmbudo() {
+  return useQuery({
+    queryKey: ["realtor", "embudo"],
+    queryFn: () => apiFetch<Embudo>(`${API_BASE_URL}/realtor/embudo`),
+    staleTime: 5 * 60 * 1000,
+  });
+}
 
 export function useRealtorPerfil() {
   return useQuery({

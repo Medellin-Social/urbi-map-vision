@@ -36,6 +36,27 @@ export function useIsAgente(): boolean {
   return isAgente;
 }
 
+// Suscripción paga: owner con plan 'pro' ($10) o agente. Puerta del DETALLE del
+// entorno (ruido/servicios/verde/valor estimado/obras) — el free solo ve los 4
+// scores (caminabilidad/transporte/tráfico/colegios). Hoy solo hay 'agente'
+// vendido; cuando se active el sub de owner (plan='pro') se enciende solo.
+// NOTA: esto solo OCULTA en el cliente; el gate real es nullear los campos en el
+// backend para no-suscriptores (patrón de buena_oferta). Pend server-side.
+function _checkSuscriptor(): boolean {
+  const u = auth.get();
+  return u?.plan === "pro" || u?.plan === "agente" || u?.esAgente === true;
+}
+export function useIsSuscriptor(): boolean {
+  const [v, setV] = useState(false);
+  useEffect(() => {
+    setV(_checkSuscriptor());
+    const h = () => setV(_checkSuscriptor());
+    window.addEventListener("medellin-social:user", h);
+    return () => window.removeEventListener("medellin-social:user", h);
+  }, []);
+  return v;
+}
+
 // Nivel REGISTRADO (inversionista): logueado, sin importar plan. Mismo patrón
 // post-mount que useIsAgente para no romper la hidratación SSR.
 export function useIsRegistered(): boolean {

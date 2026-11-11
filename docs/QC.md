@@ -160,6 +160,33 @@ deploy toca 2 servicios (Social-api = migración, social-cron = crontab, forzar
 
 Gotchas y decisiones de QC. Nuevo arriba.
 
+- **2026-11-11 — `listings_m2` fallaba hace ≥3 días (3 sub-pasos rotos).** Lo destapó
+  el ledger. Causas distintas:
+  - **dbt (todos los jobs dbt): protobuf 5.x.** `protobuf` es transitivo de
+    `dbt-core==1.7.4` (sin tope de versión) → un rebuild agarró 5.x, que quitó el
+    kwarg `including_default_value_fields` que dbt usa en su telemetría de fin de
+    corrida. Los modelos PASAN (`PASS=26`) y luego el proceso sale 1. **FIX: pin
+    `protobuf<5` en scraping/requirements.txt** (resuelve a 4.25.9). Afecta también
+    `remates_dbt`, `dbt_full_refresh`, dbt de `airbnb_semanal`.
+  - **metrocuadrado: migraron el sitio — REQUIERE REESCRITURA (pendiente).** La
+    X-Api-Key (pública) ya no está en el HTML; el sitio pasó a un SPA
+    (`/public-results/`) que NO manda key; el endpoint viejo `/rest-search/search`
+    da 401 y el frontend lo abandonó. Los resultados ahora vienen **SSR en el HTML**
+    (no hay API JSON de listings — solo el selector de ubicaciones es JSON). Fix =
+    reescribir el scraper para parsear el HTML renderizado con paginación. Tarea
+    aparte, no es config.
+  - **habi: RESUELTO.** No usa token — su x-api-key es PÚBLICA (web-client). Alguien
+    la había cambiado a exigir env `HABI_API_KEY`. FIX: `_require_api_key()` ahora
+    auto-extrae la key del frontend con un chromium headless (el SPA la inyecta en
+    runtime, no está en HTML/JS estático). ADEMÁS 2º bloqueo: `apiv2.habi.co/robots.txt`
+    da 403 → `urllib.robotparser` lo lee como "disallow all" (falso positivo; el
+    robots REAL de habi.co solo prohíbe /final/ y /undefined) → se pasó
+    `check_robots=False` en esa llamada. Verificado: scrapea 46 listings Valle de
+    Aburrá sin token, exit 0.
+  - **Límite del wrapper evidenciado:** el tail de 50 líneas solo capturó el error
+    dbt; los 2 errores de scrape quedaron fuera → hubo que reproducir local.
+    Considerar subir `_TAIL_LINES` o capturar el fallo por sub-paso.
+
 - **2026-11-08 — Nace el sistema.** Wrapper `run_job.py` + ledger `raw.cron_runs`
   (migr 0122) + lector `cron_status.py` + `qc_report` agendado. Deployado a DEV.
 - **Conexión DB fresca por operación** (no una sola compartida): un scraper de

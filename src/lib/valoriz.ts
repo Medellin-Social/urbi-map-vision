@@ -28,6 +28,11 @@ export function calcValorizStats(estrato: number) {
 
 export type ZonePoint = { year: number; precio: number };
 
+// ponytail: fuente provisional = DANE (índice de valorización de zona). El plan es
+// reemplazarla por el CIERRE DE VENTA REAL (escrituras SNR/ORIPS por zona) cuando el
+// pipeline de cierres esté listo — misma forma de serie {year, precio}, solo cambia
+// el origen del dato. Mientras tanto se etiqueta como "tendencia de la zona (DANE)".
+//
 // Serie de precio de la ZONA por año, anclada al precio actual y back-calculada con
 // las variaciones DANE × multiplicador de estrato. Es un modelo de tendencia de la
 // zona (DANE), NO el historial de ventas de un inmueble concreto — etiquetarlo así.
