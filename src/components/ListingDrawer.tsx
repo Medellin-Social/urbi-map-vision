@@ -785,9 +785,11 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
         </div>
       )}
       {!isSuscriptor && hayDetalle && (
-        <a href="/suscribirse" className="block rounded-xl px-4 py-2.5 text-center transition hover:opacity-95"
+        <a href="/register"
+          onClick={() => { try { localStorage.setItem("registro_origen", "mls"); } catch { /* storage bloqueado */ } }}
+          className="block rounded-xl px-4 py-2.5 text-center transition hover:opacity-95"
           style={{ background: "#F3F0E8", border: "1px dashed #C9B896" }}>
-          <div className="text-[12px] font-semibold" style={{ color: "#8A6A00" }}>🔒 Suscríbete para ver el detalle del entorno</div>
+          <div className="text-[12px] font-semibold" style={{ color: "#8A6A00" }}>🔒 Regístrate gratis para ver el detalle del entorno</div>
           <div className="mt-0.5 text-[11px]" style={{ color: "#6E726E" }}>Tiempos en hora pico, ruido, seguridad, servicios, zonas verdes y obras de la zona.</div>
         </a>
       )}
@@ -1329,7 +1331,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   // así que usarlos como señal de realtor abriría la sección paga a usuarios gratis.
   const isRealtor = useIsAgente();
   const isRegistered = useIsRegistered();  // nivel inversionista: rentabilidad/yields
-  const isSuscriptor = useIsSuscriptor();  // suscripción paga: valor estimado + detalle entorno
+  const isSuscriptor = useIsSuscriptor();  // = registrado (hoy no hay tier de pago): valor estimado + detalle entorno
 
   useEffect(() => {
     if (!listingId) return;
@@ -1762,7 +1764,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
       {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} />}
 
-      {/* Valor estimado de mercado (Zestimate) — SUSCRIPCIÓN (antes público) */}
+      {/* Valor estimado de mercado (Zestimate) — nivel REGISTRADO (suscrito=registro) */}
       {isSuscriptor && <ValorEstimado listing={listing} />}
 
       {/* CTA registro (solo anónimo) — bajo "Valor estimado", sobre "Ubicación".

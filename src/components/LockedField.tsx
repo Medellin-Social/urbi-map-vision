@@ -36,15 +36,16 @@ export function useIsAgente(): boolean {
   return isAgente;
 }
 
-// Suscripción paga: owner con plan 'pro' ($10) o agente. Puerta del DETALLE del
-// entorno (ruido/servicios/verde/valor estimado/obras) — el free solo ve los 4
-// scores (caminabilidad/transporte/tráfico/colegios). Hoy solo hay 'agente'
-// vendido; cuando se active el sub de owner (plan='pro') se enciende solo.
-// NOTA: esto solo OCULTA en el cliente; el gate real es nullear los campos en el
-// backend para no-suscriptores (patrón de buena_oferta). Pend server-side.
+// Puerta del DETALLE del entorno (ruido/servicios/verde/valor estimado/obras).
+// DECISIÓN DE NEGOCIO (usuario, nov-2026): HOY NO hay tier de pago al consumidor →
+// "suscrito" = "registrado" (logueado). Con solo registrarse se desbloquea el
+// detalle (el CTA del drawer ya lo promete: "Regístrate gratis y desbloquea el
+// detalle del entorno"). El anónimo ve los 4 scores públicos y el lock.
+// Cuando exista un plan pagado, volver a gatear por plan ('pro'/'agente') acá.
+// NOTA: esto solo OCULTA en el cliente; el gate real sería nullear los campos en
+// el backend para no-registrados (patrón de buena_oferta). Pend server-side.
 function _checkSuscriptor(): boolean {
-  const u = auth.get();
-  return u?.plan === "pro" || u?.plan === "agente" || u?.esAgente === true;
+  return auth.get() != null;
 }
 export function useIsSuscriptor(): boolean {
   const [v, setV] = useState(false);
