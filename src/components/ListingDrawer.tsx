@@ -559,7 +559,10 @@ function FactCircle({ icon, label, value, unit, ratio }: EntornoFact) {
           {unit && <span className="mt-0.5 text-[8px] leading-none" style={{ color: "#6E726E" }}>{unit}</span>}
         </div>
       </div>
-      <span className="text-center text-[10px] leading-tight" style={{ color: "#5B5F5C" }} data-i18n-skip="true">{icon} {label}</span>
+      {/* El label (Policía, Zonas verdes, etc.) SÍ traduce vía dict; el emoji no
+          tiene entry → queda intacto (word-boundary respeta el espacio). Antes
+          estaba data-i18n-skip y bloqueaba toda la traducción del entorno. */}
+      <span className="text-center text-[10px] leading-tight" style={{ color: "#5B5F5C" }}><span data-i18n-skip="true">{icon}</span> {label}</span>
     </div>
   );
 }
@@ -646,8 +649,20 @@ function PriceAreaChart({ data, highlightLabel, lang, gradId }: {
 /** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow.
  *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
  *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
+// Labels del entorno traducidos IN-COMPONENT (no en el dict global): varios
+// colisionan con nombres reales de negocio ("Canchas de Tenis...", "Clínica De
+// La Policía", "Parque X") → traducirlos en el dict global los mancharía. EnCicla
+// es nombre propio (sistema de bici de Medellín) → no se traduce.
+const ENTORNO_LABEL_EN: Record<string, string> = {
+  "Metro": "Metro", "Parque": "Park", "Centro comercial": "Shopping center",
+  "Zonas verdes": "Green areas", "Ruido día": "Daytime noise", "Policía": "Police",
+  "Bomberos": "Fire station", "Internet": "Internet", "EnCicla": "EnCicla", "Canchas": "Courts",
+};
+
 function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
   const isSuscriptor = useIsSuscriptor();
+  const { lang } = useLang();
+  const fl = (es: string) => (lang === "en" ? ENTORNO_LABEL_EN[es] ?? es : es);
   // Los 4 scores (caminabilidad/transporte/tráfico/colegios) = PÚBLICOS para todos
   // (gancho estilo Zillow). El DETALLE (tiempos hora pico, ruido, policía/bomberos,
   // internet, EnCicla, canchas, zonas verdes, obras) = SUSCRIPCIÓN.
@@ -713,32 +728,32 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const km = (d: number) => d < 1 ? { value: `${Math.round(d * 1000)}`, unit: "m" } : { value: d.toFixed(1), unit: "km" };
   // Metro / parque / mall: MÁS CERCA = mejor.
   const dMetro = c?.dist_metro_km;
-  if (dMetro != null) facts.push({ icon: "🚇", label: "Metro", ...km(dMetro), ratio: scaleRatio(dMetro, "metro") });
+  if (dMetro != null) facts.push({ icon: "🚇", label: fl("Metro"), ...km(dMetro), ratio: scaleRatio(dMetro, "metro") });
   const dParque = c?.dist_parque_km;
-  if (dParque != null) facts.push({ icon: "🏞️", label: "Parque", ...km(dParque), ratio: scaleRatio(dParque, "parque") });
+  if (dParque != null) facts.push({ icon: "🏞️", label: fl("Parque"), ...km(dParque), ratio: scaleRatio(dParque, "parque") });
   const dMall = c?.dist_mall_km;
-  if (dMall != null) facts.push({ icon: "🛍️", label: "Centro comercial", ...km(dMall), ratio: scaleRatio(dMall, "mall") });
+  if (dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall") });
   // Zonas verdes: % de cobertura (indice_verde_pct). Mediana Medellín = 2.4%, p90 = 11.7%
   // → un 3% está sobre la mitad de los barrios (ámbar), NO rojo. Antes un tope de 35%
   // pintaba de rojo barrios realmente verdes.
   const verde = data?.verde;
-  if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: "Zonas verdes", value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde") });
+  if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: fl("Zonas verdes"), value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde") });
   // Ruido día: MENOS dB = mejor. Medellín es ruidosa (mediana 65dB) → la escala lo refleja.
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
-  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido día", value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") });
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: fl("Ruido día"), value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") });
   // Policía / bomberos: MÁS cerca = mejor.
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
-  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN") });
-  else if (dPol != null) facts.push({ icon: "🚓", label: "Policía", ...km(dPol), ratio: scaleRatio(dPol, "policiaD") });
+  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: fl("Policía"), value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN") });
+  else if (dPol != null) facts.push({ icon: "🚓", label: fl("Policía"), ...km(dPol), ratio: scaleRatio(dPol, "policiaD") });
   const nBomb = c?.n_bomberos_2km;
-  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb}`, unit: "en 2 km", ratio: scaleRatio(nBomb, "bomberos") });
+  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: fl("Bomberos"), value: `${nBomb}`, unit: "en 2 km", ratio: scaleRatio(nBomb, "bomberos") });
   // Internet: MÁS Mbps = mejor. EnCicla: MÁS cerca = mejor. Canchas: MÁS = mejor.
   const net = c?.avg_internet_mbps;
-  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)}`, unit: "Mbps", ratio: scaleRatio(net, "internet") });
+  if (net != null && net > 0) facts.push({ icon: "📶", label: fl("Internet"), value: `${Math.round(net)}`, unit: "Mbps", ratio: scaleRatio(net, "internet") });
   const dEnc = c?.dist_encicla_km;
-  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
+  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: fl("EnCicla"), value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
   const nCanc = c?.n_canchas_1km;
-  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
+  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
 
   // Free: solo los 4 scores (tiles). Si no hay tiles y el usuario no es suscriptor
   // (o no hay detalle que mostrarle), no hay sección.

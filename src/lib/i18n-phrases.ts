@@ -2373,6 +2373,24 @@ export const PHRASES: Array<[string, string]> = [
   ["Renta típica del barrio", "Typical rent in the area"],
   ["Estimado con precios publicados, no de cierre", "Estimated from listed prices, not closings"],
   ["Avalúo catastral", "Cadastral value"],
+  // ── Drawer: entorno (detalle), valor estimado, temperatura del mercado ──
+  ["En carro, hora pico", "By car, rush hour"],
+  ["Temperatura del mercado", "Market temperature"],
+  ["Valor de mercado estimado", "Estimated market value"],
+  ["Rango estimado del barrio", "Estimated neighborhood range"],
+  ["Renta típica", "Typical rent"],
+  // Labels del entorno (Ruido día/Policía/Bomberos/Canchas/Metro/etc.) NO van acá:
+  // colisionan con nombres reales de negocio ("Canchas de Tenis...", "Clínica De La
+  // Policía") — se traducen in-component en GettingAround (lang-aware). Ver gotcha #3.
+  ["Fluido", "Free-flowing"],
+  ["Pesado", "Heavy"],
+  ["Predial", "Property tax"],
+  ["% área", "% area"],
+  ["en 1 km", "within 1 km"],
+  ["en 2 km", "within 2 km"],
+  ["Regístrate gratis para ver el detalle del entorno", "Sign up free to see neighborhood detail"],
+  ["Tiempos en hora pico, ruido, seguridad, servicios, zonas verdes y obras de la zona.", "Rush-hour times, noise, safety, services, green areas and nearby public works."],
+  ["Compraventas reales del municipio (SNR/ORIPS) — oferta vs demanda. Nivel municipio. Basado en valores de escritura: puede estar por debajo del precio real de venta.", "Actual recorded sales in the municipality (SNR/ORIPS) — supply vs demand. Municipality level. Based on deed values: may be below the real sale price."],
   ["Predial estimado", "Estimated property tax"],
   ["Rango estimado de venta:", "Estimated sale range:"],
   ["Precio de venta probable, estimado con el precio/m² típico de ",
