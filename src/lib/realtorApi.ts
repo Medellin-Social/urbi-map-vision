@@ -177,6 +177,16 @@ export type ListingPatch = {
   habitaciones?: number;
   banos?: number;
   direccion_aprox?: string;
+  // Ficha completa: ubicación (pin) + resto de campos
+  lat?: number;
+  lon?: number;
+  tipo_inmueble?: string;
+  estrato?: number;
+  parqueaderos?: number;
+  antiguedad_anios?: number;
+  nombre_edificio?: string;
+  administracion?: number;
+  amenidades?: string[];
 };
 
 export type DDItemEstado = "pendiente" | "verificado" | "rechazado";

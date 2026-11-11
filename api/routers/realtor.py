@@ -287,6 +287,16 @@ class ListingPatchRequest(BaseModel):
     habitaciones: int | None = None
     banos: int | None = None
     direccion_aprox: str | None = None
+    # Ficha completa (reclamar/editar todo): ubicación + resto de campos
+    lat: float | None = None
+    lon: float | None = None
+    tipo_inmueble: str | None = None
+    estrato: int | None = None
+    parqueaderos: int | None = None
+    antiguedad_anios: int | None = None
+    nombre_edificio: str | None = None
+    administracion: float | None = None
+    amenidades: list[str] | None = None
 
 
 @router.patch("/listings/{listing_id}")
@@ -296,25 +306,36 @@ async def editar_listing(
     user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
 ):
-    """Edita la ficha de un listing propio (campos básicos, no el estado)."""
+    """Edita la ficha de un listing propio (campos básicos + ubicación, no el estado)."""
     agent = await _agent_del_usuario(user, pool)
-    campos = {k: v for k, v in req.model_dump().items() if v is not None}
-    if not campos:
-        raise HTTPException(status_code=400, detail="Nada que actualizar")
+    data = req.model_dump()
+    # Ubicación va aparte: 'listing' guarda geom (Point), no columnas lat/lon.
+    lat = data.pop("lat", None)
+    lon = data.pop("lon", None)
+    campos = {k: v for k, v in data.items() if v is not None}
     if "precio" in campos and campos["precio"] <= 0:
         raise HTTPException(status_code=400, detail="Precio inválido")
 
-    sets = ", ".join(f"{k} = ${i + 3}" for i, k in enumerate(campos))
+    set_parts = [f"{k} = ${i + 3}" for i, k in enumerate(campos)]
+    valores = list(campos.values())
+    if lat is not None and lon is not None:
+        n = len(valores)
+        set_parts.append(f"geom = ST_SetSRID(ST_MakePoint(${n + 3}, ${n + 4}), 4326)")
+        valores.extend([lon, lat])  # MakePoint(x=lon, y=lat)
+    if not set_parts:
+        raise HTTPException(status_code=400, detail="Nada que actualizar")
+
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            f"UPDATE listing SET {sets}, updated_at = NOW() "
+            f"UPDATE listing SET {', '.join(set_parts)}, updated_at = NOW() "
             "WHERE id = $1 AND agent_id = $2 RETURNING id",
-            listing_id, agent.id, *campos.values(),
+            listing_id, agent.id, *valores,
         )
     if not row:
         raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
     await ghl_client.sync_listing(listing_id)
-    return {"id": listing_id, "actualizado": sorted(campos)}
+    actualizado = sorted(campos) + (["ubicacion"] if lat is not None and lon is not None else [])
+    return {"id": listing_id, "actualizado": actualizado}
 
 
 class CerrarListingRequest(BaseModel):
