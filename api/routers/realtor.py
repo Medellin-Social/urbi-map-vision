@@ -37,9 +37,11 @@ _CONTRIB_CAP = 5             # cierres (12m) que topan el componente de contribu
 _RANKING_MIN_ACTIVIDAD = 3   # actividad mínima (visitas resp + intakes + cierres, 90d/12m) para
                              # tener puntaje/ranking; por debajo → "datos insuficientes" (no inventamos señal)
 # Reciprocidad: cierres reportados (12m) para desbloquear los comparables de cierre.
-# OJO cold-start: con 0 cierres en el sistema el gate guarda una sala vacía; y el
-# cierre es autoreportado (verificado=false) → hoy 1 cierre falso basta para abrir.
-# Decisión de negocio pendiente: ¿exigir verificado=true? (ver docs/FLUJO_REALTOR.md)
+# Cuenta DISTINCT matrícula (anti-farm). Mitigación de integridad construida (punto
+# medio): unlock instantáneo con autoreporte, pero comparables marcan verificado vs
+# sin-verificar + dedup prioriza verificado → el cierre falso es inútil para engañar.
+# Cold-start: con pocos cierres el gate abre una sala fina (crece con los reportes).
+# Futuro: cruce SNR por matrícula (falta dato nivel-matrícula). Ver docs/FLUJO_REALTOR.md.
 _COMPARABLES_MIN_CIERRES = 1
 
 _ZONAS_SQL = """
@@ -445,20 +447,30 @@ async def cerrar_listing(
 # Comparables de CIERRE: NO expone matrícula / dirección / agente / listing_id de
 # otros — solo precio/fecha/zona/tipo/área/$m2. listing_id del ledger solo sirve
 # para el JOIN de zona/tipo, no se devuelve.
+# Dedup por matrícula (una propiedad = un cierre; si hay autoreportado + verificado
+# de la misma, gana el verificado). Verificados primero: un cierre falso queda
+# abajo y marcado "sin verificar" → no engaña a nadie y solo ensucia el bucket
+# descartable. (SNR cross flipearía verificado=true cuando exista el dato.)
 _COMPARABLES_SQL = """
-    SELECT pe.precio, pe.fecha, pe.verificado, pe.moneda,
-           l.area_m2, l.barrio, l.tipo_inmueble::text AS tipo_inmueble,
-           l.operacion::text AS operacion,
-           CASE WHEN l.area_m2 IS NOT NULL AND l.area_m2 > 0
-                THEN ROUND(pe.precio / l.area_m2) END AS precio_m2
-    FROM public.propiedad_evento pe
-    JOIN public.listing l ON l.id = pe.listing_id
-    WHERE pe.tipo_evento = 'venta'
-      AND pe.fecha > CURRENT_DATE - make_interval(months => $1)
-      AND ($2::int  IS NULL OR l.barrio_id = $2)
-      AND ($3::text IS NULL OR l.tipo_inmueble::text = $3)
-      AND ($4::text IS NULL OR l.operacion::text = $4)
-    ORDER BY pe.fecha DESC
+    SELECT precio, fecha, verificado, moneda, area_m2, barrio, tipo_inmueble, operacion, precio_m2
+    FROM (
+        SELECT DISTINCT ON (pe.matricula_inmobiliaria)
+               pe.precio, pe.fecha, pe.verificado, pe.moneda,
+               l.area_m2, l.barrio, l.tipo_inmueble::text AS tipo_inmueble,
+               l.operacion::text AS operacion,
+               CASE WHEN l.area_m2 IS NOT NULL AND l.area_m2 > 0
+                    THEN ROUND(pe.precio / l.area_m2) END AS precio_m2
+        FROM public.propiedad_evento pe
+        JOIN public.listing l ON l.id = pe.listing_id
+        WHERE pe.tipo_evento = 'venta'
+          AND pe.matricula_inmobiliaria IS NOT NULL
+          AND pe.fecha > CURRENT_DATE - make_interval(months => $1)
+          AND ($2::int  IS NULL OR l.barrio_id = $2)
+          AND ($3::text IS NULL OR l.tipo_inmueble::text = $3)
+          AND ($4::text IS NULL OR l.operacion::text = $4)
+        ORDER BY pe.matricula_inmobiliaria, pe.verificado DESC, pe.fecha DESC
+    ) d
+    ORDER BY d.verificado DESC, d.fecha DESC
     LIMIT 50
 """
 
@@ -477,9 +489,12 @@ async def comparables_cierre(
     Ese gate ES el incentivo para teclear el cierre. NO expone matrícula/dirección/
     agente de otros (solo precio/fecha/zona/tipo/área/$m2)."""
     agent = await _agent_del_usuario(user, pool)
+    # DISTINCT matrícula: reportar la misma matrícula N veces NO farmea el unlock
+    # (una propiedad se vende una vez). Anti-abuso barato del gate autoreportado.
     cierres = int(await pool.fetchval(
-        "SELECT count(*) FROM public.propiedad_evento "
+        "SELECT count(DISTINCT matricula_inmobiliaria) FROM public.propiedad_evento "
         "WHERE agent_id = $1 AND tipo_evento = 'venta' "
+        "AND matricula_inmobiliaria IS NOT NULL "
         "AND fecha > CURRENT_DATE - INTERVAL '12 months'",
         agent.id,
     ) or 0)
@@ -493,9 +508,12 @@ async def comparables_cierre(
             "comparables": [],
         }
     rows = await pool.fetch(_COMPARABLES_SQL, meses, barrio_id, tipo_inmueble, operacion)
+    n_verif = sum(1 for r in rows if r["verificado"])
     return {
         "acceso": True,
         "cierres_reportados": cierres,
+        "verificados": n_verif,
+        "autoreportados": len(rows) - n_verif,
         "comparables": [
             {
                 "precio": float(r["precio"]) if r["precio"] is not None else None,
@@ -636,8 +654,9 @@ def _puntaje_standing(row) -> int:
 # (tabla analytics o cache 5min) cuando sean cientos.
 _STANDING_COMPONENTS_SQL = """
     SELECT a.id::text AS agent_id,
-      (SELECT count(*) FROM public.propiedad_evento pe
+      (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM public.propiedad_evento pe
          WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+           AND pe.matricula_inmobiliaria IS NOT NULL
            AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres,
       (SELECT percentile_cont(0.5) WITHIN GROUP (
                  ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0)
@@ -656,8 +675,10 @@ _STANDING_COMPONENTS_SQL = """
            AND v.estado <> 'pendiente' AND v.created_at > NOW() - INTERVAL '90 days')
       + (SELECT count(*) FROM public.intake WHERE agent_id = a.id
            AND created_at > NOW() - INTERVAL '90 days')
-      + (SELECT count(*) FROM public.propiedad_evento pe WHERE pe.agent_id = a.id
-           AND pe.tipo_evento = 'venta' AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')
+      + (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM public.propiedad_evento pe
+           WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+             AND pe.matricula_inmobiliaria IS NOT NULL
+             AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')
                                                                                      AS actividad
     FROM public.agent a
     WHERE a.estado = 'activo'
@@ -846,6 +867,91 @@ async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_poo
         "standing": _standing_de(standing_rows, str(agent.id)),
         "zonas": roi,
     }
+
+
+# ── Embudo de demanda por zona patrocinada (vistas→detalle→favoritos→visitas) ──
+# Mismo cálculo que el modelo dbt analytics.embudo_zona pero INLINE (no depende de que
+# la vista exista en el env) y acotado a las zonas que patrocina el realtor.
+class EmbudoZonaItem(BaseModel):
+    zona_codigo: str
+    zona_nombre: str
+    nivel: str
+    vistas_mapa: int
+    aperturas_detalle: int
+    favoritos: int
+    visitas: int
+
+
+class EmbudoResponse(BaseModel):
+    vistas_mapa: int
+    aperturas_detalle: int
+    favoritos: int
+    visitas: int
+    zonas: list[EmbudoZonaItem]
+
+
+_EMBUDO_SQL = (
+    "WITH zonas AS (" + _ZONAS_SQL + "),\n"
+    """
+    zona_barrios AS (
+        SELECT z.zona_codigo, z.nombre, z.nivel, b.id AS barrio_id
+        FROM zonas z JOIN raw.barrios b ON z.nivel = 'barrio' AND b.id::text = z.zona_codigo
+        UNION
+        SELECT z.zona_codigo, z.nombre, z.nivel, bc.barrio_id
+        FROM zonas z JOIN analytics.barrios_cd bc ON z.nivel = 'comuna' AND bc.cd_comuna::text = z.zona_codigo
+    ),
+    ev AS (
+        SELECT COALESCE(e.barrio_id, sl.barrio_id) AS barrio_id, e.event_type
+        FROM public.user_events e
+        LEFT JOIN staging.stg_listings_unificado sl ON sl.url = e.entity_id
+        WHERE e.created_at > now() - interval '30 days'
+          AND e.event_type IN ('listing_preview', 'listing_view')
+    ),
+    ev_agg AS (
+        SELECT barrio_id,
+               count(*) FILTER (WHERE event_type = 'listing_preview') AS vistas_mapa,
+               count(*) FILTER (WHERE event_type = 'listing_view')    AS aperturas_detalle
+        FROM ev WHERE barrio_id IS NOT NULL GROUP BY barrio_id
+    ),
+    fav AS (
+        SELECT barrio_id, count(*) n FROM raw.favoritos_listings
+        WHERE created_at > now() - interval '30 days' AND barrio_id IS NOT NULL GROUP BY barrio_id
+    ),
+    vis AS (
+        SELECT sl.barrio_id, count(*) n
+        FROM public.visita_solicitud v
+        JOIN staging.stg_listings_unificado sl ON sl.url = v.listing_url
+        WHERE v.created_at > now() - interval '30 days' AND sl.barrio_id IS NOT NULL GROUP BY sl.barrio_id
+    )
+    SELECT zb.zona_codigo, zb.nombre AS zona_nombre, zb.nivel,
+           COALESCE(SUM(ea.vistas_mapa), 0)::int       AS vistas_mapa,
+           COALESCE(SUM(ea.aperturas_detalle), 0)::int AS aperturas_detalle,
+           COALESCE(SUM(f.n), 0)::int                  AS favoritos,
+           COALESCE(SUM(vv.n), 0)::int                 AS visitas
+    FROM zona_barrios zb
+    LEFT JOIN ev_agg ea ON ea.barrio_id = zb.barrio_id
+    LEFT JOIN fav    f  ON f.barrio_id  = zb.barrio_id
+    LEFT JOIN vis    vv ON vv.barrio_id = zb.barrio_id
+    GROUP BY zb.zona_codigo, zb.nombre, zb.nivel
+    ORDER BY vistas_mapa DESC
+    """
+)
+
+
+@router.get("/embudo", response_model=EmbudoResponse)
+async def embudo(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    """Embudo de demanda (30d) de las zonas que patrocina el realtor:
+    vistas en mapa → aperturas de detalle → favoritos → visitas agendadas."""
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    rows = await pool.fetch(_EMBUDO_SQL, agent.id)
+    zonas = [EmbudoZonaItem(**dict(r)) for r in rows]
+    return EmbudoResponse(
+        vistas_mapa=sum(z.vistas_mapa for z in zonas),
+        aperturas_detalle=sum(z.aperturas_detalle for z in zonas),
+        favoritos=sum(z.favoritos for z in zonas),
+        visitas=sum(z.visitas for z in zonas),
+        zonas=zonas,
+    )
 
 
 # urls que identifican los listings del agente en user_events/favoritos/visitas:

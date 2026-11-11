@@ -8,6 +8,7 @@ import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ResumenTab } from "./ResumenTab";
 import { formatCOP } from "@/lib/format";
 import { LanguageToggle, Name } from "@/lib/i18n";
 import {
@@ -57,9 +58,10 @@ export const Route = createFileRoute("/realtor/dashboard")({
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 
-type Tab = "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
+type Tab = "resumen" | "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
 
 const TABS: { id: Tab; label: string }[] = [
+  { id: "resumen",      label: "Resumen" },
   { id: "resultados",   label: "Resultados" },
   { id: "inbox",        label: "Inbox" },
   { id: "agenda",       label: "Agenda" },
@@ -70,7 +72,7 @@ const TABS: { id: Tab; label: string }[] = [
 ];
 
 function RealtorDashboardPage() {
-  const [tab, setTab] = useState<Tab>("resultados");
+  const [tab, setTab] = useState<Tab>("resumen");
   const { isError, error, isLoading } = useRealtorPerfil();
 
   // La cuenta logueada existe pero no tiene fila `agent` (backend responde 403
@@ -103,6 +105,7 @@ function RealtorDashboardPage() {
     <div className="paper-theme min-h-screen bg-background">
       <RealtorNav tab={tab} onTab={setTab} />
       <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
+        {tab === "resumen"      && <ResumenTab />}
         {tab === "resultados"   && <ResultadosTab />}
         {tab === "inbox"        && <InboxTab />}
         {tab === "agenda"       && <AgendaTab />}
@@ -1399,13 +1402,20 @@ function ComparablesSection() {
         <EmptyState msg="Aún no hay cierres reportados para comparar. A medida que los agentes reporten, aparecerán aquí." />
       )}
       {!isLoading && data?.acceso && data.comparables.length > 0 && (
+        <>
+        <p className="mb-3 text-xs text-muted-foreground">
+          {data.verificados ?? 0} verificados · {data.autoreportados ?? 0} autoreportados.
+          “Sin verificar” = reportado por un agente, aún sin cruzar con el registro (SNR) — tómalo con cautela.
+        </p>
         <div className="overflow-hidden rounded-lg border border-border bg-surface">
           {data.comparables.map((c, i) => (
             <div key={i} className={`flex items-center justify-between px-4 py-3 ${i === 0 ? "" : "border-t border-border/70"}`}>
               <div className="min-w-0">
                 <div className="text-sm font-medium capitalize text-foreground">
                   {c.tipo_inmueble} · {c.barrio ?? "—"}
-                  {c.verificado && <span className="ml-2 text-[11px] font-semibold text-success">✓ verificado</span>}
+                  {c.verificado
+                    ? <span className="ml-2 text-[11px] font-semibold text-success">✓ verificado</span>
+                    : <span className="ml-2 text-[11px] font-medium text-muted-foreground">· sin verificar</span>}
                 </div>
                 <div className="text-xs text-muted-foreground">
                   {c.area_m2 ? `${c.area_m2} m²` : "área —"} · {new Date(c.fecha).toLocaleDateString("es-CO", { month: "short", year: "numeric" })}
@@ -1418,6 +1428,7 @@ function ComparablesSection() {
             </div>
           ))}
         </div>
+        </>
       )}
     </section>
   );

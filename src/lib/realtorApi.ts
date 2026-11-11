@@ -162,6 +162,8 @@ export type ComparablesResponse = {
   cierres_reportados: number;
   cierres_necesarios?: number;
   motivo?: string;
+  verificados?: number;        // comparables cruzados con registro (SNR)
+  autoreportados?: number;     // autoreportados sin verificar
   comparables: Comparable[];
 };
 
@@ -615,9 +617,11 @@ const mockApi: RealtorDashboardApi = {
     return {
       acceso: true,
       cierres_reportados: 2,
+      verificados: 1,
+      autoreportados: 1,
       comparables: [
-        { precio: 520_000_000, precio_m2: 7_300_000, moneda: "COP", fecha: "2026-10-01", area_m2: 71, barrio: "El Poblado", tipo_inmueble: "apartamento", operacion: "venta", verificado: false },
         { precio: 445_000_000, precio_m2: 6_900_000, moneda: "COP", fecha: "2026-09-12", area_m2: 64, barrio: "El Poblado", tipo_inmueble: "apartamento", operacion: "venta", verificado: true },
+        { precio: 520_000_000, precio_m2: 7_300_000, moneda: "COP", fecha: "2026-10-01", area_m2: 71, barrio: "El Poblado", tipo_inmueble: "apartamento", operacion: "venta", verificado: false },
       ],
     } satisfies ComparablesResponse;
   },

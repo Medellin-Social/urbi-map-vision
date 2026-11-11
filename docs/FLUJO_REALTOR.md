@@ -90,9 +90,20 @@ tasas mejor → ganas más → más cierres.**
   (comparables finos). El mecanismo crece con los reportes; al inicio el valor
   desbloqueado es bajo. ¿Umbral 1 está bien, o se arranca con gate abierto hasta
   tener N cierres?
-- **Integridad del gate:** el cierre es autoreportado (`verificado=false`). Hoy 1
-  cierre basta para abrir — un cierre falso abriría el gate. ¿Exigir `verificado=true`
-  (cruce SNR) para contar hacia el desbloqueo? Decisión de negocio.
+- **Integridad del gate — mitigado 2026-11-11 (punto medio):** el cierre sigue
+  autoreportado (`verificado=false`, unlock instantáneo = incentivo fuerte), PERO:
+  1. **Anti-farm:** gate/contribución cuentan `DISTINCT matrícula` → spamear la misma
+     matrícula N veces NO sube el unlock ni el puntaje (una propiedad se vende una vez).
+  2. **Transparencia:** los comparables marcan `verificado` vs `sin verificar`, ordenan
+     verificados primero y, si hay autoreportado + verificado de la misma matrícula,
+     dedup se queda con el verificado → un cierre falso queda abajo, etiquetado "sin
+     verificar", inútil para engañar y contaminando solo el bucket descartable (que el
+     propio tramposo también ve).
+  3. **Futuro (no construido — falta dato):** cruce SNR por matrícula flipearía
+     `verificado=true` y permitiría descartar los no-verificados que no aparezcan.
+     `compraventas_orips` es nivel municipio hoy → el cruce fino espera ese dato.
+  Verificado en vivo: 3 filas / 2 matrículas → `cierres_reportados=2`, 2 comparables
+  (dedup), verificados primero, dedup prioriza la verificada.
 
 **Testeo:** `api/tests/test_realtor_incentivos.py` (10 tests: math de puntaje+pesos+cap,
 degradación honesta del ranking, gate bloqueado/abierto, no-leak) +
