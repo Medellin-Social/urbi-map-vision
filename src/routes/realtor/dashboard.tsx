@@ -9,6 +9,8 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ResumenTab } from "./ResumenTab";
+import { ComparadorTab } from "./ComparadorTab";
+import { SimuladorTab } from "./SimuladorTab";
 import { formatCOP } from "@/lib/format";
 import { LanguageToggle, Name } from "@/lib/i18n";
 import {
@@ -58,7 +60,7 @@ export const Route = createFileRoute("/realtor/dashboard")({
 
 // ── Tabs ───────────────────────────────────────────────────────────────────────
 
-type Tab = "resumen" | "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "config";
+type Tab = "resumen" | "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "comparador" | "simulador" | "config";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "resumen",      label: "Resumen" },
@@ -68,11 +70,18 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "listings",     label: "Mis listings" },
   { id: "desempeno",    label: "Desempeño" },
   { id: "inteligencia", label: "Inteligencia" },
+  { id: "comparador",   label: "Comparador" },
+  { id: "simulador",    label: "Simulador" },
   { id: "config",       label: "Configuración" },
 ];
 
 function RealtorDashboardPage() {
-  const [tab, setTab] = useState<Tab>("resumen");
+  // Tab inicial desde ?tab= (deep-link desde navbar/listing → abre el tab correcto
+  // dentro del centro de agente, sin mandar a otra página).
+  const [tab, setTab] = useState<Tab>(() => {
+    const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
+    return (TABS.some((x) => x.id === t) ? t : "resumen") as Tab;
+  });
   const { isError, error, isLoading } = useRealtorPerfil();
 
   // La cuenta logueada existe pero no tiene fila `agent` (backend responde 403
@@ -112,6 +121,8 @@ function RealtorDashboardPage() {
         {tab === "listings"     && <ListingsTab />}
         {tab === "desempeno"    && <DesempenoTab />}
         {tab === "inteligencia" && <InteligenciaTab />}
+        {tab === "comparador"   && <ComparadorTab />}
+        {tab === "simulador"    && <SimuladorTab />}
         {tab === "config"       && <ConfiguracionTab />}
       </main>
     </div>
@@ -194,19 +205,6 @@ function RealtorNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
               )}
             </button>
           ))}
-          <span className="my-auto h-4 w-px shrink-0 bg-border" aria-hidden />
-          <Link
-            to="/comparador"
-            className="shrink-0 border-b-2 border-transparent pb-2.5 pt-1 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            Comparador
-          </Link>
-          <Link
-            to="/simulador"
-            className="shrink-0 border-b-2 border-transparent pb-2.5 pt-1 text-sm font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            Simulador
-          </Link>
         </div>
       </nav>
     </header>
