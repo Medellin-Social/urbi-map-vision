@@ -60,8 +60,51 @@ Verificado contra API local (login real `realtor.test@example.com`, DB `social`:
 - `POST /realtor/listings/{id}/cerrar` — marca vendido + graba precio de cierre +
   llaves ORIP/catastro en el ledger `propiedad_evento` (append-only, sobrevive al
   listing). Precio autoreportado → `verificado=false` hasta cruzar con SNR.
-- **Pendiente:** UI "marcar vendido" en el dashboard + incentivo (por qué el realtor
-  teclea el cierre gratis).
+- UI "Marcar vendido": botón en Mis listings (publicado/pausado) → modal
+  (precio + matrícula obligatoria + fecha/catastral opc) → `cerrar`. ✅ construido.
+
+### 1c-bis. INCENTIVOS del realtor — ✅ construido + testeado 2026-11-11
+
+El loop: **reportar cierres → desbloquea comparables de cierre + sube tu puntaje →
+tasas mejor → ganas más → más cierres.**
+
+- **Palanca de reciprocidad (`GET /realtor/comparables`):** comparables de precio de
+  CIERRE (el dato más valioso para tasar), **gated**: solo los ve quien reportó
+  ≥`_COMPARABLES_MIN_CIERRES` cierres en 12m. Ese gate ES la razón para teclear el
+  cierre. NO expone matrícula/dirección/agente/listing de otros (solo
+  precio/fecha/zona/tipo/área/$m2) — verificado no-leak.
+- **Standing (`/realtor/desempeno.standing`):** `puntaje` 0–100 (contribución 30% +
+  velocidad 30% + show 20% + aceptación 20%, pesos en `_PUNTAJE_PESOS`) + `ranking`
+  {posicion,total} cross-agente. **Degrada honesto:** sin actividad ≥
+  `_RANKING_MIN_ACTIVIDAD` → puntaje/ranking `null` + "datos insuficientes" (no
+  inventa un puesto sobre ceros).
+- **Diente del grado SLA:** la velocidad de respuesta es 30% del puntaje → el espejo
+  se vuelve palanca (vía standing/ranking). NO rewiring de la asignación: la
+  velocidad sube el standing, no cambia (aún) el orden de reparto de nuevos leads.
+
+**Parámetros = decisión de PRODUCTO** (en `realtor.py`, placeholder, tunéalos):
+`_PUNTAJE_PESOS`, `_CONTRIB_CAP=5`, `_RANKING_MIN_ACTIVIDAD=3`, `_COMPARABLES_MIN_CIERRES=1`.
+
+**Decisiones de negocio pendientes (flagueadas, no bloquean el mecanismo):**
+- **Cold-start:** con pocos cierres en el sistema el gate guarda una sala casi vacía
+  (comparables finos). El mecanismo crece con los reportes; al inicio el valor
+  desbloqueado es bajo. ¿Umbral 1 está bien, o se arranca con gate abierto hasta
+  tener N cierres?
+- **Integridad del gate:** el cierre es autoreportado (`verificado=false`). Hoy 1
+  cierre basta para abrir — un cierre falso abriría el gate. ¿Exigir `verificado=true`
+  (cruce SNR) para contar hacia el desbloqueo? Decisión de negocio.
+
+**Testeo:** `api/tests/test_realtor_incentivos.py` (10 tests: math de puntaje+pesos+cap,
+degradación honesta del ranking, gate bloqueado/abierto, no-leak) +
+- FLIP del gate en vivo contra API real (0 cierres→gated → `cerrar` → mismo agente ve
+  comparables + no-leak) con cleanup (sin dejar cierres sintéticos).
+- Standing SQL→math en vivo: seed 2 agentes (5 vs 3 cierres) → `/desempeno` devuelve
+  puntaje=30 (= cálculo a mano) + ranking puesto 1 de 2; cleanup. (El pytest prueba la
+  math con dicts; esto prueba que `_STANDING_COMPONENTS_SQL` la alimenta bien.)
+
+**Observado vs calibrado (honestidad):** el MECANISMO está probado (gate en vivo, standing
+SQL→math en vivo, degradación). Que los pesos/umbrales sean los CORRECTOS para el negocio
+NO está validado — son placeholder.
 
 ### 1d. Tracking (todo se traquea)
 - Vistas: `public.user_events` (`event_type='listing_view'`). **Probado: 7 vistas
@@ -159,7 +202,8 @@ La superficie realtor/lead de nuestro lado está COMPLETA (entrada + salida):
 leads (in/out), visita estado (in), agents (in/out). Ver §3a.
 
 **Lo que queda de nuestro lado (no bloqueado):**
-- [ ] UI "marcar vendido" en dashboard realtor (paso 5) + incentivo.
+- [x] UI "marcar vendido" (paso 5) + sistema de INCENTIVOS (comparables gated +
+      standing/ranking) — ✅ 2026-11-11, ver §1c-bis.
 - [ ] (si se necesitan) `GET /ghl/listings?since=` pull — hoy el push nativo
       `ghl_client.sync_listing` ya cubre salida de listings; `POST /ghl/cierres`
       cuando exista la UI de cierre (feed de transacciones para cobro paso 6).

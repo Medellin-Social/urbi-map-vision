@@ -149,6 +149,30 @@ export function useEditarListing() {
   });
 }
 
+export function useCerrarListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, input }: { listingId: string; input: import("@/lib/realtorApi").CerrarListingInput }) =>
+      realtorApi.cerrarListing(listingId, input),
+    onSuccess: () => {
+      // Reportar el cierre: cambia listings, sube standing y DESBLOQUEA comparables.
+      qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
+      qc.invalidateQueries({ queryKey: ["realtor", "desempeno"] });
+      qc.invalidateQueries({ queryKey: ["realtor", "comparables"] });
+      toast.success("Cierre reportado. Desbloqueaste los comparables de cierre.");
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "No se pudo reportar el cierre"),
+  });
+}
+
+export function useComparables(params?: { barrioId?: number; tipoInmueble?: string; operacion?: string; meses?: number }) {
+  return useQuery({
+    queryKey: ["realtor", "comparables", params ?? null],
+    queryFn: () => realtorApi.getComparables(params),
+    staleTime: 60 * 1000,
+  });
+}
+
 export function useInteligenciaBarrio(zonaCodigo: string | null, nivel?: ZonaNivel) {
   return useQuery({
     queryKey: ["realtor", "inteligencia", zonaCodigo, nivel],

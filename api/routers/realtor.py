@@ -9,7 +9,7 @@ import logging
 from datetime import date, time as _time
 from types import SimpleNamespace
 
-from fastapi import APIRouter, Body, Depends, HTTPException, UploadFile
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile
 from pydantic import BaseModel, Field
 
 from api.db import get_pool
@@ -28,6 +28,19 @@ router = APIRouter()
 
 # claves del cuestionario que el dashboard muestra en "declarado"
 _DECL_KEYS = ("tiene_escritura", "al_dia_predial", "al_dia_administracion", "tiene_hipoteca")
+
+# ── Incentivos del realtor — parámetros de PRODUCTO (PLACEHOLDER, ajustar con negocio) ──
+# NO son decisiones técnicas: definen el comportamiento que premiamos. Tunéalos acá.
+# Pesos del puntaje de standing (0..1, deben sumar 1.0).
+_PUNTAJE_PESOS = {"contribucion": 0.30, "velocidad": 0.30, "show_rate": 0.20, "aceptacion": 0.20}
+_CONTRIB_CAP = 5             # cierres (12m) que topan el componente de contribución
+_RANKING_MIN_ACTIVIDAD = 3   # actividad mínima (visitas resp + intakes + cierres, 90d/12m) para
+                             # tener puntaje/ranking; por debajo → "datos insuficientes" (no inventamos señal)
+# Reciprocidad: cierres reportados (12m) para desbloquear los comparables de cierre.
+# OJO cold-start: con 0 cierres en el sistema el gate guarda una sala vacía; y el
+# cierre es autoreportado (verificado=false) → hoy 1 cierre falso basta para abrir.
+# Decisión de negocio pendiente: ¿exigir verificado=true? (ver docs/FLUJO_REALTOR.md)
+_COMPARABLES_MIN_CIERRES = 1
 
 _ZONAS_SQL = """
     SELECT s.zona_codigo, s.zona_nivel::text AS nivel, s.tier, s.precio_mensual,
@@ -429,6 +442,77 @@ async def cerrar_listing(
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
 
 
+# Comparables de CIERRE: NO expone matrícula / dirección / agente / listing_id de
+# otros — solo precio/fecha/zona/tipo/área/$m2. listing_id del ledger solo sirve
+# para el JOIN de zona/tipo, no se devuelve.
+_COMPARABLES_SQL = """
+    SELECT pe.precio, pe.fecha, pe.verificado, pe.moneda,
+           l.area_m2, l.barrio, l.tipo_inmueble::text AS tipo_inmueble,
+           l.operacion::text AS operacion,
+           CASE WHEN l.area_m2 IS NOT NULL AND l.area_m2 > 0
+                THEN ROUND(pe.precio / l.area_m2) END AS precio_m2
+    FROM public.propiedad_evento pe
+    JOIN public.listing l ON l.id = pe.listing_id
+    WHERE pe.tipo_evento = 'venta'
+      AND pe.fecha > CURRENT_DATE - make_interval(months => $1)
+      AND ($2::int  IS NULL OR l.barrio_id = $2)
+      AND ($3::text IS NULL OR l.tipo_inmueble::text = $3)
+      AND ($4::text IS NULL OR l.operacion::text = $4)
+    ORDER BY pe.fecha DESC
+    LIMIT 50
+"""
+
+
+@router.get("/comparables")
+async def comparables_cierre(
+    barrio_id: int | None = Query(default=None),
+    tipo_inmueble: str | None = Query(default=None),
+    operacion: str | None = Query(default=None),
+    meses: int = Query(default=12, ge=1, le=60),
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Comparables de precio de CIERRE (no de aviso) — el dato más valioso para
+    tasar. Reciprocidad estilo MLS: solo los ve quien contribuye (reportó cierres).
+    Ese gate ES el incentivo para teclear el cierre. NO expone matrícula/dirección/
+    agente de otros (solo precio/fecha/zona/tipo/área/$m2)."""
+    agent = await _agent_del_usuario(user, pool)
+    cierres = int(await pool.fetchval(
+        "SELECT count(*) FROM public.propiedad_evento "
+        "WHERE agent_id = $1 AND tipo_evento = 'venta' "
+        "AND fecha > CURRENT_DATE - INTERVAL '12 months'",
+        agent.id,
+    ) or 0)
+    if cierres < _COMPARABLES_MIN_CIERRES:
+        return {
+            "acceso": False,
+            "cierres_reportados": cierres,
+            "cierres_necesarios": _COMPARABLES_MIN_CIERRES,
+            "motivo": (f"Reporta al menos {_COMPARABLES_MIN_CIERRES} cierre en los últimos 12 meses "
+                       "para desbloquear los comparables de cierre. Contribuyes, accedes."),
+            "comparables": [],
+        }
+    rows = await pool.fetch(_COMPARABLES_SQL, meses, barrio_id, tipo_inmueble, operacion)
+    return {
+        "acceso": True,
+        "cierres_reportados": cierres,
+        "comparables": [
+            {
+                "precio": float(r["precio"]) if r["precio"] is not None else None,
+                "precio_m2": int(r["precio_m2"]) if r["precio_m2"] is not None else None,
+                "moneda": r["moneda"],
+                "fecha": r["fecha"].isoformat(),
+                "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
+                "barrio": r["barrio"],
+                "tipo_inmueble": r["tipo_inmueble"],
+                "operacion": r["operacion"],
+                "verificado": r["verificado"],
+            }
+            for r in rows
+        ],
+    }
+
+
 @router.post("/listings/{listing_id}/fotos", status_code=201)
 async def subir_fotos(
     listing_id: str,
@@ -516,6 +600,99 @@ def _grado_servicio(med_horas: float | None) -> tuple[str, str]:
     return ("D", "Respondes lento — los leads se enfrían antes de que llames")
 
 
+def _componente_velocidad(resp_med: float | None) -> float:
+    """0..100 por mediana de horas de respuesta. None (sin visitas respondidas) = 0."""
+    if resp_med is None:
+        return 0.0
+    if resp_med <= 4:
+        return 100.0
+    if resp_med <= 12:
+        return 75.0
+    if resp_med <= 24:
+        return 50.0
+    return 25.0
+
+
+def _puntaje_standing(row) -> int:
+    """Puntaje 0..100 del agente a partir de sus 4 componentes. Pesos en
+    _PUNTAJE_PESOS (decisión de producto). Solo se llama para agentes con
+    actividad >= umbral — no se infla con ceros."""
+    contrib = min(int(row["cierres"]), _CONTRIB_CAP) / _CONTRIB_CAP * 100.0
+    vel = _componente_velocidad(float(row["resp_med"]) if row["resp_med"] is not None else None)
+    show = float(row["show_rate"] or 0) * 100.0
+    acep = float(row["aceptacion"] or 0) * 100.0
+    p = (_PUNTAJE_PESOS["contribucion"] * contrib
+         + _PUNTAJE_PESOS["velocidad"] * vel
+         + _PUNTAJE_PESOS["show_rate"] * show
+         + _PUNTAJE_PESOS["aceptacion"] * acep)
+    return round(p)
+
+
+# Componentes por agente activo (scope agent_id, comparable entre agentes).
+# `actividad` = visitas respondidas 90d + intakes 90d + cierres 12m → umbral de
+# "¿hay suficiente para rankear?". Pocos agentes → subqueries OK.
+# ponytail: fan-out de subqueries sobre TODOS los agentes activos en cada
+# /desempeno. Techo: a decenas de agentes sigue barato; materializar/cachear
+# (tabla analytics o cache 5min) cuando sean cientos.
+_STANDING_COMPONENTS_SQL = """
+    SELECT a.id::text AS agent_id,
+      (SELECT count(*) FROM public.propiedad_evento pe
+         WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+           AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres,
+      (SELECT percentile_cont(0.5) WITHIN GROUP (
+                 ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0)
+         FROM public.visita_solicitud v
+         WHERE v.agent_id = a.id AND v.estado <> 'pendiente'
+           AND v.created_at > NOW() - INTERVAL '90 days')                            AS resp_med,
+      (SELECT count(*) FILTER (WHERE v.estado = 'realizada')::numeric
+              / NULLIF(count(*) FILTER (WHERE v.estado IN ('realizada','no_asistio')), 0)
+         FROM public.visita_solicitud v
+         WHERE v.agent_id = a.id AND v.created_at > NOW() - INTERVAL '90 days')       AS show_rate,
+      (SELECT count(*) FILTER (WHERE estado IN ('en_verificacion','aceptado') OR listing_id IS NOT NULL)::numeric
+              / NULLIF(count(*), 0)
+         FROM public.intake WHERE agent_id = a.id
+           AND created_at > NOW() - INTERVAL '90 days')                              AS aceptacion,
+      (SELECT count(*) FROM public.visita_solicitud v WHERE v.agent_id = a.id
+           AND v.estado <> 'pendiente' AND v.created_at > NOW() - INTERVAL '90 days')
+      + (SELECT count(*) FROM public.intake WHERE agent_id = a.id
+           AND created_at > NOW() - INTERVAL '90 days')
+      + (SELECT count(*) FROM public.propiedad_evento pe WHERE pe.agent_id = a.id
+           AND pe.tipo_evento = 'venta' AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')
+                                                                                     AS actividad
+    FROM public.agent a
+    WHERE a.estado = 'activo'
+"""
+
+
+def _standing_de(rows, agent_id: str) -> dict:
+    """Arma el bloque standing para `agent_id` a partir de los componentes de
+    TODOS los agentes activos. Degrada honesto: sin actividad suficiente →
+    puntaje/ranking None (no inventamos un 'puesto 3 de 8' sobre ceros)."""
+    me = next((r for r in rows if r["agent_id"] == agent_id), None)
+    cierres = int(me["cierres"]) if me else 0
+    actividad = int(me["actividad"]) if me else 0
+    if not me or actividad < _RANKING_MIN_ACTIVIDAD:
+        return {
+            "puntaje": None,
+            "cierres_reportados_12m": cierres,
+            "ranking": None,
+            "nota": "Datos insuficientes para tu puntaje y ranking — trabaja leads y reporta cierres.",
+        }
+    puntaje = _puntaje_standing(me)
+    qualifying = [r for r in rows if int(r["actividad"]) >= _RANKING_MIN_ACTIVIDAD]
+    ranking = None
+    if len(qualifying) >= 2:
+        ranked = sorted(qualifying, key=_puntaje_standing, reverse=True)
+        posicion = next(i for i, r in enumerate(ranked, 1) if r["agent_id"] == agent_id)
+        ranking = {"posicion": posicion, "total": len(ranked)}
+    return {
+        "puntaje": puntaje,
+        "cierres_reportados_12m": cierres,
+        "ranking": ranking,
+        "nota": "Reportar cierres y responder rápido sube tu puntaje.",
+    }
+
+
 @router.get("/desempeno")
 async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     """Métricas estilo Zillow (tasa de aceptación, velocidad) + ROI por zona patrocinada."""
@@ -567,6 +744,9 @@ async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_poo
             """,
             agent.id, user.get("id"),
         )
+        # Standing/ranking (incentivo): componentes de TODOS los agentes activos,
+        # puntaje+ranking se arma en Python (pesos en _PUNTAJE_PESOS).
+        standing_rows = await conn.fetch(_STANDING_COMPONENTS_SQL)
         zonas = await conn.fetch(_ZONAS_SQL, agent.id)
 
         roi = []
@@ -663,6 +843,7 @@ async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_poo
         ) if (int(visitas_stats["realizadas"]) + int(visitas_stats["no_shows"])) > 0 else None,
         "ofertas_90d": int(visitas_stats["ofertas"]),
         "interesados_90d": int(visitas_stats["interesados"]),
+        "standing": _standing_de(standing_rows, str(agent.id)),
         "zonas": roi,
     }
 

@@ -39,6 +39,8 @@ import {
   useEditarListing,
   useTomarDelPool,
   useVerificarDDItem,
+  useCerrarListing,
+  useComparables,
 } from "@/hooks/useRealtorDashboard";
 
 export const Route = createFileRoute("/realtor/dashboard")({
@@ -1072,6 +1074,7 @@ function ListingsTab() {
   const { data, isLoading, isError } = useMisListings();
   const [filtro, setFiltro] = useState<EstadoListing | "todos">("todos");
   const [editando, setEditando] = useState<MiListing | null>(null);
+  const [cerrando, setCerrando] = useState<MiListing | null>(null);
 
   const visible = useMemo(
     () => (filtro === "todos" ? data ?? [] : (data ?? []).filter((l) => l.estado === filtro)),
@@ -1117,7 +1120,13 @@ function ListingsTab() {
       {!isLoading && !isError && visible.length > 0 && (
         <div className="overflow-hidden rounded-lg border border-border bg-surface">
           {visible.map((l, i) => (
-            <ListingRow key={l.id} listing={l} first={i === 0} onEditar={() => setEditando(l)} />
+            <ListingRow
+              key={l.id}
+              listing={l}
+              first={i === 0}
+              onEditar={() => setEditando(l)}
+              onMarcarVendido={() => setCerrando(l)}
+            />
           ))}
         </div>
       )}
@@ -1129,12 +1138,123 @@ function ListingsTab() {
           onClose={() => setEditando(null)}
         />
       )}
+
+      {cerrando && (
+        <CerrarVendidoModal listing={cerrando} onClose={() => setCerrando(null)} />
+      )}
     </section>
   );
 }
 
-function ListingRow({ listing: l, first, onEditar }: { listing: MiListing; first: boolean; onEditar: () => void }) {
+// Modal "Marcar vendido" — reporta el cierre (precio + matrícula obligatoria).
+// ES la contribución que desbloquea los comparables y sube el puntaje (incentivo).
+function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
+  const cerrar = useCerrarListing();
+  const [precio, setPrecio] = useState("");
+  const [matricula, setMatricula] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [catastral, setCatastral] = useState("");
+
+  const precioNum = Number(precio.replace(/[^\d]/g, ""));
+  const puedeEnviar = precioNum > 0 && matricula.trim().length > 0 && !cerrar.isPending;
+
+  async function enviar() {
+    if (!puedeEnviar) return;
+    try {
+      await cerrar.mutateAsync({
+        listingId: listing.id,
+        input: {
+          precio_cierre: precioNum,
+          matricula_inmobiliaria: matricula.trim(),
+          fecha_cierre: fecha || undefined,
+          cedula_catastral: catastral.trim() || undefined,
+        },
+      });
+      onClose();
+    } catch {
+      /* el hook ya hace toast.error */
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/40" />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Marcar vendido"
+        className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <h3 className="text-lg font-semibold text-foreground">Reportar venta</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {listing.titulo}. Reportar el cierre <strong>desbloquea los comparables de cierre</strong> y sube tu puntaje.
+        </p>
+
+        <div className="mt-4 space-y-3">
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Precio de cierre (COP) *</span>
+            <input
+              value={precio}
+              onChange={(e) => setPrecio(e.target.value)}
+              inputMode="numeric"
+              placeholder="450000000"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            {precioNum > 0 && <span className="mt-0.5 block text-xs text-muted-foreground">{formatCOP(precioNum)}</span>}
+          </label>
+          <label className="block">
+            <span className="text-xs font-medium text-muted-foreground">Matrícula inmobiliaria (ORIP) *</span>
+            <input
+              value={matricula}
+              onChange={(e) => setMatricula(e.target.value)}
+              placeholder="001-123456"
+              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+            <span className="mt-0.5 block text-xs text-muted-foreground">Obligatoria — es la llave del registro de la propiedad.</span>
+          </label>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Fecha de cierre</span>
+              <input
+                type="date"
+                value={fecha}
+                onChange={(e) => setFecha(e.target.value)}
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+            <label className="block">
+              <span className="text-xs font-medium text-muted-foreground">Cédula catastral</span>
+              <input
+                value={catastral}
+                onChange={(e) => setCatastral(e.target.value)}
+                placeholder="opcional"
+                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-5 flex justify-end gap-2">
+          <button onClick={onClose} className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+            Cancelar
+          </button>
+          <button
+            onClick={enviar}
+            disabled={!puedeEnviar}
+            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+          >
+            {cerrar.isPending ? "Reportando…" : "Reportar venta"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ListingRow({ listing: l, first, onEditar, onMarcarVendido }: { listing: MiListing; first: boolean; onEditar: () => void; onMarcarVendido: () => void }) {
   const estado = ESTADO_META[l.estado];
+  const puedeCerrar = l.estado === "publicado" || l.estado === "pausado";
   return (
     <div
       className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 ${
@@ -1175,6 +1295,15 @@ function ListingRow({ listing: l, first, onEditar }: { listing: MiListing; first
             className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
           >
             Editar
+          </button>
+        )}
+        {puedeCerrar && (
+          <button
+            onClick={onMarcarVendido}
+            className="shrink-0 rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white"
+            title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje"
+          >
+            Marcar vendido
           </button>
         )}
       </div>
@@ -1245,6 +1374,55 @@ function etiquetaCaminable(score: number | null | undefined): string {
   return "Poco caminable";
 }
 
+// Comparables de cierre — incentivo de reciprocidad: gated si no has reportado cierres.
+function ComparablesSection() {
+  const { data, isLoading } = useComparables();
+  return (
+    <section>
+      <BloqueHeader
+        titulo="Comparables de cierre"
+        estado={data?.acceso ? "disponible" : "pendiente"}
+        sub="Precios reales de venta (no de aviso)"
+      />
+      {isLoading && <SkeletonRows n={2} />}
+      {!isLoading && data && !data.acceso && (
+        <div className="rounded-xl border border-dashed border-border bg-muted/30 p-5 text-sm">
+          <p className="font-medium text-foreground">🔒 Desbloquea los comparables de cierre</p>
+          <p className="mt-1 text-muted-foreground">{data.motivo}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            Has reportado {data.cierres_reportados} de {data.cierres_necesarios ?? 1} cierres necesarios.
+            Marca vendido un listing en “Mis listings”.
+          </p>
+        </div>
+      )}
+      {!isLoading && data?.acceso && data.comparables.length === 0 && (
+        <EmptyState msg="Aún no hay cierres reportados para comparar. A medida que los agentes reporten, aparecerán aquí." />
+      )}
+      {!isLoading && data?.acceso && data.comparables.length > 0 && (
+        <div className="overflow-hidden rounded-lg border border-border bg-surface">
+          {data.comparables.map((c, i) => (
+            <div key={i} className={`flex items-center justify-between px-4 py-3 ${i === 0 ? "" : "border-t border-border/70"}`}>
+              <div className="min-w-0">
+                <div className="text-sm font-medium capitalize text-foreground">
+                  {c.tipo_inmueble} · {c.barrio ?? "—"}
+                  {c.verificado && <span className="ml-2 text-[11px] font-semibold text-success">✓ verificado</span>}
+                </div>
+                <div className="text-xs text-muted-foreground">
+                  {c.area_m2 ? `${c.area_m2} m²` : "área —"} · {new Date(c.fecha).toLocaleDateString("es-CO", { month: "short", year: "numeric" })}
+                </div>
+              </div>
+              <div className="text-right">
+                <div className="text-sm font-semibold tabular-nums text-foreground">{c.precio != null ? formatCOP(c.precio) : "—"}</div>
+                <div className="text-xs text-muted-foreground">{c.precio_m2 != null ? `${formatCOP(c.precio_m2)}/m²` : ""}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function ResultadosTab() {
   const { data, isLoading, isError } = useDesempeno();
   // zonas viene ordenado por precio_mensual DESC → [0] es la zona pagada principal
@@ -1276,6 +1454,11 @@ function ResultadosTab() {
   const csSub = cs.ranking
     ? `${cs.nota} · Puesto ${cs.ranking.posicion} de ${cs.ranking.total} por velocidad`
     : cs.nota;
+  const st = data.standing;
+  const stValue = st.puntaje != null ? `${st.puntaje}/100` : "—";
+  const stSub = st.ranking
+    ? `Puesto ${st.ranking.posicion} de ${st.ranking.total} · ${st.cierres_reportados_12m} cierres reportados`
+    : st.nota;
 
   return (
     <div className="space-y-12">
@@ -1321,8 +1504,12 @@ function ResultadosTab() {
             value={cs.mediana_horas_respuesta != null ? `${cs.grado} · ${cs.mediana_horas_respuesta}h` : cs.grado}
             sub={csSub}
           />
+          <ResultCard label="Tu puntaje (standing)" value={stValue} sub={stSub} />
         </div>
       </section>
+
+      {/* ── §1b Comparables de cierre (incentivo de reciprocidad) ── */}
+      <ComparablesSection />
 
       {/* ── §2 Resultados en tu zona pagada ── */}
       <section>
