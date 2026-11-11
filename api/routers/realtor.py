@@ -52,8 +52,13 @@ _VISTAS_JOIN = "e.event_type = 'listing_view' AND e.entity_id IN (l.id::text, l.
 
 async def _agent_del_usuario(user: dict, pool, exigir_activo: bool = True) -> SimpleNamespace:
     async with pool.acquire() as conn:
+        # Determinista: si un usuario tuviera >1 fila agent, TODOS los endpoints
+        # realtor deben resolver a la MISMA (si no, /pool/tomar escribe en una y
+        # /asignados lee de otra → el lead tomado "desaparece"). Canónica = la
+        # más vieja; activa gana sobre inactiva.
         row = await conn.fetchrow(
-            "SELECT id, estado, usuario_id, nombre, foto_url, bio FROM agent WHERE usuario_id = $1",
+            "SELECT id, estado, usuario_id, nombre, foto_url, bio FROM agent "
+            "WHERE usuario_id = $1 ORDER BY (estado = 'activo') DESC, created_at ASC LIMIT 1",
             user.get("id"),
         )
     if not row:
