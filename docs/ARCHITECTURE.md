@@ -519,8 +519,10 @@ garantiza el cron, no el DAG de dbt.
    `n_colegios_1km`, `n_canchas_1km`, `dist_encicla_km`, `n_policia_1km`, `n_bomberos_2km`…
    sobre una tabla sin esos POIs → quedan 0/NULL hasta re-correr `load_pois_overpass` a mano.
    Es exactamente el GOTCHA de [CLAUDE.md](../CLAUDE.md) ("dos scripts escribiendo la misma
-   tabla donde uno hace TRUNCATE pisa al otro"). **Fix**: fusionar los 20 tipos en un solo
-   loader, o encadenar `load_pois && load_pois_overpass && compute_barrios_pois` en cron.
+   tabla donde uno hace TRUNCATE pisa al otro"). ✅ **Corregido 2026-11-08**: se encadenó
+   `load_pois_overpass` (que hace UPSERT de los 20 tipos) entre `load_pois` y
+   `compute_barrios_pois` en el cron del lunes (`Dockerfile.cron`), así los 9 POIs ricos
+   existen antes del compute.
 2. **JSON legacy que corre pero nadie lee en runtime.** `aggregate`, `remates/aggregate_remates`
    (vía `refresh_data`) y `enrich_barrios_stats` (vía `run_listings_metrocuadrado`, con label
    engañoso "refresh_analytics") escriben `data/processed/*.json` y `public/data/barrios_stats.json`.
@@ -649,7 +651,14 @@ explica solo:
 > git) · **U** = untracked (**pérdida permanente** si se borra — mover fuera del repo si
 > se quiere reversibilidad). Nada aquí se borra sin tu OK.
 
-### 11.1 Código MUERTO (borrable, todo tracked)
+> ✅ **Aplicado 2026-11-08:** la tabla 11.1 completa se **borró** (`git rm`: `api/config.py`,
+> 3 `compute_*`, `backfill_categoria.py`, 3 modelos dbt + sus bloques en `schema.yml`,
+> `INVENTARIO_DATOS.pdf`). Los 4 docs MUERTO untracked de §11.3 se movieron a scratchpad
+> trash (reversible). El bug de `load_pois` (§11.4/§7.6) se **corrigió** en `Dockerfile.cron`.
+> `DATABASE_SCHEMA.md` se **regeneró** (138 tablas). La tabla 11.1 se conserva abajo como
+> registro del *por qué* se borró cada uno.
+
+### 11.1 Código MUERTO (borrado 2026-11-08)
 
 | archivo | por qué | reemplazo |
 |---|---|---|
@@ -718,7 +727,7 @@ contenido) — quedarse con uno.
 
 ### 11.4 Bugs / deuda de datos accionable (detalle en §7.6)
 
-1. **`load_pois` TRUNCATE borra los 9 POIs ricos cada lunes** → columnas colegio/cancha/policía/bomberos en 0/NULL.
+1. ✅ **CORREGIDO 2026-11-08** — `load_pois` TRUNCATE borraba los 9 POIs ricos cada lunes → columnas colegio/cancha/policía/bomberos en 0/NULL. Fix: `load_pois_overpass` encadenado en el cron.
 2. **`sources.yml`** atribuye la valorización a `load_ipvn.py`/`fetch_ipvu_banrep.py` que **no existen**.
 3. **Discrepancia de precio de zona** código (COP) vs docs (USD), ~4× (§9).
 4. **Drift de schema docs**: `DATABASE_SCHEMA.md` es de agosto (~15+ migraciones de atraso) — regenerar con `scripts/generate_db_schema_docs.py`.

@@ -562,7 +562,8 @@ _BARRIO_CTX_KEYS = (
 #   Registrado (inversionista, gratis con registro): rentabilidad/yields +
 #     historial de precio (gancho de registro; anónimo ve el fallback degradado).
 #   Realtor (paga): scores de inversión + inteligencia profunda.
-_REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct", "precio_historia")
+# precio_historia pasó a PÚBLICO (estilo Zillow: el historial de precio no se gatea).
+_REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct")
 # To-do §2: seguridad pasó de realtor-only a PÚBLICA (gratis para todos) — ya no
 # está en esta lista. Los scores de inversión y liquidez siguen siendo realtor.
 _REALTOR_FIELDS = (
@@ -2055,9 +2056,8 @@ async def get_listing_entorno(
     current_user: Optional[dict] = Depends(get_optional_user),
 ):
     """POIs por radio desde las coords del listing (#1) — para inmuebles sin barrio_id.
-    Gated a nivel registrado: el entorno del inmueble es gancho de registro."""
-    if current_user is None:
-        return {"conectividad": None, "gated": True}
+    Scores del entorno PÚBLICOS (estilo Zillow, gancho del usuario gratis). El
+    detalle (tiempos, servicios, obras) se gatea a registrado en el frontend."""
     pool = get_pool()
     row = await pool.fetchrow(_LISTING_ENTORNO_SQL, listing_id)
     if row is None:  # sin coords válidas → no hay entorno que mostrar

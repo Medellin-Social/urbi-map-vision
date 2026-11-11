@@ -728,7 +728,10 @@ function MapPageInner() {
         onComunaSelect={handleComunaSelect}
       />
       <ProfileChipMobile />
-      {segmentoGate === "open" && <SegmentGate onChoose={handleChooseSegmento} />}
+      {/* El gate de segmento filtra el MAPA; no debe taparse sobre un inmueble
+          abierto (popup/drawer). Si hay uno abierto (p.ej. deep-link /map?listing=),
+          su z-120 bloqueaba clics del drawer — el corazón "no se podía activar". */}
+      {segmentoGate === "open" && !listingDetailId && miniPopupData == null && <SegmentGate onChoose={handleChooseSegmento} />}
 
       {/* Buscar en el Valle — filtros activos pero sin barrio/zona seleccionada */}
       {activeFilterCount > 0 && !mlsBarrio && !globalSearch && activeTab !== "agent" && (

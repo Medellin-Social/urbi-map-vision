@@ -709,8 +709,129 @@ async def link_agency_to_listing(listing_id: str, agency_id: Optional[str]) -> N
     await _create_relation(_ASSOC_LISTING_AGENCY, ghl_business_id, listing_row["ghl_object_id"])
 
 
+# ── Evento → Custom Object "event" (§1 del contrato, bidireccional) ──────────
+# Custom object, como listing (no Business). Nombres de campo = §1 de
+# docs/GHL_CONTRATO_PROPUESTO.md — código y doc deben coincidir.
+#
+# categoria/tipo_audiencia son picklists NUESTROS (enums que definimos), por eso
+# se mandan en crudo sin _map_choice: a diferencia de los dropdowns de listing
+# (definidos por GHL), acá el contrato de valores lo ponemos nosotros y Talal
+# crea el picklist con esos keys. Ver §1 para la lista de valores.
+#
+# eventos NO tiene columna moneda → currency se manda constante "cop".
+# website_event_id / website_barrio_id: ids internos ocultos para que el inbound
+# (nombres→ids es lossy) pueda resolver barrio_id y el evento sin adivinar.
+_EVENTO_OBJECT_KEY = "custom_objects.event"  # propuesto; Talal confirma el key real
+
+
+def _evento_campos_to_properties(campos: dict, evento_id: int) -> dict:
+    props: dict = {}
+
+    def set_(key: str, value):
+        if isinstance(value, Decimal):
+            value = float(value)
+        if value is not None:
+            props[key] = value
+
+    set_("event_title", campos.get("titulo"))
+    set_("event_description", campos.get("descripcion"))
+    set_("category", campos.get("categoria"))
+    set_("audience_type", campos.get("tipo_audiencia"))
+    set_("municipality", campos.get("municipio"))
+    set_("neighborhood", campos.get("barrio_nombre"))
+    if campos.get("fecha_inicio") is not None:
+        fi = campos["fecha_inicio"]
+        props["start_date"] = fi.isoformat() if hasattr(fi, "isoformat") else fi
+    if campos.get("fecha_fin") is not None:
+        ff = campos["fecha_fin"]
+        props["end_date"] = ff.isoformat() if hasattr(ff, "isoformat") else ff
+    set_("price", campos.get("precio"))
+    props["currency"] = "cop"  # eventos no tiene columna moneda — siempre COP
+    set_("is_free", _yes_no(campos.get("gratuito")))
+    set_("external_url", campos.get("url_externo"))
+    set_("photo_url", campos.get("foto_url"))
+    set_("organizer", campos.get("organizador"))
+    set_("max_attendees", campos.get("max_asistentes"))
+    set_("is_active", _yes_no(campos.get("activo")))
+    set_("is_featured", _yes_no(campos.get("destacado")))
+    set_("featured_scope", campos.get("destacado_nivel"))
+    set_("featured_zone_code", campos.get("destacado_zona_codigo"))
+    set_("source", campos.get("fuente"))
+    props["website_event_id"] = str(evento_id)
+    if campos.get("barrio_id") is not None:
+        props["website_barrio_id"] = str(campos["barrio_id"])
+    return props
+
+
+@_serialized("evento")
 async def push_evento_to_ghl(evento_id: int, campos: dict) -> Optional[str]:
-    raise NotImplementedError("ghl_client.push_evento_to_ghl: falta contrato GHL para evento")
+    """evento_id = public.eventos.id (integer). Custom object custom_objects.event.
+    Best-effort, nunca lanza (mismo patrón que push_tienda/push_listing).
+
+    ⚠️ NO wireado a ningún call site todavía (submit/aprobar/editar): custom_objects.event
+    aún no existe del lado GHL — conectarlo ahora dispararía POSTs 400 contra la
+    location real (hay creds en .env → is_configured()=True). Wire cuando Talal
+    confirme el objeto creado (ver §1 del contrato y nota en ghl_client.py:216)."""
+    if not is_configured():
+        return None
+
+    pool = get_pool()
+    existing = await pool.fetchrow(
+        "SELECT ghl_object_id FROM public.ghl_object_mapping WHERE object_type = 'evento' AND internal_object_id = $1",
+        str(evento_id),
+    )
+    properties = _evento_campos_to_properties(campos, evento_id)
+
+    try:
+        if existing:
+            ghl_id = existing["ghl_object_id"]
+            await _request(
+                "PUT",
+                f"/objects/{_EVENTO_OBJECT_KEY}/records/{ghl_id}",
+                params={"locationId": _GHL_LOCATION_ID},
+                json={"properties": properties},
+            )
+        else:
+            resp = await _request(
+                "POST",
+                f"/objects/{_EVENTO_OBJECT_KEY}/records",
+                json={"locationId": _GHL_LOCATION_ID, "properties": properties},
+            )
+            ghl_id = resp.json()["record"]["id"]
+    except Exception as e:
+        logger.warning("push_evento_to_ghl(%s) falló: %s", evento_id, e)
+        if existing:
+            await _record_sync_result("evento", evento_id, existing["ghl_object_id"], "failed", str(e))
+        else:
+            await _record_push_failure("evento", evento_id, str(e))
+        return None
+
+    await _record_sync_result("evento", evento_id, ghl_id, "synced", None)
+    return ghl_id
+
+
+_EVENTO_SELECT = """
+    SELECT e.titulo, e.descripcion, e.categoria, e.tipo_audiencia, e.barrio_id,
+           e.fecha_inicio, e.fecha_fin, e.precio, e.gratuito, e.url_externo,
+           e.foto_url, e.organizador, e.max_asistentes, e.activo, e.destacado,
+           e.destacado_nivel, e.destacado_zona_codigo, e.fuente,
+           b.nombre AS barrio_nombre, b.municipio AS municipio
+    FROM public.eventos e
+    LEFT JOIN raw.barrios b ON b.id = e.barrio_id
+    WHERE e.id = $1
+"""
+
+
+async def sync_evento(evento_id: int) -> Optional[str]:
+    """Lee public.eventos (+ barrio/municipio) y lo empuja a GHL. Mismo patrón que
+    sync_tienda. NO wireado todavía (ver push_evento_to_ghl)."""
+    if not is_configured():
+        return None
+    pool = get_pool()
+    row = await pool.fetchrow(_EVENTO_SELECT, evento_id)
+    if row is None:
+        return None
+    return await push_evento_to_ghl(evento_id, dict(row))
 
 
 async def push_deal_to_ghl(deal_id: int, campos: dict) -> Optional[str]:

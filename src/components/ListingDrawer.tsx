@@ -22,6 +22,7 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { formatCOP } from "@/lib/format";
+import { zonePriceTrend, calcValorizStats } from "@/lib/valoriz";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { track } from "@/lib/tracking";
@@ -294,61 +295,77 @@ function ValorEstimado({ listing }: { listing: ApiListingDetail }) {
 
   if (valor == null && renta == null && avaluo == null) return null;
 
-  const Row = ({ label, tip, children }: { label: string; tip: string; children: React.ReactNode }) => (
-    <div className="flex items-start justify-between gap-3 border-b py-3 last:border-0" style={{ borderColor: "#E5E0D5" }}>
-      <div className="flex items-center gap-1.5 pt-0.5">
-        <span className="text-[13px]" style={{ color: "#5B5F5C" }}>{label}</span>
-        <InfoTip text={tip} />
+  // Punto (valor único) solo para no-casas; las casas muestran rango (heterogéneas).
+  const showHero = valor != null && !esCasa;
+  // Posición del valor estimado dentro del rango p25–p75 (dónde cae este inmueble).
+  const markerPct = showHero && rangoMin != null && rangoMax != null && rangoMax > rangoMin
+    ? Math.max(5, Math.min(95, ((valor! - rangoMin) / (rangoMax - rangoMin)) * 100))
+    : 50;
+
+  const Chip = ({ icon, label, value, sub, tip }: { icon: string; label: string; value: string; sub?: string; tip: string }) => (
+    <div className="flex-1 rounded-xl px-3 py-2.5" style={{ background: "#F3F0E8", border: "0.5px solid #E5E0D5", minWidth: 104 }}>
+      <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#6E726E" }}>
+        <span data-i18n-skip="true">{icon}</span><span>{label}</span><InfoTip text={tip} />
       </div>
-      <div className="text-right">{children}</div>
+      <div className="mt-0.5 text-[14px] font-bold tabular-nums leading-none" style={{ color: "#111418" }}>
+        {value}{sub && <span className="text-[10px] font-normal" style={{ color: "#6E726E" }}>{sub}</span>}
+      </div>
     </div>
   );
 
   return (
     <div className="space-y-3">
       <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Valor estimado</h3>
-      <div>
-        {valor != null && !(esCasa && (rangoMin == null || rangoMax == null)) && (
-          <Row label="Valor de mercado" tip={`Referencia del barrio, no una tasación: precio/m² típico de ${barrio} (de precios publicados, no de cierre) × los ${area}m² de este inmueble.`}>
-            {esCasa ? (
-              <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(rangoMin!)} – {formatCOP(rangoMax!)}</div>
-            ) : (
-              <>
-                <div className="text-[19px] font-semibold tabular-nums leading-none" style={{ color: "#0F8A4F" }}>{formatCOP(valor)}</div>
-                {rangoMin != null && rangoMax != null && (
-                  <div className="mt-1 text-[11px] tabular-nums" style={{ color: "#6E726E" }}>{formatCOP(rangoMin)} – {formatCOP(rangoMax)}</div>
+
+      {/* Hero + banda de rango del barrio */}
+      {(showHero || (rangoMin != null && rangoMax != null)) && (
+        <div className="rounded-2xl p-4" style={{ background: "#E7F4EC", border: "0.5px solid rgba(15,138,79,0.25)" }}>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "#0A5C36" }}>
+              {esCasa ? "Rango estimado del barrio" : "Valor de mercado estimado"}
+            </span>
+            <InfoTip text={`Referencia del barrio (${barrio}), no una tasación: precio/m² típico × los ${area}m² de este inmueble. De precios publicados, no de cierre.`} />
+          </div>
+          {showHero ? (
+            <div className="mt-1 text-[28px] font-bold leading-none tabular-nums" style={{ color: "#0F8A4F" }}>{formatCOP(valor!)}</div>
+          ) : (
+            <div className="mt-1 text-[20px] font-bold leading-none tabular-nums" style={{ color: "#0F8A4F" }}>{formatCOP(rangoMin!)} – {formatCOP(rangoMax!)}</div>
+          )}
+          {rangoMin != null && rangoMax != null && (
+            <div className="mt-3">
+              <div className="relative h-2 rounded-full" style={{ background: "linear-gradient(90deg,#CDE8D8,rgba(15,138,79,0.55),#CDE8D8)" }}>
+                {showHero && (
+                  <div
+                    className="absolute h-4 w-4 rounded-full border-2 border-white"
+                    style={{ top: -4, left: `calc(${markerPct}% - 8px)`, background: "#0F8A4F", boxShadow: "0 1px 3px rgba(0,0,0,0.25)" }}
+                  />
                 )}
-              </>
-            )}
-            <div className="mt-1 text-[11px]" style={{ color: "#6E726E" }}>
-              {esCasa
-                ? "Rango del barrio — las casas varían mucho por tamaño y lote; tómalo como referencia amplia"
-                : "Estimado con precios publicados, no de cierre"}
+              </div>
+              <div className="mt-1 flex justify-between text-[10px] tabular-nums" style={{ color: "#5B7A6A" }}>
+                <span>{formatCOP(rangoMin)}</span><span>{formatCOP(rangoMax)}</span>
+              </div>
             </div>
-          </Row>
-        )}
-        {renta != null && (
-          <Row label="Renta típica del barrio" tip={`Mediana de arriendo del barrio (${barrio}), no una tasación de este inmueble.`}>
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(renta)}<span className="text-[11px] font-normal" style={{ color: "#6E726E" }}>/mes</span></div>
-          </Row>
-        )}
-        {avaluo != null && (
-          <Row
-            label="Avalúo catastral"
-            tip={`Valor fiscal del predio según el catastro de Medellín (estimado con el avalúo/m² de la comuna). Es la base sobre la que se cobran los impuestos y casi siempre es menor al precio de mercado — aquí, cerca de ${valor && avaluo ? Math.round(valor / avaluo) : 4}× por debajo.`}
-          >
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(avaluo)}</div>
-          </Row>
-        )}
-        {predial != null && (
-          <Row
-            label="Predial estimado"
-            tip={`Impuesto predial anual aproximado: avalúo catastral × tarifa del municipio (~${milaje} por mil${listing.estrato_real != null ? ` para estrato ${listing.estrato_real}` : ""} en Medellín). La tarifa exacta la fija la Alcaldía según estrato y uso.`}
-          >
-            <div className="text-[15px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatCOP(predial)}<span className="text-[11px] font-normal" style={{ color: "#6E726E" }}>/año</span></div>
-          </Row>
-        )}
-      </div>
+          )}
+        </div>
+      )}
+
+      {/* Chips de soporte */}
+      {(renta != null || avaluo != null || predial != null) && (
+        <div className="flex flex-wrap gap-2">
+          {renta != null && (
+            <Chip icon="🏠" label="Renta típica" value={formatCOP(renta)} sub="/mes"
+              tip={`Mediana de arriendo del barrio (${barrio}), no una tasación de este inmueble.`} />
+          )}
+          {avaluo != null && (
+            <Chip icon="🏛️" label="Avalúo catastral" value={formatCOP(avaluo)}
+              tip={`Valor fiscal del predio (avalúo/m² de la comuna × área). Base de impuestos, casi siempre menor al mercado${valor && avaluo ? ` — aquí ~${Math.round(valor / avaluo)}× por debajo` : ""}.`} />
+          )}
+          {predial != null && (
+            <Chip icon="📄" label="Predial" value={formatCOP(predial)} sub="/año"
+              tip={`Impuesto predial anual aprox: avalúo × ~${milaje} por mil${listing.estrato_real != null ? ` (estrato ${listing.estrato_real})` : ""} en Medellín. La tarifa exacta la fija la Alcaldía.`} />
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -515,22 +532,49 @@ function ScoreBar({ label, score, sub }: { label: string; score: number; sub: st
   );
 }
 
+// Entorno detalle (servicios): meter circular — valor real al centro, el arco
+// codifica qué tan "bueno" es (ratio 0-1), color por nivel (teal/ámbar/rojo).
+type EntornoFact = { icon: string; label: string; value: string; unit: string; ratio: number };
+function FactCircle({ icon, label, value, unit, ratio }: EntornoFact) {
+  const color = ratio >= 0.66 ? "#0F8A4F" : ratio >= 0.33 ? "#8A6A00" : "#CE1126";
+  const R = 24;
+  const CIRC = 2 * Math.PI * R;
+  const dash = CIRC * Math.max(0.04, Math.min(1, ratio)); // mínimo visible aunque ratio≈0
+  return (
+    <div className="flex flex-col items-center gap-1" style={{ width: 76 }}>
+      <div className="relative" style={{ width: 60, height: 60 }}>
+        <svg width={60} height={60} viewBox="0 0 60 60">
+          <circle cx={30} cy={30} r={R} fill="none" stroke="#EFEADF" strokeWidth={5} />
+          <circle
+            cx={30} cy={30} r={R} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
+            strokeDasharray={`${dash} ${CIRC}`} transform="rotate(-90 30 30)"
+          />
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-[15px] font-bold leading-none tabular-nums" style={{ color: "#111418" }}>{value}</span>
+          {unit && <span className="mt-0.5 text-[8px] leading-none" style={{ color: "#6E726E" }}>{unit}</span>}
+        </div>
+      </div>
+      <span className="text-center text-[10px] leading-tight" style={{ color: "#5B5F5C" }} data-i18n-skip="true">{icon} {label}</span>
+    </div>
+  );
+}
+
 /** "Cómo moverse" (Walk/Transit) + colegios cercanos. Público, estilo Zillow.
  *  Con barrio_id usa el agregado del barrio; sin él (otros municipios, #1) cae a
  *  /listings/{id}/entorno que calcula lo mismo por radio desde las coords. */
 function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
   const isRegistered = useIsRegistered();
+  // Scores del entorno (caminabilidad/transporte/colegios/tráfico) = PÚBLICOS,
+  // estilo Zillow (gancho de atención para el usuario gratis). El DETALLE
+  // (tiempos, ruido, policía, servicios, obras) sigue gated a registrado.
   const { data } = useQuery<BarrioFetch>({
     queryKey: barrioId ? ["barrio-full", barrioId] : ["listing-entorno", listingId],
     queryFn: () => barrioId
       ? apiFetch<BarrioFetch>(API_ENDPOINTS.barrio(barrioId))
       : apiFetch<BarrioFetch>(API_ENDPOINTS.listingEntorno(listingId)),
     staleTime: 300_000,
-    enabled: isRegistered,  // entorno del inmueble = gancho de registro (gated)
   });
-  // Anónimo: entorno gated → se oculta. El CTA de registro vive bajo "Valor
-  // estimado" (un solo CTA en el pop-up grande, no uno por sección).
-  if (!isRegistered) return null;
   const c = data?.conectividad;
   const trafico = data?.trafico;
   if (!c && trafico?.nivel == null) return null;
@@ -572,27 +616,33 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   // Entorno+ (combo): señales del barrio ya en la respuesta, cada una guardada por
   // cercanía/relevancia → en otros municipios solo aparece lo que de verdad está cerca
   // (ej. EnCicla y obras son ~Medellín). Solo con barrio_id (vía /barrios/{id}).
-  const facts: { icon: string; label: string; value: string }[] = [];
+  // Detalle del entorno como meters circulares (valor real al centro + arco por
+  // "bondad" 0-1). ruido: menos=mejor; internet: más=mejor; policía/bomberos:
+  // más/cerca=mejor; EnCicla: cerca=mejor.
+  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
+  const facts: EntornoFact[] = [];
   // #17 obra pública: línea dedicada (nombre largo) con tipo + fecha estimada. Sin
   // % de valorización (no hay dato que lo respalde). Solo si está realmente cerca (<3km).
   const obra = c?.nombre_obra_cercana; const dObra = c?.dist_obra_publica_km;
   const obraVisible = !!obra && dObra != null && dObra <= 3;
   const obraDist = dObra != null ? (dObra < 1 ? `${Math.round(dObra * 1000)} m` : `${dObra.toFixed(1)} km`) : "";
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
-  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido (día)", value: `${Math.round(ruidoDb)} dB` });
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: "Ruido día", value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: clamp01(1 - (ruidoDb - 35) / 40) });
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
-  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol} a 1 km` });
-  else if (dPol != null && dPol <= 2) facts.push({ icon: "🚓", label: "Policía", value: `a ${dPol.toFixed(1)} km` });
+  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: "Policía", value: `${nPol}`, unit: "a 1 km", ratio: clamp01(nPol / 3) });
+  else if (dPol != null && dPol <= 2) facts.push({ icon: "🚓", label: "Policía", value: `${dPol.toFixed(1)}`, unit: "km", ratio: clamp01(1 - dPol / 2) });
   const nBomb = c?.n_bomberos_2km;
-  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb} a 2 km` });
+  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: "Bomberos", value: `${nBomb}`, unit: "a 2 km", ratio: clamp01(nBomb / 2) });
   const net = c?.avg_internet_mbps;
-  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)} Mbps` });
+  if (net != null && net > 0) facts.push({ icon: "📶", label: "Internet", value: `${Math.round(net)}`, unit: "Mbps", ratio: clamp01(net / 300) });
   const dEnc = c?.dist_encicla_km;
-  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: `a ${dEnc.toFixed(1)} km` });
+  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: "EnCicla", value: `${dEnc.toFixed(1)}`, unit: "km", ratio: clamp01(1 - dEnc / 1.5) });
   const nCanc = c?.n_canchas_1km;
-  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc} a 1 km` });
+  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: "Canchas", value: `${nCanc}`, unit: "a 1 km", ratio: clamp01(nCanc / 3) });
 
-  if (tiles.length === 0 && !hayTiempos && facts.length === 0 && !obraVisible) return null;
+  // Anon: sin scores no hay sección (el detalle no se le muestra). Registrado:
+  // oculta solo si no hay nada (scores ni detalle).
+  if (tiles.length === 0 && (!isRegistered || (!hayTiempos && facts.length === 0 && !obraVisible))) return null;
 
   return (
     <div className="space-y-2.5">
@@ -602,31 +652,31 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
           <ScoreBar key={t.label} label={t.label} score={t.score} sub={t.sub} />
         ))}
       </div>
-      {hayTiempos && (
-        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: "#6E726E" }}>
-          <Car className="h-3.5 w-3.5 shrink-0" />
-          <span>
-            En carro, hora pico:
-            {tPoblado != null && <> El Poblado ~{tPoblado} min</>}
-            {tPoblado != null && tCentro != null && " ·"}
-            {tCentro != null && <> Centro ~{tCentro} min</>}
-          </span>
+      {isRegistered && hayTiempos && (
+        <div>
+          <div className="mb-1.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: "#6E726E" }}>
+            <Car className="h-3.5 w-3.5 shrink-0" /> En carro, hora pico
+          </div>
+          <div className="flex flex-wrap justify-center gap-x-3 gap-y-2">
+            {tPoblado != null && (
+              <FactCircle icon="🏙️" label="El Poblado" value={`${tPoblado}`} unit="min"
+                ratio={Math.max(0, Math.min(1, 1 - (tPoblado - 5) / 40))} />
+            )}
+            {tCentro != null && (
+              <FactCircle icon="🏛️" label="Centro" value={`${tCentro}`} unit="min"
+                ratio={Math.max(0, Math.min(1, 1 - (tCentro - 5) / 40))} />
+            )}
+          </div>
         </div>
       )}
-      {facts.length > 0 && (
-        <div
-          className="grid gap-x-4 gap-y-1 text-[11px]"
-          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", color: "#5B5F5C" }}
-        >
+      {isRegistered && facts.length > 0 && (
+        <div className="flex flex-wrap justify-center gap-x-3 gap-y-3 pt-1">
           {facts.map((f) => (
-            <div key={f.label} className="flex items-center justify-between gap-2 border-b py-1 last:border-0" style={{ borderColor: "#EFEADF" }}>
-              <span data-i18n-skip="true">{f.icon} {f.label}</span>
-              <span className="font-medium tabular-nums" style={{ color: "#111418" }} data-i18n-skip="true">{f.value}</span>
-            </div>
+            <FactCircle key={f.label} {...f} />
           ))}
         </div>
       )}
-      {obraVisible && (
+      {isRegistered && obraVisible && (
         <div className="text-[11px]" style={{ color: "#6E726E" }} data-i18n-skip="true">
           🏗️ A {obraDist} del proyecto <strong>{obra}</strong>
           {c?.obra_tipo ? ` · ${c.obra_tipo}` : ""}
@@ -1378,7 +1428,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const favButton = listing ? (
     <button
       onClick={() => {
-        if (!auth.get()) return;
+        if (!auth.get()) { toast.info("Inicia sesión para guardar"); return; }
         // Intención (capa 3): guardar = señal fuerte. Solo al marcar (no al quitar).
         if (!isFav(favKey(listing))) {
           track("listing_save", {
@@ -1394,6 +1444,19 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       style={{ border: "0.5px solid #E5E0D5", background: isFav(favKey(listing)) ? "#FCE8EA" : "#FFFFFF" }}
     >
       <Heart className="h-5 w-5" style={{ color: isFav(favKey(listing)) ? "#CE1126" : "#5B5F5C" }} fill={isFav(favKey(listing)) ? "#CE1126" : "none"} />
+    </button>
+  ) : null;
+
+  // Compartir arriba, junto al corazón (antes solo estaba enterrado abajo).
+  const shareButton = listing ? (
+    <button
+      onClick={handleShare}
+      title="Compartir"
+      aria-label="Compartir"
+      className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition hover:scale-105"
+      style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}
+    >
+      <Share2 className="h-5 w-5" style={{ color: "#5B5F5C" }} />
     </button>
   ) : null;
 
@@ -1428,16 +1491,6 @@ export function ListingDrawer({ listingId, onClose }: Props) {
             }
           </button>
         )}
-      </div>
-      <div className="flex gap-2">
-        <button
-          onClick={handleShare}
-          title="Copiar link"
-          className="grid h-10 w-10 shrink-0 place-items-center rounded-xl transition"
-          style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}
-        >
-          <Share2 className="h-4 w-4 text-[#5B5F5C]" />
-        </button>
       </div>
       <p className="text-[10px] leading-relaxed" style={{ color: "#9A8B76" }}>
         Información publicada por fuentes externas y propietarios. Medellín Social no
@@ -1544,39 +1597,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           );
         }
 
-        if (historia.length <= 2) {
-          return (
-            <div className="space-y-3">
-              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
-              <div className="space-y-2.5">
-                {historia.map((h, i) => {
-                  const daysAgo = Math.floor((Date.now() - new Date(h.fecha).getTime()) / 86400000);
-                  const cuandoLabel = daysAgo === 0 ? (lang === "en" ? "Today" : "Hoy") : daysAgo === 1 ? (lang === "en" ? "1 day ago" : "Hace 1 día") : (lang === "en" ? `${daysAgo} days ago` : `Hace ${daysAgo} días`);
-                  const sube = (h.delta_pct ?? 0) > 0;
-                  const color = sube ? "#B4462F" : "#0F8A4F";
-                  return (
-                    <div key={i} className="flex items-baseline justify-between border-b pb-2.5 last:border-0" style={{ borderColor: "#E5E0D5" }}>
-                      <div>
-                        <div className="text-[13px]" style={{ color: "#111418" }}>{sube ? "Subió de precio" : "Bajó de precio"}</div>
-                        <div className="text-[11px]" style={{ color: "#6E726E" }}>{cuandoLabel}</div>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-[14px] font-semibold tabular-nums" style={{ color: "#111418" }}>{formatPrice(h.precio)}</div>
-                        {h.delta_pct != null && (
-                          <div className="text-[11px] font-medium tabular-nums" style={{ color }}>
-                            {sube ? "+" : "−"}{Math.abs(h.delta_pct).toFixed(1)}%
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          );
-        }
-
-        // 3+ cambios → gráfica de área estilo Zillow
+        // Cualquier historial (≥1 cambio) → gráfica de precio en el tiempo
+        // (X=fecha, Y=precio). Crece punto a punto a medida que se registran cambios.
         const sorted = [...historia].sort((a, b) => a.fecha.localeCompare(b.fecha));
         const chartData = [
           ...sorted.map(h => ({
@@ -1586,10 +1608,21 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           { fecha: lang === "en" ? "Today" : "Hoy", precio: listing.precio_cop ?? 0 },
         ];
         const currentPrecioM = listing.precio_cop ?? 0;
+        // % neto desde el primer precio registrado hasta hoy (resumen sobre la gráfica).
+        const primerPrecio = sorted[0]?.precio ?? null;
+        const netPct = primerPrecio && primerPrecio > 0 ? ((currentPrecioM - primerPrecio) / primerPrecio) * 100 : null;
+        const subeNet = (netPct ?? 0) >= 0;
 
         return (
-          <div className="space-y-3">
-            <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
+          <div className="space-y-2">
+            <div className="flex items-baseline justify-between gap-2">
+              <h3 className="text-[13px] font-semibold tracking-tight" style={{ color: "#111418" }}>Historial de precio</h3>
+              {netPct != null && Math.abs(netPct) >= 0.5 && (
+                <span className="text-[11px] font-semibold tabular-nums" style={{ color: subeNet ? "#B4462F" : "#0F8A4F" }}>
+                  {subeNet ? "▲" : "▼"} {Math.abs(netPct).toFixed(0)}% {lang === "en" ? "since listed" : "desde publicación"}
+                </span>
+              )}
+            </div>
             <div style={{ height: 150 }}>
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart data={chartData} margin={{ top: 6, right: 8, left: 0, bottom: 0 }}>
@@ -1640,8 +1673,8 @@ export function ListingDrawer({ listingId, onClose }: Props) {
           </div>
           <div className="mt-1 text-[12px] leading-snug" style={{ color: "#0A5C36" }}>
             {lang === "en"
-              ? "Sign up free to unlock the neighborhood (walkability, schools, transit), price history and more."
-              : "Regístrate gratis y desbloquea el entorno (caminabilidad, colegios, transporte), el historial de precio y más datos del inmueble."}
+              ? "Sign up free to unlock neighborhood detail (safety, services, commute times) and investment returns."
+              : "Regístrate gratis y desbloquea el detalle del entorno (servicios, obras, tiempos de viaje) y la rentabilidad."}
           </div>
           <span className="mt-3 inline-flex items-center justify-center gap-1 rounded-lg px-5 py-2 text-[13px] font-bold text-white" style={{ background: "#0F8A4F" }}>
             {lang === "en" ? "Sign up free" : "Regístrate gratis"} <ChevronRight className="h-4 w-4" />
@@ -1824,6 +1857,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                             </div>
                             <div className="flex items-start gap-2">
                               {badgesRow}
+                              {shareButton}
                               {favButton}
                             </div>
                           </div>
@@ -1901,8 +1935,9 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                   </div>
                 )}
               </div>
-              <div className="flex shrink-0 items-start gap-3 pt-1.5">
+              <div className="flex shrink-0 items-start gap-2 pt-1.5">
                 {specsInline}
+                {shareButton}
                 {favButton}
               </div>
             </div>

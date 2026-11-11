@@ -4,7 +4,7 @@ import { OriginalListingLink } from "@/components/OriginalListingLink";
 import { originalListingUrl } from "@/lib/originalListing";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown } from "@/lib/icons";
+import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown, Heart } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
@@ -237,7 +237,7 @@ function ListingCard({
             aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
             title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
           >
-            {isFav ? "❤️" : "🤍"}
+            <Heart className="h-[22px] w-[22px]" style={{ color: isFav ? "#CE1126" : "#9aa0a6" }} fill={isFav ? "#CE1126" : "none"} />
           </button>
         </div>
       </div>
@@ -435,7 +435,7 @@ function ListingCard({
             aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
             title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
           >
-            {isFav ? "❤️" : "🤍"}
+            <Heart className="h-[22px] w-[22px]" style={{ color: isFav ? "#CE1126" : "#9aa0a6" }} fill={isFav ? "#CE1126" : "none"} />
           </button>
         </div>
       </div>
@@ -619,7 +619,7 @@ export function MLSPanel({
       cardRef={(el) => { cardRefs.current[l.id] = el; }}
       isFav={isFav(favKey(l))}
       onToggleFav={() => {
-        if (!auth.get()) return;
+        if (!auth.get()) { toast.info("Inicia sesión para guardar"); return; }
         toggleFav(favKey(l), l.barrio_id);
       }}
       onSimular={() => {

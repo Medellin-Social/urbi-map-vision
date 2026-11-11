@@ -101,8 +101,14 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
 # job revienta o sale != 0. Antes las fallas se tragaban en el logfile: cron
 # disparaba, el script moría, y se veía igual a "corrió y no hizo nada".
 # El redirect a /var/log/urbi/*.log se conserva: full log para `railway logs`/exec
-# mientras vive el contenedor. load_pois && compute sigue encadenado (run_job
-# propaga el exit del hijo, así que el && respeta el orden).
+# mientras vive el contenedor. load_pois && load_pois_overpass && compute van
+# encadenados (run_job propaga el exit del hijo, el && respeta el orden):
+# load_pois TRUNCA raw.pois y carga 11 tipos base; load_pois_overpass hace UPSERT
+# de los 20 tipos (añade colegio/supermercado/farmacia/paradero/cancha/encicla/
+# policía/bomberos sin truncar); recién entonces compute_barrios_pois calcula
+# n_colegios_1km/n_canchas_1km/dist_policia_km sobre la tabla COMPLETA. Sin
+# overpass en el medio, el TRUNCATE de load_pois borraba esos 9 POIs ricos cada
+# lunes y las columnas salían 0/NULL (ver docs/ARCHITECTURE.md §7.6).
 RUN printf '%s\n' \
     "PATH=/usr/local/bin:/usr/bin:/bin" \
     "0 3 * * * app cd /app && python3 scripts/run_job.py refresh python3 scripts/refresh_data.py >> /var/log/urbi/refresh.log 2>&1" \
@@ -118,7 +124,7 @@ RUN printf '%s\n' \
     "30 7 * * 1 app cd /app && python3 scripts/run_job.py dbt_full_refresh python3 scripts/run_dbt_full_refresh.py >> /var/log/urbi/dbt_full_refresh.log 2>&1" \
     "0 10 * * 3 app cd /app && python3 scripts/run_job.py remates_dbt python3 scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/urbi/remates_dbt.log 2>&1" \
     "30 3 1 * * app cd /app && python3 scripts/run_job.py ingest_barrios python3 scripts/load_barrios.py >> /var/log/urbi/ingest_barrios.log 2>&1" \
-    "0 4 * * 1 app cd /app && python3 scripts/run_job.py ingest_pois python3 scripts/load_pois.py --build-analytics >> /var/log/urbi/ingest_pois.log 2>&1 && python3 scripts/run_job.py compute_barrios_pois python3 scripts/compute_barrios_pois.py >> /var/log/urbi/ingest_pois.log 2>&1" \
+    "0 4 * * 1 app cd /app && python3 scripts/run_job.py ingest_pois python3 scripts/load_pois.py --build-analytics >> /var/log/urbi/ingest_pois.log 2>&1 && python3 scripts/run_job.py ingest_pois_overpass python3 scripts/load_pois_overpass.py >> /var/log/urbi/ingest_pois.log 2>&1 && python3 scripts/run_job.py compute_barrios_pois python3 scripts/compute_barrios_pois.py >> /var/log/urbi/ingest_pois.log 2>&1" \
     "0 12 1 * * app cd /app && python3 scripts/run_job.py seguridad_mensual python3 scripts/run_seguridad_mensual.py >> /var/log/urbi/seguridad_mensual.log 2>&1" \
     "0 11 * * * app cd /app && python3 scripts/run_job.py parametros_diario python3 scripts/fetch_usd_rate.py >> /var/log/urbi/parametros_diario.log 2>&1" \
     "15 11 * * 1 app cd /app && python3 scripts/run_job.py trm_semanal python3 scripts/fetch_trm.py >> /var/log/urbi/trm_semanal.log 2>&1" \

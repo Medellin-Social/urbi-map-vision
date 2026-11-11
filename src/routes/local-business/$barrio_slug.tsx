@@ -563,7 +563,7 @@ function LocalBusinessPage() {
               </p>
             </div>
             <a
-              href="/negocios/unirse"
+              href="/negocios/crear"
               style={{
                 background: K.teal, color: '#fff', fontWeight: 700,
                 fontSize: 13, padding: '9px 18px', borderRadius: 8,

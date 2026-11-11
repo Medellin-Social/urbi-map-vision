@@ -138,7 +138,7 @@ function EventosPage() {
             </p>
           </div>
           <a
-            href="/negocios/unirse"
+            href="/eventos/crear"
             style={{
               display: 'inline-flex', alignItems: 'center', gap: 6,
               background: K.coral, color: '#fff',
@@ -237,7 +237,7 @@ function EventosPage() {
               <p style={{ color: K.muted, fontSize: '1.05rem', marginBottom: 12 }}>
                 {t('Aún no hay eventos aquí.', 'No events here yet.')}
               </p>
-              <a href="/publicar" style={{ color: K.coral, fontWeight: 700, textDecoration: 'none' }}>
+              <a href="/eventos/crear" style={{ color: K.coral, fontWeight: 700, textDecoration: 'none' }}>
                 {t('¿Tienes uno? Publícalo →', 'Have one? Publish it →')}
               </a>
             </div>

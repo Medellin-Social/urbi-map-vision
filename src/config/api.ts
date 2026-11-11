@@ -83,6 +83,9 @@ export const API_ENDPOINTS = {
 
   // Comunidad
   comunidadEventos: (barrioId: number) => `${API_BASE_URL}/comunidad/${barrioId}/eventos`,
+  crearEvento: `${API_BASE_URL}/comunidad/eventos`,
+  importarEvento: `${API_BASE_URL}/comunidad/eventos/importar`,
+  crearNegocio: `${API_BASE_URL}/business/mi-negocio`,
   comunidadTiendas: (barrioId: number) => `${API_BASE_URL}/comunidad/${barrioId}/tiendas`,
   ticker: (ciudadId = 1) => `${API_BASE_URL}/comunidad/ticker?ciudad_id=${ciudadId}`,
   todosEventos: `${API_BASE_URL}/comunidad/todos/eventos?limit=20`,
