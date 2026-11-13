@@ -775,9 +775,14 @@ async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_poo
             # intake.zona_codigo siempre es barrio_id::text; una zona comuna
             # agrega todos los barrios que la componen
             if z["nivel"] == "comuna":
+                # zona_codigo de comuna = cd_comuna (número, p.ej. '14'), igual que
+                # _ZONAS_SQL y /embudo. Antes hacía `comuna = $1` contra raw.barrios.comuna
+                # (que guarda el NOMBRE, "EL POBLADO") → 0 barrios → ROI de zona en cero.
                 codigos = [
                     r["id"] for r in await conn.fetch(
-                        "SELECT id::text AS id FROM raw.barrios WHERE comuna = $1",
+                        "SELECT b.id::text AS id FROM raw.barrios b "
+                        "JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id "
+                        "WHERE bc.cd_comuna::text = $1",
                         z["zona_codigo"],
                     )
                 ]
