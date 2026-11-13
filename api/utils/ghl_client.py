@@ -58,7 +58,7 @@ _RETRY_BACKOFF = 0.5          # seconds; doubles each attempt (patched to 0 in t
 _RETRY_AFTER_CAP = 5.0        # never sleep longer than this for a Retry-After header
 _IDEMPOTENT = {"GET", "PUT", "DELETE", "HEAD"}
 _ALLOWED_METHODS = {"POST", "PUT"}
-_ALLOWED_PATH_PREFIXES = ("/contacts/", "/businesses/", "/objects/", "/associations/relations")
+_ALLOWED_PATH_PREFIXES = ("/contacts/", "/businesses/", "/objects/", "/associations/relations", "/opportunities/upsert")
 _RETRY_STATUS_ALWAYS = {429, 502, 503, 504}   # request not processed (or safe to replay)
 _RETRY_STATUS_IDEMPOTENT = {500}
 
@@ -159,6 +159,36 @@ async def upsert_contact(
         body["tags"] = list(tags)
     resp = await _request("POST", "/contacts/upsert", json=body)
     return resp.json()["contact"]["id"]
+
+
+# --- Opportunities (pipelines creados en GHL; IDs no son secretos) -------------
+PIPELINES = {
+    "realtors": ("iatpsNVgueTeBcwGuXP2", {
+        "new": "e505bf40-50a1-40b8-9ab4-79110e886ce9",
+        "paid": "96fb2746-744c-476a-984e-ebcb59838356"}),
+    "negocios": ("goKSiZ3P2CUzWGKv7wKW", {
+        "new": "2ec781cb-e050-4274-8f13-02059f07cd01"}),
+    "visitas": ("hMInmdsj7m5oDcp3cdK6", {
+        "new": "eb1022b4-7524-4196-8f8e-0afd55d99564"}),
+    "embajadores": ("u84Fv0YilZEYnwQjXCdd", {
+        "new": "01e2ec63-bdf3-4967-bc04-96ca6b80ad00"}),
+}
+
+
+async def upsert_opportunity(contact_id: str, pipeline: str, name: str, stage: str = "new") -> Optional[str]:
+    """POST /opportunities/upsert: una oportunidad por (contacto, pipeline), sin
+    duplicados. Best-effort: nunca levanta (el Contact ya quedó guardado)."""
+    try:
+        pid, stages = PIPELINES[pipeline]
+        r = await _request("POST", "/opportunities/upsert", json={
+            "locationId": _GHL_LOCATION_ID, "pipelineId": pid,
+            "pipelineStageId": stages[stage], "contactId": contact_id,
+            "name": name[:200], "status": "open",
+        })
+        return ((r.json() or {}).get("opportunity") or {}).get("id")
+    except Exception as e:
+        logger.error("upsert_opportunity(%s) falló: %s", pipeline, e)
+        return None
 
 
 async def add_contact_note(contact_id: str, body: str) -> None:
@@ -908,6 +938,7 @@ async def push_referidor_to_ghl(referidor_id: int, campos: dict) -> Optional[str
             f"Aplicación {tipo} #{referidor_id}\nCanal: {campos.get('canal')}\n"
             f"Experiencia: {campos.get('experiencia')}\nMotivación: {campos.get('motivacion')}"
         ))
+        await upsert_opportunity(contact_id, "embajadores", f"{tipo.capitalize()}: {campos.get('nombre') or referidor_id}")
         return contact_id
     except Exception as e:
         logger.error("push_referidor_to_ghl(%s) falló: %s", referidor_id, e)
@@ -959,6 +990,10 @@ async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
         logger.error("push_agent_to_ghl(%s) falló: %s", agent_id, e)
         await _record_push_failure("agent", agent_id, str(e))
         return None
+    await upsert_opportunity(
+        contact_id, "realtors", f"Realtor: {campos.get('nombre') or agent_id}",
+        stage="paid" if campos.get("estado") == "activo" else "new",
+    )
     await _record_sync_result("agent", agent_id, contact_id, "synced", None)
     return contact_id
 
@@ -991,6 +1026,29 @@ async def sync_agent(agent_id: str) -> Optional[str]:
 # con Talal. Sin contrato NO se arma mapeo de campos (a diferencia de evento/
 # deal/referidor, que sí tenían mapeo propuesto). Ver §7 Visita del contrato.
 
+async def push_negocio_lead_to_ghl(lead_id, campos: dict) -> Optional[str]:
+    """leads_negocio -> Contact (tag negocio-local) + nota + oportunidad en
+    pipeline "Local Businesses". Best-effort: no levanta."""
+    if not is_configured():
+        return None
+    try:
+        contact_id = await upsert_contact(
+            email=campos.get("email"), nombre=campos.get("nombre_negocio"),
+            phone=campos.get("telefono"), tags=["negocio-local"],
+        )
+        await add_contact_note(contact_id, (
+            f"Aplicación negocio #{lead_id}\nNegocio: {campos.get('nombre_negocio')}\n"
+            f"Categoría: {campos.get('categoria')}\nBarrio: {campos.get('barrio_id')}\n"
+            f"Plan: {campos.get('plan_tipo')}\nMensaje: {campos.get('mensaje')}"
+        ))
+        await upsert_opportunity(contact_id, "negocios", f"Negocio: {campos.get('nombre_negocio')}")
+        return contact_id
+    except Exception as e:
+        logger.error("push_negocio_lead_to_ghl(%s) falló: %s", lead_id, e)
+        await _record_push_failure("negocio", lead_id, str(e))
+        return None
+
+
 async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
     """visita_solicitud -> Contact (el comprador) con tag y nota de la visita
     pedida. El Calendar/Appointment por agente sigue pendiente de Talal. Si la
@@ -1005,6 +1063,7 @@ async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
             f"Fecha pedida: {campos.get('fecha_visita')}\nMensaje: {campos.get('mensaje')}\n"
             f"Agente: {campos.get('agent_id')}"
         ))
+        await upsert_opportunity(contact_id, "visitas", f"Visita: {campos.get('listing_url') or visita_id}")
         return contact_id
     except Exception as e:
         logger.error("push_visita_to_ghl(%s) falló: %s", visita_id, e)
