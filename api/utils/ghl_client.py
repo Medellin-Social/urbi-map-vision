@@ -57,6 +57,8 @@ _MAX_ATTEMPTS = 3
 _RETRY_BACKOFF = 0.5          # seconds; doubles each attempt (patched to 0 in tests)
 _RETRY_AFTER_CAP = 5.0        # never sleep longer than this for a Retry-After header
 _IDEMPOTENT = {"GET", "PUT", "DELETE", "HEAD"}
+_ALLOWED_METHODS = {"POST", "PUT"}
+_ALLOWED_PATH_PREFIXES = ("/contacts/", "/businesses/", "/objects/", "/associations/relations")
 _RETRY_STATUS_ALWAYS = {429, 502, 503, 504}   # request not processed (or safe to replay)
 _RETRY_STATUS_IDEMPOTENT = {500}
 
@@ -80,6 +82,9 @@ def _should_retry(method: str, exc: Optional[Exception], resp: Optional[httpx.Re
 async def _request(method: str, path: str, **kwargs) -> httpx.Response:
     """HTTP call to GHL with timeout + bounded retries (see _should_retry).
     Raises httpx.HTTPStatusError / httpx.TransportError after the last attempt."""
+    # Mínimo privilegio: el sitio solo ESCRIBE en GHL. Nunca lee ni borra.
+    if method.upper() not in _ALLOWED_METHODS or not path.startswith(_ALLOWED_PATH_PREFIXES):
+        raise PermissionError(f"GHL {method} {path} no permitido (solo escritura a rutas allowlist)")
     last_exc: Optional[Exception] = None
     for attempt in range(1, _MAX_ATTEMPTS + 1):
         resp: Optional[httpx.Response] = None
