@@ -1021,17 +1021,27 @@ class BarrioComunaItem(BaseModel):
     precio_m2_cop: Optional[int] = None
 
 
+# Valle de Aburrá — el producto cubre SOLO estos 10 municipios. Excluye la data de
+# Panamá que una rama paralela inyectó en DEV/local (no hay col pais; se discrimina por
+# municipio). Medellín es Medellín, Panamá es otro país/producto aparte.
+# Ver [[feedback_coordinacion_ramas_panama_marketintel]].
+_VALLE_ABURRA_SQL = (
+    "UPPER(b.municipio) IN ('MEDELLIN','BELLO','ITAGUI','ENVIGADO','SABANETA',"
+    "'LA ESTRELLA','CALDAS','COPACABANA','GIRARDOTA','BARBOSA')"
+)
+
+
 @router.get("/comunas", response_model=list[ComunaItem])
 async def list_comunas():
     pool = get_pool()
-    rows = await pool.fetch("""
+    rows = await pool.fetch(f"""
         SELECT
             COALESCE(b.comuna, b.municipio) AS key,
             COALESCE(b.comuna, b.municipio) AS label,
             b.municipio,
             COUNT(*)::int AS n_barrios
         FROM raw.barrios b
-        WHERE b.excluir_inversion = FALSE
+        WHERE b.excluir_inversion = FALSE AND {_VALLE_ABURRA_SQL}
         GROUP BY b.comuna, b.municipio
         ORDER BY b.municipio, label
     """)
@@ -1052,9 +1062,9 @@ async def list_barrios_por_comuna(key: str):
         FROM raw.barrios b
         LEFT JOIN analytics.barrios_mercado bm ON b.id = bm.barrio_id
         WHERE (b.comuna = $1 OR b.municipio = $1)
-          AND b.excluir_inversion = FALSE
+          AND b.excluir_inversion = FALSE AND {valle}
         ORDER BY b.nombre
-    """, key)
+    """.format(valle=_VALLE_ABURRA_SQL), key)
     return [BarrioComunaItem(**dict(r)) for r in rows]
 
 
@@ -1121,10 +1131,10 @@ async def get_mercado_serie(barrio_id: int, current_user: Optional[dict] = Depen
 
 @router.get("/comparar", response_model=list[BarrioResponse])
 async def comparar_barrios(
-    ids: str = Query(description="IDs separados por coma: 1,2,3 (máx 3)"),
+    ids: str = Query(description="IDs separados por coma: 1,2,3,4 (máx 4)"),
     perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
 ):
-    id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()][:3]
+    id_list = [int(x.strip()) for x in ids.split(",") if x.strip().isdigit()][:4]
     if not id_list:
         raise HTTPException(status_code=400, detail="Parámetro ids inválido")
 

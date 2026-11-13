@@ -149,9 +149,14 @@ export function SimuladorTab() {
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-5">
             <Gauge value={r.score_oportunidad} label="Oportunidad" sub={r.rating_oportunidad} />
             <Stat label="Yield neto" value={r.yields.neto_pct != null ? `${r.yields.neto_pct.toFixed(1)}%` : "—"} sub={`bruto ${r.yields.bruto_pct.toFixed(1)}%`} accent={C.brand} />
-            <Stat label="Recupero" value={r.recupero.neto_anos != null ? `${r.recupero.neto_anos.toFixed(0)} años` : `${r.recupero.bruto_anos.toFixed(0)} años`} sub="para recuperar la inversión" />
+            <Stat label="Recupero" value={r.recupero.neto_anos != null ? `${r.recupero.neto_anos.toFixed(0)} años` : `${r.recupero.bruto_anos.toFixed(0)} años`} sub="recuperar la inversión" />
             <Stat label="Ingreso/mes" value={fmtCOP(r.ingresos.mensual_cop)} sub={`${fmtCOP(r.ingresos.anual_cop)}/año`} />
             <Stat label="Ganancia 5 años" value={fmtCOP(r.valorizacion.ganancia_5anos_cop)} sub={`+${r.valorizacion.tasa_anual_pct.toFixed(1)}%/año`} accent={C.good} />
+            <Stat label="Valor a 5 años" value={fmtCOP(r.valorizacion.valor_5anos_cop)} sub={`hoy ${fmtCOP(r.presupuesto_cop)}`} />
+            <Stat label="Retorno total 5a" value={fmtCOP(r.valorizacion.retorno_total_5anos_cop)} sub="valorización + renta" accent={C.good} />
+            <Stat label="Área comprable" value={`${Math.round(r.area_comprable_m2)} m²`} sub={`con $${(r.presupuesto_cop / 1e6).toFixed(0)}M`} />
+            {r.estado_precio && <Stat label="Precio de zona" value={r.estado_precio} sub="vs. precio justo" accent={/sobre/i.test(r.estado_precio) ? C.bad : /bajo/i.test(r.estado_precio) ? C.good : C.ink} />}
+            {r.seguridad_score != null && <Gauge value={r.seguridad_score} label="Seguridad" sub={r.zona_categoria ?? undefined} />}
           </div>
 
           {/* Proyección */}
