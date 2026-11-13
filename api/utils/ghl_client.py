@@ -130,13 +130,47 @@ def _push_lock(object_type: str, internal_id) -> asyncio.Lock:
     return _push_locks.setdefault((object_type, str(internal_id)), asyncio.Lock())
 
 
+def _split_nombre(nombre: str) -> tuple[str, str]:
+    parts = (nombre or "").strip().split(None, 1)
+    return (parts[0] if parts else ""), (parts[1] if len(parts) > 1 else "")
+
+
+async def upsert_contact(
+    *, email: Optional[str] = None, nombre: Optional[str] = None,
+    phone: Optional[str] = None, tags: Optional[list] = None, source: str = "medellinsocial.com",
+) -> str:
+    """POST /contacts/upsert (API estándar GHL v2): crea o actualiza por email/
+    teléfono dentro de la location -> sin duplicados. Solo campos estándar +
+    tags (no custom fields: sus nombres/picklists aún no los confirma Talal).
+    Devuelve el contact id. Levanta ValueError si no hay email ni teléfono."""
+    if not (email or phone):
+        raise ValueError("upsert_contact: se necesita email o teléfono")
+    first, last = _split_nombre(nombre or "")
+    body = {"locationId": _GHL_LOCATION_ID, "source": source}
+    for k, v in (("email", email), ("phone", phone), ("firstName", first), ("lastName", last)):
+        if v:
+            body[k] = v
+    if tags:
+        body["tags"] = list(tags)
+    resp = await _request("POST", "/contacts/upsert", json=body)
+    return resp.json()["contact"]["id"]
+
+
+async def add_contact_note(contact_id: str, body: str) -> None:
+    await _request("POST", f"/contacts/{contact_id}/notes", json={"body": body[:5000]})
+
+
 async def find_or_create_contact(usuario_id: int, email: str, nombre: str) -> Optional[str]:
-    """Should return a GHL contact_id, persisted by the caller onto
-    usuarios.ghl_contact_id — so the webhook can look up by that ID instead
-    of matching on email. Not implemented: needs the GHL API contract."""
-    raise NotImplementedError(
-        "ghl_client.find_or_create_contact: needs GHL API key/location + contacts API contract from Talal"
+    """Devuelve el GHL contact_id del usuario y lo persiste en
+    usuarios.ghl_contact_id (el webhook puede buscar por ese ID en vez de email).
+    None si GHL no está configurado."""
+    if not is_configured():
+        return None
+    contact_id = await upsert_contact(email=email, nombre=nombre, tags=["usuario"])
+    await get_pool().execute(
+        "UPDATE public.usuarios SET ghl_contact_id = $1 WHERE id = $2", contact_id, usuario_id
     )
+    return contact_id
 
 
 async def crear_checkout_session(
@@ -856,8 +890,24 @@ async def push_deal_to_ghl(deal_id: int, campos: dict) -> Optional[str]:
 #   - Si el `codigo` de referido se genera acá o lo asigna GHL
 
 async def push_referidor_to_ghl(referidor_id: int, campos: dict) -> Optional[str]:
-    """referidor_id = public.aplicacion_referidor.id. Target propuesto: Contact."""
-    raise NotImplementedError("ghl_client.push_referidor_to_ghl: falta contrato GHL para referidor (Contact)")
+    """aplicacion_referidor -> Contact en GHL (lead del programa), con tag por
+    tipo y una nota con la aplicación. La comisión/Referral object queda para
+    Affiliate Manager (contrato de Talal pendiente). Best-effort: no levanta."""
+    try:
+        tipo = campos.get("tipo") or "afiliado"
+        contact_id = await upsert_contact(
+            email=campos.get("email"), nombre=campos.get("nombre"),
+            phone=campos.get("telefono"), tags=["referidor", f"referidor-{tipo}"],
+        )
+        await add_contact_note(contact_id, (
+            f"Aplicación {tipo} #{referidor_id}\nCanal: {campos.get('canal')}\n"
+            f"Experiencia: {campos.get('experiencia')}\nMotivación: {campos.get('motivacion')}"
+        ))
+        return contact_id
+    except Exception as e:
+        logger.error("push_referidor_to_ghl(%s) falló: %s", referidor_id, e)
+        await _record_push_failure("referidor", referidor_id, str(e))
+        return None
 
 
 _REFERIDOR_SELECT = """
@@ -891,11 +941,21 @@ async def sync_referidor(referidor_id: int) -> Optional[str]:
 # la forma de los custom fields (mismo criterio que _map_choice).
 
 async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
-    """agent_id = public.agent.id (uuid). Target: Contact. Stub hasta el JSON
-    de /contacts de Talal (ver find_or_create_contact)."""
-    raise NotImplementedError(
-        "ghl_client.push_agent_to_ghl: falta JSON de POST /contacts de Talal (find_or_create_contact)"
-    )
+    """public.agent -> Contact en GHL (confirmado por Talal). Solo campos
+    estándar + tags (agent, agent-<estado>); los custom fields agent_* se suman
+    cuando Talal confirme nombres/picklists. Best-effort: no levanta."""
+    try:
+        contact_id = await upsert_contact(
+            email=campos.get("email"), nombre=campos.get("nombre"),
+            phone=campos.get("telefono"),
+            tags=["agent", f"agent-{campos.get('estado') or 'pending'}"],
+        )
+    except Exception as e:
+        logger.error("push_agent_to_ghl(%s) falló: %s", agent_id, e)
+        await _record_push_failure("agent", agent_id, str(e))
+        return None
+    await _record_sync_result("agent", agent_id, contact_id, "synced", None)
+    return contact_id
 
 
 _AGENT_SELECT = """
@@ -927,12 +987,24 @@ async def sync_agent(agent_id: str) -> Optional[str]:
 # deal/referidor, que sí tenían mapeo propuesto). Ver §7 Visita del contrato.
 
 async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
-    """visita_id = public.visita_solicitud.id (uuid). Target propuesto:
-    Appointment en el Calendar del agente. Stub: falta todo el contrato de
-    Calendars/Appointments de Talal (calendar por agente, endpoint, campos)."""
-    raise NotImplementedError(
-        "ghl_client.push_visita_to_ghl: falta contrato GHL Calendars/Appointments de Talal"
-    )
+    """visita_solicitud -> Contact (el comprador) con tag y nota de la visita
+    pedida. El Calendar/Appointment por agente sigue pendiente de Talal. Si la
+    solicitud no trae teléfono ni email no hay con qué crear el Contact. Best-effort."""
+    try:
+        contact_id = await upsert_contact(
+            email=campos.get("email"), nombre=campos.get("nombre"),
+            phone=campos.get("telefono"), tags=["visita-solicitada"],
+        )
+        await add_contact_note(contact_id, (
+            f"Solicitud de visita #{visita_id}\nListing: {campos.get('listing_url')}\n"
+            f"Fecha pedida: {campos.get('fecha_visita')}\nMensaje: {campos.get('mensaje')}\n"
+            f"Agente: {campos.get('agent_id')}"
+        ))
+        return contact_id
+    except Exception as e:
+        logger.error("push_visita_to_ghl(%s) falló: %s", visita_id, e)
+        await _record_push_failure("visita", visita_id, str(e))
+        return None
 
 
 _VISITA_SELECT = """
