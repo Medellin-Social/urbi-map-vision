@@ -148,6 +148,7 @@ function ListingCard({
   onToggleFav,
   onSimular,
   onHover,
+  index = 0,
 }: {
   onHover?: (hovering: boolean) => void;
   listing: ApiListing;
@@ -157,7 +158,11 @@ function ListingCard({
   isFav: boolean;
   onToggleFav: () => void;
   onSimular: () => void;
+  index?: number;
 }) {
+  // Entrada escalonada: cascada continua en ciclos de 8 (acotado, sin delays que
+  // crezcan sin fin en el infinite scroll). Reduced-motion lo anula vía la clase.
+  const enterDelay = `${(index % 8) * 0.04}s`;
   const isPro = useIsPro();
   const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
@@ -196,11 +201,13 @@ function ListingCard({
         ref={mergedRef}
         onClick={(e) => onSelect(e)}
         data-tour="listing-card"
-        className="cursor-pointer rounded-lg border overflow-hidden"
-        style={highlighted
-          ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-          : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
-        }
+        className="mls-card-enter cursor-pointer rounded-lg border overflow-hidden"
+        style={{
+          ...(highlighted
+            ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+            : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }),
+          animationDelay: enterDelay,
+        }}
       >
         <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
           {listing.foto_principal ? (
@@ -251,11 +258,13 @@ function ListingCard({
       onMouseLeave={() => onHover?.(false)}
       onClick={(e) => onSelect(e)}
       data-tour="listing-card"
-      className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F3F0E8]"
-      style={highlighted
-        ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-        : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
-      }
+      className="mls-card-enter cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F3F0E8]"
+      style={{
+        ...(highlighted
+          ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+          : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }),
+        animationDelay: enterDelay,
+      }}
     >
       {/* Photo */}
       <div className="relative h-[140px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
@@ -604,14 +613,15 @@ export function MLSPanel({
     if (!s || !root || !hayMas) return;
     const io = new IntersectionObserver(
       (es) => { if (es[0].isIntersecting) setVisibleCount((c) => c + RENDER_STEP); },
-      { root, rootMargin: "600px" },
+      { root, rootMargin: "250px" },
     );
     io.observe(s);
     return () => io.disconnect();
   }, [hayMas, restoVisible.length]);
-  const renderCard = (l: ApiListing) => (
+  const renderCard = (l: ApiListing, i: number) => (
     <ListingCard
       key={`${l.fuente ?? "x"}-${l.id}`}
+      index={i}
       listing={l}
       highlighted={highlightedListingId === l.id}
       onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}

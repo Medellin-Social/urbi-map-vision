@@ -901,6 +901,7 @@ async def list_barrios(
 
     sql = base_sql + f"""
         WHERE ($1::text IS NULL OR upper(b.municipio) = upper($1))
+          AND {_VALLE_ABURRA_SQL}
           AND ($2::int  IS NULL OR sl.estrato_barrio = $2)
           AND (sc.{score_col} IS NULL OR sc.{score_col} >= $3)
         ORDER BY sc.{score_col} DESC NULLS LAST

@@ -281,6 +281,18 @@ body {
   .load-bar::before { animation: none; width: 100%; opacity: 0.5; }
 }
 
+/* Entrada suave de las tarjetas del panel de listings: aparecen deslizando hacia
+   arriba al renderizarse (initial, cambio de filtro, y lotes del infinite scroll)
+   en vez de saltar de golpe. El stagger lo pone cada tarjeta vía animation-delay. */
+@keyframes mls-card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.mls-card-enter { animation: mls-card-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@media (prefers-reduced-motion: reduce) {
+  .mls-card-enter { animation: none; }
+}
+
 @media (max-width: 768px) {
   .footer-grid {
     grid-template-columns: 1fr 1fr !important;

@@ -347,8 +347,7 @@ function precioLabel(f: SharedFilters, isRent: boolean, lang: string, fmtPrice: 
 function habLabel(f: SharedFilters): string {
   if (f.habitaciones === null) return "Habitaciones";
   if (f.habitaciones === 0) return "Studio (0)";
-  if (f.habitaciones === 4) return "4+ hab.";
-  return `${f.habitaciones} hab.`;
+  return `${f.habitaciones}+ hab.`;
 }
 
 function tipoLabel(f: SharedFilters): string {
@@ -449,14 +448,13 @@ function usePriceFieldText(
 
 function banosLabel(f: SharedFilters): string {
   if (f.banos === null) return "Baños";
-  if (f.banos === 4) return "4+ baños";
-  return `${f.banos} baños`;
+  return `${f.banos}+ baños`;
 }
 
 function habBanosLabel(f: SharedFilters): string {
   const parts: string[] = [];
-  if (f.habitaciones !== null) parts.push(f.habitaciones === 0 ? "Studio" : f.habitaciones === 4 ? "4+ hab." : `${f.habitaciones} hab.`);
-  if (f.banos !== null) parts.push(f.banos === 4 ? "4+ baños" : `${f.banos} baños`);
+  if (f.habitaciones !== null) parts.push(f.habitaciones === 0 ? "Studio" : `${f.habitaciones}+ hab.`);
+  if (f.banos !== null) parts.push(f.banos === 0 ? "Studio" : `${f.banos}+ baños`);
   return parts.length > 0 ? parts.join(", ") : "Hab. y Baños";
 }
 
@@ -1544,7 +1542,7 @@ export function MapFilterBar({
                   cursor: "pointer",
                 }}
               >
-                {["Todas", "Studio (0)", "1", "2", "3", "4+"][i]}
+                {["Todas", "Studio (0)", "1+", "2+", "3+", "4+"][i]}
               </button>
             ))}
           </div>
@@ -1608,7 +1606,7 @@ export function MapFilterBar({
                       cursor: "pointer",
                     }}
                   >
-                    {["Todos", "1", "2", "3", "4+"][i]}
+                    {["Todos", "1+", "2+", "3+", "4+"][i]}
                   </button>
                 ))}
               </div>
