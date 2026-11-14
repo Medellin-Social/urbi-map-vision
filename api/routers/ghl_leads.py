@@ -30,7 +30,7 @@ from api.db import get_pool
 from api.limiter import client_ip, limiter
 # Ruteo por listing_url (listing propio → sponsor de zona). Reusado para el
 # lead-in de GHL que SÍ trae un inmueble concreto.
-from api.routers.visitas import _VISITA_ZONA_AGENT_SQL
+from api.routers.visitas import _VISITA_ZONA_AGENT_SQL, notificar_visita_al_realtor
 
 router = APIRouter()
 
@@ -250,6 +250,9 @@ async def crear_lead(request: Request, body: GhlLeadNuevo = Body(...), pool=Depe
             row = await conn.fetchrow(_LEAD_SELECT + " WHERE v.external_id = $1", body.external_id)
             return _lead(row)
         full = await conn.fetchrow(_LEAD_SELECT + " WHERE v.id = $1", row["id"])
+    # Lead nuevo creado → avisar al realtor ruteado (best-effort, fuera de la conexión).
+    if agent_id:
+        await notificar_visita_al_realtor(str(agent_id), full["id"], pool)
     return _lead(full)
 
 

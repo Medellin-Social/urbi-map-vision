@@ -57,6 +57,46 @@ def _send_visita_email(req: "VisitaRequest", fecha: Optional[datetime]) -> None:
         log.exception("Falló envío de email de visita para %s", req.listing_url)
 
 
+async def notificar_visita_al_realtor(agent_id: str, visita_id: str, pool) -> None:
+    """Email al realtor: te llegó un lead de COMPRADOR (visita). Espejo de
+    `_notificar_lead_asignado` (que cubre los intakes/owner). Best-effort — jamás
+    tumba la creación de la visita. Reusado por crear_visita y POST /ghl/leads."""
+    try:
+        from api.utils.email import esc, send_email  # import tardío: evita ciclo
+        from api.utils.pii import mask_email
+
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT a.email, a.nombre AS agente,
+                       v.nombre AS comprador, v.telefono, v.fecha_visita,
+                       v.intencion, v.presupuesto, v.listing_url
+                FROM agent a, visita_solicitud v
+                WHERE a.id = $1::uuid AND v.id = $2::uuid
+                """,
+                agent_id, visita_id,
+            )
+        if not row or not row["email"]:
+            return
+        app_url = os.getenv("APP_URL", "https://medellin.social")
+        cuando = row["fecha_visita"].strftime("%Y-%m-%d %H:%M") if row["fecha_visita"] else "sin fecha propuesta"
+        calif = " · ".join(filter(None, [row["intencion"], row["presupuesto"]]))
+        await send_email(
+            row["email"],
+            f"Nuevo lead de visita — {row['comprador'] or 'un comprador'}",
+            f"""
+            <h3 style="color:#1D9E75">Te llegó un lead de comprador</h3>
+            <p>Hola {esc(row['agente'])}, alguien quiere ver un inmueble de tu zona:</p>
+            <p><strong>{esc(row['comprador'] or 'Un comprador')}</strong>{(' · ' + esc(row['telefono'])) if row['telefono'] else ''}</p>
+            <p>Fecha propuesta: <strong>{esc(cuando)}</strong>{(' · ' + esc(calif)) if calif else ''}</p>
+            <p><a href="{app_url}/realtor/dashboard?tab=agenda" style="color:#085041;font-weight:600">Abrir mi agenda →</a></p>
+            """,
+        )
+        log.info("Visita %s: notificación enviada a %s", visita_id, mask_email(row["email"]))
+    except Exception:
+        log.exception("Visita %s: notificación al agente %s falló", visita_id, agent_id)
+
+
 class VisitaRequest(BaseModel):
     listing_url: str = Field(min_length=1, max_length=600)
     nombre: Optional[str] = Field(None, max_length=120)
@@ -159,6 +199,11 @@ async def crear_visita(
             )
         except Exception:
             log.warning("visit_request event insert falló (listing=%s)", req.listing_url, exc_info=True)
+    # Lead ruteado a un realtor de zona → avisarle que le llegó un comprador
+    # (best-effort, fuera de la transacción). Antes el lead solo aparecía en su
+    # dashboard si refrescaba; ahora recibe el aviso.
+    if agent_id:
+        await notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool)
     # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
     if req.sin_agente:
         await asyncio.to_thread(_send_visita_email, req, fecha)
