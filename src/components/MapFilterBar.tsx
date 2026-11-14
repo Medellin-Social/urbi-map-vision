@@ -15,7 +15,7 @@ import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { CurrencyToggle } from "@/components/CurrencyToggle";
 import { parsePriceInput } from "@/lib/format";
 import { useUnit } from "@/hooks/useUnit";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsTablet } from "@/hooks/use-mobile";
 import { useBarrioSearch } from "@/hooks/useBarrioSearch";
 import { TIPOS_POR_SEGMENTO, type Segmento } from "@/lib/segmento";
 import type { SearchOption } from "@/lib/barrioSearch";
@@ -1155,7 +1155,10 @@ export function MapFilterBar({
   const [mobileMore, setMobileMore] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [, bumpLayout] = useReducer((n: number) => n + 1, 0);  // re-render to re-measure anchors on resize/scroll
-  const isMobile = useIsMobile();
+  // "Compacto" (toggle + hoja de filtros) en móvil Y TABLET: la fila desktop con los
+  // 9 filtros solo cabe en ≥lg (1024). Entre 768-1024 se desbordaba y cortaba los
+  // filtros de la derecha. Por eso el breakpoint de la barra es tablet (<1024), no móvil.
+  const isMobile = useIsTablet();
   const barRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -2097,15 +2100,15 @@ export function MapFilterBar({
           padding: "0 16px",
         }}
       >
-        {/* Desktop */}
-        <div className="hidden md:flex w-full items-center" style={{ gap: 10 }}>
+        {/* Desktop — fila de 9 filtros, solo cabe completa ≥1180px (a 1024-1180 se clipeaba "Amenities") */}
+        <div className="hidden min-[1180px]:flex w-full items-center" style={{ gap: 10 }}>
           {opToggle}
           {activeTab !== "sell" && segmentToggle}
           {activeTab === "sell" ? sellContent : desktopContent}
         </div>
 
-        {/* Mobile trigger */}
-        <div className="flex md:hidden w-full items-center justify-between" style={{ gap: 8 }}>
+        {/* Compacta (Buy/Rent + botón Filtros) para <1180px */}
+        <div className="flex min-[1180px]:hidden w-full items-center justify-between" style={{ gap: 8 }}>
           {opToggle}
           {activeTab === "sell" ? sellContent : (
             <>
