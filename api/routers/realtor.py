@@ -989,7 +989,10 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             _MIS_URLS_CTE + """
             SELECT v.id::text AS id, v.listing_url,
                    COALESCE(m.titulo,
-                            initcap(s.tipo_inmueble::text) || ' en ' || COALESCE(b.nombre, s.barrio_raw, 'la zona')
+                            initcap(s.tipo_inmueble::text) || ' en ' || COALESCE(b.nombre, s.barrio_raw, 'la zona'),
+                            -- Lead zona-only (listing_url sintético, sin fila en staging):
+                            -- sin esto listing_titulo = NULL → el front muestra "· fecha" roto.
+                            'Nuevo lead'
                    ) AS listing_titulo,
                    COALESCE(v.nombre, u.nombre, 'Visitante') AS nombre,
                    v.telefono, u.email,
@@ -1017,6 +1020,10 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = s.barrio_id
             LEFT JOIN public.usuarios u ON u.id = v.usuario_id
             WHERE m.url IS NOT NULL
+               -- Lead ruteado directo al realtor (crear_visita / lead-in de GHL por
+               -- zona): el agent_id se resolvió al crear. Sin esta rama, un lead
+               -- zona-only (listing_url sintético, sin fila en staging) no aparecería.
+               OR v.agent_id = $1
                OR EXISTS (
                     SELECT 1 FROM sponsorship sp
                     JOIN agency_member am ON am.agency_id = sp.agency_id AND am.agent_id = $1
@@ -1083,6 +1090,7 @@ async def actualizar_visita(
             UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado), updated_at = NOW()
             WHERE v.id = $4 AND (
                 v.listing_url IN (SELECT url FROM mis_urls)
+                OR v.agent_id = $1   -- lead ruteado directo (crear_visita / GHL lead-in)
                 OR EXISTS (
                     SELECT 1
                     FROM staging.stg_listings_unificado s

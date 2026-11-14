@@ -165,12 +165,29 @@ rotación de token por coma + IP allowlist opcional (`GHL_LEADS_ALLOWED_IPS`).
   - ✅ `GET /ghl/leads?since=&estado=&limit=` + `GET /ghl/leads/{id}` — lead calificado.
   - ✅ `GET /ghl/agents?since=&estado=&limit=` + `GET /ghl/agents/{id}` — realtor →
     Contact (first/last name, email, tel, estado, verificado, agent_internal_id).
+  - ✅ `GET /ghl/cierres?since=&verificado=&limit=` — feed de transacciones (ledger
+    `propiedad_evento`) para el cobro (paso 6): agent_id (a quién se cobra), precio,
+    matrícula, `from_lead` (atribución), zona/tipo/$m2. **Interno de billing** (≠
+    `/realtor/comparables` que oculta matrícula/agente a otros realtors). migr 0123+.
 - **Entrada (GHL empuja a REST nuestro, shape nuestro) — NO usa la firma del webhook:**
+  - ✅ `POST /ghl/leads` — **crea un lead NUEVO** ("cuando llega un lead" de ad/form/
+    portal de GHL). Rutea al realtor de zona por `listing_url` (inmueble concreto) o por
+    `zona_nivel`+`zona_codigo` (solo contacto+zona de interés) → aparece en su agenda.
+    **Idempotente** por `external_id` (los workflows de GHL reintentan). migr 0123
+    (`external_id` unique + `email` en `visita_solicitud`). Verificado DB: ruteo→agente,
+    lead en agenda, dedup, unrouted→agent_id NULL, sin leak cross-agente (10/10).
   - ✅ `POST /ghl/visitas/{id}/estado` — estado/fecha/resultado de la visita →
     `visita_solicitud`. Verificado: 401 · 200+persist · 400.
   - ✅ `POST /ghl/agents/{id}/estado` — aprobar/rechazar/activar realtor →
     `public.agent`. Guard 409 si se activa sin usuario vinculado (no 500).
     Verificado: 401 · 200 round-trip · 400 · 404 · 409-guard.
+
+  > **Gotcha (fix 2026-11-13):** `/realtor/agenda` y `PATCH /realtor/visitas/{id}` NO
+  > filtraban por `agent_id` — re-derivaban la propiedad del lead desde `listing_url` →
+  > staging → zona → sponsorship. Un lead zona-only (listing_url sintético
+  > `zona:<nivel>:<codigo>`, sin fila en staging) quedaba invisible aunque tuviera
+  > `agent_id`. Se agregó la rama `OR v.agent_id = $1` en ambas → el ruteo por agente
+  > ahora surte efecto (es lo que hace visible el lead-in de GHL en el dashboard).
 
 Todo verificado por `curl` contra API local, sin Talal.
 
@@ -215,9 +232,14 @@ leads (in/out), visita estado (in), agents (in/out). Ver §3a.
 **Lo que queda de nuestro lado (no bloqueado):**
 - [x] UI "marcar vendido" (paso 5) + sistema de INCENTIVOS (comparables gated +
       standing/ranking) — ✅ 2026-11-11, ver §1c-bis.
+- [x] `POST /ghl/leads` — lead-in nuevo (GHL → visita → agenda del realtor), ruteo
+      por url/zona, idempotente. ✅ 2026-11-13 (migr 0123 + rama agenda agent_id).
+- [x] `GET /ghl/cierres` — feed de transacciones para el cobro (paso 6). ✅ 2026-11-13.
 - [ ] (si se necesitan) `GET /ghl/listings?since=` pull — hoy el push nativo
-      `ghl_client.sync_listing` ya cubre salida de listings; `POST /ghl/cierres`
-      cuando exista la UI de cierre (feed de transacciones para cobro paso 6).
+      `ghl_client.sync_listing` ya cubre salida de listings.
+- [ ] **Intakes (owner/seller leads) in/out** — simétrico a `/ghl/leads` pero para
+      captación de propietarios → `intake` + asignador → Inbox (pool/asignados).
+      `POST /ghl/intakes` (crear) + `GET /ghl/intakes` (pull). Pendiente, no bloqueado.
 
 **Bloqueado en terceros (luego):** webhook firmado `/webhook/ghl`, sync nativo a
 GHL de evento/agent/visita (contrato Talal), `GHL_LEADS_TOKEN` en prod, cobro.
