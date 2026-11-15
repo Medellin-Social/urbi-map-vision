@@ -232,6 +232,11 @@ def scrape_rss_feed(feed_config: dict) -> tuple[list[dict], int]:
             print(f"  [-neg-t] {titulo[:70]}")
             continue
 
+        # Allowlist keyword: exige tema positivo. NO se quitó a propósito — es
+        # complementario al modelo: atrapa política-sin-keyword-negativa que el
+        # zero-shot deja pasar (ej. "Laura Sarabia y el lote...", "EPM pública")
+        # porque no sabe que son figuras/temas políticos. El modelo no reemplaza
+        # esto de forma confiable en títulos cortos (verificado 2026-11-14).
         if not es_noticia_relevante(titulo):
             print(f"  [-rel]   {titulo[:70]}")
             continue
