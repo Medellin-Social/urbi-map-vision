@@ -667,6 +667,7 @@ const ENTORNO_LABEL_EN: Record<string, string> = {
   "Zonas verdes": "Green areas", "Ruido día": "Daytime noise", "Policía": "Police",
   "Bomberos": "Fire station", "Internet": "Internet", "EnCicla": "EnCicla", "Canchas": "Courts",
   "Gimnasios": "Gyms", "Parques infantiles": "Playgrounds", "Universidades": "Universities", "Hospitales": "Hospitals",
+  "Zona activa": "Lively area",
 };
 
 function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null; tipoInmueble?: string | null }) {
@@ -773,7 +774,13 @@ function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { li
   if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: fl("Zonas verdes"), value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde") });
   // Ruido día: MENOS dB = mejor. Medellín es ruidosa (mediana 65dB) → la escala lo refleja.
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
-  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: fl("Ruido día"), value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") });
+  // Residencial: menos dB = mejor. Comercial: MÁS dB = zona activa = bueno (arco invertido),
+  // mismo criterio que tráfico→Visibilidad. Relabel a "Zona activa" para no confundir.
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push(
+    esComercial
+      ? { icon: "🔊", label: fl("Zona activa"), value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: 1 - scaleRatio(ruidoDb, "ruido") }
+      : { icon: "🔊", label: fl("Ruido día"),   value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") }
+  );
   // Policía / bomberos: MÁS cerca = mejor.
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
   if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: fl("Policía"), value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN") });
