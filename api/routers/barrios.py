@@ -155,6 +155,8 @@ class Conectividad(BaseModel):
     n_bares_500m: Optional[int] = None
     n_coworking_1km: Optional[int] = None
     n_gimnasios_1km: Optional[int] = None
+    n_universidades_2km: Optional[int] = None
+    n_hospitales_3km: Optional[int] = None
     n_yoga_1km: Optional[int] = None
     indice_nomada: Optional[float] = None
     # Colegios cercanos + scores estilo Zillow (walk/transit)
@@ -324,6 +326,8 @@ _BARRIO_MAP_SQL = """
         poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
+        poi.n_universidades_2km,
+        poi.n_hospitales_3km,
         poi.n_yoga_1km,
         poi.indice_nomada,
         poi.n_colegios_1km,
@@ -409,6 +413,8 @@ _BARRIO_SQL = """
         poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
+        poi.n_universidades_2km,
+        poi.n_hospitales_3km,
         poi.n_yoga_1km,
         poi.indice_nomada,
         poi.n_colegios_1km,
@@ -739,6 +745,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             n_bares_500m=_i(row, "n_bares_500m"),
             n_coworking_1km=_i(row, "n_coworking_1km"),
             n_gimnasios_1km=_i(row, "n_gimnasios_1km"),
+            n_universidades_2km=_i(row, "n_universidades_2km"),
+            n_hospitales_3km=_i(row, "n_hospitales_3km"),
             n_yoga_1km=_i(row, "n_yoga_1km"),
             indice_nomada=_f(row, "indice_nomada"),
             n_colegios_1km=_i(row, "n_colegios_1km"),

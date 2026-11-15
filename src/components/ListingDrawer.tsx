@@ -499,6 +499,11 @@ type BarrioFetch = {
     n_cafes_500m?: number | null;
     n_restaurantes_500m?: number | null;
     n_bares_500m?: number | null;
+    // Servicios/anclas de flujo (más=mejor). Gym/univ/hospital = res+com; parques_inf = res.
+    n_gimnasios_1km?: number | null;
+    n_parques_inf_500m?: number | null;
+    n_universidades_2km?: number | null;
+    n_hospitales_3km?: number | null;
     n_colegios_1km?: number | null;
     dist_colegio_km?: number | null;
     walk_score?: number | null;
@@ -661,6 +666,7 @@ const ENTORNO_LABEL_EN: Record<string, string> = {
   "Metro": "Metro", "Parque": "Park", "Centro comercial": "Shopping center",
   "Zonas verdes": "Green areas", "Ruido día": "Daytime noise", "Policía": "Police",
   "Bomberos": "Fire station", "Internet": "Internet", "EnCicla": "EnCicla", "Canchas": "Courts",
+  "Gimnasios": "Gyms", "Parques infantiles": "Playgrounds", "Universidades": "Universities", "Hospitales": "Hospitals",
 };
 
 function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null; tipoInmueble?: string | null }) {
@@ -781,6 +787,15 @@ function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { li
   if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: fl("EnCicla"), value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
   const nCanc = c?.n_canchas_1km;
   if (!esComercial && nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
+  // Servicios/anclas (más=mejor, solo si >0). Gym/univ/hospital = res+com; parques_inf = solo res.
+  const nGym = c?.n_gimnasios_1km;
+  if (nGym != null && nGym > 0) facts.push({ icon: "🏋️", label: fl("Gimnasios"), value: `${nGym}`, unit: "en 1 km", ratio: scaleRatio(nGym, "gimnasios") });
+  const nUni = c?.n_universidades_2km;
+  if (nUni != null && nUni > 0) facts.push({ icon: "🎓", label: fl("Universidades"), value: `${nUni}`, unit: "en 2 km", ratio: scaleRatio(nUni, "universidades") });
+  const nHosp = c?.n_hospitales_3km;
+  if (nHosp != null && nHosp > 0) facts.push({ icon: "🏥", label: fl("Hospitales"), value: `${nHosp}`, unit: "en 3 km", ratio: scaleRatio(nHosp, "hospitales") });
+  const nParqInf = c?.n_parques_inf_500m;
+  if (!esComercial && nParqInf != null && nParqInf > 0) facts.push({ icon: "🧒", label: fl("Parques infantiles"), value: `${nParqInf}`, unit: "en 500 m", ratio: scaleRatio(nParqInf, "parquesInf") });
 
   // Free: solo los 4 scores (tiles). Si no hay tiles y el usuario no es suscriptor
   // (o no hay detalle que mostrarle), no hay sección.
