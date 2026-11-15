@@ -495,6 +495,10 @@ type BarrioFetch = {
     dist_parque_km?: number | null;
     dist_mall_km?: number | null;
     indice_nomada?: number | null;
+    // Densidad comercial (flujo peatonal) — lente comercial. Ya en barrios_pois_distancia.
+    n_cafes_500m?: number | null;
+    n_restaurantes_500m?: number | null;
+    n_bares_500m?: number | null;
     n_colegios_1km?: number | null;
     dist_colegio_km?: number | null;
     walk_score?: number | null;
@@ -659,9 +663,13 @@ const ENTORNO_LABEL_EN: Record<string, string> = {
   "Bomberos": "Fire station", "Internet": "Internet", "EnCicla": "EnCicla", "Canchas": "Courts",
 };
 
-function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
+function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null; tipoInmueble?: string | null }) {
   const isSuscriptor = useIsSuscriptor();
   const { lang } = useLang();
+  // Lente comercial: local/oficina/bodega/lote. Prioriza flujo peatonal + visibilidad
+  // vehicular; quita colegios/canchas (irrelevantes para trabajar vs vivir).
+  // Anclado al inicio: "casa_lote" es residencial (casa), NO debe matchear por "lote".
+  const esComercial = /^(local|oficina|bodega|lote)\b/i.test(tipoInmueble ?? "");
   const fl = (es: string) => (lang === "en" ? ENTORNO_LABEL_EN[es] ?? es : es);
   // Los 4 scores (caminabilidad/transporte/tráfico/colegios) = PÚBLICOS para todos
   // (gancho estilo Zillow). El DETALLE (tiempos hora pico, ruido, policía/bomberos,
@@ -700,10 +708,29 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const traficoTile = traficoScore != null ? { label: "Tráfico", score: traficoScore, sub: traficoSub } : null;
   const movilidad = (parqueaderos ?? 0) > 0 ? [traficoTile, transitTile] : [transitTile, traficoTile];
 
+  // Lente comercial: flujo peatonal (cafés+rest+bares 500m) + visibilidad vehicular
+  // (tráfico alto = más tránsito = BUENO para un local, al revés que residencial).
+  const nFlujo = (c?.n_cafes_500m ?? 0) + (c?.n_restaurantes_500m ?? 0) + (c?.n_bares_500m ?? 0);
+  const hayFlujo = c?.n_cafes_500m != null || c?.n_restaurantes_500m != null || c?.n_bares_500m != null;
+  // Escala sqrt sobre distribución real (mediana ~2 locales/500m, p75~5, p90~13, long-tail):
+  // ámbar≈p75, verde≈p90. ponytail: raíz reparte el long-tail; recalibrar si cambia la base.
+  const flujoScore = hayFlujo ? Math.min(100, Math.round(Math.sqrt(nFlujo) * 22)) : null;
+  // jam_prom HERE p50~1.3, p90~2.4, max~6.4 (bajo en Medellín) → *32 reparte el rango real.
+  const visScore = trafico?.jam_prom != null ? Math.min(100, Math.round(trafico.jam_prom * 32)) : null;
+  // Sub-texto DERIVADO del mismo score que el color (bandas 40/70 de ScoreBar): evita
+  // la contradicción "barra roja con label Alta actividad".
+  const bandSub = (s: number, hi: string, mid: string, lo: string) => (s >= 70 ? hi : s >= 40 ? mid : lo);
+
   const tiles: { label: string; score: number; sub: string }[] = [];
   if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
-  for (const t of movilidad) if (t) tiles.push(t);
-  if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  if (esComercial) {
+    if (flujoScore != null) tiles.push({ label: "Flujo comercial", score: flujoScore, sub: bandSub(flujoScore, "Alta actividad comercial", "Actividad moderada", "Zona tranquila") });
+    if (visScore != null) tiles.push({ label: "Visibilidad", score: visScore, sub: bandSub(visScore, "Alto flujo vehicular", "Flujo moderado", "Poco tránsito") });
+    if (transitTile) tiles.push(transitTile);
+  } else {
+    for (const t of movilidad) if (t) tiles.push(t);
+    if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  }
 
   // Tiempo en auto a puntos clave, hora pico (#27). Minutos, no score. Solo
   // llega con barrio_id (vía /barrios/{id}); los listings sin barrio no lo traen.
@@ -753,7 +780,7 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const dEnc = c?.dist_encicla_km;
   if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: fl("EnCicla"), value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
   const nCanc = c?.n_canchas_1km;
-  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
+  if (!esComercial && nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
 
   // Free: solo los 4 scores (tiles). Si no hay tiles y el usuario no es suscriptor
   // (o no hay detalle que mostrarle), no hay sección.
@@ -1777,7 +1804,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       })()}
 
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
-      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} />}
+      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} tipoInmueble={listing.tipo_inmueble} />}
 
       {/* Valor estimado de mercado (Zestimate) — nivel REGISTRADO (suscrito=registro) */}
       {isSuscriptor && <ValorEstimado listing={listing} />}

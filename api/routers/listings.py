@@ -2033,6 +2033,9 @@ SELECT
     n_colegios_1km,
     dist_colegio_km,
     dist_metro_km,
+    n_cafe,
+    n_rest,
+    n_bar,
     LEAST(100, (
         LEAST(20, n_cafe * 4)
         + LEAST(20, n_rest * 2)
@@ -2068,6 +2071,10 @@ async def get_listing_entorno(
         "n_colegios_1km": row["n_colegios_1km"],
         "dist_colegio_km": float(row["dist_colegio_km"]) if row["dist_colegio_km"] is not None else None,
         "dist_metro_km": float(row["dist_metro_km"]) if row["dist_metro_km"] is not None else None,
+        # Densidad comercial (flujo peatonal) — lente comercial del drawer.
+        "n_cafes_500m": row["n_cafe"],
+        "n_restaurantes_500m": row["n_rest"],
+        "n_bares_500m": row["n_bar"],
     }}
 
 

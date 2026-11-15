@@ -151,6 +151,8 @@ class Conectividad(BaseModel):
     dist_parque_km: Optional[float] = None
     dist_mall_km: Optional[float] = None
     n_cafes_500m: Optional[int] = None
+    n_restaurantes_500m: Optional[int] = None
+    n_bares_500m: Optional[int] = None
     n_coworking_1km: Optional[int] = None
     n_gimnasios_1km: Optional[int] = None
     n_yoga_1km: Optional[int] = None
@@ -318,6 +320,8 @@ _BARRIO_MAP_SQL = """
         poi.dist_parque_km,
         poi.dist_mall_km,
         poi.n_cafes_500m,
+        poi.n_restaurantes_500m,
+        poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
         poi.n_yoga_1km,
@@ -401,6 +405,8 @@ _BARRIO_SQL = """
         poi.dist_parque_km,
         poi.dist_mall_km,
         poi.n_cafes_500m,
+        poi.n_restaurantes_500m,
+        poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
         poi.n_yoga_1km,
@@ -729,6 +735,8 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             dist_parque_km=_f(row, "dist_parque_km"),
             dist_mall_km=_f(row, "dist_mall_km"),
             n_cafes_500m=_i(row, "n_cafes_500m"),
+            n_restaurantes_500m=_i(row, "n_restaurantes_500m"),
+            n_bares_500m=_i(row, "n_bares_500m"),
             n_coworking_1km=_i(row, "n_coworking_1km"),
             n_gimnasios_1km=_i(row, "n_gimnasios_1km"),
             n_yoga_1km=_i(row, "n_yoga_1km"),
