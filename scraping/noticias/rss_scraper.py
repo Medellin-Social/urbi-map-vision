@@ -151,6 +151,14 @@ KEYWORDS_POSITIVOS = [
     "parque", "museo", "biblioteca", "tango",
     "jazz", "folclor", "danza", "cine",
     "libro", "literatura", "fotografía",
+    # Vocabulario cultural ampliado (2026-11-15) — recupera cultura que el keyword
+    # exacto perdía (Latin Grammy, Daddy Yankee, "sector gastronómico"...). Raíces
+    # verificadas sin colisión política; el modelo igual gatea después (+5 keep,
+    # 0 fugas en feed real). NO agregar "escenario"/"orquesta"/"galería": colisionan
+    # con política ("escenario electoral") o genérico ("galería de fotos").
+    "grammy", "gastronóm", "artista", "inaugura",
+    "canción", "álbum", "sinfón", "escultura",
+    "pintura", "poesía", "mural", "ópera", "coreograf",
 ]
 
 _CUTOFF_48H = timedelta(hours=48)
