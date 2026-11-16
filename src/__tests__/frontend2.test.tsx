@@ -116,7 +116,9 @@ describe("original listing link", () => {
     expect(container.querySelector("[data-testid=original-listing-link]")).toBeNull();
   });
   it("is wired in drawer, route page, popups and cards", () => {
-    for (const f of ["components/ListingDrawer.tsx", "routes/listing.$id.tsx", "components/ListingMiniPopup.tsx", "components/listing-popup/ListingPopup.tsx", "components/MLSPanel.tsx"])
+    // El mini popup (listing-popup/ListingPopup) ya NO lo lleva: su footer se quitó y un
+    // click abre el detalle completo (drawer), que sí tiene el enlace original.
+    for (const f of ["components/ListingDrawer.tsx", "routes/listing.$id.tsx", "components/ListingMiniPopup.tsx", "components/MLSPanel.tsx"])
       expect(src(f)).toContain("OriginalListingLink");
   });
 });

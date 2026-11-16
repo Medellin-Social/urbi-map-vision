@@ -1580,17 +1580,6 @@ export function MapFilterBar({
           </div>
         </div>
 
-        {/* Ocultar destacados */}
-        <label style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 44, marginBottom: 20, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={filters.ocultarDestacados}
-            onChange={(e) => onFiltersChange({ ocultarDestacados: e.target.checked })}
-            style={{ width: 22, height: 22 }}
-          />
-          <span style={{ fontSize: 14, color: C.ink }}>Ocultar destacados</span>
-        </label>
-
         {activeTab === "buy" && (
           <>
             {/* Baños */}
@@ -1995,18 +1984,6 @@ export function MapFilterBar({
                 })}
               </div>
 
-              {/* Ocultar destacados */}
-              <label style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36, marginBottom: 16, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  data-testid="ocultar-destacados"
-                  checked={filters.ocultarDestacados}
-                  onChange={(e) => onFiltersChange({ ocultarDestacados: e.target.checked })}
-                  style={{ width: 18, height: 18 }}
-                />
-                <span style={{ fontSize: 13, color: C.ink }}>Ocultar destacados</span>
-              </label>
-
               {/* PRO teasers — solo para usuarios sin plan pro */}
               {!isPro && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
@@ -2062,7 +2039,7 @@ export function MapFilterBar({
   // Comprar/Arrendar — vivía en el header (MapNavbar), ahora en el borde
   // izquierdo de esta barra al traer ComunidadNavbar como header nuevo.
   const opToggle = onTabChange && activeTab !== "sell" && (
-    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
       {(["buy", "rent"] as const).map((id) => (
         <button
           key={id}
@@ -2070,7 +2047,7 @@ export function MapFilterBar({
           style={{
             border: "none", background: activeTab === id ? C.teal : "transparent",
             color: activeTab === id ? "#fff" : C.muted, padding: "5px 12px",
-            minHeight: isMobile ? 44 : 30,
+            minHeight: isMobile ? 36 : 30,
             fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
           }}
         >

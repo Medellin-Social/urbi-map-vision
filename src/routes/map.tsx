@@ -25,7 +25,7 @@ import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ListingPopup } from "@/components/listing-popup/ListingPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
 import { MapTourModal } from "@/components/MapTourModal";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsMobile, useIsTablet } from "@/hooks/use-mobile";
 import { List, Map as MapIcon } from "@/lib/icons";
 import { AnimatePresence } from "framer-motion";
 
@@ -43,6 +43,11 @@ export const Route = createFileRoute("/map")({
 
 // Zillow-style popup rollout flag — false restores the old ListingMiniPopup.
 const NEW_POPUP = true;
+
+// Split-view (Zillow/Airbnb) rollout flag — true = lista 2-col izq + mapa card der
+// (solo ≥1024px). false = layout clásico (mapa full-screen + panel flotante).
+// Móvil/tablet conservan el toggle de pantalla completa en ambos casos.
+const SPLIT_LAYOUT = true;
 
 // Capa 2 (Interés): metadata normalizada del listing. tipo_inmueble revive
 // user_interests.tipo_inmueble_top (el cron lo lee) y da dimensiones al funnel.
@@ -142,6 +147,13 @@ function MapPageInner() {
   const hoverPinRef = useRef<((p: { lat: number; lng: number } | null) => void) | null>(null);
   const [activeBarrioInComune, setActiveBarrioInComune] = useState<string | null>(null);
   const flyToListingRef = useRef<((lat: number, lng: number, zoom?: number) => void) | null>(null);
+  // Deep-link ?listing= abre el drawer pero no tiene coords en el mount (solo el id).
+  // Esto marca que el drawer, al cargar su listing, debe volar a sus coords una sola
+  // vez — así al cerrar el drawer el pin queda centrado, no el mapa completo.
+  const flyOnDrawerLoadRef = useRef(false);
+  // Barrio a seleccionar en un deep-link ?listing=: se aplica cuando barriosRaw
+  // ya cargó (efecto abajo), así el polígono queda resaltado y el panel scoped.
+  const [deepLinkBarrioId, setDeepLinkBarrioId] = useState<number | null>(null);
   // Deep-link comuna/municipio (botón "Listings" del home) parseado en el mount;
   // se aplica vía handleComunaSelect cuando ya cargaron los barrios Y el mapa (ver efecto abajo).
   const deepLinkComunaRef = useRef<{ cd: number | null; municipio: string | null; nombre: string | null } | null>(null);
@@ -153,6 +165,13 @@ function MapPageInner() {
     if (typeof window === "undefined") return false;
     const p = new URLSearchParams(window.location.search);
     return !!(p.get("cd_comuna") || p.get("municipio"));
+  });
+  // Link compartido ?listing=: lo abre un visitante sin segmento guardado → el gate
+  // queda "open" (y oculto tras el drawer) → mapa paused → nunca carga los pins.
+  // Despausar solo para este caso; NO toca el gate ni los filtros (siguen su default).
+  const [isListingDeepLink] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return !!new URLSearchParams(window.location.search).get("listing");
   });
 
   // Listing detail modal
@@ -176,6 +195,8 @@ function MapPageInner() {
   // Desktop ignores it — map + right panel show together. Full-screen map means the
   // screen center IS the real center, so camera auto-select (FIX 1d) needs no offset.
   const isMobile = useIsMobile();
+  const isTablet = useIsTablet();           // < 1024px (phone + tablet portrait)
+  const showSplit = SPLIT_LAYOUT && !isTablet;  // split solo en desktop ≥1024
   const [mobileView, setMobileView] = useState<"map" | "list">("map");
 
   // Count active filters for hint banner
@@ -237,7 +258,7 @@ function MapPageInner() {
   // y el payload baja ~2.5x (carga más rápido en red real).
   const { data: globalData, isLoading: globalIsLoading } = useListings(
     null, 200, 0, mlsTipoOp, false, apiFilters,
-    undefined, undefined, globalSearch,
+    undefined, undefined, globalSearch || showSplit,
   );
 
   // Premium-expansion fetch — fires when premium filter is active to find nearby premium
@@ -286,6 +307,18 @@ function MapPageInner() {
   // map shows (clusters mode returns a capped list, points mode the points).
   const mergedListings = globalSearch ? (globalData?.listings ?? []) : viewportListings;
   const mergedLoading  = globalSearch ? globalIsLoading : (mlsBarrio ? mlsIsLoading : viewportLoading);
+
+  // Split-view: la columna izquierda SIEMPRE muestra algo (fusión zonas+listings).
+  // Prioridad: barrio seleccionado → viewport (bbox visible) → baseline del Valle.
+  const splitListings = mlsBarrio
+    ? mlsListings
+    : (viewportListings.length > 0 ? viewportListings : (globalData?.listings ?? []));
+  const splitLoading = mlsBarrio
+    ? mlsIsLoading
+    : (viewportListings.length === 0 && globalIsLoading) || viewportLoading;
+  const splitTotal = mlsBarrio
+    ? mlsData?.total
+    : (viewportListings.length > 0 ? undefined : globalData?.total);
   // Conteo real del backend (COUNT(*)), no el length de la página capada (200/500) — evita
   // mostrar "200" como si fuera el total cuando hay más resultados sin cargar.
   const realTotal = globalSearch ? globalData?.total : (mlsBarrio ? mlsData?.total : undefined);
@@ -332,7 +365,11 @@ function MapPageInner() {
     const lid = params.get("listing");
     if (lid) {
       const id = Number(lid);
-      if (!Number.isNaN(id)) setListingDetailId(id);
+      if (!Number.isNaN(id)) {
+        setListingDetailId(id);
+        flyOnDrawerLoadRef.current = true;
+        setHighlightedListingId(id);  // pin preseleccionado al llegar por link
+      }
     }
     // ?cd_comuna=N (Medellín) o ?municipio=X (Valle) → entrar directo a los listings
     // de esa comuna (botón "Listings" del mapa del home). Se difiere a un efecto que
@@ -366,6 +403,24 @@ function MapPageInner() {
     deepLinkComunaRef.current = null;
     handleComunaSelect(dl.cd, dl.nombre, dl.municipio);
   }, [mapReady, allBarrioOptions]);
+
+  // Deep-link ?listing=: selecciona el barrio del listing (misma vía que un click
+  // en el polígono) cuando barriosRaw ya lo tiene. El fly al pin corre aparte en
+  // onLocate — selección no mueve cámara (ver handleMapBarrioClick).
+  useEffect(() => {
+    if (deepLinkBarrioId == null) return;
+    const barrios = barriosRaw ?? [];
+    if (barrios.length === 0) return;  // aún cargando; reintenta cuando llegue barriosRaw
+    if (barrios.some((b) => b.barrio_id === deepLinkBarrioId)) {
+      handleMapBarrioClick(deepLinkBarrioId);  // resalta polígono + scope del panel al barrio
+    } else {
+      // Barrio fuera de barriosRaw (municipio externo: Girardota/Caldas/…): no se
+      // puede resaltar, pero igual entra a vista listings para mostrar los pins del viewport.
+      setMapView("listings");
+    }
+    setDeepLinkBarrioId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deepLinkBarrioId, barriosRaw]);
 
   useEffect(() => {
     const sync = () => setMostrarOportunidades(auth.get()?.mostrarOportunidades ?? false);
@@ -573,6 +628,7 @@ function MapPageInner() {
     }
     handleViewLevelChange("barrios", nombre, null, cd);
     setGlobalSearch(false);
+    track('comuna_click', { metadata: { cd_comuna: cd ?? undefined, nombre: nombre ?? undefined } });
     // Volar al centroide de la comuna (promedio de sus barrios).
     const barriosDeComuna = allBarrioOptions.filter((o) => o.cd_comuna === cd);
     if (barriosDeComuna.length > 0) {
@@ -602,6 +658,7 @@ function MapPageInner() {
       lng: item.lon ?? -75.5812,
     });
     if (item.lat && item.lon) flyToListingRef.current?.(item.lat, item.lon);
+    track('barrio_click', { barrio_id: item.barrio_id, metadata: { nombre: item.nombre, origen: 'list' } });
   }
 
   function handleBarrioFilter(barrioNombre: string | null) {
@@ -619,6 +676,10 @@ function MapPageInner() {
       flyToListingRef.current?.(listing.lat, listing.lon);
     }
     track('listing_preview', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined, metadata: listingInteresMeta(listing) });
+    track('card_click', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined, metadata: listingInteresMeta(listing) });
+    if (listing.fuente_display === "propio_pro" || listing.fuente_display === "agente_verificado") {
+      track('destacado_click', { entity_type: 'listing', entity_id: listing.url ?? undefined, barrio_id: listing.barrio_id ?? undefined });
+    }
     setMiniPopupData({ listing, x: screenX, y: screenY });
   }
 
@@ -651,11 +712,16 @@ function MapPageInner() {
     setMapView("listings");
     setSelected(null);
     setActiveBarrioInComune(null);
+    track('barrio_click', { barrio_id: barrioId, metadata: { nombre: n.nombre, origen: 'map' } });
   }
 
   return (
     <div className="relative h-dvh w-full max-w-full overflow-hidden bg-background">
-      <div className="absolute inset-0 z-0" data-tour="map-canvas">
+      <div
+        className={showSplit ? "absolute z-0 overflow-hidden" : "absolute inset-0 z-0"}
+        style={showSplit ? { top: "calc(var(--map-header-h, 53px) + 48px)", right: 0, bottom: 0, width: "60%", borderLeft: "1px solid #E5E0D5" } : undefined}
+        data-tour="map-canvas"
+      >
         <MapView
           selectedId={selected?.id ?? null}
           onSelect={setSelected}
@@ -677,7 +743,7 @@ function MapPageInner() {
           onViewportListingsChange={setViewportListings}
           onViewportLoadingChange={setViewportLoading}
           onBarrioClick={handleMapBarrioClick}
-          paused={segmentoGate !== "done"}
+          paused={segmentoGate !== "done" && !isListingDeepLink}
           onReady={() => setMapReady(true)}
           highlightedListingId={highlightedListingId}
           hoverPinRef={hoverPinRef}
@@ -689,11 +755,54 @@ function MapPageInner() {
         />
       </div>
 
+      {/* Split-view: columna izquierda con la lista (60%), siempre visible. El mapa
+          conserva su drill-down comuna→barrio; la lista se alimenta de barrio →
+          viewport(bbox) → baseline del Valle (fusión). */}
+      {showSplit && (
+        <div
+          className="absolute left-0 z-10 overflow-hidden"
+          style={{ top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0, width: "40%", background: "#FAF8F3" }}
+        >
+          <Suspense fallback={null}>
+            <MLSPanel
+              embedded
+              barrio={panelBarrio}
+              listings={splitListings}
+              total={splitTotal}
+              isLoading={splitLoading}
+              onBack={handleBackToZonas}
+              onListingSelect={handleListingSelect}
+              onListingHover={(l) => hoverPinRef.current?.(l?.lat && l?.lon ? { lat: l.lat, lng: l.lon } : null)}
+              highlightedListingId={highlightedListingId}
+              activeBarrioName={activeBarrioInComune}
+              onBarrioFilter={handleBarrioFilter}
+              allBarrios={allBarrioOptions}
+              onBarrioNavigate={handleBarrioNavigate}
+              radioUsadoMetros={mlsRadio}
+              barriosIncluidos={mlsBarriosIncluidos}
+              premiumExpanded={premiumExpanded}
+              premiumIsLoading={premiumIsLoading}
+              premiumRadio={premiumRadio}
+              premiumBarriosIncluidos={premiumBarriosIncluidos}
+              onPremiumExpand={setPremiumExpand}
+              externalFilters={sharedFilters}
+              onClearFilters={handleResetFilters}
+              activeComuna={activeComuna}
+              activeMunicipio={activeMunicipio}
+              comunaBarrios={comunaBarriosList}
+              onBackToComuna={handleBackToCommune}
+              onSelectBarrioInComune={handleSelectBarrioInComune}
+            />
+          </Suspense>
+        </div>
+      )}
+
       {/* Gradiente superior */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[108px] bg-gradient-to-b from-background/40 to-transparent" />
 
-      {/* Botón volver a comunas — solo en vista de barrios y cuando no estamos en listings */}
-      {viewLevel === "barrios" && mapView === "zonas" && (
+      {/* Botón volver a comunas — solo en vista de barrios y cuando no estamos en listings.
+          En split lo reemplaza el breadcrumb de la columna izquierda. */}
+      {!showSplit && viewLevel === "barrios" && mapView === "zonas" && (
         <button
           onClick={handleBack}
           className="absolute left-4 top-[calc(var(--map-header-h,53px)+56px)] z-20 flex items-center gap-2 rounded-lg border border-white/10 bg-background/80 px-3 py-2 text-sm font-medium text-foreground backdrop-blur-md transition hover:bg-background/95"
@@ -710,7 +819,7 @@ function MapPageInner() {
           z-index propio: el canvas del mapa (absolute, z-0) pinta por encima de
           elementos static sin esto — el ticker quedaba tapado. */}
       <div ref={headerRef} style={{ position: "relative", zIndex: 41 }}>
-        <ComunidadNavbar compact hideTicker />
+        <ComunidadNavbar hideTicker />
       </div>
       <MapFilterBar
         activeTab={activeTab}
@@ -733,8 +842,9 @@ function MapPageInner() {
           su z-120 bloqueaba clics del drawer — el corazón "no se podía activar". */}
       {segmentoGate === "open" && !listingDetailId && miniPopupData == null && <SegmentGate onChoose={handleChooseSegmento} />}
 
-      {/* Buscar en el Valle — filtros activos pero sin barrio/zona seleccionada */}
-      {activeFilterCount > 0 && !mlsBarrio && !globalSearch && activeTab !== "agent" && (
+      {/* Buscar en el Valle — filtros activos pero sin barrio/zona seleccionada.
+          En split la lista ya muestra el baseline del Valle → innecesario. */}
+      {!showSplit && activeFilterCount > 0 && !mlsBarrio && !globalSearch && activeTab !== "agent" && (
         <button
           onClick={() => { setGlobalSearch(true); setMapView("listings"); }}
           style={{
@@ -750,8 +860,9 @@ function MapPageInner() {
         </button>
       )}
 
-      {/* Vista 1: paneles normales */}
-      {mapView === "zonas" && (
+      {/* Vista 1: paneles normales (zona-exploración). En split se funden con la
+          columna izquierda → no se renderizan. */}
+      {!showSplit && mapView === "zonas" && (
         <>
           <Suspense fallback={null}>
             <FloatingPanel selected={selected} onClear={() => setSelected(null)} onSelect={setSelected} onGoToMLS={handleGoToMLS} />
@@ -765,7 +876,7 @@ function MapPageInner() {
           realmente juegue: al vivir en un && del padre, sin esto React
           desmonta el panel entero antes de que su animación interna corra. */}
       <AnimatePresence>
-        {mapView === "listings" && panelBarrio && (!isMobile || mobileView === "list") && (
+        {!showSplit && mapView === "listings" && panelBarrio && (!isMobile || mobileView === "list") && (
         <Suspense key="mls-panel" fallback={null}>
         <MLSPanel
           barrio={panelBarrio}
@@ -802,7 +913,7 @@ function MapPageInner() {
       {/* Toggle mapa ⟷ lista (solo móvil, en modo listings) — estilo Zillow */}
       {isMobile && mapView === "listings" && panelBarrio && (
         <button
-          onClick={() => setMobileView((v) => (v === "map" ? "list" : "map"))}
+          onClick={() => setMobileView((v) => { const to = v === "map" ? "list" : "map"; track('mobile_toggle_map_list', { metadata: { to } }); return to; })}
           data-tour="mobile-toggle-view"
           className="fixed left-1/2 z-30 flex -translate-x-1/2 items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white shadow-lg"
           style={{ bottom: 24, background: "#111418" }}
@@ -817,6 +928,9 @@ function MapPageInner() {
       {miniPopupData && (NEW_POPUP ? (
         <ListingPopup
           listing={miniPopupData.listing}
+          splitLayout={showSplit}
+          anchorX={miniPopupData.x}
+          anchorY={miniPopupData.y}
           onClose={() => setMiniPopupData(null)}
           onViewMore={(id) => {
             setMiniPopupData(null);
@@ -840,7 +954,16 @@ function MapPageInner() {
       {/* Mounted from the first open on (keeps its close animation afterwards). */}
       {(listingDetailId != null || drawerMounted) && (
         <Suspense fallback={null}>
-          <ListingDrawer listingId={listingDetailId} onClose={closeListingDetail} />
+          <ListingDrawer
+            listingId={listingDetailId}
+            onClose={closeListingDetail}
+            onLocate={(lat, lng, barrioId) => {
+              if (!flyOnDrawerLoadRef.current) return;
+              flyOnDrawerLoadRef.current = false;
+              flyToListingRef.current?.(lat, lng, 16);
+              setDeepLinkBarrioId(barrioId);  // selecciona el barrio cuando carguen los polígonos
+            }}
+          />
         </Suspense>
       )}
 

@@ -115,7 +115,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
         }}
       >
         {/* Comprar / Arrendar — the two tabs that stay on /map */}
-        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${NAV.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+        <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${NAV.border}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
           {(["buy", "rent"] as const).map((id) => {
             const active = activeTab === id;
             return (

@@ -10,7 +10,7 @@ export const PHRASES: Array<[string, string]> = [
   ["Elige el tipo de inmueble. Puedes cambiarlo cuando quieras.", "Choose the property type. You can change it anytime."],
   ["Locales, oficinas, bodegas y lotes", "Shops, offices, warehouses and lots"],
   ["Apartamentos y casas", "Apartments and houses"],
-  ["Ver publicación original", "View original listing"],
+  ["Ver publicación original", "View Original Listing"],
   ["Reportar enlace roto", "Report broken link"],
   ["Gracias, revisaremos este enlace.", "Thanks, we will check this link."],
   ["Ya recibimos tu reporte de este enlace.", "We already have your report for this link."],

@@ -42,3 +42,36 @@ describe("copyText never throws", () => {
     await expect(copyText("x")).resolves.toBeTypeOf("boolean");
   });
 });
+
+describe("deep-link ?listing= flies the map to the pin", () => {
+  it("map.tsx arms the fly on deep-link and the drawer reports coords to fly", () => {
+    const map = readFileSync("src/routes/map.tsx", "utf8");
+    // deep-link mount arms the one-shot fly
+    expect(map).toMatch(/flyOnDrawerLoadRef\.current\s*=\s*true/);
+    // the callback consumes it once and flies to the listing coords
+    expect(map).toMatch(/flyOnDrawerLoadRef\.current\s*=\s*false/);
+    expect(map).toContain("onLocate={(lat, lng, barrioId) =>");
+    // and selects the barrio (highlight + scope) via the polygon-click path
+    expect(map).toContain("setDeepLinkBarrioId(barrioId)");
+    expect(map).toMatch(/deepLinkBarrioId[\s\S]*?handleMapBarrioClick\(deepLinkBarrioId\)/);
+    const drawer = readFileSync("src/components/ListingDrawer.tsx", "utf8");
+    expect(drawer).toContain("onLocate?.(listing.lat, listing.lon, listing.barrio_id ?? null)");
+  });
+  it("preselects the pin on a shared link and keeps the highlight after pins load", () => {
+    const map = readFileSync("src/routes/map.tsx", "utf8");
+    // the shared listing's pin is preselected
+    expect(map).toMatch(/setHighlightedListingId\(id\)/);
+    // highlight survives the pins loading after it was set (reapplied on viewport setData)
+    const mv = readFileSync("src/components/MapView.tsx", "utf8");
+    expect(mv).toMatch(/highlightedIdRef\.current != null[\s\S]*?setFeatureState/);
+  });
+  it("shows the listing pins on a shared link (unpause + layer re-toggle after load)", () => {
+    const map = readFileSync("src/routes/map.tsx", "utf8");
+    // a ?listing= visitor with no stored segmento must not stay paused (gate hidden by drawer)
+    expect(map).toContain('paused={segmentoGate !== "done" && !isListingDeepLink}');
+    // deep-link flips mapView="listings" before "load"; the layer-visibility effect must
+    // re-run after mapLoaded or the listing pins stay visibility:"none".
+    const mv = readFileSync("src/components/MapView.tsx", "utf8");
+    expect(mv).toMatch(/toggle capas[\s\S]*?\}, \[mapView, mapLoaded\]\)/);
+  });
+});

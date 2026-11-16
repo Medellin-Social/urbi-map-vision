@@ -317,7 +317,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
         // En móvil left:16 choca con el botón "volver a comunas" (mismo lugar) — a la derecha en móvil.
         style={isMobile
           ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }
-          : { top: "calc(var(--map-header-h, 53px) + 56px)", left: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
+          : { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
       >
         <GraduationCap size={14} />
         Tutorial de la página
