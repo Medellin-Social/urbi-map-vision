@@ -1031,7 +1031,14 @@ SELECT
     l.precio_min_cluster::bigint       AS precio_min_cluster,
     l.precio_max_cluster::bigint       AS precio_max_cluster,
     liq.tiempo_estimado_venta,
-    cat.avaluo_m2_catastro::bigint     AS avaluo_m2_catastro,
+    -- $/m² catastral EFECTIVO según tipo (ver dbt listings_vs_catastro.sql):
+    --   apto → construcción/m²;  casa → construcción/m² + lote fijo repartido sobre el área.
+    CASE
+        WHEN l.tipo_inmueble = 'casa' AND cat.n_casa >= 20 AND l.area_m2 > 0
+            THEN round((cat.avaluo_m2_casa_constru + cat.avaluo_lote_casa / l.area_m2)::numeric)
+        WHEN l.tipo_inmueble = 'apartamento' AND cat.n_apto >= 20
+            THEN round(cat.avaluo_m2_apto::numeric)
+    END::bigint                        AS avaluo_m2_catastro,
     _lp_owner.tour_url,
     _lp_owner.video_url,
     COALESCE(_lp_owner.nombre_edificio, l.nombre_edificio) AS nombre_edificio
@@ -1048,11 +1055,17 @@ LEFT JOIN analytics.barrios_medianas m
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_liquidez liq ON liq.barrio_id = l.barrio_id
--- Avalúo catastral (Medellín) — agregado por comuna en listings_vs_catastro.
+-- Avalúo catastral (Medellín) — componentes por comuna y tipo en listings_vs_catastro.
+-- El $/m² efectivo se arma arriba con el área real del listing (casa reparte el lote fijo).
 LEFT JOIN (
-    SELECT cd_comuna, MAX(avaluo_m2_catastro) AS avaluo_m2_catastro
+    SELECT cd_comuna,
+           MAX(n_apto)                 AS n_apto,
+           MAX(avaluo_m2_apto)         AS avaluo_m2_apto,
+           MAX(n_casa)                 AS n_casa,
+           MAX(avaluo_m2_casa_constru) AS avaluo_m2_casa_constru,
+           MAX(avaluo_lote_casa)       AS avaluo_lote_casa
     FROM analytics.listings_vs_catastro
-    WHERE avaluo_m2_catastro > 0
+    WHERE cd_comuna IS NOT NULL
     GROUP BY cd_comuna
 ) cat ON cat.cd_comuna = bc.cd_comuna
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'

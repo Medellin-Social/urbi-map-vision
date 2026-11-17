@@ -1,10 +1,9 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useImpression } from "@/lib/impressions";
 import { OriginalListingLink } from "@/components/OriginalListingLink";
-import { originalListingUrl } from "@/lib/originalListing";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ArrowLeft, ExternalLink, Plus, Check, Heart } from "@/lib/icons";
+import { ArrowLeft, Plus, Check, Heart } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
@@ -307,16 +306,44 @@ function ListingCard({
         >
           {tipo}
         </span>
-        {/* Me gusta (favorito) sobre la foto — para todos, estilo Zillow */}
-        <button
-          onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-          aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
-          title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
-          className="absolute top-2 right-2 grid h-8 w-8 place-items-center rounded-full shadow-md transition hover:scale-110"
-          style={{ background: "rgba(255,255,255,0.92)", border: "0.5px solid #E5E0D5" }}
-        >
-          <Heart className="h-[18px] w-[18px]" style={{ color: isFav ? "#CE1126" : "#374151" }} />
-        </button>
+        {/* Acciones sobre la foto (top-right): me gusta (todos) + comparar/simular
+            (solo realtors) apilados debajo del corazón. */}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
+          <button
+            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+            aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+            title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+            className="grid h-8 w-8 place-items-center rounded-full shadow-md transition hover:scale-110"
+            style={{ background: "rgba(255,255,255,0.92)", border: "0.5px solid #E5E0D5" }}
+          >
+            <Heart className="h-[18px] w-[18px]" style={{ color: isFav ? "#CE1126" : "#374151" }} />
+          </button>
+          {isRealtor && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (selected) removeListing(listing.id);
+                else if (canAdd) addListing(listing);
+                else toast.info("Máximo 5 inmuebles en el comparador");
+              }}
+              title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
+              className="grid h-8 w-8 place-items-center rounded-full shadow-md transition hover:scale-110"
+              style={{ background: selected ? "#0F8A4F" : "rgba(255,255,255,0.92)", border: selected ? "none" : "0.5px solid #E5E0D5" }}
+            >
+              {selected ? <Check className="h-3.5 w-3.5 text-white" /> : <Plus className="h-3.5 w-3.5 text-[#0F8A4F]" />}
+            </button>
+          )}
+          {isRealtor && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSimular(); }}
+              title="Simular inversión"
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-md transition hover:scale-105"
+              style={{ background: "rgba(255,255,255,0.92)", border: "0.5px solid #E5E0D5", color: "#0F8A4F" }}
+            >
+              Simular
+            </button>
+          )}
+        </div>
       </div>
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
@@ -398,54 +425,6 @@ function ListingCard({
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between">
-        {listing.url && listing.disponible_actualmente !== false && originalListingUrl(listing) ? (
-          <OriginalListingLink listing={listing} variant="compact" report={false} />
-        ) : listing.disponible_actualmente === false ? (
-          <span
-            className="flex items-center gap-1 text-[10px] text-[#C9C4B8] capitalize cursor-default"
-            title="Este listing ya no está disponible, pero sus datos son referencia histórica del mercado"
-          >
-            {listing.fuente ?? "—"}
-            <ExternalLink className="h-2.5 w-2.5 opacity-30" />
-          </span>
-        ) : (
-          <span className="text-[10px] text-[#6E726E] capitalize">
-            {listing.fuente ?? "—"}
-          </span>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          {isRealtor && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSimular(); }}
-              className="rounded px-1.5 py-0.5 text-[10px] text-[#6E726E] border border-[#E5E0D5] hover:text-[#0F8A4F] hover:border-[#0F8A4F]/40 transition"
-              title="Simular inversión"
-            >
-              Simular
-            </button>
-          )}
-          {/* Agregar a comparación — exclusivo realtors */}
-          {isRealtor && (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                if (selected) removeListing(listing.id);
-                else if (canAdd) addListing(listing);
-                else toast.info("Máximo 5 inmuebles en el comparador");
-              }}
-              title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
-              className="grid h-8 w-8 place-items-center rounded-full border transition hover:scale-110"
-              style={{ background: selected ? "#0F8A4F" : "transparent", borderColor: selected ? "#0F8A4F" : "#E5E0D5" }}
-            >
-              {selected
-                ? <Check className="h-3.5 w-3.5 text-white" />
-                : <Plus className="h-3.5 w-3.5 text-[#0F8A4F]" />
-              }
-            </button>
-          )}
-        </div>
-      </div>
       </div>
     </div>
   );

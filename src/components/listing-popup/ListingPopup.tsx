@@ -108,8 +108,8 @@ export function ListingPopup({ listing, onClose, onViewMore, splitLayout = false
     // phones put the sheet's top over the header after a fly-to)
     posStyle = { left: 8, right: 8, bottom: 12, width: "auto", maxHeight: "min(72dvh, calc(100dvh - var(--map-header-h, 53px) - 80px))" };
   } else if (splitLayout) {
-    const mapLeft = window.innerWidth * 0.40;
-    const mapW = window.innerWidth * 0.60;
+    const mapLeft = window.innerWidth * 0.45;
+    const mapW = window.innerWidth * 0.55;
     const w = Math.min(320, mapW - 24);
     const pad = 10, gap = 14;
     // Horizontal: centrado en el pin, acotado a la región del mapa.
@@ -158,7 +158,7 @@ export function ListingPopup({ listing, onClose, onViewMore, splitLayout = false
         className={`fixed z-40 ${isMobile ? "bg-black/30" : ""}`}
         onClick={onClose}
         style={splitLayout && !isMobile
-          ? { left: "40%", right: 0, top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0 }
+          ? { left: "45%", right: 0, top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0 }
           : { inset: 0 }}
       />
 

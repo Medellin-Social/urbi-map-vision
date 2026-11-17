@@ -719,7 +719,7 @@ function MapPageInner() {
     <div className="relative h-dvh w-full max-w-full overflow-hidden bg-background">
       <div
         className={showSplit ? "absolute z-0 overflow-hidden" : "absolute inset-0 z-0"}
-        style={showSplit ? { top: "calc(var(--map-header-h, 53px) + 48px)", right: 0, bottom: 0, width: "60%", borderLeft: "1px solid #E5E0D5" } : undefined}
+        style={showSplit ? { top: "calc(var(--map-header-h, 53px) + 48px)", right: 0, bottom: 0, width: "55%", borderLeft: "1px solid #E5E0D5" } : undefined}
         data-tour="map-canvas"
       >
         <MapView
@@ -761,7 +761,7 @@ function MapPageInner() {
       {showSplit && (
         <div
           className="absolute left-0 z-10 overflow-hidden"
-          style={{ top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0, width: "40%", background: "#FAF8F3" }}
+          style={{ top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0, width: "45%", background: "#FAF8F3" }}
         >
           <Suspense fallback={null}>
             <MLSPanel
