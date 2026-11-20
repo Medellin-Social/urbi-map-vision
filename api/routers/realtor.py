@@ -314,6 +314,16 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                    l.tipo_inmueble::text AS tipo_inmueble, l.operacion::text AS operacion,
                    l.precio, COALESCE(l.barrio, '') AS barrio, l.estado::text AS estado,
                    l.updated_at,
+                   -- Ficha completa para pre-llenar el editor (editar todo, no solo unas cosas).
+                   l.descripcion, l.area_m2, l.habitaciones, l.banos, l.parqueaderos,
+                   l.estrato, l.antiguedad_anios, l.direccion_aprox, l.nombre_edificio,
+                   l.administracion, COALESCE(l.amenidades, '{{}}') AS amenidades,
+                   ST_Y(l.geom) AS lat, ST_X(l.geom) AS lon,
+                   -- es_propio: creado por el agente (/publicar) vs asignado de un lead
+                   -- (intake → listing, la propiedad es del owner). Solo para el badge.
+                   NOT EXISTS (SELECT 1 FROM intake i WHERE i.listing_id = l.id) AS es_propio,
+                   (SELECT m.url FROM listing_media m WHERE m.listing_id = l.id
+                      ORDER BY m.es_portada DESC, m.orden ASC LIMIT 1) AS cover_url,
                    COALESCE(v.total, 0) AS vistas_total, COALESCE(v.v30, 0) AS vistas_30d,
                    COALESCE(f.favoritos, 0) AS favoritos
             FROM listing l
@@ -336,7 +346,11 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
             agent.id,
         )
     return [
-        {**dict(r), "precio": float(r["precio"] or 0),
+        {**dict(r),
+         "precio": float(r["precio"] or 0),
+         "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
+         "administracion": float(r["administracion"]) if r["administracion"] is not None else None,
+         "amenidades": list(r["amenidades"] or []),
          "updated_at": r["updated_at"].isoformat()}
         for r in rows
     ]

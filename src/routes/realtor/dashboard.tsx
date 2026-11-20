@@ -3,7 +3,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { RouteError, RoutePending } from "@/components/RouteStates";
 import { useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, MapPinned, Plus } from "@/lib/icons";
+import { ArrowLeft, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2 } from "@/lib/icons";
 import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
@@ -669,7 +669,7 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
     nextStep = { texto: "Documentos al día. Completa la ficha para poder publicar." };
   } else {
     nextStep = {
-      texto: "Todo listo para enviar a revisión.",
+      texto: "Todo listo. Al publicar, aparece en el mapa al instante.",
       accion: { label: publicar.isPending ? "Publicando…" : "Publicar listing", run: () => publicar.mutate(d.id), pending: publicar.isPending },
     };
   }
@@ -781,13 +781,24 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
 
       {editandoFicha && asignado?.listing && (
         <EditorFichaModal
-          listingId={asignado.listing.id}
-          initial={{
+          listing={{
+            id: asignado.listing.id,
             titulo: asignado.listing.titulo ?? "",
-            precio: asignado.listing.precio ?? undefined,
-            area_m2: asignado.listing.area_m2 ?? undefined,
-            habitaciones: asignado.listing.habitaciones ?? undefined,
-            banos: asignado.listing.banos ?? undefined,
+            tipo_inmueble: asignado.listing.tipo_inmueble ?? "apartamento",
+            operacion: asignado.listing.operacion ?? "venta",
+            precio: asignado.listing.precio ?? 0,
+            barrio: asignado.listing.barrio ?? "",
+            estado: "borrador",
+            updated_at: new Date().toISOString(),
+            vistas_total: 0, vistas_30d: 0, favoritos: 0,
+            es_propio: false, cover_url: null,
+            descripcion: null,
+            area_m2: asignado.listing.area_m2,
+            habitaciones: asignado.listing.habitaciones,
+            banos: asignado.listing.banos,
+            parqueaderos: null, estrato: null, antiguedad_anios: null,
+            direccion_aprox: null, nombre_edificio: null, administracion: null,
+            amenidades: [], lat: null, lon: null,
           }}
           onClose={() => setEditandoFicha(false)}
         />
@@ -798,33 +809,72 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
 
 // ── Editor de ficha (modal compartido: inbox + mis listings) ───────────────────
 
-function EditorFichaModal({
-  listingId,
-  initial,
-  onClose,
-}: {
-  listingId: string;
-  initial: { titulo?: string; precio?: number; area_m2?: number; habitaciones?: number; banos?: number };
-  onClose: () => void;
-}) {
+const EDITOR_TIPO_OPTS: { v: string; l: string }[] = [
+  { v: "apartamento", l: "Apartamento" }, { v: "casa", l: "Casa" }, { v: "local", l: "Local" },
+  { v: "oficina", l: "Oficina" }, { v: "lote", l: "Lote" }, { v: "finca", l: "Finca" },
+];
+// Vocabulario de amenidades (int + ext) reusado de /publicar. Se duplica aquí a
+// propósito: importar desde publicar.tsx arrastraría su módulo mapbox de 1900 líneas.
+const EDITOR_AMENIDADES: string[] = [
+  "Balcón/terraza", "Depósito", "Cuarto de servicio", "Estudio", "Cocina integral",
+  "Walk-in closet", "Chimenea", "Jacuzzi", "Piscina", "Gimnasio", "Salón comunal",
+  "Portería 24h", "Vigilancia", "CCTV", "Zonas verdes", "Parque infantil", "BBQ", "Cancha deportiva",
+];
+
+// Editor de ficha COMPLETO: todos los campos que el backend (ListingPatchRequest)
+// acepta, pre-llenados con los valores actuales del listing. ponytail: el pin
+// (lat/lon) se deja fuera — editar la ubicación exacta necesita el mapa de /publicar;
+// aquí se edita la dirección aproximada (texto). Subir pin picker si se pide.
+function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
   const editar = useEditarListing();
-  const [titulo, setTitulo] = useState(initial.titulo ?? "");
-  const [precio, setPrecio] = useState(initial.precio ? String(initial.precio) : "");
-  const [area, setArea] = useState(initial.area_m2 ? String(initial.area_m2) : "");
-  const [hab, setHab] = useState(initial.habitaciones != null ? String(initial.habitaciones) : "");
-  const [banos, setBanos] = useState(initial.banos != null ? String(initial.banos) : "");
-  const [descripcion, setDescripcion] = useState("");
+  const num = (n: number | null | undefined) => (n != null ? String(n) : "");
+  const [titulo, setTitulo] = useState(listing.titulo ?? "");
+  const [tipo, setTipo] = useState<string>(listing.tipo_inmueble ?? "");
+  const [precio, setPrecio] = useState(num(listing.precio));
+  const [admin, setAdmin] = useState(num(listing.administracion));
+  const [area, setArea] = useState(num(listing.area_m2));
+  const [hab, setHab] = useState(num(listing.habitaciones));
+  const [banos, setBanos] = useState(num(listing.banos));
+  const [parqs, setParqs] = useState(num(listing.parqueaderos));
+  const [estrato, setEstrato] = useState(num(listing.estrato));
+  const [antiguedad, setAntiguedad] = useState(num(listing.antiguedad_anios));
+  const [edificio, setEdificio] = useState(listing.nombre_edificio ?? "");
+  const [direccion, setDireccion] = useState(listing.direccion_aprox ?? "");
+  const [descripcion, setDescripcion] = useState(listing.descripcion ?? "");
+  const [amenidades, setAmenidades] = useState<string[]>(listing.amenidades ?? []);
   const [fotos, setFotos] = useState<File[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
+  const toggleAmen = (a: string) =>
+    setAmenidades((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
+
   const guardar = async () => {
     const campos: import("@/lib/realtorApi").ListingPatch = {};
-    if (titulo.trim() && titulo.trim() !== (initial.titulo ?? "")) campos.titulo = titulo.trim();
-    if (precio && Number(precio) > 0 && Number(precio) !== initial.precio) campos.precio = Number(precio);
-    if (area && Number(area) > 0 && Number(area) !== initial.area_m2) campos.area_m2 = Number(area);
-    if (hab && Number(hab) !== initial.habitaciones) campos.habitaciones = Number(hab);
-    if (banos && Number(banos) !== initial.banos) campos.banos = Number(banos);
-    if (descripcion.trim()) campos.descripcion = descripcion.trim();
+    const asNum = (s: string) => (s.trim() === "" ? null : Number(s));
+    const diffStr = (val: string, orig: string | null, key: keyof import("@/lib/realtorApi").ListingPatch) => {
+      const v = val.trim();
+      if (v !== (orig ?? "")) (campos as Record<string, unknown>)[key] = v;
+    };
+    const diffNum = (s: string, orig: number | null, key: keyof import("@/lib/realtorApi").ListingPatch) => {
+      const v = asNum(s);
+      if (v !== orig && v != null) (campos as Record<string, unknown>)[key] = v;
+    };
+
+    if (titulo.trim() && titulo.trim() !== (listing.titulo ?? "")) campos.titulo = titulo.trim();
+    if (tipo && tipo !== listing.tipo_inmueble) campos.tipo_inmueble = tipo;
+    if (precio && Number(precio) > 0 && Number(precio) !== listing.precio) campos.precio = Number(precio);
+    diffNum(admin, listing.administracion, "administracion");
+    diffNum(area, listing.area_m2, "area_m2");
+    diffNum(hab, listing.habitaciones, "habitaciones");
+    diffNum(banos, listing.banos, "banos");
+    diffNum(parqs, listing.parqueaderos, "parqueaderos");
+    diffNum(estrato, listing.estrato, "estrato");
+    diffNum(antiguedad, listing.antiguedad_anios, "antiguedad_anios");
+    diffStr(edificio, listing.nombre_edificio, "nombre_edificio");
+    diffStr(direccion, listing.direccion_aprox, "direccion_aprox");
+    diffStr(descripcion, listing.descripcion, "descripcion");
+    if (JSON.stringify([...amenidades].sort()) !== JSON.stringify([...(listing.amenidades ?? [])].sort()))
+      campos.amenidades = amenidades;
 
     if (Object.keys(campos).length === 0 && fotos.length === 0) {
       setErr("No hay cambios para guardar");
@@ -832,7 +882,7 @@ function EditorFichaModal({
     }
     setErr(null);
     try {
-      await editar.mutateAsync({ listingId, campos, fotos });
+      await editar.mutateAsync({ listingId: listing.id, campos, fotos });
       onClose();
     } catch (e) {
       setErr(e instanceof Error ? e.message : "No se pudo guardar");
@@ -841,42 +891,104 @@ function EditorFichaModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="Editar ficha del listing">
-      <div className="absolute inset-0 bg-black/40" />
+      <div className="absolute inset-0 bg-black/50" />
       <div
-        className="paper-theme relative w-full max-w-md rounded-lg border border-border bg-background p-5 shadow-xl"
+        className="paper-theme relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border bg-background shadow-xl"
+        style={{ borderColor: C.line }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">Editar ficha</h3>
-
-        <div className="mt-4 grid gap-3">
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Título del aviso
-            <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={inputCls} placeholder="Apartamento en El Poblado con balcón" />
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Precio (COP)
-              <input inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Área (m²)
-              <input inputMode="numeric" value={area} onChange={(e) => setArea(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Habitaciones
-              <input inputMode="numeric" value={hab} onChange={(e) => setHab(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </label>
-            <label className="grid gap-1 text-xs text-muted-foreground">
-              Baños
-              <input inputMode="numeric" value={banos} onChange={(e) => setBanos(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </label>
+        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: C.line }}>
+          <div>
+            <h3 className="text-base font-semibold text-foreground">Editar ficha</h3>
+            <p className="text-xs capitalize text-muted-foreground">{listing.operacion} · {listing.barrio || "sin barrio"}</p>
           </div>
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Descripción (opcional)
-            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} min-h-20 resize-y`} />
-          </label>
-          <label className="grid gap-1 text-xs text-muted-foreground">
-            Agregar fotos {fotos.length > 0 && `(${fotos.length} seleccionadas)`}
+          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/50 hover:text-foreground">
+            <X className="h-5 w-5" />
+          </button>
+        </div>
+
+        <div className="grid gap-5 overflow-y-auto px-5 py-5">
+          <FieldGroup title="Datos del aviso">
+            <Field label="Título del aviso" className="sm:col-span-2">
+              <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={inputCls} placeholder="Apartamento en El Poblado con balcón" />
+            </Field>
+            <Field label="Tipo de inmueble">
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputCls}>
+                {EDITOR_TIPO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </select>
+            </Field>
+            <Field label="Precio (COP)">
+              <input inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+            <Field label="Administración (COP/mes)">
+              <input inputMode="numeric" value={admin} onChange={(e) => setAdmin(e.target.value.replace(/\D/g, ""))} className={inputCls} placeholder="opcional" />
+            </Field>
+          </FieldGroup>
+
+          <FieldGroup title="Características">
+            <Field label="Área (m²)">
+              <input inputMode="numeric" value={area} onChange={(e) => setArea(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+            <Field label="Habitaciones">
+              <input inputMode="numeric" value={hab} onChange={(e) => setHab(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+            <Field label="Baños">
+              <input inputMode="numeric" value={banos} onChange={(e) => setBanos(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+            <Field label="Parqueaderos">
+              <input inputMode="numeric" value={parqs} onChange={(e) => setParqs(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+            <Field label="Estrato">
+              <select value={estrato} onChange={(e) => setEstrato(e.target.value)} className={inputCls}>
+                <option value="">—</option>
+                {["1", "2", "3", "4", "5", "6"].map((e) => <option key={e} value={e}>{e}</option>)}
+              </select>
+            </Field>
+            <Field label="Antigüedad (años)">
+              <input inputMode="numeric" value={antiguedad} onChange={(e) => setAntiguedad(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            </Field>
+          </FieldGroup>
+
+          <FieldGroup title="Ubicación">
+            <Field label="Nombre del edificio / unidad">
+              <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={inputCls} placeholder="Torre Alción" />
+            </Field>
+            <Field label="Dirección aproximada">
+              <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className={inputCls} placeholder="Cra. 34 # 7 Sur" />
+            </Field>
+          </FieldGroup>
+
+          <div>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amenidades</h4>
+            <div className="flex flex-wrap gap-2">
+              {EDITOR_AMENIDADES.map((a) => {
+                const on = amenidades.includes(a);
+                return (
+                  <button
+                    key={a}
+                    type="button"
+                    aria-pressed={on}
+                    onClick={() => toggleAmen(a)}
+                    className="inline-flex min-h-[32px] items-center rounded-full border px-3 text-xs font-medium transition"
+                    style={on
+                      ? { background: C.brand, borderColor: C.brand, color: "#fff" }
+                      : { background: C.soft, borderColor: C.line, color: C.sub }}
+                  >
+                    {a}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <Field label="Descripción" className="sm:col-span-2">
+            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} min-h-24 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
+          </Field>
+
+          <div>
+            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Agregar fotos {fotos.length > 0 && <span className="text-foreground">({fotos.length} seleccionadas)</span>}
+            </h4>
             <input
               type="file"
               accept="image/*"
@@ -884,25 +996,44 @@ function EditorFichaModal({
               onChange={(e) => setFotos(Array.from(e.target.files ?? []))}
               className="text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground"
             />
-          </label>
+            <p className="mt-1 text-xs text-muted-foreground">Se añaden a las existentes; la primera queda como portada.</p>
+          </div>
         </div>
 
-        {err && <p className="mt-3 text-sm text-danger">{err}</p>}
+        {err && <p className="px-5 text-sm text-danger">{err}</p>}
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
+        <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: C.line }}>
+          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
             Cancelar
           </button>
           <button
             onClick={guardar}
             disabled={editar.isPending}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
+            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
           >
-            {editar.isPending ? "Guardando…" : "Guardar"}
+            {editar.isPending ? "Guardando…" : "Guardar cambios"}
           </button>
         </div>
       </div>
     </div>
+  );
+}
+
+function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
+      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
+    </div>
+  );
+}
+
+function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={`grid gap-1 text-xs text-muted-foreground ${className}`}>
+      {label}
+      {children}
+    </label>
   );
 }
 
@@ -1329,6 +1460,12 @@ function ListingsTab() {
     () => (filtro === "todos" ? data ?? [] : (data ?? []).filter((l) => l.estado === filtro)),
     [data, filtro],
   );
+  // Conteo por estado para las chips de filtro (solo los estados con al menos uno).
+  const counts = useMemo(() => {
+    const c: Record<string, number> = {};
+    for (const l of data ?? []) c[l.estado] = (c[l.estado] ?? 0) + 1;
+    return c;
+  }, [data]);
 
   const onEliminar = (l: MiListing) => {
     // ponytail: confirm nativo — accesible y sin modal extra; subir a modal si se pide.
@@ -1342,33 +1479,47 @@ function ListingsTab() {
     }
   };
 
+  const busy = cambiarEstado.isPending || eliminar.isPending;
+
   return (
     <section>
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <SectionHeader title="Mis listings" count={data?.length} />
+      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 className="text-lg font-semibold tracking-tight" style={{ color: C.ink }}>Mis listings</h2>
+          <p className="text-[13px]" style={{ color: C.sub }}>
+            Tus inmuebles publicados y en proceso. Edita la ficha completa de cualquiera.
+          </p>
+        </div>
         <Link
           to="/publicar"
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white transition hover:opacity-90"
+          style={{ background: C.brand }}
         >
           <Plus className="h-4 w-4" /> Crear listing
         </Link>
       </div>
 
       {!isLoading && data && data.length > 0 && (
-        <div className="mb-4 flex flex-wrap gap-4 border-b border-border text-sm">
-          {ESTADO_FILTER_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setFiltro(opt.value)}
-              className={`border-b-2 pb-2 transition ${
-                filtro === opt.value
-                  ? "border-primary font-semibold text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="mb-5 flex flex-wrap gap-2">
+          {ESTADO_FILTER_OPTIONS.map((opt) => {
+            const n = opt.value === "todos" ? data.length : counts[opt.value] ?? 0;
+            if (opt.value !== "todos" && n === 0) return null;
+            const active = filtro === opt.value;
+            return (
+              <button
+                key={opt.value}
+                onClick={() => setFiltro(opt.value)}
+                aria-pressed={active}
+                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition"
+                style={active
+                  ? { background: C.ink, borderColor: C.ink, color: "#fff" }
+                  : { background: C.card, borderColor: C.line, color: C.sub }}
+              >
+                {opt.label}
+                <span className="tabular-nums" style={{ opacity: 0.7 }}>{n}</span>
+              </button>
+            );
+          })}
         </div>
       )}
 
@@ -1387,13 +1538,12 @@ function ListingsTab() {
       )}
 
       {!isLoading && !isError && visible.length > 0 && (
-        <div className="overflow-hidden rounded-lg border border-border bg-surface">
-          {visible.map((l, i) => (
-            <ListingRow
+        <div className="grid gap-3">
+          {visible.map((l) => (
+            <ListingCard
               key={l.id}
               listing={l}
-              first={i === 0}
-              busy={cambiarEstado.isPending || eliminar.isPending}
+              busy={busy}
               onEditar={() => setEditando(l)}
               onMarcarVendido={() => setCerrando(l)}
               onPausar={() => cambiarEstado.mutate({ listingId: l.id, estado: "pausado" })}
@@ -1405,11 +1555,7 @@ function ListingsTab() {
       )}
 
       {editando && (
-        <EditorFichaModal
-          listingId={editando.id}
-          initial={{ titulo: editando.titulo, precio: editando.precio }}
-          onClose={() => setEditando(null)}
-        />
+        <EditorFichaModal listing={editando} onClose={() => setEditando(null)} />
       )}
 
       {cerrando && (
@@ -1545,68 +1691,126 @@ function RowAction({ onClick, disabled, variant = "ghost", title, children }: {
   );
 }
 
-function ListingRow({ listing: l, first, busy, onEditar, onMarcarVendido, onPausar, onReactivar, onEliminar }: {
-  listing: MiListing; first: boolean; busy?: boolean;
+// Ícono de portada según el tipo de inmueble (placeholder cuando no hay foto).
+function tipoIcon(tipo: string) {
+  if (tipo === "casa" || tipo === "finca") return Home;
+  if (tipo === "local" || tipo === "oficina" || tipo === "bodega") return Store;
+  if (tipo === "lote") return MapPin;
+  return Building2;
+}
+
+function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, onReactivar, onEliminar }: {
+  listing: MiListing; busy?: boolean;
   onEditar: () => void; onMarcarVendido: () => void; onPausar: () => void; onReactivar: () => void; onEliminar: () => void;
 }) {
   const estado = ESTADO_META[l.estado];
   const puedeCerrar = l.estado === "publicado" || l.estado === "pausado";
-  // Métricas por listing. "Aperturas" = aberturas de detalle (listing_view, histórico);
-  // "30d" = aperturas recientes; "Favoritos" = veces guardado.
-  const metrica = (valor: number, label: string) => (
-    <div className="text-right">
-      <div className="text-sm font-semibold tabular-nums text-foreground">{valor.toLocaleString("es-CO")}</div>
-      <div className="text-[11px] text-muted-foreground">{label}</div>
-    </div>
+  const PlaceIcon = tipoIcon(l.tipo_inmueble);
+
+  const spec = (val: number | null, suffix: string, Icon: typeof Bed) =>
+    val == null ? null : (
+      <span className="inline-flex items-center gap-1 text-xs" style={{ color: C.sub }}>
+        <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{val}{suffix}
+      </span>
+    );
+  const metrica = (Icon: typeof Eye, val: number, title: string) => (
+    <span className="inline-flex items-center gap-1 text-xs tabular-nums" style={{ color: C.sub }} title={title}>
+      <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{val.toLocaleString("es-CO")}
+    </span>
   );
+
   return (
     <div
       data-testid="listing-row"
       data-estado={l.estado}
-      className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 ${
-        first ? "" : "border-t border-border/70"
-      }`}
+      className="flex flex-col gap-3 rounded-2xl p-3 transition hover:shadow-sm sm:p-4"
+      style={{ background: C.card, border: `1px solid ${C.line}` }}
     >
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-          <span className="truncate text-sm font-medium text-foreground">{l.titulo}</span>
-          <span data-testid="listing-estado" className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
-            {estado.label}
-          </span>
+      <div className="flex gap-3 sm:gap-4">
+        {/* Portada */}
+        <div
+          className="relative grid h-20 w-28 shrink-0 place-items-center overflow-hidden rounded-xl sm:h-24 sm:w-36"
+          style={{ background: C.soft }}
+        >
+          {l.cover_url ? (
+            <img src={l.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+          ) : (
+            <PlaceIcon className="h-7 w-7" style={{ color: C.muted }} />
+          )}
+          {!l.cover_url && (
+            <span className="absolute bottom-1 right-1 inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[10px]"
+              style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>
+              <Camera className="h-2.5 w-2.5" /> Sin foto
+            </span>
+          )}
         </div>
-        <div className="mt-0.5 text-sm capitalize text-muted-foreground">
-          {l.tipo_inmueble} · {l.operacion} · {l.barrio}
+
+        {/* Info */}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span data-testid="listing-estado"
+              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
+              {estado.label}
+            </span>
+            <span className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
+              style={l.es_propio
+                ? { borderColor: C.brand, background: "rgba(15,138,79,0.08)", color: C.brand }
+                : { borderColor: C.line, background: C.soft, color: C.muted }}
+              title={l.es_propio ? "Creado por ti" : "Asignado de un lead — representas al propietario"}>
+              {l.es_propio ? "Propio" : "Asignado"}
+            </span>
+          </div>
+          <h3 className="mt-1 truncate text-sm font-semibold" style={{ color: C.ink }}>{l.titulo}</h3>
+          <p className="mt-0.5 truncate text-xs capitalize" style={{ color: C.sub }}>
+            {l.tipo_inmueble} · {l.operacion}{l.barrio ? ` · ${l.barrio}` : ""}
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+            {spec(l.area_m2, " m²", Maximize2)}
+            {spec(l.habitaciones, " hab", Bed)}
+            {spec(l.banos, " baños", Bath)}
+            {spec(l.parqueaderos, " parq", Car)}
+          </div>
         </div>
-        <div className="mt-0.5 text-xs text-muted-foreground">Actualizado {relativeTime(l.updated_at)}</div>
+
+        {/* Precio + métricas */}
+        <div className="flex shrink-0 flex-col items-end justify-between text-right">
+          <div className="text-base font-bold tabular-nums sm:text-lg" style={{ color: C.ink }}>
+            {formatCOP(l.precio)}
+          </div>
+          <div className="mt-2 hidden flex-col items-end gap-1 sm:flex">
+            {metrica(Eye, l.vistas_total, "Aperturas de detalle (total)")}
+            {metrica(Heart, l.favoritos ?? 0, "Veces guardado en favoritos")}
+            <span className="text-[11px]" style={{ color: C.muted }}>{l.vistas_30d.toLocaleString("es-CO")} en 30d</span>
+          </div>
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 sm:shrink-0 sm:justify-end sm:gap-x-6">
-        <div className="text-right text-base font-semibold tabular-nums text-foreground">
-          {formatCOP(l.precio)}
-        </div>
-        {/* Métricas por listing: aperturas (total), recientes (30d), favoritos. */}
-        {metrica(l.vistas_total, "aperturas")}
-        {metrica(l.vistas_30d, "30d")}
-        {metrica(l.favoritos ?? 0, "favoritos")}
+      {/* Métricas en móvil (bajo la info) */}
+      <div className="flex items-center gap-3 sm:hidden">
+        {metrica(Eye, l.vistas_total, "Aperturas de detalle (total)")}
+        {metrica(Heart, l.favoritos ?? 0, "Veces guardado en favoritos")}
+        <span className="text-[11px]" style={{ color: C.muted }}>{l.vistas_30d.toLocaleString("es-CO")} en 30d</span>
+      </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {l.estado !== "cerrado" && (
-            <RowAction onClick={onEditar} disabled={busy}>Editar</RowAction>
-          )}
-          {l.estado === "publicado" && (
-            <RowAction onClick={onPausar} disabled={busy} title="Ocultar temporalmente este listing">Pausar</RowAction>
-          )}
-          {l.estado === "pausado" && (
-            <RowAction onClick={onReactivar} disabled={busy} variant="primary" title="Volver a publicar">Reactivar</RowAction>
-          )}
-          {puedeCerrar && (
-            <RowAction onClick={onMarcarVendido} disabled={busy} variant="primary"
-              title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje">
-              Marcar vendido
-            </RowAction>
-          )}
-          <RowAction onClick={onEliminar} disabled={busy} variant="danger" title="Eliminar este listing">Eliminar</RowAction>
-        </div>
+      {/* Acciones */}
+      <div className="flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: C.line }}>
+        <span className="mr-auto text-[11px]" style={{ color: C.muted }}>Actualizado {relativeTime(l.updated_at)}</span>
+        {l.estado !== "cerrado" && (
+          <RowAction onClick={onEditar} disabled={busy} variant="primary" title="Editar la ficha completa">Editar</RowAction>
+        )}
+        {l.estado === "publicado" && (
+          <RowAction onClick={onPausar} disabled={busy} title="Ocultar temporalmente este listing">Pausar</RowAction>
+        )}
+        {l.estado === "pausado" && (
+          <RowAction onClick={onReactivar} disabled={busy} title="Volver a publicar">Reactivar</RowAction>
+        )}
+        {puedeCerrar && (
+          <RowAction onClick={onMarcarVendido} disabled={busy}
+            title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje">
+            Marcar vendido
+          </RowAction>
+        )}
+        <RowAction onClick={onEliminar} disabled={busy} variant="danger" title="Eliminar este listing">Eliminar</RowAction>
       </div>
     </div>
   );

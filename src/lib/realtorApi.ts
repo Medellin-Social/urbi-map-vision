@@ -95,6 +95,23 @@ export type MiListing = {
   vistas_total: number;    // aperturas de detalle (event_type='listing_view')
   vistas_30d: number;
   favoritos: number;       // veces guardado como favorito (raw.favoritos_listings)
+  // es_propio: creado por el agente vs asignado de un lead (owner). Solo badge.
+  es_propio: boolean;
+  cover_url: string | null;
+  // Ficha completa — pre-llena el editor (editar todo, no solo unas cosas).
+  descripcion: string | null;
+  area_m2: number | null;
+  habitaciones: number | null;
+  banos: number | null;
+  parqueaderos: number | null;
+  estrato: number | null;
+  antiguedad_anios: number | null;
+  direccion_aprox: string | null;
+  nombre_edificio: string | null;
+  administracion: number | null;
+  amenidades: string[];
+  lat: number | null;
+  lon: number | null;
 };
 
 // Inteligencia de barrio del realtor = mismo shape que el panel público de
@@ -374,12 +391,18 @@ let _pool: ItemPool[] = [
 
 // ponytail: mock stateful solo para el journey de lifecycle (editar/pausar/
 // reactivar/eliminar/cerrar). Mutable a nivel módulo; se resetea al recargar.
+const _mockFicha = {
+  descripcion: null, area_m2: null, habitaciones: null, banos: null, parqueaderos: null,
+  estrato: null, antiguedad_anios: null, direccion_aprox: null, nombre_edificio: null,
+  administracion: null, amenidades: [] as string[], lat: null, lon: null,
+  es_propio: true, cover_url: null,
+};
 let _mockListings: MiListing[] = [
-  { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z", vistas_total: 1240, vistas_30d: 312, favoritos: 48 },
-  { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0 },
-  { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0 },
-  { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z", vistas_total: 85,   vistas_30d: 4,   favoritos: 3 },
-  { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z", vistas_total: 2100, vistas_30d: 12,  favoritos: 71 },
+  { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z", vistas_total: 1240, vistas_30d: 312, favoritos: 48, ...{ ..._mockFicha, descripcion: "Apartamento remodelado con balcón y vista a la ciudad.", area_m2: 95, habitaciones: 3, banos: 2, parqueaderos: 1, estrato: 6, antiguedad_anios: 8, direccion_aprox: "Cra. 34 # 7 Sur", nombre_edificio: "Torre Alción", administracion: 650_000, amenidades: ["Piscina", "Gimnasio", "Portería 24h", "Balcón/terraza"] } },
+  { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0, ...{ ..._mockFicha, es_propio: false, area_m2: 180, habitaciones: 4, banos: 3, parqueaderos: 2, estrato: 5 } },
+  { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0, ..._mockFicha },
+  { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z", vistas_total: 85,   vistas_30d: 4,   favoritos: 3, ...{ ..._mockFicha, es_propio: false, area_m2: 120 } },
+  { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z", vistas_total: 2100, vistas_30d: 12,  favoritos: 71, ..._mockFicha },
 ];
 const _touch = (id: string, patch: Partial<MiListing>) => {
   _mockListings = _mockListings.map((l) => (l.id === id ? { ...l, ...patch, updated_at: new Date().toISOString() } : l));
