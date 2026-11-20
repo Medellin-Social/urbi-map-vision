@@ -19,11 +19,8 @@ const BASE_TABS: { id: MapTab; label: string; route?: string }[] = [
   { id: "agent",      label: "Encuentra un agente", route: "/agentes" },
 ];
 
-// Solo agentes/agencias ven estos — herramientas profesionales, no para el consumidor final.
-const AGENTE_TABS: { id: MapTab; label: string; route?: string }[] = [
-  { id: "simulator",  label: "Simular", route: "/simulador" },
-  { id: "comparador", label: "Comparar", route: "/comparador" },
-];
+// Simulador/Comparador ya NO se exponen en el navbar — son herramientas del dashboard
+// del realtor (sección Herramientas). Se accede desde /realtor/dashboard.
 
 // Mismos links/hrefs que ComunidadNavbar (home) — <a> plano igual que allá,
 // no <Link> tipado (evita fricción con rutas dinámicas $barrio_slug).
@@ -75,20 +72,10 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
   const [accountOpen, setAccountOpen] = useState(false);
   const accountBtnRef = useRef<HTMLButtonElement>(null);
   const [accountPos, setAccountPos] = useState({ top: 0, right: 0 });
-  const [toolsOpen, setToolsOpen] = useState(false);
-  const toolsBtnRef = useRef<HTMLButtonElement>(null);
-  const [toolsPos, setToolsPos] = useState({ top: 0, left: 0 });
   const user = typeof window !== "undefined" ? auth.get() : null;
-  const TABS = isAgente ? [...BASE_TABS, ...AGENTE_TABS] : BASE_TABS;
-  const activeTool = AGENTE_TABS.find((t) => t.id === activeTab);
-
-  const toggleTools = () => {
-    if (!toolsOpen && toolsBtnRef.current) {
-      const r = toolsBtnRef.current.getBoundingClientRect();
-      setToolsPos({ top: r.bottom + 4, left: r.left });
-    }
-    setToolsOpen((o) => !o);
-  };
+  // Simulador/Comparador salieron del navbar: ahora viven SOLO en el dashboard del
+  // realtor (sección Herramientas). No se exponen como herramientas sueltas del mapa.
+  const TABS = BASE_TABS;
 
   const toggleAccount = () => {
     if (!accountOpen && accountBtnRef.current) {
@@ -312,58 +299,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
           {BASE_TABS.slice(0, 2).map(renderTab)}
         </div>
         {BASE_TABS.slice(2).map(renderTab)}
-
-        {isAgente && (
-          <button
-            ref={toolsBtnRef}
-            onClick={toggleTools}
-            style={{
-              background: "none", border: "none", padding: "0 11px",
-              borderBottom: activeTool ? `2px solid ${C.teal}` : "2px solid transparent",
-              color: activeTool ? C.amarillo : NAV.text,
-              fontWeight: activeTool ? 700 : 500,
-              fontSize: 13, cursor: "pointer",
-              letterSpacing: "0.1px",
-              flexShrink: 0,
-              display: "flex", alignItems: "center", gap: 4,
-            }}
-          >
-            {activeTool ? activeTool.label : "Herramientas"}
-            <ChevronDown size={13} style={{ transform: toolsOpen ? "rotate(180deg)" : undefined, transition: "transform 0.15s" }} />
-          </button>
-        )}
       </nav>
-
-      {isAgente && toolsOpen && createPortal(
-        <>
-          <div onClick={() => setToolsOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 9998 }} />
-          <div
-            style={{
-              position: "fixed", top: toolsPos.top, left: toolsPos.left, zIndex: 9999,
-              background: C.paper, border: `1px solid ${C.border}`, borderRadius: 8,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.15)", minWidth: 140, overflow: "hidden",
-            }}
-          >
-            {AGENTE_TABS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => { setToolsOpen(false); navigate({ to: t.route as any }); }}
-                style={{
-                  display: "block", width: "100%", textAlign: "left",
-                  background: activeTab === t.id ? "rgba(29,158,117,0.1)" : "none",
-                  border: "none", padding: "9px 14px", fontSize: 13,
-                  fontWeight: activeTab === t.id ? 700 : 500,
-                  color: activeTab === t.id ? C.tealDeep : C.ink,
-                  cursor: "pointer",
-                }}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-        </>,
-        document.body
-      )}
 
       {/* MLS back breadcrumb */}
       {mlsBarrio && (

@@ -504,12 +504,16 @@ function MapPageInner() {
       backToComunasTimerRef.current = null;
     }, 1500);
   }
-  // Si el usuario navega (adelante/atrás) antes de que dispare, cancela el
-  // reset pendiente — si no, revienta el estado que el paso actual ya armó.
-  function cancelTourBackToComunas() {
+  // Si el usuario navega (adelante/atrás) antes de que dispare, NO lo canceles:
+  // ejecútalo ya. Cancelarlo dejaba mapView="listings" mientras switchToComunas
+  // ya movió cámara+capas a comunas → al hacer zoom se veía la capa de listings y
+  // no cargaban los barrios. Flushear lo corre exactamente una vez y ANTES de que
+  // el onEnter del nuevo paso re-arme su estado (last-write-wins).
+  function flushTourBackToComunas() {
     if (backToComunasTimerRef.current) {
       clearTimeout(backToComunasTimerRef.current);
       backToComunasTimerRef.current = null;
+      handleBackToZonas();
     }
   }
 
@@ -984,7 +988,7 @@ function MapPageInner() {
         }}
         onCloseListingDetail={closeListingDetail}
         onBackToComunas={handleTourBackToComunas}
-        onCancelBackToComunas={cancelTourBackToComunas}
+        onFlushBackToComunas={flushTourBackToComunas}
         onSelectLaureles={() => {
           const laureles = allBarrioOptions.find((o) => o.comuna?.toLowerCase().includes("laureles"));
           if (laureles?.cd_comuna != null) handleComunaSelect(laureles.cd_comuna, laureles.comuna);

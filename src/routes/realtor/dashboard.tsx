@@ -44,6 +44,8 @@ import {
   useTomarDelPool,
   useVerificarDDItem,
   useCerrarListing,
+  useCambiarEstadoListing,
+  useEliminarListing,
   useComparables,
 } from "@/hooks/useRealtorDashboard";
 
@@ -59,36 +61,57 @@ export const Route = createFileRoute("/realtor/dashboard")({
   head: () => seo({ title: "Panel del agente · Medellín Social", description: "Tus leads, zonas y propiedades.", noindex: true }),
 });
 
-// ── Tabs ───────────────────────────────────────────────────────────────────────
+// ── Secciones ────────────────────────────────────────────────────────────────
+// Reorg 10 tabs → 5 secciones. Las secciones con varias vistas usan sub-nav
+// (SubNav) en vez de tabs de primer nivel. Dedup: Desempeño muere (dup de Inicio),
+// Resultados/Inteligencia/Comparador → Mercado, Inbox+Agenda → Bandeja.
 
-type Tab = "resumen" | "resultados" | "inbox" | "agenda" | "listings" | "desempeno" | "inteligencia" | "comparador" | "simulador" | "config";
+// Verde oscuro para texto blanco sobre color: C.brand (#0F8A4F) sobre blanco da 4.4:1
+// (falla AA texto normal); #0C7A45 da 5.4:1 → pasa AA. Usado en sub-nav/badges activos.
+const BRAND_DEEP = "#0C7A45";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "resumen",      label: "Resumen" },
-  { id: "resultados",   label: "Resultados" },
-  { id: "inbox",        label: "Inbox" },
-  { id: "agenda",       label: "Agenda" },
+type Section = "inicio" | "listings" | "bandeja" | "mercado" | "herramientas";
+
+const SECTIONS: { id: Section; label: string }[] = [
+  { id: "inicio",       label: "Inicio" },
   { id: "listings",     label: "Mis listings" },
-  { id: "desempeno",    label: "Desempeño" },
-  { id: "inteligencia", label: "Inteligencia" },
-  { id: "comparador",   label: "Comparador" },
-  { id: "simulador",    label: "Simulador" },
-  { id: "config",       label: "Configuración" },
+  { id: "bandeja",      label: "Bandeja y agenda" },
+  { id: "mercado",      label: "Mercado" },
+  { id: "herramientas", label: "Herramientas" },
 ];
 
+// Deep-link: ids viejos de ?tab= → sección nueva (no romper enlaces del navbar/listing).
+const TAB_TO_SECTION: Record<string, Section> = {
+  resumen: "inicio", desempeno: "inicio",
+  listings: "listings",
+  inbox: "bandeja", agenda: "bandeja",
+  resultados: "mercado", inteligencia: "mercado",
+  simulador: "herramientas", comparador: "herramientas", config: "herramientas",
+};
+
+// El viejo ?tab= también fija el sub-tab de la sección (p.ej. /realtor/dashboard?tab=comparador
+// debe abrir Mercado › Comparador, no la primera sub-vista). Lee el ?tab= actual una vez.
+function tabParam(): string {
+  if (typeof window === "undefined") return "";
+  return new URLSearchParams(window.location.search).get("tab") ?? "";
+}
+
 function RealtorDashboardPage() {
-  // Tab inicial desde ?tab= (deep-link desde navbar/listing → abre el tab correcto
-  // dentro del centro de agente, sin mandar a otra página).
-  const [tab, setTab] = useState<Tab>(() => {
-    const t = typeof window !== "undefined" ? new URLSearchParams(window.location.search).get("tab") : null;
-    return (TABS.some((x) => x.id === t) ? t : "resumen") as Tab;
-  });
+  // Default "inicio" en el primer render (SSR y cliente coinciden → sin hydration
+  // mismatch). El deep-link ?section= / ?tab= se aplica post-mount en el efecto.
+  const [section, setSection] = useState<Section>("inicio");
+  useEffect(() => {
+    const p = new URLSearchParams(window.location.search);
+    const raw = p.get("section") ?? p.get("tab") ?? "";
+    if (SECTIONS.some((s) => s.id === raw)) setSection(raw as Section);
+    else if (TAB_TO_SECTION[raw]) setSection(TAB_TO_SECTION[raw]);
+  }, []);
   const { isError, error, isLoading } = useRealtorPerfil();
 
   // La cuenta logueada existe pero no tiene fila `agent` (backend responde 403
   // en /realtor/me y por extensión en todos los demás endpoints). Sin este
   // check el dashboard se ve "vacío": nav sin perfil + cajas de error sueltas
-  // en cada tab, que es indistinguible de "no carga nada".
+  // en cada sección, que es indistinguible de "no carga nada".
   const sinAgente = isError && /no es un agente/i.test(String((error as Error)?.message ?? ""));
 
   if (!isLoading && sinAgente) {
@@ -113,33 +136,49 @@ function RealtorDashboardPage() {
 
   return (
     <div className="paper-theme min-h-screen bg-background">
-      <RealtorNav tab={tab} onTab={setTab} />
-      <main className="mx-auto max-w-6xl px-4 pb-20 pt-8 sm:px-6">
-        {tab === "resumen"      && <ResumenTab />}
-        {tab === "resultados"   && <ResultadosTab />}
-        {tab === "inbox"        && <InboxTab />}
-        {tab === "agenda"       && <AgendaTab />}
-        {tab === "listings"     && <ListingsTab />}
-        {tab === "desempeno"    && <DesempenoTab />}
-        {tab === "inteligencia" && <InteligenciaTab />}
-        {tab === "comparador"   && <ComparadorTab />}
-        {tab === "simulador"    && <SimuladorTab />}
-        {tab === "config"       && <ConfiguracionTab />}
+      <RealtorNav section={section} onSection={setSection} />
+      {/* scroll-mt-28: el foco no queda tapado por el header sticky (WCAG 2.2 SC 2.4.11). */}
+      <main
+        id={`panel-${section}`}
+        role="tabpanel"
+        aria-labelledby={`tab-${section}`}
+        tabIndex={-1}
+        className="mx-auto max-w-6xl scroll-mt-28 px-4 pb-20 pt-8 outline-none sm:px-6"
+      >
+        {section === "inicio"       && <InicioSection />}
+        {section === "listings"     && <ListingsTab />}
+        {section === "bandeja"      && <BandejaSection />}
+        {section === "mercado"      && <MercadoSection />}
+        {section === "herramientas" && <HerramientasSection />}
       </main>
     </div>
   );
 }
 
-// ── Nav ────────────────────────────────────────────────────────────────────────
+// ── Nav principal (tablist WAI-ARIA: flechas navegan, Home/End saltan) ─────────
 
-function RealtorNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
+function RealtorNav({ section, onSection }: { section: Section; onSection: (s: Section) => void }) {
   const { data: perfil } = useRealtorPerfil();
   const { data: asignados } = useRealtorAsignados();
   const { data: agenda } = useAgenda();
 
   const nuevos = asignados?.filter((a) => a.estado === "asignado").length ?? 0;
   const visitasPendientes = agenda?.visitas.filter((v) => v.estado === "pendiente").length ?? 0;
+  const bandejaBadge = nuevos + visitasPendientes;
   const initials = perfil?.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
+
+  const onKeyNav = (e: React.KeyboardEvent, idx: number) => {
+    const n = SECTIONS.length;
+    let next = idx;
+    if (e.key === "ArrowRight") next = (idx + 1) % n;
+    else if (e.key === "ArrowLeft") next = (idx - 1 + n) % n;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = n - 1;
+    else return;
+    e.preventDefault();
+    onSection(SECTIONS[next].id);
+    document.getElementById(`tab-${SECTIONS[next].id}`)?.focus();
+  };
 
   return (
     <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
@@ -180,35 +219,225 @@ function RealtorNav({ tab, onTab }: { tab: Tab; onTab: (t: Tab) => void }) {
         )}
       </div>
 
-      <nav className="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6" aria-label="Secciones del dashboard">
-        <div className="flex gap-6">
-          {TABS.map(({ id, label }) => (
-            <button
-              key={id}
-              onClick={() => onTab(id)}
-              aria-current={tab === id ? "page" : undefined}
-              className={`relative shrink-0 border-b-2 pb-2.5 pt-1 text-sm transition ${
-                tab === id
-                  ? "border-primary font-semibold text-foreground"
-                  : "border-transparent font-medium text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {label}
-              {id === "inbox" && nuevos > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                  {nuevos}
-                </span>
-              )}
-              {id === "agenda" && visitasPendientes > 0 && (
-                <span className="ml-1.5 rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground">
-                  {visitasPendientes}
-                </span>
-              )}
-            </button>
-          ))}
+      <nav className="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6">
+        <div role="tablist" aria-label="Secciones del dashboard" className="flex gap-6">
+          {SECTIONS.map(({ id, label }, idx) => {
+            const active = section === id;
+            const badge = id === "bandeja" ? bandejaBadge : 0;
+            return (
+              <button
+                key={id}
+                id={`tab-${id}`}
+                role="tab"
+                aria-selected={active}
+                aria-controls={`panel-${id}`}
+                tabIndex={active ? 0 : -1}
+                onClick={() => onSection(id)}
+                onKeyDown={(e) => onKeyNav(e, idx)}
+                className={`relative flex min-h-[44px] shrink-0 items-center gap-1.5 border-b-2 pt-1 text-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 ${
+                  active
+                    ? "border-primary font-semibold text-foreground"
+                    : "border-transparent font-medium text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {label}
+                {badge > 0 && (
+                  <span
+                    className="rounded-full bg-primary px-1.5 py-0.5 text-[10px] font-semibold text-primary-foreground"
+                    aria-label={`${badge} pendientes`}
+                  >
+                    {badge}
+                  </span>
+                )}
+              </button>
+            );
+          })}
         </div>
       </nav>
     </header>
+  );
+}
+
+// ── Sub-nav accesible (tablist secundario dentro de una sección) ──────────────
+
+function SubNav<T extends string>({ value, onChange, items, label }: {
+  value: T; onChange: (v: T) => void; items: { id: T; label: string; badge?: number }[]; label: string;
+}) {
+  const onKeyNav = (e: React.KeyboardEvent, idx: number) => {
+    const n = items.length;
+    let next = idx;
+    if (e.key === "ArrowRight") next = (idx + 1) % n;
+    else if (e.key === "ArrowLeft") next = (idx - 1 + n) % n;
+    else if (e.key === "Home") next = 0;
+    else if (e.key === "End") next = n - 1;
+    else return;
+    e.preventDefault();
+    onChange(items[next].id);
+    document.getElementById(`subtab-${items[next].id}`)?.focus();
+  };
+  return (
+    <div role="tablist" aria-label={label} className="mb-6 flex flex-wrap gap-2">
+      {items.map(({ id, label: lbl, badge }, idx) => {
+        const active = value === id;
+        return (
+          <button
+            key={id}
+            id={`subtab-${id}`}
+            role="tab"
+            aria-selected={active}
+            aria-controls={`subpanel-${id}`}
+            tabIndex={active ? 0 : -1}
+            onClick={() => onChange(id)}
+            onKeyDown={(e) => onKeyNav(e, idx)}
+            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            style={active
+              ? { background: BRAND_DEEP, color: "#fff" }   // #0C7A45: blanco pasa AA (5.4:1)
+              : { background: C.soft, color: C.sub, border: `1px solid ${C.line}` }}
+          >
+            {lbl}
+            {badge != null && badge > 0 && (
+              <span
+                className="rounded-full px-1.5 text-[10px] font-bold"
+                style={active ? { background: "rgba(255,255,255,.25)" } : { background: BRAND_DEEP, color: "#fff" }}
+                aria-label={`${badge} pendientes`}
+              >
+                {badge}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// ── Sección: Inicio (alertas de hoy + resumen) ────────────────────────────────
+
+function InicioSection() {
+  return (
+    <div className="flex flex-col gap-6">
+      <AlertasHoy />
+      <ResumenTab />
+    </div>
+  );
+}
+
+// "Qué hacer hoy": alertas accionables derivadas de datos ya cargados (sin backend).
+// Cada alerta enlaza a la sección donde se resuelve.
+function AlertasHoy() {
+  const { data: asignados } = useRealtorAsignados();
+  const { data: agenda } = useAgenda();
+  const { data: listings } = useMisListings();
+
+  const sinResponder = asignados?.filter((a) => a.estado === "asignado").length ?? 0;
+  const hoy = new Date().toISOString().slice(0, 10);
+  const visitasHoy = agenda?.visitas.filter(
+    (v) => v.estado === "pendiente" || (v.fecha_visita?.slice(0, 10) === hoy),
+  ).length ?? 0;
+  const borradores = listings?.filter((l) => l.estado === "borrador").length ?? 0;
+  const rechazados = listings?.filter((l) => l.estado === "rechazado").length ?? 0;
+
+  const alertas: { icon: string; texto: string }[] = [];
+  if (sinResponder > 0) alertas.push({ icon: "📩", texto: `${sinResponder} ${sinResponder === 1 ? "cliente nuevo sin responder" : "clientes nuevos sin responder"} — acéptalos antes de que vuelvan al pool` });
+  if (visitasHoy > 0) alertas.push({ icon: "📅", texto: `${visitasHoy} ${visitasHoy === 1 ? "visita por confirmar/atender" : "visitas por confirmar/atender"}` });
+  if (borradores > 0) alertas.push({ icon: "✏️", texto: `${borradores} ${borradores === 1 ? "borrador sin publicar" : "borradores sin publicar"}` });
+  if (rechazados > 0) alertas.push({ icon: "⚠️", texto: `${rechazados} ${rechazados === 1 ? "listing rechazado" : "listings rechazados"} — corrígelos y vuelve a publicar` });
+
+  if (alertas.length === 0) {
+    return (
+      <div className="rounded-2xl p-4 text-[13px]" style={{ background: C.soft, border: `1px solid ${C.line}`, color: C.sub }}>
+        ✅ <strong style={{ color: C.ink }}>Todo al día.</strong> No hay pendientes urgentes hoy.
+      </div>
+    );
+  }
+  return (
+    <section aria-labelledby="alertas-hoy-h" className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+      <h2 id="alertas-hoy-h" className="mb-3 text-[13px] font-semibold tracking-tight" style={{ color: C.ink }}>Qué hacer hoy</h2>
+      <ul className="flex flex-col gap-2">
+        {alertas.map((a, i) => (
+          <li key={i} className="flex items-start gap-2.5 text-[13px]" style={{ color: C.ink }}>
+            <span aria-hidden className="mt-px">{a.icon}</span>
+            <span>{a.texto}</span>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+// ── Sección: Bandeja y agenda (Inbox + Agenda) ────────────────────────────────
+
+function BandejaSection() {
+  const { data: asignados } = useRealtorAsignados();
+  const { data: agenda } = useAgenda();
+  const nuevos = asignados?.filter((a) => a.estado === "asignado").length ?? 0;
+  const visitasPendientes = agenda?.visitas.filter((v) => v.estado === "pendiente").length ?? 0;
+  const [sub, setSub] = useState<"bandeja" | "agenda">(() => (tabParam() === "agenda" ? "agenda" : "bandeja"));
+  return (
+    <div>
+      <SubNav
+        label="Bandeja y agenda"
+        value={sub}
+        onChange={setSub}
+        items={[
+          { id: "bandeja", label: "Bandeja", badge: nuevos },
+          { id: "agenda", label: "Agenda", badge: visitasPendientes },
+        ]}
+      />
+      <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
+        {sub === "bandeja" ? <InboxTab /> : <AgendaTab />}
+      </div>
+    </div>
+  );
+}
+
+// ── Sección: Mercado (Zonas de interés + Inteligencia + Comparador) ────────────
+
+function MercadoSection() {
+  const [sub, setSub] = useState<"zonas" | "inteligencia">(() => (tabParam() === "inteligencia" ? "inteligencia" : "zonas"));
+  return (
+    <div>
+      <SubNav
+        label="Mercado"
+        value={sub}
+        onChange={setSub}
+        items={[
+          { id: "zonas", label: "Zonas de interés" },
+          { id: "inteligencia", label: "Inteligencia" },
+        ]}
+      />
+      <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
+        {sub === "zonas" ? <ResultadosTab /> : <InteligenciaTab />}
+      </div>
+    </div>
+  );
+}
+
+// ── Sección: Herramientas (Simulador + Servicios) ─────────────────────────────
+
+function HerramientasSection() {
+  const [sub, setSub] = useState<"simulador" | "comparador" | "servicios">(() => {
+    const t = tabParam();
+    return t === "comparador" ? "comparador" : t === "config" ? "servicios" : "simulador";
+  });
+  return (
+    <div>
+      <SubNav
+        label="Herramientas"
+        value={sub}
+        onChange={setSub}
+        items={[
+          { id: "simulador", label: "Simulador" },
+          { id: "comparador", label: "Comparador" },
+          { id: "servicios", label: "Servicios" },
+        ]}
+      />
+      <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
+        {sub === "simulador" && <SimuladorTab />}
+        {sub === "comparador" && <ComparadorTab />}
+        {sub === "servicios" && <ConfiguracionTab />}
+      </div>
+    </div>
   );
 }
 
@@ -1093,15 +1322,37 @@ function ListingsTab() {
   const [filtro, setFiltro] = useState<EstadoListing | "todos">("todos");
   const [editando, setEditando] = useState<MiListing | null>(null);
   const [cerrando, setCerrando] = useState<MiListing | null>(null);
+  const cambiarEstado = useCambiarEstadoListing();
+  const eliminar = useEliminarListing();
 
   const visible = useMemo(
     () => (filtro === "todos" ? data ?? [] : (data ?? []).filter((l) => l.estado === filtro)),
     [data, filtro],
   );
 
+  const onEliminar = (l: MiListing) => {
+    // ponytail: confirm nativo — accesible y sin modal extra; subir a modal si se pide.
+    // El caso publicado tiene filo: el soft-delete lo saca del dashboard pero sigue
+    // vivo en el mapa público hasta el refresh (sync al mapa = fase 2). Avisar.
+    const extra = l.estado === "publicado"
+      ? " Nota: seguirá visible en el mapa público hasta el próximo refresh."
+      : "";
+    if (window.confirm(`¿Eliminar "${l.titulo}"? Podrás recuperarlo con soporte (soft-delete).${extra}`)) {
+      eliminar.mutate(l.id);
+    }
+  };
+
   return (
     <section>
-      <SectionHeader title="Mis listings" count={data?.length} />
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <SectionHeader title="Mis listings" count={data?.length} />
+        <Link
+          to="/publicar"
+          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-lg bg-primary px-4 text-sm font-semibold text-primary-foreground transition hover:opacity-90"
+        >
+          <Plus className="h-4 w-4" /> Crear listing
+        </Link>
+      </div>
 
       {!isLoading && data && data.length > 0 && (
         <div className="mb-4 flex flex-wrap gap-4 border-b border-border text-sm">
@@ -1142,8 +1393,12 @@ function ListingsTab() {
               key={l.id}
               listing={l}
               first={i === 0}
+              busy={cambiarEstado.isPending || eliminar.isPending}
               onEditar={() => setEditando(l)}
               onMarcarVendido={() => setCerrando(l)}
+              onPausar={() => cambiarEstado.mutate({ listingId: l.id, estado: "pausado" })}
+              onReactivar={() => cambiarEstado.mutate({ listingId: l.id, estado: "publicado" })}
+              onEliminar={() => onEliminar(l)}
             />
           ))}
         </div>
@@ -1270,11 +1525,44 @@ function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose:
   );
 }
 
-function ListingRow({ listing: l, first, onEditar, onMarcarVendido }: { listing: MiListing; first: boolean; onEditar: () => void; onMarcarVendido: () => void }) {
+// Botón de acción de fila: target ≥24px (WCAG 2.2 SC 2.5.8), min-h-[32px] real.
+function RowAction({ onClick, disabled, variant = "ghost", title, children }: {
+  onClick: () => void; disabled?: boolean; variant?: "ghost" | "primary" | "danger"; title?: string; children: React.ReactNode;
+}) {
+  const styles =
+    variant === "primary" ? "border-primary text-primary hover:bg-primary hover:text-white"
+    : variant === "danger" ? "border-danger/40 text-danger hover:bg-danger hover:text-white"
+    : "border-border text-muted-foreground hover:text-foreground";
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      title={title}
+      className={`inline-flex min-h-[32px] shrink-0 items-center rounded-md border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:opacity-50 ${styles}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function ListingRow({ listing: l, first, busy, onEditar, onMarcarVendido, onPausar, onReactivar, onEliminar }: {
+  listing: MiListing; first: boolean; busy?: boolean;
+  onEditar: () => void; onMarcarVendido: () => void; onPausar: () => void; onReactivar: () => void; onEliminar: () => void;
+}) {
   const estado = ESTADO_META[l.estado];
   const puedeCerrar = l.estado === "publicado" || l.estado === "pausado";
+  // Métricas por listing. "Aperturas" = aberturas de detalle (listing_view, histórico);
+  // "30d" = aperturas recientes; "Favoritos" = veces guardado.
+  const metrica = (valor: number, label: string) => (
+    <div className="text-right">
+      <div className="text-sm font-semibold tabular-nums text-foreground">{valor.toLocaleString("es-CO")}</div>
+      <div className="text-[11px] text-muted-foreground">{label}</div>
+    </div>
+  );
   return (
     <div
+      data-testid="listing-row"
+      data-estado={l.estado}
       className={`flex flex-col gap-3 px-4 py-3 transition sm:flex-row sm:items-center sm:justify-between hover:bg-muted/30 ${
         first ? "" : "border-t border-border/70"
       }`}
@@ -1282,7 +1570,7 @@ function ListingRow({ listing: l, first, onEditar, onMarcarVendido }: { listing:
       <div className="min-w-0">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
           <span className="truncate text-sm font-medium text-foreground">{l.titulo}</span>
-          <span className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
+          <span data-testid="listing-estado" className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
             {estado.label}
           </span>
         </div>
@@ -1292,38 +1580,33 @@ function ListingRow({ listing: l, first, onEditar, onMarcarVendido }: { listing:
         <div className="mt-0.5 text-xs text-muted-foreground">Actualizado {relativeTime(l.updated_at)}</div>
       </div>
 
-      <div className="flex shrink-0 items-center gap-5 sm:gap-6">
+      <div className="flex flex-wrap items-center gap-x-5 gap-y-2 sm:shrink-0 sm:justify-end sm:gap-x-6">
         <div className="text-right text-base font-semibold tabular-nums text-foreground">
           {formatCOP(l.precio)}
         </div>
-        {/* 30d en jerarquía fuerte, total como referencia — sin insinuar tendencia:
-           no hay serie histórica para saber si esto sube o baja. */}
-        <div className="text-right">
-          <div className="text-sm font-semibold tabular-nums text-foreground">
-            {l.estado === "publicado" ? l.vistas_30d.toLocaleString("es-CO") : "—"}
-            <span className="ml-1 text-xs font-normal text-muted-foreground">30d</span>
-          </div>
-          <div className="text-xs text-muted-foreground">
-            {l.vistas_total > 0 ? `${l.vistas_total.toLocaleString("es-CO")} totales` : "sin vistas aún"}
-          </div>
+        {/* Métricas por listing: aperturas (total), recientes (30d), favoritos. */}
+        {metrica(l.vistas_total, "aperturas")}
+        {metrica(l.vistas_30d, "30d")}
+        {metrica(l.favoritos ?? 0, "favoritos")}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {l.estado !== "cerrado" && (
+            <RowAction onClick={onEditar} disabled={busy}>Editar</RowAction>
+          )}
+          {l.estado === "publicado" && (
+            <RowAction onClick={onPausar} disabled={busy} title="Ocultar temporalmente este listing">Pausar</RowAction>
+          )}
+          {l.estado === "pausado" && (
+            <RowAction onClick={onReactivar} disabled={busy} variant="primary" title="Volver a publicar">Reactivar</RowAction>
+          )}
+          {puedeCerrar && (
+            <RowAction onClick={onMarcarVendido} disabled={busy} variant="primary"
+              title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje">
+              Marcar vendido
+            </RowAction>
+          )}
+          <RowAction onClick={onEliminar} disabled={busy} variant="danger" title="Eliminar este listing">Eliminar</RowAction>
         </div>
-        {l.estado !== "cerrado" && (
-          <button
-            onClick={onEditar}
-            className="shrink-0 rounded-md border border-border px-3 py-1.5 text-xs font-medium text-muted-foreground transition hover:text-foreground"
-          >
-            Editar
-          </button>
-        )}
-        {puedeCerrar && (
-          <button
-            onClick={onMarcarVendido}
-            className="shrink-0 rounded-md border border-primary px-3 py-1.5 text-xs font-semibold text-primary transition hover:bg-primary hover:text-white"
-            title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje"
-          >
-            Marcar vendido
-          </button>
-        )}
       </div>
     </div>
   );
@@ -1343,34 +1626,6 @@ const ESTADO_META: Record<EstadoListing, { label: string; badge: string }> = {
 // NO trae datos nuevos: reúne los MISMOS endpoints que Desempeño (/desempeno) e
 // Inteligencia (/inteligencia/{zona}) en lenguaje llano para el realtor. La zona
 // pagada manda: §2 y §3 hablan de la misma zona (la de mayor patrocinio).
-
-const SUGERENCIAS: { titulo: string; detalle: string }[] = [
-  {
-    titulo: "Avisos cuando baja el precio de tus inmuebles",
-    detalle:
-      "Para que sepas de inmediato cuándo uno de tus inmuebles bajó de precio, sin tener que revisarlo tú mismo.",
-  },
-  {
-    titulo: "Saber qué tanto interés real tiene cada inmueble",
-    detalle:
-      "Hoy solo sabemos quién lo vio. Falta saber quién lo comparó con otros o lo guardó como favorito — eso muestra quién está más cerca de decidirse.",
-  },
-  {
-    titulo: "De dónde vienen tus clientes",
-    detalle:
-      "WhatsApp, Instagram, Google, un referido — para saber en qué vale la pena invertir más tu tiempo y tu plata.",
-  },
-  {
-    titulo: "Clientes que perdiste por no responder a tiempo",
-    detalle:
-      "Cuántos clientes se te devolvieron por no contestar rápido, comparado con otros asesores de tu zona.",
-  },
-  {
-    titulo: "Cuánta gente vive en tu zona",
-    detalle:
-      "Para que sepas si vale la pena pasar de barrio a comuna, según cuántas personas viven ahí.",
-  },
-];
 
 const TIER_LABEL: Record<string, string> = {
   agente_premium: "Plan Agente Premium",
@@ -1470,71 +1725,17 @@ function ResultadosTab() {
   }
   if (isError || !data) return <SectionError msg="No se pudo cargar tu panel de resultados." />;
 
-  const mediana = data.mediana_horas_aceptar != null
-    ? data.mediana_horas_aceptar < 48
-      ? `${data.mediana_horas_aceptar} horas`
-      : `${Math.round(data.mediana_horas_aceptar / 24)} días`
-    : "—";
-  const ofertasInteres = data.ofertas_90d + data.interesados_90d;
-  const cs = data.calificacion_servicio;
-  const csSub = cs.ranking
-    ? `${cs.nota} · Puesto ${cs.ranking.posicion} de ${cs.ranking.total} por velocidad`
-    : cs.nota;
-  const st = data.standing;
-  const stValue = st.puntaje != null ? `${st.puntaje}/100` : "—";
-  const stSub = st.ranking
-    ? `Puesto ${st.ranking.posicion} de ${st.ranking.total} · ${st.cierres_reportados_12m} cierres reportados`
-    : st.nota;
-
   return (
     <div className="space-y-12">
       <header>
-        <h1 className="text-xl font-semibold" style={{ color: C.ink }}>Tu panel de resultados</h1>
+        <h1 className="text-xl font-semibold" style={{ color: C.ink }}>Zonas de interés</h1>
         <p className="mt-1 max-w-2xl text-sm" style={{ color: C.sub }}>
-          Cómo te está yendo, cómo rinde tu zona pagada y qué dice el mercado. Cuéntanos qué te
-          sirve más — eso decide qué construimos después.
+          Cómo rinde tu zona pagada, los comparables de cierre y qué dice el mercado.
+          {/* El resumen de desempeño (aceptación, respuesta, asistencia) vive ahora en Inicio. */}
         </p>
       </header>
 
-      {/* ── §1 Cómo te está yendo ── */}
-      <section>
-        <BloqueHeader titulo="Cómo te está yendo" estado="disponible" sub="Últimos 3 meses" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <ResultCard
-            label="Clientes que aceptaste"
-            value={data.aceptados_90d}
-            sub={`Te llegaron ${data.asignados_90d} y aceptaste ${data.aceptados_90d}`}
-          />
-          <ResultCard
-            label="Qué tan rápido respondes"
-            value={mediana}
-            sub="Desde que te llega un cliente hasta que lo aceptas"
-          />
-          <ResultCard
-            label="Personas que vieron tus inmuebles"
-            value={data.vistas_30d.toLocaleString("es-CO")}
-            sub="En los últimos 30 días"
-          />
-          <ResultCard
-            label="Asistencia a las visitas"
-            value={data.show_rate != null ? `${Math.round(data.show_rate * 100)}%` : "—"}
-            sub={`${data.visitas_realizadas_90d} sí llegaron y ${data.visitas_no_show_90d} no llegaron`}
-          />
-          <ResultCard
-            label="Visitas con oferta o interés real"
-            value={ofertasInteres}
-            sub={`${data.ofertas_90d} ofertas y ${data.interesados_90d} personas interesadas`}
-          />
-          <ResultCard
-            label="Tu calificación de servicio"
-            value={cs.mediana_horas_respuesta != null ? `${cs.grado} · ${cs.mediana_horas_respuesta}h` : cs.grado}
-            sub={csSub}
-          />
-          <ResultCard label="Tu puntaje (standing)" value={stValue} sub={stSub} />
-        </div>
-      </section>
-
-      {/* ── §1b Comparables de cierre (incentivo de reciprocidad) ── */}
+      {/* ── Comparables de cierre (incentivo de reciprocidad) ── */}
       <ComparablesSection />
 
       {/* ── §2 Resultados en tu zona pagada ── */}
@@ -1644,23 +1845,6 @@ function ResultadosTab() {
           </div>
         )}
       </section>
-
-      {/* ── §4 Ideas para más adelante ── */}
-      <section>
-        <BloqueHeader titulo="Ideas para más adelante" estado="pendiente" />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          {SUGERENCIAS.map((s) => (
-            <div key={s.titulo} className="rounded-2xl border border-dashed p-5" style={{ background: C.soft, borderColor: C.line }}>
-              <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: C.muted }}>Sugerencia</span>
-              <h4 className="mt-1.5 text-sm font-semibold" style={{ color: C.ink }}>{s.titulo}</h4>
-              <p className="mt-1 text-xs leading-relaxed" style={{ color: C.sub }}>{s.detalle}</p>
-            </div>
-          ))}
-        </div>
-        <p className="mt-4 text-xs" style={{ color: C.muted }}>
-          Estas ideas todavía no existen. Cuéntanos qué te gustaría ver primero.
-        </p>
-      </section>
     </div>
   );
 }
@@ -1680,17 +1864,6 @@ function BloqueHeader({ titulo, estado, sub }: { titulo: string; estado: "dispon
         </span>
       )}
       {sub && <span className="w-full text-xs sm:w-auto" style={{ color: C.muted }}>{sub}</span>}
-    </div>
-  );
-}
-
-// Tarjeta de estadística cálida (número grande + explicación en llano)
-function ResultCard({ label, value, sub }: { label: string; value: string | number; sub: string }) {
-  return (
-    <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <div className="text-xs" style={{ color: C.muted }}>{label}</div>
-      <div className="mt-2 text-3xl font-semibold tabular-nums" style={{ color: C.ink }}>{value}</div>
-      <div className="mt-1.5 text-xs leading-relaxed" style={{ color: C.sub }}>{sub}</div>
     </div>
   );
 }
@@ -1717,87 +1890,6 @@ function MercadoCol({ titulo, filas }: { titulo: string; filas: [string, string 
           </div>
         ))}
       </dl>
-    </div>
-  );
-}
-
-// ══ TAB 3: Desempeño ═══════════════════════════════════════════════════════════
-
-function DesempenoTab() {
-  const { data, isLoading, isError } = useDesempeno();
-
-  if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-24 rounded-lg" />)}
-        </div>
-        <Skeleton className="h-64 rounded-lg" />
-      </div>
-    );
-  }
-
-  if (isError || !data) {
-    return <SectionError msg="No se pudo cargar tu desempeño." />;
-  }
-
-  const mediana = data.mediana_horas_aceptar != null
-    ? data.mediana_horas_aceptar < 48
-      ? `${data.mediana_horas_aceptar} h`
-      : `${Math.round(data.mediana_horas_aceptar / 24)} d`
-    : "—";
-
-  return (
-    <div className="space-y-10">
-      <section>
-        <SectionHeader title="Tu desempeño" sub="Últimos 90 días" />
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          <RingStat
-            label="Tasa de aceptación"
-            percent={data.tasa_aceptacion != null ? Math.round(data.tasa_aceptacion * 100) : null}
-            sub={`${data.aceptados_90d} de ${data.asignados_90d} asignados`}
-          />
-          <StatTile
-            label="Velocidad de respuesta"
-            value={mediana}
-            sub="mediana hasta aceptar"
-          />
-          <StatTile
-            label="Vistas en 30 días"
-            value={data.vistas_30d.toLocaleString("es-CO")}
-            sub={`${data.vistas_total.toLocaleString("es-CO")} históricas`}
-          />
-          <RingStat
-            label="Asistencia a visitas"
-            percent={data.show_rate != null ? Math.round(data.show_rate * 100) : null}
-            sub={`${data.visitas_realizadas_90d} realizadas · ${data.visitas_no_show_90d} plantones`}
-          />
-          <StatTile
-            label="Visitas con oferta"
-            value={data.ofertas_90d}
-            sub={`${data.interesados_90d} más quedaron interesados`}
-          />
-          <StatTile
-            label="Cierres"
-            value={data.zonas.reduce((s, z) => s + z.cerrados_total, 0)}
-            sub="en zonas patrocinadas"
-          />
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          Los asignados no aceptados a tiempo pueden volver al pool. Responder rápido protege tu zona.
-        </p>
-      </section>
-
-      <section>
-        <SectionHeader title="Retorno de tus zonas patrocinadas" sub="Este mes" />
-        {data.zonas.length === 0 ? (
-          <EmptyState msg="No tienes zonas patrocinadas activas. Patrocina un barrio o comuna para recibir inmuebles con prioridad." />
-        ) : (
-          <div className="grid gap-4 lg:grid-cols-2">
-            {data.zonas.map((z) => <RoiZonaCard key={z.zona_codigo} zona={z} />)}
-          </div>
-        )}
-      </section>
     </div>
   );
 }
@@ -1838,58 +1930,6 @@ function RingStat({ label, percent, sub, unit = "%" }: { label: string; percent:
         <div className="text-[12px] font-semibold" style={{ color: C.ink }}>{label}</div>
         <div className="mt-0.5 text-[11px]" style={{ color: C.muted }}>{sub}</div>
       </div>
-    </div>
-  );
-}
-
-function RoiZonaCard({ zona: z }: { zona: RoiZona }) {
-  const embudo = [
-    { label: "Inmuebles en la zona", value: z.intakes_mes },
-    { label: "Tomados por ti",       value: z.tomados_mes },
-    { label: "Publicados",           value: z.publicados_total },
-    { label: "Cerrados",             value: z.cerrados_total },
-  ];
-  const max = Math.max(z.intakes_mes, 1);
-
-  return (
-    <div className="rounded-lg border border-border bg-surface p-5">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <h3 className="text-sm font-semibold text-foreground">
-            {z.zona_nombre}
-            <span className="ml-2 text-xs font-normal capitalize text-muted-foreground">{z.nivel}</span>
-          </h3>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            Patrocinio {formatCOP(z.precio_mensual)}/mes
-          </p>
-        </div>
-        <div className="shrink-0 text-right">
-          <div className="text-xs text-muted-foreground">Costo por inmueble</div>
-          <div className="text-lg font-semibold tabular-nums text-foreground">
-            {z.costo_por_intake != null ? formatCOP(z.costo_por_intake) : "—"}
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-4 space-y-2">
-        {embudo.map(({ label, value }) => (
-          <div key={label} className="flex items-center gap-3">
-            <span className="w-40 shrink-0 text-xs text-muted-foreground">{label}</span>
-            <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary"
-                style={{ width: `${Math.min(100, (value / max) * 100)}%` }}
-              />
-            </div>
-            <span className="w-8 shrink-0 text-right text-sm font-medium tabular-nums text-foreground">{value}</span>
-          </div>
-        ))}
-      </div>
-
-      <p className="mt-4 border-t border-border pt-3 text-xs text-muted-foreground">
-        <span className="font-medium tabular-nums text-foreground">{z.vistas_30d.toLocaleString("es-CO")}</span>{" "}
-        vistas a tus listings de esta zona en los últimos 30 días
-      </p>
     </div>
   );
 }

@@ -2039,7 +2039,7 @@ export function MapFilterBar({
   // Comprar/Arrendar — vivía en el header (MapNavbar), ahora en el borde
   // izquierdo de esta barra al traer ComunidadNavbar como header nuevo.
   const opToggle = onTabChange && activeTab !== "sell" && (
-    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
+    <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
       {(["buy", "rent"] as const).map((id) => (
         <button
           key={id}

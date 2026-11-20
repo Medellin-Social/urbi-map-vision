@@ -1,7 +1,6 @@
 import {
-  useDesempeno, useEmbudo, useRealtorPerfil, useInteligenciaBarrio, type Embudo,
+  useDesempeno, useEmbudo, type Embudo,
 } from "@/hooks/useRealtorDashboard";
-import type { ZonaNivel } from "@/lib/realtorApi";
 import { C, fmt, fmtCOP, Card, Gauge, Stat } from "./_kit";
 
 const pctN = (v: number | null | undefined) => (v == null ? null : v * 100);
@@ -37,73 +36,23 @@ function Funnel({ stages, title, nota, compact }: { stages: { label: string; val
   );
 }
 
-// Grid "Información del mercado" de la zona del realtor (spec Katy §3).
-function MercadoZona({ codigo, nivel }: { codigo: string; nivel?: string }) {
-  const { data: b } = useInteligenciaBarrio(codigo, nivel as ZonaNivel | undefined);
-  if (!b) return null;
-  const m = b.mercado, a = b.airbnb, s = b.seguridad, con = b.conectividad, v = b.valorizacion, liq = b.liquidez;
-  const Bloc = ({ title, rows }: { title: string; rows: [string, string][] }) => (
-    <div className="rounded-xl p-4" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
-      <div className="mb-2 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.brand }}>{title}</div>
-      <div className="flex flex-col gap-1.5">
-        {rows.map(([k, val]) => (
-          <div key={k} className="flex items-baseline justify-between gap-2">
-            <span className="text-[11.5px]" style={{ color: C.sub }}>{k}</span>
-            <span className="text-[12px] font-semibold tabular-nums" style={{ color: C.ink }}>{val}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-  const km = (d: number | null) => (d == null ? "—" : d < 1 ? `${Math.round(d * 1000)} m` : `${d.toFixed(1)} km`);
-  return (
-    <Card title={`📊 Información del mercado — ${b.nombre ?? codigo}`}>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        <Bloc title="Venta" rows={[
-          ["Precio por m²", fmtCOP(m.precio_m2_cop)],
-          ["Facilidad de venta", liq.categoria ?? "—"],
-          ["Tiempo para vender", liq.tiempo_estimado_venta ?? "—"],
-        ]} />
-        <Bloc title="Arriendo largo plazo" rows={[
-          ["Arriendo típico", fmtCOP(m.arriendo_p50_cop)],
-          ["Ganancia anual", m.yield_bruto_pct != null ? `${m.yield_bruto_pct.toFixed(1)}%` : "—"],
-          ["Años para recuperar", m.anos_recupero != null ? `${m.anos_recupero.toFixed(1)}` : "—"],
-        ]} />
-        <Bloc title="Alquiler por días (Airbnb)" rows={[
-          ["Días ocupado", a.ocupacion_pct != null ? `${Math.round(a.ocupacion_pct)}%` : "—"],
-          ["Precio por noche", fmtCOP(a.adr_cop)],
-          ["Ganancia anual", a.yield_airbnb_pct != null ? `${a.yield_airbnb_pct.toFixed(1)}%` : "—"],
-        ]} />
-        <Bloc title="Seguridad" rows={[
-          ["Qué tan segura es", s.score != null ? `${Math.round(s.score)} de 100` : "—"],
-          ["Cómo va cambiando", s.tendencia ?? "—"],
-        ]} />
-        <Bloc title="Ubicación" rows={[
-          ["Distancia al metro", km(con.dist_metro_km)],
-          ["Caminable", con.walk_score != null ? (con.walk_score >= 70 ? "Muy caminable" : con.walk_score >= 40 ? "Algo caminable" : "Requiere carro") : "—"],
-          ["Colegios cerca", con.n_colegios_1km != null ? `${con.n_colegios_1km}` : "—"],
-        ]} />
-        <Bloc title="Valorización" rows={[
-          ["Subió este año", v.var_anual_pct != null ? `+${v.var_anual_pct.toFixed(1)}%` : "—"],
-          ["Se espera en 5 años", v.proyeccion_5anos_pct != null ? `+${Math.round(v.proyeccion_5anos_pct)}%` : "—"],
-        ]} />
-      </div>
-      <div className="mt-3 text-[10.5px]" style={{ color: C.muted }}>Se actualiza cada semana o cada mes, no al instante.</div>
-    </Card>
-  );
-}
+// La grid "Información del mercado" de la zona vive ahora en Mercado › Zonas de
+// interés (ResultadosTab §3) — se quitó de Inicio para no duplicarla.
 
 export function ResumenTab() {
   const { data: d, isLoading } = useDesempeno();
   const { data: emb } = useEmbudo() as { data: Embudo | undefined };
-  const { data: perfil } = useRealtorPerfil();
 
   if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Cargando…</div>;
   if (!d) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Sin datos de desempeño aún.</div>;
 
   const cs = d.calificacion_servicio;
   const st = d.standing;
-  const zonaPrincipal = perfil?.zonas_patrocinadas?.[0];
+
+  const z = d.zonas ?? [];
+  // Vistas/oportunidades perdidas (derivado, sin backend): leads que llegaron a tu
+  // zona pero no tomaste + plantones (visitas que no asistieron).
+  const perdidas = z.reduce((s, zo) => s + Math.max(0, zo.intakes_mes - zo.tomados_mes), 0) + (d.visitas_no_show_90d ?? 0);
 
   const demanda = [
     { label: "Vistas en mapa", value: emb?.vistas_mapa ?? 0 },
@@ -112,14 +61,13 @@ export function ResumenTab() {
     { label: "Visitas pedidas", value: emb?.visitas ?? 0 },
   ];
   const hayDemanda = demanda.some((s) => s.value > 0);
-  const z = d.zonas ?? [];
 
   return (
     <div className="flex flex-col gap-6">
       {/* ① Cómo te está yendo */}
       <div>
         <div className="mb-2 text-[13px] font-semibold tracking-tight" style={{ color: C.ink }}>Cómo te está yendo</div>
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Gauge value={st?.puntaje ?? null} label="Standing" sub={st?.ranking ? `#${st.ranking.posicion} de ${st.ranking.total}` : "Puntaje 0–100"} />
           <Gauge value={pctN(d.tasa_aceptacion)} label="Aceptación" suffix="%" sub={`llegaron ${d.asignados_90d}, aceptaste ${d.aceptados_90d}`} />
           <Stat label="Respuesta" value={d.mediana_horas_aceptar != null ? `${d.mediana_horas_aceptar.toFixed(1)}h` : "—"}
@@ -127,6 +75,7 @@ export function ResumenTab() {
           <Gauge value={pctN(d.show_rate)} label="Asistencia" suffix="%" sub={`${d.visitas_realizadas_90d} sí, ${d.visitas_no_show_90d} no`} />
           <Stat label="Oferta / interés" value={fmt(d.ofertas_90d + d.interesados_90d)} sub={`${d.ofertas_90d} ofertas · ${d.interesados_90d} interesados`} />
           <Stat label="Vistas" value={fmt(d.vistas_30d)} sub="este mes" />
+          <Stat label="Perdidas" value={fmt(perdidas)} sub="no tomados + plantones" accent={perdidas > 0 ? C.bad : undefined} />
         </div>
       </div>
 
@@ -159,9 +108,6 @@ export function ResumenTab() {
           </div>
         </div>
       )}
-
-      {/* ③ Información del mercado de tu zona */}
-      {zonaPrincipal && <MercadoZona codigo={zonaPrincipal.codigo} nivel={zonaPrincipal.nivel} />}
 
       {/* Embudo de demanda (era "idea", ya es real): interés real por tus inmuebles */}
       {hayDemanda ? (
