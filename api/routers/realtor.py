@@ -102,8 +102,21 @@ async def perfil(user: dict = Depends(get_current_user), pool=Depends(get_pool))
     }
 
 
+# Especialidades permitidas (mismo vocabulario que el front del perfil).
+_ESPECIALIDADES_OK = {"compra", "venta", "arriendo", "inversion", "extranjeros", "airbnb"}
+
+
 class PerfilPatchRequest(BaseModel):
     bio: str | None = Field(default=None, max_length=2000)
+    titulo: str | None = Field(default=None, max_length=120)
+    anios_experiencia: int | None = Field(default=None, ge=0, le=70)
+    idiomas: list[str] | None = Field(default=None, max_length=10)
+    especialidades: list[str] | None = Field(default=None, max_length=10)
+    licencias: list[dict] | None = Field(default=None, max_length=10)
+
+
+def _clean_list(xs: list[str] | None) -> list[str]:
+    return [s.strip() for s in (xs or []) if isinstance(s, str) and s.strip()][:10]
 
 
 @router.patch("/me")
@@ -112,16 +125,38 @@ async def editar_perfil(
     user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
 ):
-    """Edita el perfil público del agente (por ahora solo bio)."""
+    """Edita el perfil público del agente: bio, título/rol, años de experiencia,
+    idiomas, especialidades y licencias/certificaciones."""
+    import json
     agent = await _agent_del_usuario(user, pool, exigir_activo=False)
-    if req.bio is None:
+    data = req.model_dump(exclude_unset=True)
+    sets, vals = [], []
+
+    def add(col: str, val, cast: str = ""):
+        vals.append(val)
+        sets.append(f"{col} = ${len(vals) + 1}{cast}")  # $1 = agent.id
+
+    if "bio" in data:
+        add("bio", (data["bio"] or "").strip() or None)
+    if "titulo" in data:
+        add("titulo", (data["titulo"] or "").strip() or None)
+    if "anios_experiencia" in data:
+        add("anios_experiencia", data["anios_experiencia"])
+    if "idiomas" in data:
+        add("idiomas", _clean_list(data["idiomas"]))
+    if "especialidades" in data:
+        add("especialidades", [e.lower() for e in _clean_list(data["especialidades"]) if e.lower() in _ESPECIALIDADES_OK])
+    if "licencias" in data:
+        add("licencias", json.dumps(data["licencias"] or []), "::jsonb")
+
+    if not sets:
         raise HTTPException(status_code=400, detail="Nada que actualizar")
     async with pool.acquire() as conn:
         await conn.execute(
-            "UPDATE agent SET bio = $2, updated_at = NOW() WHERE id = $1",
-            agent.id, req.bio.strip() or None,
+            f"UPDATE agent SET {', '.join(sets)}, updated_at = NOW() WHERE id = $1",
+            agent.id, *vals,
         )
-    return {"id": str(agent.id), "bio": req.bio.strip() or None}
+    return {"id": str(agent.id), "actualizado": sorted(data.keys())}
 
 
 @router.post("/me/foto", status_code=201)
@@ -279,7 +314,8 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                    l.tipo_inmueble::text AS tipo_inmueble, l.operacion::text AS operacion,
                    l.precio, COALESCE(l.barrio, '') AS barrio, l.estado::text AS estado,
                    l.updated_at,
-                   COALESCE(v.total, 0) AS vistas_total, COALESCE(v.v30, 0) AS vistas_30d
+                   COALESCE(v.total, 0) AS vistas_total, COALESCE(v.v30, 0) AS vistas_30d,
+                   COALESCE(f.favoritos, 0) AS favoritos
             FROM listing l
             LEFT JOIN LATERAL (
                 SELECT COUNT(*) AS total,
@@ -287,7 +323,14 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                 FROM public.user_events e
                 WHERE {_VISTAS_JOIN}
             ) v ON TRUE
-            WHERE l.agent_id = $1
+            LEFT JOIN LATERAL (
+                -- favoritos por listing: la tabla se llavea por url (slug | id),
+                -- mismo patrón dual que _VISTAS_JOIN para cubrir ambas llaves.
+                SELECT COUNT(*) AS favoritos
+                FROM raw.favoritos_listings fl
+                WHERE fl.url IN (l.id::text, l.slug)
+            ) f ON TRUE
+            WHERE l.agent_id = $1 AND l.deleted_at IS NULL
             ORDER BY l.updated_at DESC
             """,
             agent.id,
@@ -442,6 +485,63 @@ async def cerrar_listing(
         log.warning("conversion event insert falló (listing=%s)", listing_id, exc_info=True)
     await ghl_client.sync_listing(listing_id)
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
+
+
+class EstadoListingRequest(BaseModel):
+    estado: str  # 'pausado' | 'publicado'
+
+
+@router.post("/listings/{listing_id}/estado")
+async def cambiar_estado_listing(
+    listing_id: str,
+    req: EstadoListingRequest,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Pausar (publicado→pausado) o reactivar (pausado→publicado) un listing propio.
+    Valida la transición con TRANSICIONES_VALIDAS (mismo guard que cerrar). NO toca
+    el cache del mapa público: dashboard-only, sync al mapa es fase 2."""
+    nuevo = req.estado
+    if nuevo not in ("pausado", "publicado"):
+        raise HTTPException(status_code=400, detail="Estado solo puede ser 'pausado' o 'publicado'")
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            lst = await conn.fetchrow(
+                "SELECT estado::text AS estado FROM listing "
+                "WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL FOR UPDATE",
+                listing_id, agent.id,
+            )
+            if not lst:
+                raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
+            if nuevo not in TRANSICIONES_VALIDAS.get(lst["estado"], frozenset()):
+                raise HTTPException(status_code=409, detail=f"No se puede pasar de '{lst['estado']}' a '{nuevo}'")
+            await conn.execute(
+                "UPDATE listing SET estado = $2::listing_estado, updated_at = NOW() WHERE id = $1",
+                listing_id, nuevo,
+            )
+    await ghl_client.sync_listing(listing_id)
+    return {"id": listing_id, "estado": nuevo}
+
+
+@router.delete("/listings/{listing_id}", status_code=204)
+async def eliminar_listing(
+    listing_id: str,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Soft-delete de un listing propio (deleted_at = NOW()). Reversible y auditable:
+    la fila y el evento de propiedad (propiedad_evento) sobreviven. NO toca el cache
+    del mapa público (fase 2)."""
+    agent = await _agent_del_usuario(user, pool)
+    row = await pool.fetchrow(
+        "UPDATE listing SET deleted_at = NOW(), updated_at = NOW() "
+        "WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL RETURNING id",
+        listing_id, agent.id,
+    )
+    if not row:
+        raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
+    return None
 
 
 # Comparables de CIERRE: NO expone matrícula / dirección / agente / listing_id de
@@ -775,9 +875,14 @@ async def desempeno(user: dict = Depends(get_current_user), pool=Depends(get_poo
             # intake.zona_codigo siempre es barrio_id::text; una zona comuna
             # agrega todos los barrios que la componen
             if z["nivel"] == "comuna":
+                # zona_codigo de comuna = cd_comuna (número, p.ej. '14'), igual que
+                # _ZONAS_SQL y /embudo. Antes hacía `comuna = $1` contra raw.barrios.comuna
+                # (que guarda el NOMBRE, "EL POBLADO") → 0 barrios → ROI de zona en cero.
                 codigos = [
                     r["id"] for r in await conn.fetch(
-                        "SELECT id::text AS id FROM raw.barrios WHERE comuna = $1",
+                        "SELECT b.id::text AS id FROM raw.barrios b "
+                        "JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id "
+                        "WHERE bc.cd_comuna::text = $1",
                         z["zona_codigo"],
                     )
                 ]
@@ -984,7 +1089,10 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             _MIS_URLS_CTE + """
             SELECT v.id::text AS id, v.listing_url,
                    COALESCE(m.titulo,
-                            initcap(s.tipo_inmueble::text) || ' en ' || COALESCE(b.nombre, s.barrio_raw, 'la zona')
+                            initcap(s.tipo_inmueble::text) || ' en ' || COALESCE(b.nombre, s.barrio_raw, 'la zona'),
+                            -- Lead zona-only (listing_url sintético, sin fila en staging):
+                            -- sin esto listing_titulo = NULL → el front muestra "· fecha" roto.
+                            'Nuevo lead'
                    ) AS listing_titulo,
                    COALESCE(v.nombre, u.nombre, 'Visitante') AS nombre,
                    v.telefono, u.email,
@@ -1012,6 +1120,10 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = s.barrio_id
             LEFT JOIN public.usuarios u ON u.id = v.usuario_id
             WHERE m.url IS NOT NULL
+               -- Lead ruteado directo al realtor (crear_visita / lead-in de GHL por
+               -- zona): el agent_id se resolvió al crear. Sin esta rama, un lead
+               -- zona-only (listing_url sintético, sin fila en staging) no aparecería.
+               OR v.agent_id = $1
                OR EXISTS (
                     SELECT 1 FROM sponsorship sp
                     JOIN agency_member am ON am.agency_id = sp.agency_id AND am.agent_id = $1
@@ -1078,6 +1190,7 @@ async def actualizar_visita(
             UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado), updated_at = NOW()
             WHERE v.id = $4 AND (
                 v.listing_url IN (SELECT url FROM mis_urls)
+                OR v.agent_id = $1   -- lead ruteado directo (crear_visita / GHL lead-in)
                 OR EXISTS (
                     SELECT 1
                     FROM staging.stg_listings_unificado s

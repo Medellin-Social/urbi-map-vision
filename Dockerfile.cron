@@ -48,6 +48,13 @@ ENV TRANSLATE_TOK_ES_EN=/app/models/opus-es-en-tok
 ENV TRANSLATE_MODEL_EN_ES=/app/models/opus-en-es-ct2
 ENV TRANSLATE_TOK_EN_ES=/app/models/opus-en-es-tok
 
+# Clasificador zero-shot offline de noticias (scraping/noticias/clasificador.py).
+# Filtra por tema: deja cultura/deporte/gastronomía, descarta crimen/política/
+# accidentes. Modelo Spanish ELECTRA bakeado -> runtime 100% offline, sin API.
+# ponytail: si SELECTRA medium da ruido, swap a mDeBERTa-v3 vía NOTICIAS_CLF_MODEL.
+RUN python3 -c "from transformers import pipeline; pipeline('zero-shot-classification', model='Recognai/zeroshot_selectra_medium').save_pretrained('/app/models/zeroshot-noticias')"
+ENV NOTICIAS_CLF_MODEL=/app/models/zeroshot-noticias
+
 COPY scripts/ ./scripts/
 COPY api/ ./api/
 COPY scraping/ ./scraping/

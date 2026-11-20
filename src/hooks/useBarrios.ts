@@ -339,7 +339,7 @@ export function useBarriosRaw(perfil?: string) {
       const url = `${API_ENDPOINTS.barrios}?${params}`;
 
       const [apiData, geoLookup, staticFeatures, statsMap] = await Promise.all([
-        apiFetch<ApiBarrio[]>(url).catch(() => [] as ApiBarrio[]),
+        apiFetch<ApiBarrio[]>(url, { skipAuth: true }).catch(() => [] as ApiBarrio[]),
         loadStaticGeometry(),
         loadStaticFeatures(),
         loadBarrioStats(),
@@ -636,7 +636,7 @@ export type BarrioComunaItem = {
 export function useBarriosComunas() {
   return useQuery({
     queryKey: ["barrios-comunas"],
-    queryFn: () => apiFetch<ComunaItem[]>(`${API_ENDPOINTS.barrios}/comunas`),
+    queryFn: () => apiFetch<ComunaItem[]>(`${API_ENDPOINTS.barrios}/comunas`, { skipAuth: true }),
     staleTime: 10 * 60 * 1000,
     retry: 1,
   });
@@ -648,6 +648,7 @@ export function useBarriosPorComuna(key: string | null) {
     queryFn: () =>
       apiFetch<BarrioComunaItem[]>(
         `${API_ENDPOINTS.barrios}/por-comuna/${encodeURIComponent(key!)}`,
+        { skipAuth: true },
       ),
     enabled: key !== null,
     staleTime: 5 * 60 * 1000,

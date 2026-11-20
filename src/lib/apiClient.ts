@@ -51,7 +51,13 @@ export async function apiFetch<T>(url: string, options: FetchOptions = {}): Prom
   const token = getToken();
   if (!skipAuth) Object.assign(headers, authHeaders());
 
-  const res = await fetch(url, { ...init, headers, credentials: init.credentials ?? authCredentials });
+  // skipAuth = llamada pública → request totalmente anónimo (ni header ni
+  // credentials). En cookie-mode `authCredentials='include'`; mandarlo a un
+  // endpoint público cross-origin que no responde `access-control-allow-credentials`
+  // (p.ej. /barrios?fields=map servido desencadena un fallo CORS) tumba el fetch
+  // → los polígonos no cargaban estando logueado. 'omit' evita el preflight credentialed.
+  const creds = init.credentials ?? (skipAuth ? "omit" : authCredentials);
+  const res = await fetch(url, { ...init, headers, credentials: creds });
 
   if (res.status === 401) {
     clearToken();

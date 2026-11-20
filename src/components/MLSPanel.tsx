@@ -1,15 +1,14 @@
 import { useState, useMemo, useEffect, useRef, useCallback } from "react";
 import { useImpression } from "@/lib/impressions";
 import { OriginalListingLink } from "@/components/OriginalListingLink";
-import { originalListingUrl } from "@/lib/originalListing";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { ArrowLeft, ExternalLink, Plus, Check, ArrowUpDown, Heart } from "@/lib/icons";
+import { ArrowLeft, Plus, Check, Heart } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { formatCOP } from "@/lib/format";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
-import { auth } from "@/lib/auth";
+import { getToken } from "@/lib/apiClient";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
@@ -49,6 +48,9 @@ type Props = {
   comunaBarrios?: Array<{ barrio_id: number; nombre: string }>;
   onBackToComuna?: () => void;
   onSelectBarrioInComune?: (barrioId: number) => void;
+  /** Split-view (Zillow/Airbnb): render in-flow como columna izquierda, cards en grid 2-col
+   *  (sin overlay flotante ni animación). Lo usa la ruta /map con SPLIT_LAYOUT. */
+  embedded?: boolean;
 };
 
 // Internal-only filters — common filters (precio, hab, tipo, area, banos, antiguedad, tipoOp)
@@ -148,6 +150,7 @@ function ListingCard({
   onToggleFav,
   onSimular,
   onHover,
+  index = 0,
 }: {
   onHover?: (hovering: boolean) => void;
   listing: ApiListing;
@@ -157,7 +160,11 @@ function ListingCard({
   isFav: boolean;
   onToggleFav: () => void;
   onSimular: () => void;
+  index?: number;
 }) {
+  // Entrada escalonada: cascada continua en ciclos de 8 (acotado, sin delays que
+  // crezcan sin fin en el infinite scroll). Reduced-motion lo anula vía la clase.
+  const enterDelay = `${(index % 8) * 0.04}s`;
   const isPro = useIsPro();
   const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
@@ -196,11 +203,13 @@ function ListingCard({
         ref={mergedRef}
         onClick={(e) => onSelect(e)}
         data-tour="listing-card"
-        className="cursor-pointer rounded-lg border overflow-hidden"
-        style={highlighted
-          ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-          : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
-        }
+        className="mls-card-enter cursor-pointer rounded-lg border overflow-hidden"
+        style={{
+          ...(highlighted
+            ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+            : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }),
+          animationDelay: enterDelay,
+        }}
       >
         <div className="relative h-[90px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
           {listing.foto_principal ? (
@@ -229,7 +238,7 @@ function ListingCard({
           <div className="min-w-0">
             <div data-i18n-skip="true" className="text-sm font-bold leading-tight text-[#111418]">{precio}</div>
             {specs && <div className="mt-0.5 truncate text-[11px] text-[#5B5F5C]">{specs}</div>}
-            <OriginalListingLink listing={listing} variant="compact" className="mt-1.5" />
+            <OriginalListingLink listing={listing} variant="compact" className="mt-1.5" report={false} />
           </div>
           <button
             onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
@@ -237,7 +246,7 @@ function ListingCard({
             aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
             title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
           >
-            <Heart className="h-[22px] w-[22px]" style={{ color: isFav ? "#CE1126" : "#9aa0a6" }} fill={isFav ? "#CE1126" : "none"} />
+            <Heart className="h-[22px] w-[22px]" style={{ color: isFav ? "#CE1126" : "#374151" }} />
           </button>
         </div>
       </div>
@@ -251,11 +260,13 @@ function ListingCard({
       onMouseLeave={() => onHover?.(false)}
       onClick={(e) => onSelect(e)}
       data-tour="listing-card"
-      className="cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F3F0E8]"
-      style={highlighted
-        ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
-        : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }
-      }
+      className="mls-card-enter cursor-pointer rounded-lg border overflow-hidden transition-all hover:bg-[#F3F0E8]"
+      style={{
+        ...(highlighted
+          ? { border: '1.5px solid #0F8A4F', background: '#FFFFFF', boxShadow: '0 2px 8px rgba(29,158,117,0.15)' }
+          : { border: '0.5px solid #E5E0D5', background: '#FFFFFF' }),
+        animationDelay: enterDelay,
+      }}
     >
       {/* Photo */}
       <div className="relative h-[140px] w-full overflow-hidden" style={{ background: '#F3F0E8' }}>
@@ -295,32 +306,44 @@ function ListingCard({
         >
           {tipo}
         </span>
-        {/* Comparador "+" button — solo realtors */}
-        {isRealtor && (
+        {/* Acciones sobre la foto (top-right): me gusta (todos) + comparar/simular
+            (solo realtors) apilados debajo del corazón. */}
+        <div className="absolute top-2 right-2 flex flex-col items-end gap-1.5">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              if (selected) {
-                removeListing(listing.id);
-              } else if (canAdd) {
-                addListing(listing);
-              } else {
-                toast.info("Máximo 5 inmuebles en el comparador");
-              }
-            }}
-            title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
-            className="absolute top-2 right-2 flex h-7 w-7 items-center justify-center rounded-full shadow-md transition hover:scale-110"
-            style={{
-              background: selected ? "#0F8A4F" : "rgba(255,255,255,0.92)",
-              border: selected ? "none" : "0.5px solid #E5E0D5",
-            }}
+            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
+            aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+            title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
+            className="grid h-8 w-8 place-items-center rounded-full shadow-md transition hover:scale-110"
+            style={{ background: "rgba(255,255,255,0.92)", border: "0.5px solid #E5E0D5" }}
           >
-            {selected
-              ? <Check className="h-3.5 w-3.5 text-white" />
-              : <Plus className="h-3.5 w-3.5 text-[#0F8A4F]" />
-            }
+            <Heart className="h-[18px] w-[18px]" style={{ color: isFav ? "#CE1126" : "#374151" }} />
           </button>
-        )}
+          {isRealtor && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                if (selected) removeListing(listing.id);
+                else if (canAdd) addListing(listing);
+                else toast.info("Máximo 5 inmuebles en el comparador");
+              }}
+              title={selected ? "Quitar de comparación" : canAdd ? "Agregar a comparación" : "Máximo 5 inmuebles"}
+              className="grid h-8 w-8 place-items-center rounded-full shadow-md transition hover:scale-110"
+              style={{ background: selected ? "#0F8A4F" : "rgba(255,255,255,0.92)", border: selected ? "none" : "0.5px solid #E5E0D5" }}
+            >
+              {selected ? <Check className="h-3.5 w-3.5 text-white" /> : <Plus className="h-3.5 w-3.5 text-[#0F8A4F]" />}
+            </button>
+          )}
+          {isRealtor && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onSimular(); }}
+              title="Simular inversión"
+              className="rounded-full px-2 py-0.5 text-[10px] font-semibold shadow-md transition hover:scale-105"
+              style={{ background: "rgba(255,255,255,0.92)", border: "0.5px solid #E5E0D5", color: "#0F8A4F" }}
+            >
+              Simular
+            </button>
+          )}
+        </div>
       </div>
       <div className="p-3">
       <div className="mb-2 flex items-center gap-2 flex-wrap">
@@ -402,43 +425,6 @@ function ListingCard({
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between">
-        {listing.url && listing.disponible_actualmente !== false && originalListingUrl(listing) ? (
-          <OriginalListingLink listing={listing} variant="compact" />
-        ) : listing.disponible_actualmente === false ? (
-          <span
-            className="flex items-center gap-1 text-[10px] text-[#C9C4B8] capitalize cursor-default"
-            title="Este listing ya no está disponible, pero sus datos son referencia histórica del mercado"
-          >
-            {listing.fuente ?? "—"}
-            <ExternalLink className="h-2.5 w-2.5 opacity-30" />
-          </span>
-        ) : (
-          <span className="text-[10px] text-[#6E726E] capitalize">
-            {listing.fuente ?? "—"}
-          </span>
-        )}
-
-        <div className="flex items-center gap-1.5">
-          {isRealtor && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onSimular(); }}
-              className="rounded px-1.5 py-0.5 text-[10px] text-[#6E726E] border border-[#E5E0D5] hover:text-[#0F8A4F] hover:border-[#0F8A4F]/40 transition"
-              title="Simular inversión"
-            >
-              Simular
-            </button>
-          )}
-          <button
-            onClick={(e) => { e.stopPropagation(); onToggleFav(); }}
-            className="grid h-11 w-11 place-items-center text-base leading-none transition hover:scale-110"
-            aria-label={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
-            title={isFav ? "Quitar de favoritos" : "Guardar propiedad"}
-          >
-            <Heart className="h-[22px] w-[22px]" style={{ color: isFav ? "#CE1126" : "#9aa0a6" }} fill={isFav ? "#CE1126" : "none"} />
-          </button>
-        </div>
-      </div>
       </div>
     </div>
   );
@@ -475,8 +461,12 @@ export function MLSPanel({
   comunaBarrios,
   onBackToComuna,
   onSelectBarrioInComune,
+  embedded = false,
 }: Props) {
   const isMobile = useIsMobile();
+  // En split, las celdas que NO son cards (loading/vacío/encabezados/sentinel/disclaimer)
+  // ocupan el ancho completo del grid 2-col; las cards fluyen como celdas.
+  const spanAll = embedded ? "col-span-2" : "";
   const [filters, setFilters] = useState<Filters>({
     modalidad: null,
     scoreMin: null,
@@ -604,14 +594,15 @@ export function MLSPanel({
     if (!s || !root || !hayMas) return;
     const io = new IntersectionObserver(
       (es) => { if (es[0].isIntersecting) setVisibleCount((c) => c + RENDER_STEP); },
-      { root, rootMargin: "600px" },
+      { root, rootMargin: "250px" },
     );
     io.observe(s);
     return () => io.disconnect();
   }, [hayMas, restoVisible.length]);
-  const renderCard = (l: ApiListing) => (
+  const renderCard = (l: ApiListing, i: number) => (
     <ListingCard
       key={`${l.fuente ?? "x"}-${l.id}`}
+      index={i}
       listing={l}
       highlighted={highlightedListingId === l.id}
       onSelect={(e) => onListingSelect(l, e.clientX, e.clientY)}
@@ -619,7 +610,7 @@ export function MLSPanel({
       cardRef={(el) => { cardRefs.current[l.id] = el; }}
       isFav={isFav(favKey(l))}
       onToggleFav={() => {
-        if (!auth.get()) { toast.info("Inicia sesión para guardar"); return; }
+        if (!getToken()) { toast.info("Inicia sesión para guardar"); return; }
         toggleFav(favKey(l), l.barrio_id);
       }}
       onSimular={() => {
@@ -631,8 +622,9 @@ export function MLSPanel({
   const body = (
     <>
         {/* Header — desktop clears the navbar+filterbar (104px); mobile list sits below them */}
-        <div className={`border-b border-border px-4 pb-3 ${isMobile ? "pt-2" : "pt-[104px]"}`}>
+        <div className={`${embedded ? "" : "border-b border-border"} px-4 pb-3 ${isMobile ? "pt-2" : embedded ? "pt-3" : "pt-[104px]"}`}>
           {isAtTopLevel ? (
+            embedded ? null : (
             <button
               onClick={onBack}
               className="mb-3 flex items-center gap-1.5 text-xs text-muted-foreground transition hover:text-foreground"
@@ -640,6 +632,7 @@ export function MLSPanel({
               <ArrowLeft className="h-3.5 w-3.5" />
               Volver al análisis
             </button>
+            )
           ) : (
             <div className="mb-2 flex flex-wrap items-center gap-1 text-xs">
               <button
@@ -702,7 +695,7 @@ export function MLSPanel({
 
         {/* Contador de resultados + orden */}
         {!isLoading && (
-          <div className="flex items-center justify-between gap-2 border-b border-border px-4 py-2">
+          <div className={`flex items-center justify-between gap-2 px-4 py-2 ${embedded ? "" : "border-b border-border"}`}>
             <span className="text-xs font-medium text-muted-foreground">
               {(() => {
                 const noLocalFilters = !premiumFilterActive && filters.scoreMin === null && filters.scoreMax === null
@@ -712,7 +705,6 @@ export function MLSPanel({
               })()}
             </span>
             <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <ArrowUpDown className="h-3.5 w-3.5" />
               <select
                 value={sortBy}
                 onChange={(e) => setSortBy(e.target.value as SortKey)}
@@ -727,15 +719,15 @@ export function MLSPanel({
         )}
 
         {/* Lista */}
-        <div ref={listContainerRef} data-tour="listing-panel" className={`flex-1 overflow-y-auto px-4 py-3 space-y-2.5 ${isMobile ? "pb-24" : ""}`}>
+        <div ref={listContainerRef} data-tour="listing-panel" className={`flex-1 min-h-0 overflow-y-auto px-4 py-3 ${embedded ? "grid grid-cols-2 content-start items-start auto-rows-min gap-2.5" : "space-y-2.5"} ${isMobile ? "pb-24" : ""}`}>
           {isLoading && (
-            <div className="flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm">
+            <div className={`${spanAll} flex flex-col items-center justify-center gap-3 py-12 text-muted-foreground text-sm`}>
               <div className="h-8 w-8 animate-spin rounded-full border-2 border-[#0F8A4F] border-t-transparent" />
               <span>Cargando inmuebles…</span>
             </div>
           )}
           {!isLoading && filtered.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+            <div className={`${spanAll} flex flex-col items-center justify-center py-12 text-center text-muted-foreground`}>
               <div className="text-3xl mb-2">🏠</div>
               <div className="text-sm font-medium">Sin resultados</div>
               <div className="text-xs mt-1">Intenta con otros filtros</div>
@@ -754,7 +746,7 @@ export function MLSPanel({
           )}
           {destacados.length > 0 && (
             <>
-              <div className="flex items-center gap-2 px-1 pt-1 pb-0.5">
+              <div className={`${spanAll} flex items-center gap-2 px-1 pt-1 pb-0.5`}>
                 <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: DESTACADO_COLOR }}>
                   ★ {lang === "en" ? "Featured in this area" : "Destacados en esta zona"}
                 </span>
@@ -762,7 +754,7 @@ export function MLSPanel({
               </div>
               {destacados.map(renderCard)}
               {resto.length > 0 && (
-                <div className="flex items-center gap-2 px-1 pt-2 pb-0.5">
+                <div className={`${spanAll} flex items-center gap-2 px-1 pt-2 pb-0.5`}>
                   <span className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
                     {lang === "en" ? "All properties" : "Todas las propiedades"}
                   </span>
@@ -774,12 +766,12 @@ export function MLSPanel({
           {restoVisible.map(renderCard)}
           {/* Sentinel para render progresivo — dispara el siguiente lote */}
           {hayMas && (
-            <div ref={sentinelRef} className="flex justify-center py-4">
+            <div ref={sentinelRef} className={`${spanAll} flex justify-center py-4`}>
               <div className="h-5 w-5 animate-spin rounded-full border-2 border-[#0F8A4F] border-t-transparent" />
             </div>
           )}
           {!isLoading && !hayMas && filtered.length > 0 && (
-            <p className="px-3 py-4 text-center text-[10px] leading-relaxed text-muted-foreground">
+            <p className={`${spanAll} px-3 py-4 text-center text-[10px] leading-relaxed text-muted-foreground`}>
               {lang === "en"
                 ? "Listings come from third-party sources and owners. Medellín Social does not guarantee the accuracy of prices, availability or details — verify with the agent before deciding."
                 : "Los inmuebles provienen de fuentes externas y propietarios. Medellín Social no garantiza la exactitud de precios, disponibilidad ni detalles — verifica con el agente antes de decidir."}
@@ -788,6 +780,16 @@ export function MLSPanel({
         </div>
     </>
   );
+
+  // Split-view (desktop ≥1024): columna izquierda in-flow, sin overlay ni animación.
+  // El contenedor padre (map.tsx) le da tamaño; el `body` maneja su propio scroll.
+  if (embedded && !isMobile) {
+    return (
+      <div className="flex h-full flex-col" style={{ background: "#FAF8F3", ...panelVars }}>
+        {body}
+      </div>
+    );
+  }
 
   // Mobile: full-screen list (Zillow toggle) below the navbar+filterbar (top:100).
   // The map.tsx toggle button swaps between this and the full-screen map.

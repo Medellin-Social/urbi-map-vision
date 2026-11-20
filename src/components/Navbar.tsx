@@ -28,16 +28,6 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
     .join("")
     .toUpperCase();
 
-  const linkStyle: React.CSSProperties = {
-    color: 'rgba(255,255,255,0.85)',
-    fontSize: 13,
-    fontWeight: 600,
-    textDecoration: 'none',
-    letterSpacing: '.6px',
-    textTransform: 'uppercase',
-    fontFamily: 'inherit',
-  };
-
   return (
     <header style={{
       position: 'absolute', inset: '0 0 auto 0', zIndex: 30,
@@ -57,7 +47,7 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexShrink: 0 }}>
 
         {/* MLS breadcrumb */}
-        {mlsBarrio ? (
+        {mlsBarrio && (
           <button
             onClick={onBack}
             style={{
@@ -80,11 +70,6 @@ export function Navbar({ mlsBarrio, mlsTotal, onBack }: NavbarProps = {}) {
               </span>
             )}
           </button>
-        ) : (
-          <>
-            <Link to="/simulador" style={linkStyle}>Simulador 💰</Link>
-            <Link to="/comparador" style={linkStyle}>Comparador</Link>
-          </>
         )}
 
         {/* Language pill */}

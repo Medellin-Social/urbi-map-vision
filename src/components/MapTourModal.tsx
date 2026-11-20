@@ -19,6 +19,18 @@ type TourStep = {
 
 const palette = SCORE_PALETTES.urbi;
 
+// Varios anchors data-tour se renderizan 2× (desktop/compacto, uno con display:none)
+// → querySelector devolvería el oculto (rect 0×0) y el spotlight apuntaría a la nada.
+// Toma el primero con tamaño real; si ninguno, cae al primer match.
+function findVisible(selector: string): HTMLElement | null {
+  const els = document.querySelectorAll<HTMLElement>(selector);
+  for (const el of els) {
+    const r = el.getBoundingClientRect();
+    if (r.width > 0 && r.height > 0) return el;
+  }
+  return els[0] ?? null;
+}
+
 type Props = {
   isMobile: boolean;
   dataReady: boolean;
@@ -30,10 +42,10 @@ type Props = {
   onZoomToBarrio: () => void;
   onCloseListingDetail: () => void;
   onBackToComunas: () => void;
-  onCancelBackToComunas: () => void;
+  onFlushBackToComunas: () => void;
 };
 
-export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLaureles, onShowMobileList, onShowMobileMap, onDemoZoom, onZoomToBarrio, onCloseListingDetail, onBackToComunas, onCancelBackToComunas }: Props) {
+export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLaureles, onShowMobileList, onShowMobileMap, onDemoZoom, onZoomToBarrio, onCloseListingDetail, onBackToComunas, onFlushBackToComunas }: Props) {
   const [step, setStep] = useState(0);
   const [show, setShow] = useState(false);
   const [rect, setRect] = useState<DOMRect | null>(null);
@@ -123,7 +135,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
       body: "Al expandir el resumen se abre esta ventana con todos los detalles del inmueble.",
       // Encadenado: reabre el popup (por si se volvió aquí desde un paso
       // posterior que lo cerró) y luego expande al drawer.
-      autoClickSelector: ['[data-tour="listing-card"]', '[data-tour="listing-popup-viewmore"]'],
+      autoClickSelector: ['[data-tour="listing-card"]', '[data-tour="listing-popup"]'],
       selector: '[data-tour="listing-drawer"]',
     },
     {
@@ -161,12 +173,12 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
   }, [dataReady]);
 
   // Drive the app state each step expects (e.g. select Laureles, open mobile list).
-  // Cancela primero cualquier reset diferido (el de "volver a comunas") — si
-  // el usuario ya navegó a otro paso, ese timer quedaría huérfano y pisaría
-  // el estado que este paso está por armar.
+  // Flushea primero cualquier reset diferido (el de "volver a comunas") — correrlo
+  // ya (no cancelarlo) ANTES del onEnter de este paso deja un estado consistente:
+  // cancelarlo dejaba mapView="listings" tras switchToComunas → zoom sin barrios.
   useEffect(() => {
     if (!show) return;
-    onCancelBackToComunas();
+    onFlushBackToComunas();
     STEPS[step]?.onEnter?.();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [step, show]);
@@ -182,7 +194,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
     let cancelled = false;
     const tick = (i: number, start: number) => {
       if (cancelled || i >= selectors.length) return;
-      const el = document.querySelector<HTMLElement>(selectors[i]);
+      const el = findVisible(selectors[i]);
       if (el) {
         el.click();
         if (i + 1 < selectors.length) raf = requestAnimationFrame(() => tick(i + 1, performance.now()));
@@ -206,7 +218,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
     const start = performance.now();
     const tick = () => {
       if (cancelled) return;
-      const el = document.querySelector(selector);
+      const el = findVisible(selector);
       if (el) {
         setRect(el.getBoundingClientRect());
         raf = requestAnimationFrame(tick);
@@ -317,7 +329,7 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
         // En móvil left:16 choca con el botón "volver a comunas" (mismo lugar) — a la derecha en móvil.
         style={isMobile
           ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }
-          : { top: "calc(var(--map-header-h, 53px) + 56px)", left: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
+          : { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
       >
         <GraduationCap size={14} />
         Tutorial de la página

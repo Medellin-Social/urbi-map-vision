@@ -151,8 +151,12 @@ class Conectividad(BaseModel):
     dist_parque_km: Optional[float] = None
     dist_mall_km: Optional[float] = None
     n_cafes_500m: Optional[int] = None
+    n_restaurantes_500m: Optional[int] = None
+    n_bares_500m: Optional[int] = None
     n_coworking_1km: Optional[int] = None
     n_gimnasios_1km: Optional[int] = None
+    n_universidades_2km: Optional[int] = None
+    n_hospitales_3km: Optional[int] = None
     n_yoga_1km: Optional[int] = None
     indice_nomada: Optional[float] = None
     # Colegios cercanos + scores estilo Zillow (walk/transit)
@@ -318,8 +322,12 @@ _BARRIO_MAP_SQL = """
         poi.dist_parque_km,
         poi.dist_mall_km,
         poi.n_cafes_500m,
+        poi.n_restaurantes_500m,
+        poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
+        poi.n_universidades_2km,
+        poi.n_hospitales_3km,
         poi.n_yoga_1km,
         poi.indice_nomada,
         poi.n_colegios_1km,
@@ -401,8 +409,12 @@ _BARRIO_SQL = """
         poi.dist_parque_km,
         poi.dist_mall_km,
         poi.n_cafes_500m,
+        poi.n_restaurantes_500m,
+        poi.n_bares_500m,
         poi.n_coworking_1km,
         poi.n_gimnasios_1km,
+        poi.n_universidades_2km,
+        poi.n_hospitales_3km,
         poi.n_yoga_1km,
         poi.indice_nomada,
         poi.n_colegios_1km,
@@ -729,8 +741,12 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             dist_parque_km=_f(row, "dist_parque_km"),
             dist_mall_km=_f(row, "dist_mall_km"),
             n_cafes_500m=_i(row, "n_cafes_500m"),
+            n_restaurantes_500m=_i(row, "n_restaurantes_500m"),
+            n_bares_500m=_i(row, "n_bares_500m"),
             n_coworking_1km=_i(row, "n_coworking_1km"),
             n_gimnasios_1km=_i(row, "n_gimnasios_1km"),
+            n_universidades_2km=_i(row, "n_universidades_2km"),
+            n_hospitales_3km=_i(row, "n_hospitales_3km"),
             n_yoga_1km=_i(row, "n_yoga_1km"),
             indice_nomada=_f(row, "indice_nomada"),
             n_colegios_1km=_i(row, "n_colegios_1km"),
@@ -901,6 +917,7 @@ async def list_barrios(
 
     sql = base_sql + f"""
         WHERE ($1::text IS NULL OR upper(b.municipio) = upper($1))
+          AND {_VALLE_ABURRA_SQL}
           AND ($2::int  IS NULL OR sl.estrato_barrio = $2)
           AND (sc.{score_col} IS NULL OR sc.{score_col} >= $3)
         ORDER BY sc.{score_col} DESC NULLS LAST

@@ -4,12 +4,18 @@ Filters: neg keywords (title+body), positive keywords (title), last 48h only.
 Long titles summarized via HF Inference API (mT5 multilingual XLSum).
 """
 import os
+import sys
 import time
 from datetime import datetime, timedelta
 
 import feedparser
 import psycopg2
 from bs4 import BeautifulSoup
+
+# Clasificador hermano. sys.path a la propia carpeta -> import funciona en los 3
+# contextos (run_comunidad, DAG, tests) sin paquete relativo.
+sys.path.insert(0, os.path.dirname(__file__))
+from clasificador import clasificador_disponible, clasificar, decidir  # noqa: E402
 
 # El Colombiano no tiene RSS nativo; Google News RSS por sección
 _GN_BASE = "https://news.google.com/rss/search?hl=es-419&gl=CO&ceid=CO:es-419&q="
@@ -145,6 +151,14 @@ KEYWORDS_POSITIVOS = [
     "parque", "museo", "biblioteca", "tango",
     "jazz", "folclor", "danza", "cine",
     "libro", "literatura", "fotografía",
+    # Vocabulario cultural ampliado (2026-11-15) — recupera cultura que el keyword
+    # exacto perdía (Latin Grammy, Daddy Yankee, "sector gastronómico"...). Raíces
+    # verificadas sin colisión política; el modelo igual gatea después (+5 keep,
+    # 0 fugas en feed real). NO agregar "escenario"/"orquesta"/"galería": colisionan
+    # con política ("escenario electoral") o genérico ("galería de fotos").
+    "grammy", "gastronóm", "artista", "inaugura",
+    "canción", "álbum", "sinfón", "escultura",
+    "pintura", "poesía", "mural", "ópera", "coreograf",
 ]
 
 _CUTOFF_48H = timedelta(hours=48)
@@ -207,6 +221,7 @@ def scrape_rss_feed(feed_config: dict) -> tuple[list[dict], int]:
 
     cutoff = datetime.now() - _CUTOFF_48H
     noticias = []
+    clf_on = clasificador_disponible()  # cacheado: carga el modelo una vez
 
     for entry in feed.entries:
         titulo = limpiar_titulo(entry.get("title", "").strip())
@@ -225,6 +240,11 @@ def scrape_rss_feed(feed_config: dict) -> tuple[list[dict], int]:
             print(f"  [-neg-t] {titulo[:70]}")
             continue
 
+        # Allowlist keyword: exige tema positivo. NO se quitó a propósito — es
+        # complementario al modelo: atrapa política-sin-keyword-negativa que el
+        # zero-shot deja pasar (ej. "Laura Sarabia y el lote...", "EPM pública")
+        # porque no sabe que son figuras/temas políticos. El modelo no reemplaza
+        # esto de forma confiable en títulos cortos (verificado 2026-11-14).
         if not es_noticia_relevante(titulo):
             print(f"  [-rel]   {titulo[:70]}")
             continue
@@ -233,6 +253,14 @@ def scrape_rss_feed(feed_config: dict) -> tuple[list[dict], int]:
         if body and not es_noticia_positiva(body):
             print(f"  [-neg-b] {titulo[:70]}")
             continue
+
+        # Gate semántico zero-shot: decide por tema, no por keyword. Solo corre
+        # sobre los que pasaron los filtros baratos de arriba.
+        if clf_on:
+            info = clasificar(titulo)
+            if not decidir(info["pos"], info["neg"]):
+                print(f"  [-tema]  ({info['top']} p{info['pos']:.2f}/n{info['neg']:.2f}) {titulo[:55]}")
+                continue
 
         titulo_final = resumir_titulo(titulo)
         noticias.append({"fuente": feed_config["fuente"], "titulo": titulo_final, "url": url, "fecha_publicacion": fecha})

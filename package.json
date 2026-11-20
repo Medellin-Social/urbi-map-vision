@@ -12,7 +12,8 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "qc": "playwright test -c qc/playwright.config.ts"
+    "qc": "playwright test -c qc/playwright.config.ts",
+    "test:realtor-e2e": "playwright test -c qc/playwright.realtor.config.ts"
   },
   "dependencies": {
     "@phosphor-icons/react": "^2.1.10",

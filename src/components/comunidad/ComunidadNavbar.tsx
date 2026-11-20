@@ -5,7 +5,6 @@ import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
 import { auth } from '../../lib/auth'
-import { useIsAgente } from '../LockedField'
 import { K as TOKENS } from "@/design/tokens";
 
 const K = TOKENS;
@@ -79,7 +78,6 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [reOpen,      setReOpen]      = useState(false)
-  const isAgente = useIsAgente()
   const logged = !!auth.get()
 
   const t = useT()
@@ -164,12 +162,8 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     { href: '/vender',      label: t('Vender o arrendar tu inmueble', 'Sell or rent your property') },
     { href: '/agentes',     label: t('Encuentra un agente', 'Find an agent') },
   ]
-  const reTools = [
-    { href: '/simulador',  label: t('Simulador', 'Simulator') },
-    { href: '/comparador', label: t('Comparador', 'Comparison') },
-    { href: '/calculadora', label: t('Calculadora', 'Calculator') },
-  ]
-  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes', '/simulador', '/comparador', '/calculadora']
+  // Simulador/Comparador/Calculadora salieron del navbar → solo en el dashboard del realtor.
+  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes']
     .some(h => path === h || path.startsWith(h + '/'))
   const reItemStyle: CSSProperties = {
     display: 'block', padding: '9px 12px', borderRadius: 7,
@@ -343,17 +337,8 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                     {reItems.map(it => (
                       <a key={it.href} href={it.href} className="re-item" style={reItemStyle}>{it.label}</a>
                     ))}
-                    {isAgente && (
-                      <>
-                        <div style={{ height: 1, background: K.line, margin: '6px 8px' }} />
-                        <div style={{ padding: '3px 12px 4px', fontSize: 11, letterSpacing: '.09em', textTransform: 'uppercase', color: K.muted, fontWeight: 700 }}>
-                          {t('Herramientas', 'Tools')}
-                        </div>
-                        {reTools.map(it => (
-                          <a key={it.href} href={it.href} className="re-item" style={reItemStyle}>{it.label}</a>
-                        ))}
-                      </>
-                    )}
+                    {/* Herramientas (simulador/comparador/calculadora) salieron del navbar:
+                       ahora viven solo en el dashboard del realtor. */}
                   </div>
                 )}
               </div>
@@ -503,7 +488,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 <div style={{ color: 'rgba(255,255,255,0.85)', padding: '10px 0 4px', fontSize: 15, fontWeight: 700, borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
                   {link.label}
                 </div>
-                {[...reItems, ...(isAgente ? reTools : [])].map(it => (
+                {reItems.map(it => (
                   <a
                     key={it.href}
                     href={it.href}

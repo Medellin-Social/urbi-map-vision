@@ -185,6 +185,33 @@ export function useCerrarListing() {
   });
 }
 
+/** Pausar / reactivar un listing propio (publicado↔pausado). */
+export function useCambiarEstadoListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ listingId, estado }: { listingId: string; estado: "pausado" | "publicado" }) =>
+      realtorApi.cambiarEstadoListing(listingId, estado),
+    onSuccess: (_, { estado }) => {
+      qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
+      toast.success(estado === "pausado" ? "Listing pausado" : "Listing reactivado");
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "No se pudo cambiar el estado"),
+  });
+}
+
+/** Eliminar (soft-delete) un listing propio. */
+export function useEliminarListing() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (listingId: string) => realtorApi.eliminarListing(listingId),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
+      toast.success("Listing eliminado");
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "No se pudo eliminar el listing"),
+  });
+}
+
 export function useComparables(params?: { barrioId?: number; tipoInmueble?: string; operacion?: string; meses?: number }) {
   return useQuery({
     queryKey: ["realtor", "comparables", params ?? null],

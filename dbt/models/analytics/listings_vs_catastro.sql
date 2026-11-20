@@ -26,23 +26,35 @@
 */
 
 with catastro_por_comuna as (
+    /*
+      Avalúo catastral estimado por comuna, SEPARADO por tipo de inmueble, porque
+      mezclar casas (que cargan su lote) con apartamentos infla el $/m² de los aptos
+      (El Poblado: 2.24M mezclado → 895k apto puro). Discriminador = SEÑAL DE TIERRA
+      (vl_av_lote), más robusto que contar pisos:
+
+        · APTO  (PH, vl_av_lote = 0)  → avalúo = construcción/m² × área.
+                 El terreno es común (no individual), así que vl_av_constru es el valor real.
+        · CASA  (predio suelto, vl_av_lote > 0) → construcción/m² × área + TIERRA (monto fijo).
+                 La tierra va como mediana absoluta del lote, NO dividida entre m² construidos:
+                 los lotes de mansión inflarían el $/m² y el avalúo superaría el precio.
+
+      El $/m² efectivo por listing lo arma api/routers/listings.py con el área real
+      (la tierra fija se reparte: casa_m2_efectivo = casa_constru_m2 + lote_fijo/área).
+    */
     select
         ds_comuna,
         cd_comuna,
         count(*)                                            as n_predios_catastro,
-        avg(vl_avaluo_total)                                as avaluo_total_prom,
-        -- mediana del avalúo/m² (antes avg, sesgado por casas grandes).
-        percentile_cont(0.5) within group (
-            order by vl_avaluo_total / nm_ar_constru
-        )                                                   as avaluo_m2_construccion,
-        percentile_cont(0.5) within group (
-            order by
-                case when nm_ar_constru > 0
-                     then vl_avaluo_total / nm_ar_constru
-                     else null
-                end
-        )                                                   as avaluo_m2_mediana,
-        avg(nm_ar_constru)                                  as area_construccion_prom
+        -- Apartamentos (PH, sin lote individual)
+        count(*) filter (where coalesce(vl_av_lote, 0) = 0) as n_apto,
+        percentile_cont(0.5) within group (order by vl_av_constru / nm_ar_constru)
+            filter (where coalesce(vl_av_lote, 0) = 0)      as avaluo_m2_apto,
+        -- Casas (predio suelto con lote): construcción/m² + valor de lote (monto fijo)
+        count(*) filter (where coalesce(vl_av_lote, 0) > 0) as n_casa,
+        percentile_cont(0.5) within group (order by vl_av_constru / nm_ar_constru)
+            filter (where coalesce(vl_av_lote, 0) > 0)      as avaluo_m2_casa_constru,
+        percentile_cont(0.5) within group (order by vl_av_lote)
+            filter (where coalesce(vl_av_lote, 0) > 0)      as avaluo_lote_casa
     from raw.catastro_medellin
     where cd_vig_pred = 'S'
       and cd_ind_ru_ur = 'U'
@@ -115,48 +127,59 @@ enriched as (
         lcb.precio_variable,
         lcb.fecha_scraping,
 
-        -- Datos catastrales de la comuna
+        -- Componentes catastrales por comuna (los lee api/routers/listings.py para
+        -- armar el $/m² efectivo con el área real del listing).
         cat.cd_comuna,
         cat.n_predios_catastro,
-        cat.avaluo_m2_construccion                          as avaluo_m2_catastro,
-        cat.avaluo_m2_mediana                               as avaluo_m2_catastro_mediana,
-        cat.area_construccion_prom,
+        cat.n_apto,
+        cat.avaluo_m2_apto,
+        cat.n_casa,
+        cat.avaluo_m2_casa_constru,
+        cat.avaluo_lote_casa,
 
-        -- Nivel de referencia catastral usado
+        -- $/m² efectivo según tipo (guard: mínimo 20 predios del tipo en la comuna).
+        -- Apto: construcción pura. Casa: construcción + tierra fija repartida sobre el área.
         case
-            when cat.avaluo_m2_construccion is not null then 'comuna'
+            when lcb.tipo_inmueble = 'casa'
+             and cat.n_casa >= 20 and lcb.area_m2 > 0
+            then round((cat.avaluo_m2_casa_constru + cat.avaluo_lote_casa / lcb.area_m2)::numeric)
+            when lcb.tipo_inmueble = 'apartamento'
+             and cat.n_apto >= 20
+            then round(cat.avaluo_m2_apto::numeric)
             else null
-        end                                                 as catastro_nivel,
-
-        -- Ratio mercado / catastro (solo venta — arriendo no es comparable)
-        case
-            when lcb.tipo_operacion = 'venta'
-             and cat.avaluo_m2_construccion > 0
-             and lcb.precio_m2 is not null
-            then round(
-                (lcb.precio_m2 / cat.avaluo_m2_construccion)::numeric,
-                2
-            )
-            else null
-        end                                                 as ratio_mercado_catastro,
-
-        -- Clasificación del ratio (solo venta)
-        case
-            when lcb.tipo_operacion != 'venta'
-              or lcb.precio_m2 is null
-              or cat.avaluo_m2_construccion is null
-            then null
-            when lcb.precio_m2 / cat.avaluo_m2_construccion > 3.0
-            then 'SOBRE_CATASTRO'
-            when lcb.precio_m2 / cat.avaluo_m2_construccion < 1.5
-            then 'CERCANO_CATASTRO'
-            else 'RANGO_NORMAL'
-        end                                                 as categoria_precio_catastro
+        end                                                 as avaluo_m2_catastro
 
     from listings_con_barrio lcb
     left join catastro_por_comuna cat
            on upper(cat.ds_comuna) = upper(lcb.barrio_comuna)
           and lcb.barrio_municipio ilike '%medellin%'
+),
+
+final as (
+    select
+        e.*,
+        case when e.avaluo_m2_catastro is not null then 'comuna' else null end as catastro_nivel,
+
+        -- Ratio mercado / catastro (solo venta). Con el avalúo corregido (más bajo),
+        -- la mediana real sube a ~8–10x (el catastro de Medellín está muy desactualizado).
+        case
+            when e.tipo_operacion = 'venta'
+             and e.avaluo_m2_catastro > 0
+             and e.precio_m2 is not null
+            then round((e.precio_m2 / e.avaluo_m2_catastro)::numeric, 2)
+            else null
+        end                                                 as ratio_mercado_catastro,
+
+        -- Bandas recalibradas a la distribución real post-corrección (p50 ≈ 8–9x).
+        case
+            when e.tipo_operacion != 'venta'
+              or e.precio_m2 is null
+              or e.avaluo_m2_catastro is null then null
+            when e.precio_m2 / e.avaluo_m2_catastro > 14.0 then 'SOBRE_CATASTRO'
+            when e.precio_m2 / e.avaluo_m2_catastro < 5.0  then 'CERCANO_CATASTRO'
+            else 'RANGO_NORMAL'
+        end                                                 as categoria_precio_catastro
+    from enriched e
 )
 
-select * from enriched
+select * from final

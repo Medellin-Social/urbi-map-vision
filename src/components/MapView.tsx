@@ -271,6 +271,7 @@ export function MapView({
   const selectedBarrioRef = useRef<number | null>(null);  // barrio con relleno de selección (explícito: click/búsqueda)
   const flattenSkipRef = useRef(false);  // skip listings-toggle pitch easeTo when a zone fit drives it
   const pendingFlyRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);  // deep-link flyTo que llegó antes del "load" del mapa
+  const highlightedIdRef = useRef<number | null>(null);  // pin a resaltar; reaplicado tras cada setData (deep-link lo fija antes de que carguen los puntos)
   const lastViewportQueryRef = useRef("");  // dedup identical viewport fetches
   const lastViewportAtRef = useRef(0);
   // Which barrio array is currently loaded in the "barrios-mls" source (by reference).
@@ -1039,15 +1040,19 @@ export function MapView({
           coords[0] += e.lngLat.lng > coords[0] ? 360 : -360;
         }
         const point = map.project(coords);
+        // point es relativo al canvas; el popup usa coords de viewport (fixed). En split
+        // el canvas arranca en 40% → sumamos el offset del contenedor (0,0 en full-screen).
+        const rect = map.getContainer().getBoundingClientRect();
+        const vx = rect.left + point.x, vy = rect.top + point.y;
         // Touch has no double-click: open the popup right away instead of waiting 220 ms.
         if (isMobileRef.current) {
-          onListingClickFromMapRef.current?.(props.id as number, point.x, point.y);
+          onListingClickFromMapRef.current?.(props.id as number, vx, vy);
           return;
         }
         if (_pendingClick !== null) return;
         _pendingClick = setTimeout(() => {
           _pendingClick = null;
-          onListingClickFromMapRef.current?.(props.id as number, point.x, point.y);
+          onListingClickFromMapRef.current?.(props.id as number, vx, vy);
         }, 220);
       });
 
@@ -1241,8 +1246,11 @@ export function MapView({
       }
       switchToComunas(map);
     }
+  // mapLoaded en deps: un deep-link (?listing=) pone mapView="listings" ANTES del
+  // "load", cuando las capas aún no existen → sin re-correr tras el load, los pins
+  // de listings quedaban ocultos (visibility="none" por defecto).
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapView]);
+  }, [mapView, mapLoaded]);
 
   // ── Vista 1 (zonas): botón "Volver al Valle" ────────────────────────────────
   // La cámara ya NO cambia la zona/filtros: ni el zoom-in entra a una comuna (drill por
@@ -1336,6 +1344,11 @@ export function MapView({
               },
             })),
           } as unknown as GeoJSON.FeatureCollection);
+          // El deep-link fija el pin resaltado ANTES de que estos puntos existan →
+          // reaplicar aquí (si no, el highlight se pierde cuando llegan los datos).
+          if (highlightedIdRef.current != null) {
+            map.setFeatureState({ source: "listings-mls", id: highlightedIdRef.current }, { highlighted: true });
+          }
         }
         inFlight = false;
       } catch (err) {
@@ -1441,6 +1454,7 @@ export function MapView({
 
   // ── Highlight listing seleccionado ───────────────────────────────────────────
   useEffect(() => {
+    highlightedIdRef.current = highlightedListingId ?? null;
     const map = mapRef.current;
     if (!map || !map.isStyleLoaded() || !map.getSource("listings-mls")) return;
     map.removeFeatureState({ source: "listings-mls" });

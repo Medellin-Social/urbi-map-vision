@@ -4,11 +4,10 @@ import {
   Carousel,
   CarouselContent,
   CarouselItem,
-  CarouselNext,
-  CarouselPrevious,
   type CarouselApi,
 } from "@/components/ui/carousel";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ChevronLeft, ChevronRight } from "@/lib/icons";
 
 const PHOTO_H = 150;
 
@@ -76,9 +75,29 @@ export function PopupGallery({ fotos, fallbackFoto, loading, alt }: Props) {
             </CarouselItem>
           ))}
         </CarouselContent>
-        <CarouselPrevious className="left-2 h-7 w-7 border-none bg-black/50 text-white hover:bg-black/70 hover:text-white" />
-        <CarouselNext className="right-2 h-7 w-7 border-none bg-black/50 text-white hover:bg-black/70 hover:text-white" />
-        <span className="absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
+        {/* Zonas laterales estilo Zillow: toda la altura de la foto. Lado izq/der
+            navegan; el centro queda libre → tap abre el detalle (popup grande). */}
+        <button
+          type="button"
+          aria-label={lang === "en" ? "Previous photo" : "Foto anterior"}
+          onClick={(e) => { e.stopPropagation(); api?.scrollPrev(); }}
+          className="group absolute left-0 top-0 flex h-full w-1/4 items-center justify-start pl-1.5"
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-black/45 text-white opacity-0 transition group-hover:opacity-100">
+            <ChevronLeft className="h-5 w-5" />
+          </span>
+        </button>
+        <button
+          type="button"
+          aria-label={lang === "en" ? "Next photo" : "Foto siguiente"}
+          onClick={(e) => { e.stopPropagation(); api?.scrollNext(); }}
+          className="group absolute right-0 top-0 flex h-full w-1/4 items-center justify-end pr-1.5"
+        >
+          <span className="grid h-8 w-8 place-items-center rounded-full bg-black/45 text-white opacity-0 transition group-hover:opacity-100">
+            <ChevronRight className="h-5 w-5" />
+          </span>
+        </button>
+        <span className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-1.5 py-0.5 text-[10px] font-medium text-white">
           {index + 1}/{gallery.length}
         </span>
       </Carousel>

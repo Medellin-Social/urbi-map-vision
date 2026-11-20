@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ExternalLink } from "@/lib/icons";
 import { API_ENDPOINTS } from "@/config/api";
 import { apiFetch } from "@/lib/apiClient";
-import { originalListingUrl, portalName, type OriginalListingSource } from "@/lib/originalListing";
+import { originalListingUrl, type OriginalListingSource } from "@/lib/originalListing";
 
 /**
  * Primary "View original listing" link. Renders nothing when there is no external URL
@@ -13,11 +13,13 @@ export function OriginalListingLink({
   variant = "primary",
   className = "",
   onClick,
+  report: showReport = true,
 }: {
   listing: OriginalListingSource | null | undefined;
   variant?: "primary" | "secondary" | "compact";
   className?: string;
   onClick?: (e: React.MouseEvent) => void;
+  report?: boolean; // "Reportar enlace roto" — off en la lista, on en popup/detalle
 }) {
   const [report, setReport] = useState<"idle" | "sending" | "ok" | "dup" | "err">("idle");
   const href = originalListingUrl(listing);
@@ -34,7 +36,6 @@ export function OriginalListingLink({
       setReport("err");
     }
   };
-  const portal = portalName(listing?.fuente);
   const base = "inline-flex items-center justify-center gap-1.5 font-semibold transition";
   const style: React.CSSProperties =
     variant === "primary"
@@ -55,9 +56,8 @@ export function OriginalListingLink({
     >
       <ExternalLink className={variant === "compact" ? "h-3 w-3" : "h-4 w-4"} />
       <span>Ver publicación original</span>
-      {portal && variant !== "compact" && <span data-i18n-skip style={{ opacity: 0.85, fontWeight: 500 }}>· {portal}</span>}
     </a>
-    {listing?.id != null && (
+    {showReport && listing?.id != null && (
       <span data-testid="report-broken-link-wrap" className="block" style={{ fontSize: 11, marginTop: 4 }} onClick={(e) => e.stopPropagation()}>
         {report === "idle" || report === "sending" ? (
           <button type="button" data-testid="report-broken-link" onClick={sendReport} disabled={report === "sending"}

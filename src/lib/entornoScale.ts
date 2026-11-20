@@ -19,6 +19,12 @@ export const ESCALE = {
   policiaD: { a: [0.26, 0.71, 1.51], dir: "low" },
   bomberos: { a: [0, 1, 2],          dir: "high" },
   encicla:  { a: [0.23, 1.04, 3.08], dir: "low" },
+  // Anchors reales (query DB 2026-11-14). Todas "más=mejor". Gym/parques_inf tienen
+  // p50=0 (ausentes en medio barrio) → se gatean a >0, solo pintan donde existen.
+  gimnasios:     { a: [0, 0, 3],   dir: "high" },
+  parquesInf:    { a: [0, 0, 2],   dir: "high" },
+  universidades: { a: [0, 4, 22],  dir: "high" },
+  hospitales:    { a: [7, 15, 62], dir: "high" },
 } as const;
 
 export type EscaleKey = keyof typeof ESCALE;

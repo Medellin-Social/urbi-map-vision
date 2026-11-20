@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { X } from "@/lib/icons";
+import { Carousel, CarouselContent, CarouselItem, type CarouselApi } from "@/components/ui/carousel";
 
 function BuildingPlaceholder({ height }: { height: number }) {
   return (
@@ -37,6 +38,18 @@ export function PhotoGallery({ fotos, titulo, height = 224 }: Props) {
   const [lightbox, setLightbox] = useState(false);
   const photos = fotos?.filter(Boolean) ?? [];
 
+  // Embla: slide/swipe en la galería inline (antes era un salto de src).
+  const [api, setApi] = useState<CarouselApi>();
+  useEffect(() => {
+    if (!api) return;
+    const onSel = () => setIdx(api.selectedScrollSnap());
+    api.on("select", onSel);
+    return () => { api.off("select", onSel); };
+  }, [api]);
+  // Guard tap-vs-swipe: solo abre el lightbox con un tap limpio, no al deslizar.
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const wasDrag = useRef(false);
+
   useEffect(() => {
     if (!lightbox) return;
     const handler = (e: KeyboardEvent) => {
@@ -57,33 +70,50 @@ export function PhotoGallery({ fotos, titulo, height = 224 }: Props) {
       <div
         className="relative overflow-hidden"
         style={{ height, borderBottom: "0.5px solid #E5E0D5" }}
+        onPointerDown={(e) => { dragStart.current = { x: e.clientX, y: e.clientY }; wasDrag.current = false; }}
+        onPointerMove={(e) => {
+          const s = dragStart.current;
+          if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) wasDrag.current = true;
+        }}
       >
-        <img
-          src={photos[idx]}
-          alt={titulo ?? "Foto del inmueble"}
-          className="h-full w-full object-cover transition-opacity duration-300 cursor-zoom-in"
-          onClick={() => setLightbox(true)}
-          decoding="async"
-        />
+        <Carousel setApi={setApi} className="h-full" opts={{ loop: true }}>
+          <CarouselContent className="ml-0 h-full">
+            {photos.map((src, i) => (
+              <CarouselItem key={i} className="pl-0" style={{ height }}>
+                <img
+                  src={src}
+                  alt={titulo ?? "Foto del inmueble"}
+                  className="h-full w-full object-cover cursor-zoom-in"
+                  style={{ height }}
+                  onClick={() => { if (!wasDrag.current) setLightbox(true); }}
+                  loading={i === 0 ? "eager" : "lazy"}
+                  decoding="async"
+                />
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+        </Carousel>
         {photos.length > 1 && (
           <>
             <button
-              onClick={() => setIdx((i) => (i - 1 + photos.length) % photos.length)}
-              className="absolute left-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
+              onClick={() => api?.scrollPrev()}
+              aria-label="Foto anterior"
+              className="absolute left-2 top-1/2 z-10 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
             >
               ‹
             </button>
             <button
-              onClick={() => setIdx((i) => (i + 1) % photos.length)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
+              onClick={() => api?.scrollNext()}
+              aria-label="Foto siguiente"
+              className="absolute right-2 top-1/2 z-10 -translate-y-1/2 grid h-8 w-8 place-items-center rounded-full bg-black/40 text-white backdrop-blur-sm transition hover:bg-black/60"
             >
               ›
             </button>
-            <div className="absolute bottom-2 left-1/2 flex -translate-x-1/2 gap-1">
+            <div className="absolute bottom-2 left-1/2 z-10 flex -translate-x-1/2 gap-1">
               {photos.slice(0, 8).map((_, i) => (
                 <button
                   key={i}
-                  onClick={() => setIdx(i)}
+                  onClick={() => api?.scrollTo(i)}
                   className="rounded-full transition-all"
                   style={{
                     height: 6,
@@ -95,7 +125,7 @@ export function PhotoGallery({ fotos, titulo, height = 224 }: Props) {
             </div>
             <button
               onClick={() => setLightbox(true)}
-              className="absolute bottom-2 right-3 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-black/60 transition"
+              className="absolute bottom-2 right-3 z-10 rounded-full bg-black/40 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm hover:bg-black/60 transition"
             >
               {idx + 1} / {photos.length} · Ver todas
             </button>

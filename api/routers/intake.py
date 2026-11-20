@@ -12,6 +12,7 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
+from api.services.asignador_service import asignar_intake
 from api.services.due_diligence_service import (
     checklist_completo, checklist_verificado, generar_checklist, verificar_item,
 )
@@ -97,7 +98,25 @@ async def crear_intake_endpoint(
             json.dumps(intake["declaraciones"]), intake["notas_owner"],
         )
 
-    return {"id": intake["id"], "estado": "nuevo"}
+    # Auto-enrutar al realtor de la zona (o al pool) + notificarle. Antes el intake
+    # quedaba en 'nuevo' hasta que un admin corría /intake/:id/asignar a mano → el
+    # owner lead se quedaba huérfano. Best-effort: si el asignador falla, el intake
+    # ya está en DB ('nuevo') y un admin lo puede rutear después.
+    estado = "nuevo"
+    agent_id = None
+    try:
+        intake_obj = SimpleNamespace(
+            id=intake["id"], estado="nuevo",
+            zona_codigo=intake["zona_codigo"], geom=req.geom, agent_id=None,
+        )
+        resultado = await asignar_intake(intake_obj, pool)
+        estado = resultado.get("estado", "nuevo")
+        agent_id = resultado.get("agent_id")
+    except Exception:  # noqa: BLE001 — enrutar es best-effort; la fila ya existe
+        import logging
+        logging.getLogger(__name__).exception("intake %s: auto-asignación falló", intake["id"])
+
+    return {"id": intake["id"], "estado": estado, "agent_id": agent_id}
 
 
 @router.get("/intake/mias")

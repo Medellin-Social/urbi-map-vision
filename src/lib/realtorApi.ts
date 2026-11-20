@@ -92,8 +92,9 @@ export type MiListing = {
   barrio: string;
   estado: EstadoListing;
   updated_at: string;
-  vistas_total: number;
+  vistas_total: number;    // aperturas de detalle (event_type='listing_view')
   vistas_30d: number;
+  favoritos: number;       // veces guardado como favorito (raw.favoritos_listings)
 };
 
 // Inteligencia de barrio del realtor = mismo shape que el panel público de
@@ -317,6 +318,10 @@ export interface RealtorDashboardApi {
   subirFotosListing(listingId: string, files: File[]): Promise<void>;
   /** POST /api/v1/realtor/listings/:id/cerrar — marca vendido + graba el cierre (incentivo) */
   cerrarListing(listingId: string, input: CerrarListingInput): Promise<void>;
+  /** POST /api/v1/realtor/listings/:id/estado — pausar (publicado→pausado) o reactivar (pausado→publicado) */
+  cambiarEstadoListing(listingId: string, estado: "pausado" | "publicado"): Promise<void>;
+  /** DELETE /api/v1/realtor/listings/:id — soft-delete (deleted_at) */
+  eliminarListing(listingId: string): Promise<void>;
   /** GET /api/v1/realtor/comparables — comparables de cierre (gated por reciprocidad) */
   getComparables(params?: { barrioId?: number; tipoInmueble?: string; operacion?: string; meses?: number }): Promise<ComparablesResponse>;
 }
@@ -366,6 +371,19 @@ let _pool: ItemPool[] = [
   { id: "pool-3", tipo_inmueble: "local",       operacion: "arriendo", precio_esperado:   4_200_000, barrio: "El Centro",        municipio: "Medellín",  created_at: "2026-07-06T09:15:00Z" },
   { id: "pool-4", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 195_000_000, barrio: "Itagüí Centro",    municipio: "Itagüí",    created_at: "2026-07-05T16:00:00Z" },
 ];
+
+// ponytail: mock stateful solo para el journey de lifecycle (editar/pausar/
+// reactivar/eliminar/cerrar). Mutable a nivel módulo; se resetea al recargar.
+let _mockListings: MiListing[] = [
+  { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z", vistas_total: 1240, vistas_30d: 312, favoritos: 48 },
+  { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0 },
+  { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z", vistas_total: 0,    vistas_30d: 0,   favoritos: 0 },
+  { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z", vistas_total: 85,   vistas_30d: 4,   favoritos: 3 },
+  { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z", vistas_total: 2100, vistas_30d: 12,  favoritos: 71 },
+];
+const _touch = (id: string, patch: Partial<MiListing>) => {
+  _mockListings = _mockListings.map((l) => (l.id === id ? { ...l, ...patch, updated_at: new Date().toISOString() } : l));
+};
 
 const mockApi: RealtorDashboardApi = {
   async getPerfil() {
@@ -489,13 +507,7 @@ const mockApi: RealtorDashboardApi = {
 
   async getMisListings() {
     await _d(600);
-    return [
-      { id: "l-1", titulo: "Apartamento moderno en El Poblado",   tipo_inmueble: "apartamento", operacion: "venta",    precio: 620_000_000, barrio: "El Poblado",  estado: "publicado",   updated_at: "2026-07-01T08:00:00Z", vistas_total: 1240, vistas_30d: 312 },
-      { id: "l-2", titulo: "Casa esquinera Laureles — 4 hab",      tipo_inmueble: "casa",        operacion: "venta",    precio: 890_000_000, barrio: "Laureles",    estado: "en_revision", updated_at: "2026-07-04T10:00:00Z", vistas_total: 0,    vistas_30d: 0 },
-      { id: "l-3", titulo: "Apartamento arriendo El Estadio",       tipo_inmueble: "apartamento", operacion: "arriendo", precio:   2_800_000, barrio: "El Estadio",  estado: "borrador",    updated_at: "2026-07-08T09:00:00Z", vistas_total: 0,    vistas_30d: 0 },
-      { id: "l-4", titulo: "Local comercial Belén",                 tipo_inmueble: "local",       operacion: "arriendo", precio:   3_500_000, barrio: "Belén",       estado: "rechazado",   updated_at: "2026-06-28T14:00:00Z", vistas_total: 85,   vistas_30d: 4 },
-      { id: "l-5", titulo: "Oficina zona financiera El Poblado",    tipo_inmueble: "oficina",     operacion: "venta",    precio: 320_000_000, barrio: "El Poblado",  estado: "cerrado",     updated_at: "2026-06-15T11:00:00Z", vistas_total: 2100, vistas_30d: 12 },
-    ];
+    return _mockListings.map((l) => ({ ...l }));
   },
 
   async publicarAsignado(_intakeId) {
@@ -578,8 +590,12 @@ const mockApi: RealtorDashboardApi = {
     await _d(300);
   },
 
-  async actualizarListing(_listingId, _campos) {
+  async actualizarListing(listingId, campos) {
     await _d(300);
+    const patch: Partial<MiListing> = {};
+    if (campos.titulo != null) patch.titulo = campos.titulo;
+    if (campos.precio != null) patch.precio = campos.precio;
+    _touch(listingId, patch);
   },
 
   async editarPerfil(_bio) {
@@ -609,8 +625,17 @@ const mockApi: RealtorDashboardApi = {
   async putDisponibilidad(_franjas) {
     await _d(300);
   },
-  async cerrarListing(_listingId, _input) {
+  async cerrarListing(listingId, _input) {
     await _d(400);
+    _touch(listingId, { estado: "cerrado" });
+  },
+  async cambiarEstadoListing(listingId, estado) {
+    await _d(300);
+    _touch(listingId, { estado });
+  },
+  async eliminarListing(listingId) {
+    await _d(300);
+    _mockListings = _mockListings.filter((l) => l.id !== listingId);
   },
   async getComparables(_params) {
     await _d(300);
@@ -647,6 +672,8 @@ const httpApi: RealtorDashboardApi = {
   verificarDDItem:      (id, estado, nota) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota }) }),
   actualizarListing:    (id, campos) => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}`, { method: "PATCH", body: JSON.stringify(campos) }),
   cerrarListing:        (id, input)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/cerrar`, { method: "POST", body: JSON.stringify(input) }),
+  cambiarEstadoListing: (id, estado)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/estado`, { method: "POST", body: JSON.stringify({ estado }) }),
+  eliminarListing:      (id)   => apiFetch<void>               (`${API_BASE_URL}/realtor/listings/${id}`, { method: "DELETE" }),
   getComparables:       (p) => {
     const qs = new URLSearchParams();
     if (p?.barrioId != null) qs.set("barrio_id", String(p.barrioId));

@@ -18,7 +18,7 @@ import {
 } from "@/lib/icons";
 import { useTarget } from "@/contexts/TargetContext";
 import { useIsPro, useIsAgente, useIsRegistered, useIsSuscriptor } from "@/components/LockedField";
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { formatCOP } from "@/lib/format";
@@ -495,6 +495,15 @@ type BarrioFetch = {
     dist_parque_km?: number | null;
     dist_mall_km?: number | null;
     indice_nomada?: number | null;
+    // Densidad comercial (flujo peatonal) — lente comercial. Ya en barrios_pois_distancia.
+    n_cafes_500m?: number | null;
+    n_restaurantes_500m?: number | null;
+    n_bares_500m?: number | null;
+    // Servicios/anclas de flujo (más=mejor). Gym/univ/hospital = res+com; parques_inf = res.
+    n_gimnasios_1km?: number | null;
+    n_parques_inf_500m?: number | null;
+    n_universidades_2km?: number | null;
+    n_hospitales_3km?: number | null;
     n_colegios_1km?: number | null;
     dist_colegio_km?: number | null;
     walk_score?: number | null;
@@ -536,33 +545,28 @@ function ScoreBar({ label, score, sub }: { label: string; score: number; sub: st
   );
 }
 
-// Entorno detalle (servicios): meter circular — valor real al centro, el arco
-// codifica qué tan "bueno" es (ratio 0-1), color por nivel (teal/ámbar/rojo).
-type EntornoFact = { icon: string; label: string; value: string; unit: string; ratio: number };
-function FactCircle({ icon, label, value, unit, ratio }: EntornoFact) {
+// Entorno detalle (servicios): fila compacta estilo Zillow — icono + label a la
+// izquierda, valor a la derecha coloreado por qué tan "bueno" es (ratio 0-1):
+// teal/ámbar/rojo. Horizontal (no círculos) → ocupa poco espacio vertical.
+type FactCat = "mov" | "lugares" | "serv";
+type EntornoFact = { icon: string; label: string; value: string; unit: string; ratio: number; cat: FactCat };
+// Secciones del detalle (orden + títulos). Agrupación pedida: parque/mall/verde en
+// una; policía/hospital/bomberos en otra. El label traduce vía fl(); el header aquí.
+const FACT_SECTIONS: { key: FactCat; es: string; en: string }[] = [
+  { key: "mov",     es: "Movilidad",             en: "Getting around" },
+  { key: "lugares", es: "Parques y entorno",     en: "Parks & surroundings" },
+  { key: "serv",    es: "Servicios y seguridad", en: "Services & safety" },
+];
+function FactRow({ icon, label, value, unit, ratio }: EntornoFact) {
   const color = ratio >= 0.66 ? "#0F8A4F" : ratio >= 0.33 ? "#8A6A00" : "#CE1126";
-  const R = 24;
-  const CIRC = 2 * Math.PI * R;
-  const dash = CIRC * Math.max(0.04, Math.min(1, ratio)); // mínimo visible aunque ratio≈0
   return (
-    <div className="flex flex-col items-center gap-1" style={{ width: 76 }}>
-      <div className="relative" style={{ width: 60, height: 60 }}>
-        <svg width={60} height={60} viewBox="0 0 60 60">
-          <circle cx={30} cy={30} r={R} fill="none" stroke="#EFEADF" strokeWidth={5} />
-          <circle
-            cx={30} cy={30} r={R} fill="none" stroke={color} strokeWidth={5} strokeLinecap="round"
-            strokeDasharray={`${dash} ${CIRC}`} transform="rotate(-90 30 30)"
-          />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[15px] font-bold leading-none tabular-nums" style={{ color: "#111418" }}>{value}</span>
-          {unit && <span className="mt-0.5 text-[8px] leading-none" style={{ color: "#6E726E" }}>{unit}</span>}
-        </div>
-      </div>
-      {/* El label (Policía, Zonas verdes, etc.) SÍ traduce vía dict; el emoji no
-          tiene entry → queda intacto (word-boundary respeta el espacio). Antes
-          estaba data-i18n-skip y bloqueaba toda la traducción del entorno. */}
-      <span className="text-center text-[10px] leading-tight" style={{ color: "#5B5F5C" }}><span data-i18n-skip="true">{icon}</span> {label}</span>
+    <div className="flex items-center gap-1.5 py-1">
+      <span className="text-[13px] leading-none" data-i18n-skip="true">{icon}</span>
+      {/* label YA traducido vía fl() antes de entrar; no re-traducir */}
+      <span className="min-w-0 flex-1 truncate text-[12px] leading-tight" style={{ color: "#5B5F5C" }}>{label}</span>
+      <span className="shrink-0 text-[12px] font-semibold tabular-nums" style={{ color }}>
+        {value}{unit && <span className="ml-0.5 text-[10px] font-normal" style={{ color: "#6E726E" }}>{unit}</span>}
+      </span>
     </div>
   );
 }
@@ -657,11 +661,17 @@ const ENTORNO_LABEL_EN: Record<string, string> = {
   "Metro": "Metro", "Parque": "Park", "Centro comercial": "Shopping center",
   "Zonas verdes": "Green areas", "Ruido día": "Daytime noise", "Policía": "Police",
   "Bomberos": "Fire station", "Internet": "Internet", "EnCicla": "EnCicla", "Canchas": "Courts",
+  "Gimnasios": "Gyms", "Parques infantiles": "Playgrounds", "Universidades": "Universities", "Hospitales": "Hospitals",
+  "Zona activa": "Lively area",
 };
 
-function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null }) {
+function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { listingId: number; barrioId?: number | null; parqueaderos?: number | null; tipoInmueble?: string | null }) {
   const isSuscriptor = useIsSuscriptor();
   const { lang } = useLang();
+  // Lente comercial: local/oficina/bodega/lote. Prioriza flujo peatonal + visibilidad
+  // vehicular; quita colegios/canchas (irrelevantes para trabajar vs vivir).
+  // Anclado al inicio: "casa_lote" es residencial (casa), NO debe matchear por "lote".
+  const esComercial = /^(local|oficina|bodega|lote)\b/i.test(tipoInmueble ?? "");
   const fl = (es: string) => (lang === "en" ? ENTORNO_LABEL_EN[es] ?? es : es);
   // Los 4 scores (caminabilidad/transporte/tráfico/colegios) = PÚBLICOS para todos
   // (gancho estilo Zillow). El DETALLE (tiempos hora pico, ruido, policía/bomberos,
@@ -700,10 +710,29 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const traficoTile = traficoScore != null ? { label: "Tráfico", score: traficoScore, sub: traficoSub } : null;
   const movilidad = (parqueaderos ?? 0) > 0 ? [traficoTile, transitTile] : [transitTile, traficoTile];
 
+  // Lente comercial: flujo peatonal (cafés+rest+bares 500m) + visibilidad vehicular
+  // (tráfico alto = más tránsito = BUENO para un local, al revés que residencial).
+  const nFlujo = (c?.n_cafes_500m ?? 0) + (c?.n_restaurantes_500m ?? 0) + (c?.n_bares_500m ?? 0);
+  const hayFlujo = c?.n_cafes_500m != null || c?.n_restaurantes_500m != null || c?.n_bares_500m != null;
+  // Escala sqrt sobre distribución real (mediana ~2 locales/500m, p75~5, p90~13, long-tail):
+  // ámbar≈p75, verde≈p90. ponytail: raíz reparte el long-tail; recalibrar si cambia la base.
+  const flujoScore = hayFlujo ? Math.min(100, Math.round(Math.sqrt(nFlujo) * 22)) : null;
+  // jam_prom HERE p50~1.3, p90~2.4, max~6.4 (bajo en Medellín) → *32 reparte el rango real.
+  const visScore = trafico?.jam_prom != null ? Math.min(100, Math.round(trafico.jam_prom * 32)) : null;
+  // Sub-texto DERIVADO del mismo score que el color (bandas 40/70 de ScoreBar): evita
+  // la contradicción "barra roja con label Alta actividad".
+  const bandSub = (s: number, hi: string, mid: string, lo: string) => (s >= 70 ? hi : s >= 40 ? mid : lo);
+
   const tiles: { label: string; score: number; sub: string }[] = [];
   if (walk != null) tiles.push({ label: "Caminabilidad", score: walk, sub: walkSub(walk) });
-  for (const t of movilidad) if (t) tiles.push(t);
-  if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  if (esComercial) {
+    if (flujoScore != null) tiles.push({ label: "Flujo comercial", score: flujoScore, sub: bandSub(flujoScore, "Alta actividad comercial", "Actividad moderada", "Zona tranquila") });
+    if (visScore != null) tiles.push({ label: "Visibilidad", score: visScore, sub: bandSub(visScore, "Alto flujo vehicular", "Flujo moderado", "Poco tránsito") });
+    if (transitTile) tiles.push(transitTile);
+  } else {
+    for (const t of movilidad) if (t) tiles.push(t);
+    if (colegioScore != null) tiles.push({ label: "Colegios", score: colegioScore, sub: colegioSub });
+  }
 
   // Tiempo en auto a puntos clave, hora pico (#27). Minutos, no score. Solo
   // llega con barrio_id (vía /barrios/{id}); los listings sin barrio no lo traen.
@@ -728,32 +757,47 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
   const km = (d: number) => d < 1 ? { value: `${Math.round(d * 1000)}`, unit: "m" } : { value: d.toFixed(1), unit: "km" };
   // Metro / parque / mall: MÁS CERCA = mejor.
   const dMetro = c?.dist_metro_km;
-  if (dMetro != null) facts.push({ icon: "🚇", label: fl("Metro"), ...km(dMetro), ratio: scaleRatio(dMetro, "metro") });
+  if (dMetro != null) facts.push({ icon: "🚇", label: fl("Metro"), ...km(dMetro), ratio: scaleRatio(dMetro, "metro"), cat: "mov" });
   const dParque = c?.dist_parque_km;
-  if (dParque != null) facts.push({ icon: "🏞️", label: fl("Parque"), ...km(dParque), ratio: scaleRatio(dParque, "parque") });
+  if (dParque != null) facts.push({ icon: "🏞️", label: fl("Parque"), ...km(dParque), ratio: scaleRatio(dParque, "parque"), cat: "lugares" });
   const dMall = c?.dist_mall_km;
-  if (dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall") });
+  if (dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall"), cat: "lugares" });
   // Zonas verdes: % de cobertura (indice_verde_pct). Mediana Medellín = 2.4%, p90 = 11.7%
   // → un 3% está sobre la mitad de los barrios (ámbar), NO rojo. Antes un tope de 35%
   // pintaba de rojo barrios realmente verdes.
   const verde = data?.verde;
-  if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: fl("Zonas verdes"), value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde") });
+  if (verde?.indice_verde_pct != null) facts.push({ icon: "🌳", label: fl("Zonas verdes"), value: verde.indice_verde_pct.toFixed(1), unit: "% área", ratio: scaleRatio(verde.indice_verde_pct, "verde"), cat: "lugares" });
   // Ruido día: MENOS dB = mejor. Medellín es ruidosa (mediana 65dB) → la escala lo refleja.
   const ruidoDb = c?.db_ruido_dia_cercano; const dRuido = c?.dist_ruido_km;
-  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push({ icon: "🔊", label: fl("Ruido día"), value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido") });
+  // Residencial: menos dB = mejor. Comercial: MÁS dB = zona activa = bueno (arco invertido),
+  // mismo criterio que tráfico→Visibilidad. Relabel a "Zona activa" para no confundir.
+  if (ruidoDb != null && dRuido != null && dRuido <= 1.5) facts.push(
+    esComercial
+      ? { icon: "🔊", label: fl("Zona activa"), value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: 1 - scaleRatio(ruidoDb, "ruido"), cat: "lugares" }
+      : { icon: "🔊", label: fl("Ruido día"),   value: `${Math.round(ruidoDb)}`, unit: "dB", ratio: scaleRatio(ruidoDb, "ruido"), cat: "lugares" }
+  );
   // Policía / bomberos: MÁS cerca = mejor.
   const nPol = c?.n_policia_1km; const dPol = c?.dist_policia_km;
-  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: fl("Policía"), value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN") });
-  else if (dPol != null) facts.push({ icon: "🚓", label: fl("Policía"), ...km(dPol), ratio: scaleRatio(dPol, "policiaD") });
+  if (nPol != null && nPol > 0) facts.push({ icon: "🚓", label: fl("Policía"), value: `${nPol}`, unit: "en 1 km", ratio: scaleRatio(nPol, "policiaN"), cat: "serv" });
+  else if (dPol != null) facts.push({ icon: "🚓", label: fl("Policía"), ...km(dPol), ratio: scaleRatio(dPol, "policiaD"), cat: "serv" });
   const nBomb = c?.n_bomberos_2km;
-  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: fl("Bomberos"), value: `${nBomb}`, unit: "en 2 km", ratio: scaleRatio(nBomb, "bomberos") });
+  if (nBomb != null && nBomb > 0) facts.push({ icon: "🚒", label: fl("Bomberos"), value: `${nBomb}`, unit: "en 2 km", ratio: scaleRatio(nBomb, "bomberos"), cat: "serv" });
   // Internet: MÁS Mbps = mejor. EnCicla: MÁS cerca = mejor. Canchas: MÁS = mejor.
   const net = c?.avg_internet_mbps;
-  if (net != null && net > 0) facts.push({ icon: "📶", label: fl("Internet"), value: `${Math.round(net)}`, unit: "Mbps", ratio: scaleRatio(net, "internet") });
+  if (net != null && net > 0) facts.push({ icon: "📶", label: fl("Internet"), value: `${Math.round(net)}`, unit: "Mbps", ratio: scaleRatio(net, "internet"), cat: "serv" });
   const dEnc = c?.dist_encicla_km;
-  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: fl("EnCicla"), value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla") });
+  if (dEnc != null && dEnc <= 1.5) facts.push({ icon: "🚲", label: fl("EnCicla"), value: dEnc.toFixed(1), unit: "km", ratio: scaleRatio(dEnc, "encicla"), cat: "mov" });
   const nCanc = c?.n_canchas_1km;
-  if (nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas") });
+  if (!esComercial && nCanc != null && nCanc > 0) facts.push({ icon: "🏀", label: fl("Canchas"), value: `${nCanc}`, unit: "en 1 km", ratio: scaleRatio(nCanc, "canchas"), cat: "lugares" });
+  // Servicios/anclas (más=mejor, solo si >0). Gym/univ/hospital = res+com; parques_inf = solo res.
+  const nGym = c?.n_gimnasios_1km;
+  if (nGym != null && nGym > 0) facts.push({ icon: "🏋️", label: fl("Gimnasios"), value: `${nGym}`, unit: "en 1 km", ratio: scaleRatio(nGym, "gimnasios"), cat: "serv" });
+  const nUni = c?.n_universidades_2km;
+  if (nUni != null && nUni > 0) facts.push({ icon: "🎓", label: fl("Universidades"), value: `${nUni}`, unit: "en 2 km", ratio: scaleRatio(nUni, "universidades"), cat: "serv" });
+  const nHosp = c?.n_hospitales_3km;
+  if (nHosp != null && nHosp > 0) facts.push({ icon: "🏥", label: fl("Hospitales"), value: `${nHosp}`, unit: "en 3 km", ratio: scaleRatio(nHosp, "hospitales"), cat: "serv" });
+  const nParqInf = c?.n_parques_inf_500m;
+  if (!esComercial && nParqInf != null && nParqInf > 0) facts.push({ icon: "🧒", label: fl("Parques infantiles"), value: `${nParqInf}`, unit: "en 500 m", ratio: scaleRatio(nParqInf, "parquesInf"), cat: "lugares" });
 
   // Free: solo los 4 scores (tiles). Si no hay tiles y el usuario no es suscriptor
   // (o no hay detalle que mostrarle), no hay sección.
@@ -786,10 +830,21 @@ function GettingAround({ listingId, barrioId, parqueaderos }: { listingId: numbe
         </div>
       )}
       {isSuscriptor && facts.length > 0 && (
-        <div className="flex flex-wrap justify-center gap-x-3 gap-y-3 pt-1">
-          {facts.map((f) => (
-            <FactCircle key={f.label} {...f} />
-          ))}
+        <div className="space-y-2.5 pt-0.5">
+          {FACT_SECTIONS.map(({ key, es, en }) => {
+            const group = facts.filter((f) => f.cat === key);
+            if (group.length === 0) return null;
+            return (
+              <div key={key}>
+                <div className="mb-0.5 border-b pb-0.5 text-[10px] font-semibold uppercase tracking-wider" style={{ color: "#8A8578", borderColor: "#EFEADF" }}>
+                  {lang === "en" ? en : es}
+                </div>
+                <div className="grid gap-x-5" style={{ gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))" }}>
+                  {group.map((f) => <FactRow key={f.label} {...f} />)}
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
       {isSuscriptor && obraVisible && (
@@ -1297,9 +1352,12 @@ function RealtorColumn({
 type Props = {
   listingId: number | null;
   onClose: () => void;
+  // Llamado una vez cuando carga el listing (deep-link ?listing=): el mapa vuela
+  // al pin Y selecciona su barrio; ver map.tsx. Opcional: abrir por click ya voló.
+  onLocate?: (lat: number, lng: number, barrioId: number | null) => void;
 };
 
-export function ListingDrawer({ listingId, onClose }: Props) {
+export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
   const { formatPrice, formatSecondary, formatPricePerArea } = usePriceFormat();
   const { lang } = useLang();
   const { unit } = useUnit();
@@ -1360,6 +1418,12 @@ export function ListingDrawer({ listingId, onClose }: Props) {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  // Avisa coords + barrio al padre cuando el listing carga (deep-link vuela al pin y selecciona el barrio).
+  useEffect(() => {
+    if (listing?.lat != null && listing?.lon != null) onLocate?.(listing.lat, listing.lon, listing.barrio_id ?? null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listing?.lat, listing?.lon]);
 
   useEffect(() => {
     // Lock page scroll while the drawer is open at ANY breakpoint (a viewport flip while
@@ -1554,7 +1618,11 @@ export function ListingDrawer({ listingId, onClose }: Props) {
   const favButton = listing ? (
     <button
       onClick={() => {
-        if (!auth.get()) { toast.info("Inicia sesión para guardar"); return; }
+        // Gate en getToken() (la MISMA fuente que usa toggleFav/la query de ids):
+        // auth.get() lee el user en localStorage, que sobrevive a un clearToken()
+        // por 401 → quedaba truthy sin token → el guard pasaba pero toggleFav
+        // early-return silencioso = "el corazón no se deja marcar, sin aviso".
+        if (!getToken()) { toast.info("Inicia sesión para guardar"); return; }
         // Intención (capa 3): guardar = señal fuerte. Solo al marcar (no al quitar).
         if (!isFav(favKey(listing))) {
           track("listing_save", {
@@ -1569,7 +1637,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       className="grid h-11 w-11 shrink-0 place-items-center rounded-full transition"
       style={{ border: "0.5px solid #E5E0D5", background: isFav(favKey(listing)) ? "#FCE8EA" : "#FFFFFF" }}
     >
-      <Heart className="h-5 w-5" style={{ color: isFav(favKey(listing)) ? "#CE1126" : "#5B5F5C" }} fill={isFav(favKey(listing)) ? "#CE1126" : "none"} />
+      <Heart className="h-5 w-5" style={{ color: isFav(favKey(listing)) ? "#CE1126" : "#374151" }} />
     </button>
   ) : null;
 
@@ -1777,7 +1845,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
       })()}
 
       {/* Entorno — Walk/Transit score + colegios cercanos (público) */}
-      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} />}
+      {listingId != null && <GettingAround listingId={listingId} barrioId={listing.barrio_id} parqueaderos={listing.parqueaderos} tipoInmueble={listing.tipo_inmueble} />}
 
       {/* Valor estimado de mercado (Zestimate) — nivel REGISTRADO (suscrito=registro) */}
       {isSuscriptor && <ValorEstimado listing={listing} />}
@@ -2151,7 +2219,7 @@ export function ListingDrawer({ listingId, onClose }: Props) {
                     {leftColContent}
                   </div>
                   {/* Columna 2 — contacto realtor + agendar visita (sticky) */}
-                  <div className="shrink-0 self-stretch" style={{ width: "37%" }}>
+                  <div className="shrink-0 self-stretch" style={{ width: "28%" }}>
                     <div className="sticky top-0">{rightColContent}</div>
                   </div>
                 </div>

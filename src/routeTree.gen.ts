@@ -37,6 +37,7 @@ import { Route as StoresRouteImport } from './routes/stores'
 import { Route as SuscribirseRouteImport } from './routes/suscribirse'
 import { Route as VenderRouteImport } from './routes/vender'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
+import { Route as AgentesIdRouteImport } from './routes/agentes_.$id'
 import { Route as AgentesRegistroRouteImport } from './routes/agentes_.registro'
 import { Route as BarrioSlugRouteImport } from './routes/barrio.$slug'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
@@ -197,6 +198,11 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
   path: '/verify-email',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AgentesIdRoute = AgentesIdRouteImport.update({
+  id: '/agentes_/$id',
+  path: '/agentes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
   id: '/agentes_/registro',
   path: '/agentes/registro',
@@ -323,6 +329,7 @@ export interface FileRoutesByFullPath {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes/$id': typeof AgentesIdRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -372,6 +379,7 @@ export interface FileRoutesByTo {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes/$id': typeof AgentesIdRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -422,6 +430,7 @@ export interface FileRoutesById {
   '/suscribirse': typeof SuscribirseRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
+  '/agentes_/$id': typeof AgentesIdRoute
   '/agentes_/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -473,6 +482,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes/$id'
     | '/agentes/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -522,6 +532,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes/$id'
     | '/agentes/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -571,6 +582,7 @@ export interface FileRouteTypes {
     | '/suscribirse'
     | '/vender'
     | '/verify-email'
+    | '/agentes_/$id'
     | '/agentes_/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -621,6 +633,7 @@ export interface RootRouteChildren {
   SuscribirseRoute: typeof SuscribirseRoute
   VenderRoute: typeof VenderRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
+  AgentesIdRoute: typeof AgentesIdRoute
   AgentesRegistroRoute: typeof AgentesRegistroRoute
   BarrioSlugRoute: typeof BarrioSlugRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
@@ -840,6 +853,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof VerifyEmailRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/agentes_/$id': {
+      id: '/agentes_/$id'
+      path: '/agentes/$id'
+      fullPath: '/agentes/$id'
+      preLoaderRoute: typeof AgentesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/agentes_/registro': {
       id: '/agentes_/registro'
       path: '/agentes/registro'
@@ -1005,6 +1025,7 @@ const rootRouteChildren: RootRouteChildren = {
   SuscribirseRoute: SuscribirseRoute,
   VenderRoute: VenderRoute,
   VerifyEmailRoute: VerifyEmailRoute,
+  AgentesIdRoute: AgentesIdRoute,
   AgentesRegistroRoute: AgentesRegistroRoute,
   BarrioSlugRoute: BarrioSlugRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,

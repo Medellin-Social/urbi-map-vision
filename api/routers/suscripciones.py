@@ -147,8 +147,10 @@ async def registro_agente(
     # agent row already linked to another account must not be re-pointed here.
     row = await pool.fetchrow(
         """
-        INSERT INTO agent (usuario_id, email, nombre, telefono)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO agent (usuario_id, email, nombre, telefono, slug)
+        VALUES ($1, $2, $3, $4,
+                trim(both '-' from regexp_replace(lower(trim($3)), '[^a-z0-9]+', '-', 'g'))
+                || '-' || substr(gen_random_uuid()::text, 1, 6))
         ON CONFLICT (email) DO UPDATE
           SET usuario_id = COALESCE(agent.usuario_id, EXCLUDED.usuario_id),
               nombre = CASE WHEN agent.estado = 'pendiente' AND agent.usuario_id IS NOT DISTINCT FROM EXCLUDED.usuario_id

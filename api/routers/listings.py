@@ -417,10 +417,10 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($5::bigint  IS NULL OR l.precio >= $5)
   AND ($6::bigint  IS NULL OR l.precio <= $6)
   AND ($7::float8  IS NULL OR l.area_m2 >= $7)
-  AND ($8::int     IS NULL OR (CASE WHEN $8 >= 4 THEN l.habitaciones >= $8 ELSE l.habitaciones = $8 END))
+  AND ($8::int     IS NULL OR (CASE WHEN $8 = 0 THEN l.habitaciones = 0 ELSE l.habitaciones >= $8 END))
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
-  AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN l.banos >= $11 ELSE l.banos = $11 END))
+  AND ($11::float8 IS NULL OR l.banos >= $11)
   AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
@@ -472,8 +472,8 @@ _ALLCITY_CTE_REPLACEMENT = """      AND NOT (tipo_operacion = 'venta'    AND pre
       AND ($6::bigint  IS NULL OR precio_cop <= $6)
       AND ($7::float8  IS NULL OR area_m2 >= $7)
       AND ($10::float8 IS NULL OR area_m2 <= $10)
-      AND ($8::int     IS NULL OR (CASE WHEN $8 >= 4 THEN NULLIF(habitaciones, -1) >= $8 ELSE NULLIF(habitaciones, -1) = $8 END))
-      AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN banos >= $11 ELSE banos = $11 END))
+      AND ($8::int     IS NULL OR (CASE WHEN $8 = 0 THEN NULLIF(habitaciones, -1) = 0 ELSE NULLIF(habitaciones, -1) >= $8 END))
+      AND ($11::float8 IS NULL OR banos >= $11)
       AND ($15::boolean IS NULL OR amoblado = $15)
       AND ($16::text   IS NULL OR ($16 = 'comercial') = (lower(coalesce(tipo_inmueble, '')) ~ '__COMERCIAL_RE__'))
     ORDER BY CASE WHEN tier IN ('agente_premium', 'agencia_premium') OR fuente = 'propio' THEN 0 ELSE 1 END,
@@ -521,10 +521,10 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($5::bigint IS NULL OR l.precio >= $5)
   AND ($6::bigint IS NULL OR l.precio <= $6)
   AND ($7::float8 IS NULL OR l.area_m2 >= $7)
-  AND ($8::int    IS NULL OR l.habitaciones = $8)
+  AND ($8::int    IS NULL OR (CASE WHEN $8 = 0 THEN l.habitaciones = 0 ELSE l.habitaciones >= $8 END))
   AND ($9::boolean IS NOT TRUE OR l.fuente = 'medellinliving')
   AND ($10::float8 IS NULL OR l.area_m2 <= $10)
-  AND ($11::float8 IS NULL OR (CASE WHEN $11 >= 4 THEN l.banos >= $11 ELSE l.banos = $11 END))
+  AND ($11::float8 IS NULL OR l.banos >= $11)
   AND ($12::int    IS NULL OR bc.cd_comuna = $12)
   AND ($13::int    IS NULL OR (g.estrato_real = $13 AND g.estrato_real BETWEEN 1 AND 6))
   AND ($14::text   IS NULL OR EXISTS (
@@ -1031,7 +1031,14 @@ SELECT
     l.precio_min_cluster::bigint       AS precio_min_cluster,
     l.precio_max_cluster::bigint       AS precio_max_cluster,
     liq.tiempo_estimado_venta,
-    cat.avaluo_m2_catastro::bigint     AS avaluo_m2_catastro,
+    -- $/m² catastral EFECTIVO según tipo (ver dbt listings_vs_catastro.sql):
+    --   apto → construcción/m²;  casa → construcción/m² + lote fijo repartido sobre el área.
+    CASE
+        WHEN l.tipo_inmueble = 'casa' AND cat.n_casa >= 20 AND l.area_m2 > 0
+            THEN round((cat.avaluo_m2_casa_constru + cat.avaluo_lote_casa / l.area_m2)::numeric)
+        WHEN l.tipo_inmueble = 'apartamento' AND cat.n_apto >= 20
+            THEN round(cat.avaluo_m2_apto::numeric)
+    END::bigint                        AS avaluo_m2_catastro,
     _lp_owner.tour_url,
     _lp_owner.video_url,
     COALESCE(_lp_owner.nombre_edificio, l.nombre_edificio) AS nombre_edificio
@@ -1048,11 +1055,17 @@ LEFT JOIN analytics.barrios_medianas m
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
 LEFT JOIN analytics.barrios_liquidez liq ON liq.barrio_id = l.barrio_id
--- Avalúo catastral (Medellín) — agregado por comuna en listings_vs_catastro.
+-- Avalúo catastral (Medellín) — componentes por comuna y tipo en listings_vs_catastro.
+-- El $/m² efectivo se arma arriba con el área real del listing (casa reparte el lote fijo).
 LEFT JOIN (
-    SELECT cd_comuna, MAX(avaluo_m2_catastro) AS avaluo_m2_catastro
+    SELECT cd_comuna,
+           MAX(n_apto)                 AS n_apto,
+           MAX(avaluo_m2_apto)         AS avaluo_m2_apto,
+           MAX(n_casa)                 AS n_casa,
+           MAX(avaluo_m2_casa_constru) AS avaluo_m2_casa_constru,
+           MAX(avaluo_lote_casa)       AS avaluo_lote_casa
     FROM analytics.listings_vs_catastro
-    WHERE avaluo_m2_catastro > 0
+    WHERE cd_comuna IS NOT NULL
     GROUP BY cd_comuna
 ) cat ON cat.cd_comuna = bc.cd_comuna
 LEFT JOIN raw.listings_metrocuadrado lm ON lm.url = l.url AND l.fuente = 'metrocuadrado'
@@ -1189,7 +1202,7 @@ _VIEWPORT_FEATURED_PRED = (
 # Shared $12-$19 filter block. NULLIF(habitaciones,-1) normalises the sentinel.
 # dias buckets replicate the old client-side semantics (NULL → 999 = "old").
 _VIEWPORT_EXTRA_WHERE = """\
-  AND ($12::int    IS NULL OR NULLIF(l.habitaciones, -1) >= $12)
+  AND ($12::int    IS NULL OR (CASE WHEN $12 = 0 THEN NULLIF(l.habitaciones, -1) = 0 ELSE NULLIF(l.habitaciones, -1) >= $12 END))
   AND ($13::float8 IS NULL OR l.banos >= $13)
   AND ($14::float8 IS NULL OR l.area_m2 >= $14)
   AND ($15::float8 IS NULL OR l.area_m2 <= $15)
@@ -1542,6 +1555,7 @@ async def get_socio_casadolcecasa(request: Request, limit: int = Query(default=6
 
 class AgenteDirectorio(BaseModel):
     id: str
+    slug: Optional[str] = None
     nombre: str
     foto_url: Optional[str] = None
     telefono: str
@@ -1580,7 +1594,7 @@ rev AS (
     FROM agent_review
     GROUP BY agent_id
 )
-SELECT a.id::text, a.nombre, a.foto_url, a.telefono, a.email,
+SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
        COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
@@ -1593,7 +1607,7 @@ LEFT JOIN LATERAL (
     WHERE am2.agent_id = a.id LIMIT 1
 ) agcy ON true
 WHERE a.estado = 'activo'
-GROUP BY a.id, a.nombre, a.foto_url, a.telefono, a.email,
+GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY a.nombre
 """
@@ -1618,6 +1632,7 @@ async def get_agentes_directorio(request: Request):
 # así el mostrar_exacto=false se respeta por omisión.
 class AgentePerfilListing(BaseModel):
     id: str
+    map_id: Optional[int] = None   # id numérico del listing en el mapa (hash md5(url)); deep-link /map?listing=
     slug: Optional[str] = None
     titulo: Optional[str] = None
     precio: Optional[float] = None
@@ -1642,16 +1657,26 @@ class AgentePerfilResena(BaseModel):
 class AgentePerfilZona(BaseModel):
     nivel: str
     nombre: Optional[str] = None
+    exclusivo: bool = True  # zonas vienen de sponsorship = modelo exclusivo por zona
 
 
 class AgentePerfil(BaseModel):
     id: str
+    slug: Optional[str] = None
+    ciudad_id: int = 1
     nombre: str
     foto_url: Optional[str] = None
     bio: Optional[str] = None
-    telefono: Optional[str] = None  # para link WhatsApp; email nunca se expone
+    titulo: Optional[str] = None               # rol ("Agente de compra y venta")
+    verificado: bool = False                   # agent.verificado (badge "Agente verificado")
+    anios_experiencia: Optional[int] = None    # NULL hasta que el agente lo complete
+    idiomas: list[str] = []
+    especialidades: list[str] = []
+    licencias: list[Any] = []                  # [{entidad, numero}] o strings
+    telefono: Optional[str] = None  # para link WhatsApp/llamar; email nunca se expone
     agencia_nombre: Optional[str] = None
     agencia_verificada: bool = False
+    agencia_logo: Optional[str] = None
     miembro_desde: Optional[datetime] = None
     rating_promedio: Optional[float] = None
     n_resenas: int = 0
@@ -1666,21 +1691,29 @@ class AgentePerfil(BaseModel):
     cierres: list[AgentePerfilListing] = []
     n_activos: int = 0
     n_cierres: int = 0
+    vendidas_12m: int = 0                       # cierres reales (propiedad_evento) últimos 12m
     precio_min: Optional[float] = None
     precio_max: Optional[float] = None
     resenas: list[AgentePerfilResena] = []
 
 
 _AGENTE_PERFIL_SQL = """
-SELECT a.id::text, a.nombre, a.foto_url, a.bio, a.telefono, a.created_at AS miembro_desde,
+SELECT a.id::text, a.slug, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.nombre, a.foto_url,
+       a.bio, a.titulo, COALESCE(a.verificado, false) AS verificado,
+       a.anios_experiencia, a.idiomas, a.especialidades, a.licencias,
+       a.telefono, a.created_at AS miembro_desde,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
+       agcy.agencia_logo,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
        resp.mediana_resp_horas, COALESCE(resp.n_resp, 0) AS n_resp,
        COALESCE(resp.n_leads, 0) AS n_leads, COALESCE(resp.n_ofertas, 0) AS n_ofertas,
-       COALESCE(resp.n_conversiones, 0) AS n_conversiones
+       COALESCE(resp.n_conversiones, 0) AS n_conversiones,
+       (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM propiedad_evento pe
+        WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+          AND pe.fecha > CURRENT_DATE - INTERVAL '12 months') AS vendidas_12m
 FROM agent a
 LEFT JOIN LATERAL (
-    SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
+    SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada, ag.logo_url AS agencia_logo
     FROM agency_member am JOIN agency ag ON ag.id = am.agency_id
     WHERE am.agent_id = a.id LIMIT 1
 ) agcy ON true
@@ -1715,7 +1748,8 @@ WHERE a.id = $1 AND a.estado = 'activo'
 """
 
 _AGENTE_PERFIL_LISTINGS_SQL = """
-SELECT l.id::text, l.slug, l.titulo, l.precio::float8 AS precio, l.moneda,
+SELECT l.id::text, ('x'||substr(md5(l.id::text),1,8))::bit(32)::int AS map_id,
+       l.slug, l.titulo, l.precio::float8 AS precio, l.moneda,
        l.operacion::text AS operacion, l.tipo_inmueble::text AS tipo_inmueble,
        l.area_m2::float8 AS area_m2, l.habitaciones, l.banos,
        l.municipio, l.barrio, l.estado::text AS estado,
@@ -1750,17 +1784,30 @@ LIMIT 20
 """
 
 
+async def _resolver_agent_id(pool, agent_id: str) -> Optional[str]:
+    """Resuelve el param de ruta (slug o UUID) al UUID real del agente activo.
+    Permite /agentes/<slug> sin romper los links viejos por UUID."""
+    return await pool.fetchval(
+        "SELECT id::text FROM agent WHERE (slug = $1 OR id::text = $1) AND estado = 'activo'",
+        agent_id,
+    )
+
+
 @router.get("/agentes/{agent_id}", response_model=AgentePerfil)
 @limiter.limit("60/minute")
 async def get_agente_perfil(request: Request, agent_id: str):
-    """Perfil público de un agente: bio/foto + su actividad in-platform + reseñas."""
+    """Perfil público de un agente: bio/foto + su actividad in-platform + reseñas.
+    `agent_id` puede ser el slug o el UUID."""
     pool = get_pool()
-    base = await pool.fetchrow(_AGENTE_PERFIL_SQL, agent_id)
+    real_id = await _resolver_agent_id(pool, agent_id)
+    if not real_id:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    base = await pool.fetchrow(_AGENTE_PERFIL_SQL, real_id)
     if not base:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
-    listings = await pool.fetch(_AGENTE_PERFIL_LISTINGS_SQL, agent_id)
-    zonas = await pool.fetch(_AGENTE_PERFIL_ZONAS_SQL, agent_id)
-    resenas = await pool.fetch(_AGENTE_PERFIL_RESENAS_SQL, agent_id)
+    listings = await pool.fetch(_AGENTE_PERFIL_LISTINGS_SQL, real_id)
+    zonas = await pool.fetch(_AGENTE_PERFIL_ZONAS_SQL, real_id)
+    resenas = await pool.fetch(_AGENTE_PERFIL_RESENAS_SQL, real_id)
 
     activos, cierres, precios = [], [], []
     for r in listings:
@@ -1775,10 +1822,24 @@ async def get_agente_perfil(request: Request, agent_id: str):
     def _tasa(n):
         return round(n * 100.0 / n_leads, 1) if n_leads >= 3 else None
 
+    # JSONB llega como str desde asyncpg; TEXT[] llega como lista.
+    licencias = base["licencias"]
+    if isinstance(licencias, str):
+        try:
+            licencias = json.loads(licencias)
+        except (ValueError, TypeError):
+            licencias = []
+
     return AgentePerfil(
-        id=base["id"], nombre=base["nombre"], foto_url=base["foto_url"], bio=base["bio"],
+        id=base["id"], slug=base["slug"], ciudad_id=base["ciudad_id"],
+        nombre=base["nombre"], foto_url=base["foto_url"], bio=base["bio"],
+        titulo=base["titulo"], verificado=base["verificado"],
+        anios_experiencia=base["anios_experiencia"],
+        idiomas=list(base["idiomas"] or []), especialidades=list(base["especialidades"] or []),
+        licencias=licencias or [],
         telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
-        agencia_verificada=base["agencia_verificada"], miembro_desde=base["miembro_desde"],
+        agencia_verificada=base["agencia_verificada"], agencia_logo=base["agencia_logo"],
+        miembro_desde=base["miembro_desde"],
         rating_promedio=base["rating_promedio"], n_resenas=base["n_resenas"],
         responde_rapido=((base["n_resp"] or 0) >= 3 and base["mediana_resp_horas"] is not None
                          and base["mediana_resp_horas"] <= 12),
@@ -1788,6 +1849,7 @@ async def get_agente_perfil(request: Request, agent_id: str):
         zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
                if z["nombre"]],
         activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
+        vendidas_12m=int(base["vendidas_12m"] or 0),
         precio_min=min(precios) if precios else None,
         precio_max=max(precios) if precios else None,
         resenas=[AgentePerfilResena(**dict(r)) for r in resenas],
@@ -1819,6 +1881,127 @@ async def crear_resena_agente(request: Request, agent_id: str, body: ResenaIn, c
         agent_id, current_user["id"], body.calificacion, body.comentario,
     )
     return {"ok": True}
+
+
+# ── Formulario de contacto público del agente ─────────────────────────────────
+# El usuario contacta al agente y/o deja su info para que lo contacten. Escribe un
+# lead en visita_solicitud ruteado por agent_id → cae en /realtor/agenda del agente
+# (rama `OR v.agent_id = $1`). El navegador NUNCA escribe a GHL: GHL hace pull del
+# lead por /ghl/leads. Consentimiento (Ley 1581) se exige y persiste server-side.
+_INTERESES_CONTACTO = ("comprar", "vender", "arrendar")
+
+
+class ContactoAgenteIn(BaseModel):
+    nombre: str = Field(min_length=1, max_length=120)
+    email: Optional[str] = Field(default=None, max_length=200)
+    telefono: Optional[str] = Field(default=None, max_length=40)
+    mensaje: Optional[str] = Field(default=None, max_length=2000)
+    interes: str = Field(default="comprar", max_length=20)
+    consentimiento: bool = False
+
+
+@router.post("/agentes/{agent_id}/contactar", status_code=201)
+@limiter.limit("10/minute")
+async def contactar_agente(
+    request: Request,
+    agent_id: str,
+    body: ContactoAgenteIn,
+    current_user: Optional[dict] = Depends(get_optional_user),
+):
+    """Lead de contacto hacia el agente (público). Valida consentimiento + datos
+    en el server (no se confía del checkbox del cliente)."""
+    if not body.consentimiento:
+        raise HTTPException(status_code=400, detail="Debes aceptar el tratamiento de datos para enviar el mensaje")
+    email = (body.email or "").strip() or None
+    telefono = (body.telefono or "").strip() or None
+    if not (email or telefono):
+        raise HTTPException(status_code=400, detail="Deja un email o un teléfono para que el agente te contacte")
+    if body.interes not in _INTERESES_CONTACTO:
+        raise HTTPException(status_code=400, detail="Interés inválido")
+    if email and not ("@" in email and "." in email.rsplit("@", 1)[-1]):
+        raise HTTPException(status_code=400, detail="Email inválido")
+
+    pool = get_pool()
+    real_id = await _resolver_agent_id(pool, agent_id)
+    if not real_id:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    vid = await pool.fetchval(
+        """INSERT INTO visita_solicitud
+             (listing_url, usuario_id, agent_id, nombre, email, telefono, mensaje,
+              intencion, estado, consentimiento, consentimiento_at)
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'pendiente', true, now())
+           RETURNING id""",
+        f"agente:{real_id}", (current_user or {}).get("id"), real_id,
+        body.nombre.strip(), email, telefono, (body.mensaje or "").strip() or None,
+        body.interes,
+    )
+    return {"ok": True, "id": str(vid)}
+
+
+# ── Agentes similares (misma zona patrocinada) ────────────────────────────────
+_AGENTES_SIMILARES_SQL = """
+WITH mis_zonas AS (
+    SELECT s.zona_nivel, s.zona_codigo
+    FROM sponsorship s
+    JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+),
+otros AS (
+    SELECT DISTINCT am.agent_id
+    FROM sponsorship s
+    JOIN mis_zonas mz ON mz.zona_nivel = s.zona_nivel AND mz.zona_codigo = s.zona_codigo
+    JOIN agency_member am ON am.agency_id = s.agency_id
+    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+      AND am.agent_id <> $1
+),
+sp AS (
+    SELECT am.agent_id,
+           CASE s.zona_nivel
+             WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
+                                  JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
+                                  WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
+             WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
+             ELSE NULL
+           END AS zona_nombre
+    FROM sponsorship s
+    JOIN agency_member am ON am.agency_id = s.agency_id
+    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+),
+rev AS (
+    SELECT agent_id, ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio,
+           COUNT(*)::int AS n_resenas
+    FROM agent_review GROUP BY agent_id
+)
+SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
+       COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
+       agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+FROM otros o
+JOIN agent a ON a.id = o.agent_id AND a.estado = 'activo'
+LEFT JOIN sp  ON sp.agent_id = a.id
+LEFT JOIN rev ON rev.agent_id = a.id
+LEFT JOIN LATERAL (
+    SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada
+    FROM agency_member am2 JOIN agency ag ON ag.id = am2.agency_id
+    WHERE am2.agent_id = a.id LIMIT 1
+) agcy ON true
+GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
+         agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
+ORDER BY rev.rating_promedio DESC NULLS LAST, a.nombre
+LIMIT 6
+"""
+
+
+@router.get("/agentes/{agent_id}/similares", response_model=list[AgenteDirectorio])
+@limiter.limit("60/minute")
+async def get_agentes_similares(request: Request, agent_id: str):
+    """Otros agentes activos en la(s) misma(s) zona(s) patrocinada(s)."""
+    pool = get_pool()
+    real_id = await _resolver_agent_id(pool, agent_id)
+    if not real_id:
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    rows = await pool.fetch(_AGENTES_SIMILARES_SQL, real_id)
+    return [AgenteDirectorio(**dict(r)) for r in rows]
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
@@ -2033,6 +2216,9 @@ SELECT
     n_colegios_1km,
     dist_colegio_km,
     dist_metro_km,
+    n_cafe,
+    n_rest,
+    n_bar,
     LEAST(100, (
         LEAST(20, n_cafe * 4)
         + LEAST(20, n_rest * 2)
@@ -2068,6 +2254,10 @@ async def get_listing_entorno(
         "n_colegios_1km": row["n_colegios_1km"],
         "dist_colegio_km": float(row["dist_colegio_km"]) if row["dist_colegio_km"] is not None else None,
         "dist_metro_km": float(row["dist_metro_km"]) if row["dist_metro_km"] is not None else None,
+        # Densidad comercial (flujo peatonal) — lente comercial del drawer.
+        "n_cafes_500m": row["n_cafe"],
+        "n_restaurantes_500m": row["n_rest"],
+        "n_bares_500m": row["n_bar"],
     }}
 
 

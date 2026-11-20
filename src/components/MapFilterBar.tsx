@@ -15,7 +15,7 @@ import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { CurrencyToggle } from "@/components/CurrencyToggle";
 import { parsePriceInput } from "@/lib/format";
 import { useUnit } from "@/hooks/useUnit";
-import { useIsMobile } from "@/hooks/use-mobile";
+import { useIsTablet } from "@/hooks/use-mobile";
 import { useBarrioSearch } from "@/hooks/useBarrioSearch";
 import { TIPOS_POR_SEGMENTO, type Segmento } from "@/lib/segmento";
 import type { SearchOption } from "@/lib/barrioSearch";
@@ -347,8 +347,7 @@ function precioLabel(f: SharedFilters, isRent: boolean, lang: string, fmtPrice: 
 function habLabel(f: SharedFilters): string {
   if (f.habitaciones === null) return "Habitaciones";
   if (f.habitaciones === 0) return "Studio (0)";
-  if (f.habitaciones === 4) return "4+ hab.";
-  return `${f.habitaciones} hab.`;
+  return `${f.habitaciones}+ hab.`;
 }
 
 function tipoLabel(f: SharedFilters): string {
@@ -449,14 +448,13 @@ function usePriceFieldText(
 
 function banosLabel(f: SharedFilters): string {
   if (f.banos === null) return "Baños";
-  if (f.banos === 4) return "4+ baños";
-  return `${f.banos} baños`;
+  return `${f.banos}+ baños`;
 }
 
 function habBanosLabel(f: SharedFilters): string {
   const parts: string[] = [];
-  if (f.habitaciones !== null) parts.push(f.habitaciones === 0 ? "Studio" : f.habitaciones === 4 ? "4+ hab." : `${f.habitaciones} hab.`);
-  if (f.banos !== null) parts.push(f.banos === 4 ? "4+ baños" : `${f.banos} baños`);
+  if (f.habitaciones !== null) parts.push(f.habitaciones === 0 ? "Studio" : `${f.habitaciones}+ hab.`);
+  if (f.banos !== null) parts.push(f.banos === 0 ? "Studio" : `${f.banos}+ baños`);
   return parts.length > 0 ? parts.join(", ") : "Hab. y Baños";
 }
 
@@ -1157,7 +1155,10 @@ export function MapFilterBar({
   const [mobileMore, setMobileMore] = useState(false);
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [, bumpLayout] = useReducer((n: number) => n + 1, 0);  // re-render to re-measure anchors on resize/scroll
-  const isMobile = useIsMobile();
+  // "Compacto" (toggle + hoja de filtros) en móvil Y TABLET: la fila desktop con los
+  // 9 filtros solo cabe en ≥lg (1024). Entre 768-1024 se desbordaba y cortaba los
+  // filtros de la derecha. Por eso el breakpoint de la barra es tablet (<1024), no móvil.
+  const isMobile = useIsTablet();
   const barRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -1544,7 +1545,7 @@ export function MapFilterBar({
                   cursor: "pointer",
                 }}
               >
-                {["Todas", "Studio (0)", "1", "2", "3", "4+"][i]}
+                {["Todas", "Studio (0)", "1+", "2+", "3+", "4+"][i]}
               </button>
             ))}
           </div>
@@ -1579,17 +1580,6 @@ export function MapFilterBar({
           </div>
         </div>
 
-        {/* Ocultar destacados */}
-        <label style={{ display: "flex", alignItems: "center", gap: 12, minHeight: 44, marginBottom: 20, cursor: "pointer" }}>
-          <input
-            type="checkbox"
-            checked={filters.ocultarDestacados}
-            onChange={(e) => onFiltersChange({ ocultarDestacados: e.target.checked })}
-            style={{ width: 22, height: 22 }}
-          />
-          <span style={{ fontSize: 14, color: C.ink }}>Ocultar destacados</span>
-        </label>
-
         {activeTab === "buy" && (
           <>
             {/* Baños */}
@@ -1608,7 +1598,7 @@ export function MapFilterBar({
                       cursor: "pointer",
                     }}
                   >
-                    {["Todos", "1", "2", "3", "4+"][i]}
+                    {["Todos", "1+", "2+", "3+", "4+"][i]}
                   </button>
                 ))}
               </div>
@@ -1994,18 +1984,6 @@ export function MapFilterBar({
                 })}
               </div>
 
-              {/* Ocultar destacados */}
-              <label style={{ display: "flex", alignItems: "center", gap: 10, minHeight: 36, marginBottom: 16, cursor: "pointer" }}>
-                <input
-                  type="checkbox"
-                  data-testid="ocultar-destacados"
-                  checked={filters.ocultarDestacados}
-                  onChange={(e) => onFiltersChange({ ocultarDestacados: e.target.checked })}
-                  style={{ width: 18, height: 18 }}
-                />
-                <span style={{ fontSize: 13, color: C.ink }}>Ocultar destacados</span>
-              </label>
-
               {/* PRO teasers — solo para usuarios sin plan pro */}
               {!isPro && (
               <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
@@ -2061,7 +2039,7 @@ export function MapFilterBar({
   // Comprar/Arrendar — vivía en el header (MapNavbar), ahora en el borde
   // izquierdo de esta barra al traer ComunidadNavbar como header nuevo.
   const opToggle = onTabChange && activeTab !== "sell" && (
-    <div style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 999, overflow: "hidden", flexShrink: 0 }}>
+    <div data-tour="tabs-comprar-arrendar" style={{ display: "flex", border: `1px solid ${C.border}`, borderRadius: 8, overflow: "hidden", flexShrink: 0 }}>
       {(["buy", "rent"] as const).map((id) => (
         <button
           key={id}
@@ -2069,7 +2047,7 @@ export function MapFilterBar({
           style={{
             border: "none", background: activeTab === id ? C.teal : "transparent",
             color: activeTab === id ? "#fff" : C.muted, padding: "5px 12px",
-            minHeight: isMobile ? 44 : 30,
+            minHeight: isMobile ? 36 : 30,
             fontSize: 12, fontWeight: 700, cursor: "pointer", whiteSpace: "nowrap",
           }}
         >
@@ -2099,15 +2077,15 @@ export function MapFilterBar({
           padding: "0 16px",
         }}
       >
-        {/* Desktop */}
-        <div className="hidden md:flex w-full items-center" style={{ gap: 10 }}>
+        {/* Desktop — fila de 9 filtros, solo cabe completa ≥1180px (a 1024-1180 se clipeaba "Amenities") */}
+        <div className="hidden min-[1180px]:flex w-full items-center" style={{ gap: 10 }}>
           {opToggle}
           {activeTab !== "sell" && segmentToggle}
           {activeTab === "sell" ? sellContent : desktopContent}
         </div>
 
-        {/* Mobile trigger */}
-        <div className="flex md:hidden w-full items-center justify-between" style={{ gap: 8 }}>
+        {/* Compacta (Buy/Rent + botón Filtros) para <1180px */}
+        <div className="flex min-[1180px]:hidden w-full items-center justify-between" style={{ gap: 8 }}>
           {opToggle}
           {activeTab === "sell" ? sellContent : (
             <>

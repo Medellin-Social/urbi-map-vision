@@ -2,18 +2,16 @@ import { tipoInmuebleLabel } from "@/lib/tipoInmueble";
 import { Name } from "@/lib/i18n";
 import { useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Bath, Bed, Building2, ChevronRight, Heart, MapPin, Maximize2, Share2, X } from "@/lib/icons";
+import { Bath, Bed, Building2, Heart, MapPin, Maximize2, Share2 } from "@/lib/icons";
 import { toast } from "sonner";
-import { apiFetch } from "@/lib/apiClient";
+import { apiFetch, getToken } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { formatNumber, M2_PER_FT2 } from "@/lib/format";
 import type { ApiListing, ApiListingDetail } from "@/lib/adapters";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useFavoritosListings, favKey } from "@/hooks/useFavoritosListings";
-import { auth } from "@/lib/auth";
 import { PopupGallery } from "./PopupGallery";
-import { OriginalListingLink } from "@/components/OriginalListingLink";
 
 const POPUP_WIDTH = 300;
 
@@ -29,10 +27,18 @@ type Props = {
   listing: ApiListing; // pin data — instant header, never blank
   onClose: () => void;
   onViewMore: (id: number) => void;
+  /** Split-view: el mapa ocupa el 60% derecho → el popup se limita a esa región. */
+  splitLayout?: boolean;
+  /** Coords de pantalla del pin clickeado → el popup se ancla arriba/abajo de él. */
+  anchorX?: number;
+  anchorY?: number;
 };
 
-export function ListingPopup({ listing, onClose, onViewMore }: Props) {
+export function ListingPopup({ listing, onClose, onViewMore, splitLayout = false, anchorX, anchorY }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
+  // Guard de galería: distingue tap (abre detalle) de swipe/flecha (solo navega).
+  const dragStart = useRef<{ x: number; y: number } | null>(null);
+  const wasDrag = useRef(false);
   const { formatPrice, formatSecondary, formatPricePerArea, unit, lang } = usePriceFormat();
   const { isFav, toggle } = useFavoritosListings();
   const favK = favKey(listing);
@@ -50,7 +56,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
   };
 
   const handleFav = () => {
-    if (!auth.get()) { toast.info(lang === "en" ? "Sign in to save" : "Inicia sesión para guardar"); return; }
+    if (!getToken()) { toast.info(lang === "en" ? "Sign in to save" : "Inicia sesión para guardar"); return; }
     toggle(favK, listing.barrio_id);
   };
 
@@ -91,14 +97,39 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
   // Desktop: tarjeta flotante centrada sobre el mapa visible. Móvil: bottom
   // sheet anclado abajo (más intuitivo, refiere claro al pin tocado).
   const isMobile = useIsMobile();
-  const panelWidth = isMobile ? 0 : 380;
-  const width = Math.min(POPUP_WIDTH, window.innerWidth - 24);
-  const left = Math.max(12, (window.innerWidth - panelWidth - width) / 2);
-  const posStyle: React.CSSProperties = isMobile
+  // Split: el mapa es el 60% derecho, desde (header + filterbar 48px) hasta abajo.
+  // El popup se centra arriba de ESA región y acota su alto → nunca sale del mapa.
+  const headerH = (typeof window !== "undefined"
+    ? parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--map-header-h")) : 0) || 53;
+  const mapTop = headerH + 48;
+  let posStyle: React.CSSProperties;
+  if (isMobile) {
     // never taller than the space under the header + filter row (short / landscape
     // phones put the sheet's top over the header after a fly-to)
-    ? { left: 8, right: 8, bottom: 12, width: "auto", maxHeight: "min(72dvh, calc(100dvh - var(--map-header-h, 53px) - 80px))" }
-    : { left, top: 72, width, maxHeight: "calc(100dvh - 120px)" };
+    posStyle = { left: 8, right: 8, bottom: 12, width: "auto", maxHeight: "min(72dvh, calc(100dvh - var(--map-header-h, 53px) - 80px))" };
+  } else if (splitLayout) {
+    const mapLeft = window.innerWidth * 0.45;
+    const mapW = window.innerWidth * 0.55;
+    const w = Math.min(320, mapW - 24);
+    const pad = 10, gap = 14;
+    // Horizontal: centrado en el pin, acotado a la región del mapa.
+    const ax = anchorX ?? mapLeft + mapW / 2;
+    const left = Math.max(mapLeft + 8, Math.min(ax - w / 2, window.innerWidth - 8 - w));
+    // Vertical estilo Zillow: SIEMPRE debajo del pin; solo arriba si abajo no cabe.
+    // anchorY=0 (click sintético del tour desde la lista) o un pin arriba del mapa
+    // empujaría el popup sobre los filtros → ánclalo dentro de la región del mapa.
+    const ay = anchorY && anchorY >= mapTop ? anchorY : mapTop + 12;
+    const spaceBelow = window.innerHeight - ay - gap - pad;
+    const spaceAbove = ay - mapTop - gap - pad;
+    const below = spaceBelow >= 260 || spaceBelow >= spaceAbove;
+    posStyle = below
+      ? { left, top: ay + gap, width: w, maxHeight: `${Math.max(160, spaceBelow)}px` }
+      : { left, bottom: window.innerHeight - ay + gap, width: w, maxHeight: `${Math.max(160, spaceAbove)}px` };
+  } else {
+    const width = Math.min(POPUP_WIDTH, window.innerWidth - 24);
+    const left = Math.max(12, (window.innerWidth - 380 - width) / 2);
+    posStyle = { left, top: 72, width, maxHeight: "calc(100dvh - 120px)" };
+  }
 
   // Header fields: prefer detail (proper *_display casing), fall back to pin.
   const d = detail;
@@ -122,8 +153,16 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
 
   return (
     <>
-      {/* Backdrop — atenuado en móvil (señala el sheet), transparente en desktop */}
-      <div className={`fixed inset-0 z-40 ${isMobile ? "bg-black/30" : ""}`} onClick={onClose} />
+      {/* Backdrop — atenuado en móvil (señala el sheet), transparente en desktop.
+          En split cubre SOLO la región del mapa (derecha) → la lista de la izquierda
+          queda navegable con el popup abierto; click en el mapa lo cierra. */}
+      <div
+        className={`fixed z-40 ${isMobile ? "bg-black/30" : ""}`}
+        onClick={onClose}
+        style={splitLayout && !isMobile
+          ? { left: "45%", right: 0, top: "calc(var(--map-header-h, 53px) + 48px)", bottom: 0 }
+          : { inset: 0 }}
+      />
 
       <div
         ref={containerRef}
@@ -132,22 +171,38 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
         aria-label={lang === "en" ? `Listing details in ${ubicacion || "the map"}` : `Detalle de listing en ${ubicacion || "el mapa"}`}
         tabIndex={-1}
         data-tour="listing-popup"
-        className="fixed z-50 flex flex-col overflow-hidden outline-none rounded-2xl"
+        className="fixed z-50 flex cursor-pointer flex-col overflow-hidden outline-none rounded-2xl"
         style={{
           ...posStyle,
           background: "#FAF8F3",
           border: "0.5px solid #E5E0D5",
           boxShadow: "0 2px 6px rgba(26,18,8,0.10), 0 24px 48px -20px rgba(26,18,8,0.45)",
         }}
-        onClick={(e) => e.stopPropagation()}
+        // Un click en el popup abre el detalle completo (share/fav/cerrar hacen stopPropagation).
+        onClick={(e) => { e.stopPropagation(); onViewMore(listing.id); }}
       >
         {isMobile && (
           <div className="flex shrink-0 justify-center pt-2 pb-1">
             <div className="h-1 w-9 rounded-full" style={{ background: "#C9C4B8" }} />
           </div>
         )}
-        {/* 1. Gallery — pin photo instantly, fotos[] from the detail when loaded */}
-        <div className="relative shrink-0">
+        {/* 1. Gallery — pin photo instantly, fotos[] from the detail when loaded.
+            Guard: tap en la imagen SÍ abre el detalle (burbujea al container); pero un
+            swipe (arrastre) o un click en una flecha/control NO abre, solo navega. */}
+        <div
+          className="relative shrink-0"
+          onPointerDown={(e) => { dragStart.current = { x: e.clientX, y: e.clientY }; wasDrag.current = false; }}
+          onPointerMove={(e) => {
+            const s = dragStart.current;
+            if (s && Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10) wasDrag.current = true;
+          }}
+          onClick={(e) => {
+            // swipe o control (flecha/compartir/guardar) → no abrir detalle
+            if (wasDrag.current || (e.target as HTMLElement).closest("button")) e.stopPropagation();
+            wasDrag.current = false;
+            // tap en la imagen → deja burbujear al onClick del container (abre detalle)
+          }}
+        >
           <PopupGallery
             fotos={d?.fotos}
             fallbackFoto={listing.foto_principal}
@@ -162,7 +217,7 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
           <div className="absolute right-2 top-2 z-10 flex items-center gap-1.5">
             <button
               type="button"
-              onClick={handleShare}
+              onClick={(e) => { e.stopPropagation(); handleShare(); }}
               aria-label={lang === "en" ? "Share" : "Compartir"}
               title={lang === "en" ? "Share" : "Compartir"}
               className="grid h-8 w-8 place-items-center rounded-full bg-white/95 text-[#111418] shadow-md transition hover:bg-white hover:scale-105"
@@ -171,20 +226,12 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
             </button>
             <button
               type="button"
-              onClick={handleFav}
+              onClick={(e) => { e.stopPropagation(); handleFav(); }}
               aria-label={isFav(favK) ? "Quitar de guardados" : "Guardar"}
               title={isFav(favK) ? (lang === "en" ? "Remove from saved" : "Quitar de guardados") : (lang === "en" ? "Save" : "Guardar")}
               className="grid h-8 w-8 place-items-center rounded-full bg-white/95 shadow-md transition hover:bg-white hover:scale-105"
             >
-              <Heart className="h-4 w-4" style={{ color: isFav(favK) ? "#CE1126" : "#5B5F5C" }} fill={isFav(favK) ? "#CE1126" : "none"} />
-            </button>
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Cerrar"
-              className="grid h-8 w-8 place-items-center rounded-full bg-black/55 text-white shadow-md transition hover:bg-black/75"
-            >
-              <X className="h-4 w-4" />
+              <Heart className="h-4 w-4" style={{ color: isFav(favK) ? "#CE1126" : "#374151" }} />
             </button>
           </div>
           {tipoOp && (
@@ -258,25 +305,8 @@ export function ListingPopup({ listing, onClose, onViewMore }: Props) {
           </div>
 
           {/* Características, engagement, amenidades, descripción y atribución viven
-              en Popup2 (drawer). Popup1 = resumen mínimo: precio + specs + ubicación. */}
-        </div>
-
-        {/* 9. CTA único — Popup1 es muestra; el detalle + link a la fuente van en Popup2 */}
-        <div className="shrink-0 space-y-2 border-t p-3" style={{ borderColor: "#E5E0D5" }}>
-          <OriginalListingLink
-            listing={{ url: detail?.url ?? listing.url, fuente: detail?.fuente ?? listing.fuente }}
-            variant="secondary"
-            className="w-full"
-          />
-          <button
-            type="button"
-            onClick={() => onViewMore(listing.id)}
-            data-tour="listing-popup-viewmore"
-            className="flex w-full items-center justify-center gap-1.5 rounded-lg py-2.5 text-[13px] font-semibold text-white transition hover:opacity-90"
-            style={{ background: "#0F8A4F" }}
-          >
-            Ver detalle del inmueble <ChevronRight className="h-4 w-4" />
-          </button>
+              en Popup2 (drawer). Popup1 = resumen mínimo: precio + specs + ubicación.
+              El CTA se eliminó: un click en todo el popup abre el detalle (drawer). */}
         </div>
       </div>
     </>
