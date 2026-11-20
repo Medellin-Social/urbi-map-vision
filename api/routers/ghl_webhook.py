@@ -48,6 +48,10 @@ from api.db import get_pool
 from api.limiter import limiter
 from api.utils import ghl_client
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -300,6 +304,41 @@ async def _upsert_visita_from_ghl(payload: dict) -> None:
     raise NotImplementedError("ghl_webhook: falta contrato de payload para visita")
 
 
+async def _activar_slot_realtor_preferido(payload: dict) -> None:
+    """Pago aprobado en Stripe (vía GHL) -> activa/renueva el slot de Realtor Preferido.
+
+    Payload (workflow GHL "Pago aprobado"): {object_type:"realtor_slot", agent_email | agent_id,
+    zona_nivel:"barrio"|"comuna", zona_codigo, meses (def. 1), pago_ref (id de la orden)}.
+    Idempotente por pago_ref: reenviar el mismo pago no extiende dos veces."""
+    from api.services.realtor_preferido_service import SlotError, procesar_pago_slot
+
+    props = payload.get("properties") or payload
+    pool = get_pool()
+    agent_id = props.get("agent_id")
+    email = (props.get("agent_email") or "").strip().lower()
+    zona_nivel, zona_codigo = props.get("zona_nivel"), str(props.get("zona_codigo") or "")
+    pago_ref = props.get("pago_ref")
+    if not zona_codigo or (not agent_id and not email):
+        raise HTTPException(status_code=400, detail="falta agent_id/agent_email o zona_codigo")
+    try:
+        meses = max(1, min(12, int(props.get("meses") or 1)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="meses inválido")
+    async with pool.acquire() as conn:
+        if not agent_id:
+            agent_id = await conn.fetchval(
+                "SELECT id::text FROM agent WHERE lower(email) = $1 AND estado::text = 'activo'", email)
+        if not agent_id:
+            raise HTTPException(status_code=404, detail="agente activo no encontrado")
+    try:
+        await procesar_pago_slot(pool, str(agent_id), zona_nivel, zona_codigo, meses, pago_ref)
+    except SlotError as e:
+        # Dinero cobrado pero sin slot: requiere acción humana (reasignar o reembolsar).
+        logger.error("realtor_slot PAGO SIN SLOT pago_ref=%s agent=%s zona=%s/%s: %s",
+                     pago_ref, agent_id, zona_nivel, zona_codigo, e)
+        raise HTTPException(status_code=409, detail=str(e))
+
+
 _HANDLERS = {
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
@@ -308,6 +347,7 @@ _HANDLERS = {
     "referidor": _upsert_referidor_from_ghl,
     "agent": _upsert_agent_from_ghl,
     "visita": _upsert_visita_from_ghl,
+    "realtor_slot": _activar_slot_realtor_preferido,
 }
 
 

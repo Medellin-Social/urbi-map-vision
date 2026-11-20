@@ -128,6 +128,7 @@ RUN printf '%s\n' \
     "30 5 * * * app cd /app && python3 scripts/run_job.py translate python3 scripts/translate_descripciones.py >> /var/log/urbi/translate.log 2>&1" \
     "0 7 * * * app cd /app && python3 scripts/run_job.py analytics_usuarios python3 scripts/run_analytics_usuarios.py >> /var/log/urbi/analytics_usuarios.log 2>&1" \
     "0 8 * * 0 app cd /app && python3 scripts/run_job.py airbnb_semanal python3 scripts/run_airbnb_semanal.py >> /var/log/urbi/airbnb_semanal.log 2>&1" \
+    "15 6 * * * app cd /app && python3 scripts/run_job.py realtor_slots python3 scripts/run_realtor_slots.py >> /var/log/urbi/realtor_slots.log 2>&1" \
     "30 7 * * 1 app cd /app && python3 scripts/run_job.py dbt_full_refresh python3 scripts/run_dbt_full_refresh.py >> /var/log/urbi/dbt_full_refresh.log 2>&1" \
     "0 10 * * 3 app cd /app && python3 scripts/run_job.py remates_dbt python3 scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/urbi/remates_dbt.log 2>&1" \
     "30 3 1 * * app cd /app && python3 scripts/run_job.py ingest_barrios python3 scripts/load_barrios.py >> /var/log/urbi/ingest_barrios.log 2>&1" \

@@ -207,7 +207,11 @@ async def crear_visita(
     # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
     if req.sin_agente:
         await asyncio.to_thread(_send_visita_email, req, fecha)
-    # GHL recibe las visitas por PULL (/api/v1/ghl/leads). El push a un
-    # Appointment (ghl_client.push_visita_to_ghl) sigue sin contrato de Talal;
-    # no se llama aquí para no loguear un stack trace por cada solicitud.
+    # Push best-effort a GHL como Contact (+ nota). Las visitas también salen por
+    # PULL (/api/v1/ghl/leads); un fallo aquí queda en ghl_push_failures y no
+    # rompe la solicitud.
+    try:
+        await ghl_client.sync_visita(row["id"])
+    except Exception:
+        log.exception("sync_visita(%s) falló", row["id"])
     return {"id": str(row["id"]), "estado": "pendiente"}
