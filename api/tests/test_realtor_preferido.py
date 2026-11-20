@@ -14,10 +14,10 @@ class FakeConn:
         return "UPDATE 0"
 
     async def fetchval(self, q, *a):
-        if "INSERT INTO realtor_slot" in q:
+        if "INSERT INTO realtor_preferido_slot" in q:
             self.inserts.append(a)
             return "nuevo-id"
-        if "precio_mensual FROM realtor_slot_precio" in q:
+        if "precio_mensual FROM realtor_preferido_precio" in q:
             return 200000
         return None
 
@@ -97,7 +97,7 @@ class PagoConn(FakeConn):
         self.refs = set()
 
     async def fetchval(self, q, *a):
-        if "INSERT INTO realtor_slot_pago" in q:
+        if "INSERT INTO realtor_preferido_pago" in q:
             if a[0] in self.refs:
                 return None
             self.refs.add(a[0])
