@@ -5,7 +5,7 @@ calificación → enrutamiento → toma por el realtor → trabajo del lead → 
 la API GHL (entrada y salida) que se construye **de este lado primero**, antes de
 cablear GoHighLevel.
 
-Última revisión: 2026-11-11. Rama: `feat/market-intel-public-gate`.
+Última revisión: 2026-11-16 (+§6 directorio 20 posiciones). Rama: `DEV`.
 Ver también: [GHL_CONTRATO_PROPUESTO.md](GHL_CONTRATO_PROPUESTO.md) (contrato campo
 a campo con Talal) · [GHL_TALAL_TEST_HANDOFF.md](GHL_TALAL_TEST_HANDOFF.md) (handoff
 de prueba a Talal).
@@ -243,3 +243,195 @@ leads (in/out), visita estado (in), agents (in/out). Ver §3a.
 
 **Bloqueado en terceros (luego):** webhook firmado `/webhook/ghl`, sync nativo a
 GHL de evento/agent/visita (contrato Talal), `GHL_LEADS_TOKEN` en prod, cobro.
+
+---
+
+## 6. Directorio de Realtors por zona — 20 posiciones con rotación ponderada (DISEÑO)
+
+Nuevo modelo de monetización del directorio público. **20 posiciones por zona**:
+el primer realtor que se suscribe toma la posición 1 (precio más bajo), cada
+siguiente toma la siguiente posición con precio mayor, hasta la 20. El orden en
+que aparecen al público NO es la posición: es una **permutación aleatoria
+ponderada, estable por sesión** — la pos 1 sale arriba más veces que la 2, etc.,
+pero ninguna queda invisible.
+
+> **Relación con `sponsorship` (exclusividad):** `sponsorship` es el modelo viejo
+> de **UN** patrocinador exclusivo por zona (`zona_ocupada_por_otro`, $1k comuna /
+> $200 barrio). El modelo de 20 slots lo **sustituye para el directorio público**.
+> Son tablas separadas a propósito: meter una columna de posición en `sponsorship`
+> rompería la exclusividad que su índice garantiza. **El enrutamiento de leads de
+> `/realtor/agenda` y `/embudo` sigue cableado a `sponsorship`** (ver §3a gotcha) —
+> migrar ese ruteo al modelo de 20 slots es una decisión aparte, no la toca este
+> diseño.
+
+Reusa lo ya construido: identidad `agent`/`agency`, el patrón del webhook de pago
+`procesar_pago_zona` (`zona_sponsor_service.py` — asignación tras pago APROBADO,
+nunca desde el redirect de éxito), el stream `public.user_events` para tracking, y
+la página pública `/agentes`.
+
+### 6.1 Modelo de datos (PostgreSQL)
+
+Dos tablas: **config editable** (precios y pesos, fuera del código) + **slots**
+(las suscripciones). `community_id` = la zona; reusa la convención polimórfica de
+`sponsorship`: `community_id` ≡ `zona_codigo` (barrio_id::text | cd_comuna |
+municipio) y `zona_nivel` desambigua.
+
+```sql
+-- Config: precios y pesos POR POSICIÓN, zona-agnóstico, editable (NO en código).
+-- Precio ASCIENDE con la posición (pos1 = más barata). Peso DESCIENDE (pos1 = más
+-- visible). peso > 0 obligatorio: así ninguna posición queda invisible.
+CREATE TABLE realtor_slot_config (
+    posicion       SMALLINT PRIMARY KEY CHECK (posicion BETWEEN 1 AND 20),
+    precio_mensual NUMERIC  NOT NULL CHECK (precio_mensual >= 0),  -- placeholder, editable
+    peso           NUMERIC  NOT NULL CHECK (peso > 0)
+);
+-- Seed: 20 filas. Precios PLACEHOLDER (aún no definidos por negocio); peso
+-- decreciente. Ambos se editan luego por UPDATE (o panel admin), sin deploy.
+INSERT INTO realtor_slot_config (posicion, precio_mensual, peso)
+SELECT g, 0, (21 - g)::numeric FROM generate_series(1, 20) g;
+
+-- Slots: una suscripción = un agente ocupando una posición en una zona.
+CREATE TABLE realtor_slot (
+    id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    community_id      TEXT     NOT NULL,                 -- = zona_codigo
+    zona_nivel        TEXT     NOT NULL DEFAULT 'barrio',-- barrio|comuna|municipio
+    posicion          SMALLINT NOT NULL REFERENCES realtor_slot_config(posicion),
+    agent_id          UUID     NOT NULL REFERENCES agent(id) ON DELETE RESTRICT,
+    estado            TEXT     NOT NULL DEFAULT 'activa', -- activa|pausada|cancelada
+    fecha_suscripcion TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    created_at        TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at        TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+-- Una posición ocupada por un solo agente a la vez (guard de concurrencia del pago):
+CREATE UNIQUE INDEX uq_realtor_slot_pos
+    ON realtor_slot (community_id, zona_nivel, posicion) WHERE estado = 'activa';
+-- Un agente ocupa a lo sumo una posición activa por zona:
+CREATE UNIQUE INDEX uq_realtor_slot_agent
+    ON realtor_slot (community_id, zona_nivel, agent_id) WHERE estado = 'activa';
+CREATE INDEX idx_realtor_slot_community
+    ON realtor_slot (community_id, zona_nivel, estado);
+```
+
+Vive en **migración alembic** (schema + seed de las 20 filas de config de una vez
+— carril "schema + backfill", ver CLAUDE.md). Los precios/pesos reales son UPDATEs
+de datos posteriores, no código.
+
+**Cancelación / vacante:** `estado='cancelada'` libera la posición *en su mismo
+número y precio* — NO se corren las posiciones 6–20 hacia arriba. Así el par
+posición↔precio es estable; el siguiente comprador rellena el hueco más bajo
+(que ahora es esa posición).
+
+### 6.2 Ordenamiento (FastAPI) — `api/services/realtor_slot_order.py` ✅ construido+probado
+
+Permutación ponderada estable por sesión (Efraimidis–Spirakis), con self-check
+(`python api/services/realtor_slot_order.py`):
+
+```python
+rng = random.Random(session_id)          # string directo (NO hash(): salado por proceso)
+key = rng.random() ** (1.0 / peso[posicion])   # por slot
+# sorted(slots, key=key, reverse=True)
+```
+
+- **Semilla = `session_id`** (el mismo que ya fluye a `user_events` — se reusa, no
+  se inventa otra). Mismo session_id → mismo orden toda la sesión; no cambia al
+  recargar. Entre sesiones rota.
+- **`random.Random(session_id)` con el string crudo**, NO `hash(session_id)`: el
+  hash de str en CPython está salado por `PYTHONHASHSEED` y divergiría entre workers.
+- Los slots se consultan `ORDER BY posicion` (orden determinista de entrada →
+  extracciones del RNG reproducibles). Pesos desde `realtor_slot_config`.
+- Server-side: el dashboard y el tracking ven exactamente el orden mostrado.
+- Self-check verifica: estabilidad (misma sesión = mismo orden), rotación, pos1
+  arriba ~Npeso× más que pos20, y pos20 igual aparece (nunca invisible).
+
+**Endpoint público:** `GET /agentes?community_id=&nivel=&session_id=` → slots
+activos de la zona, ya ordenados por rotación, con datos públicos del `agent`
+(nombre, foto, bio, zonas, rating) + su `posicion` (para el tracking).
+
+**Asignar la siguiente posición (tras pago APROBADO):** transacción + índice único
+parcial como guard de carrera. Punto único, mismo patrón que `procesar_pago_zona`:
+
+```sql
+-- posición libre más baja de la zona (= lo que cuesta "el siguiente"):
+SELECT c.posicion, c.precio_mensual FROM realtor_slot_config c
+WHERE NOT EXISTS (
+  SELECT 1 FROM realtor_slot s
+  WHERE s.community_id=$1 AND s.zona_nivel=$2 AND s.posicion=c.posicion AND s.estado='activa')
+ORDER BY c.posicion LIMIT 1;   -- NULL → zona llena (20/20)
+-- INSERT dentro de transacción; si otro pago ganó la carrera, el UNIQUE parcial
+-- revienta → reintentar (recalcular la libre más baja). GHL = solo pago+notif.
+```
+
+### 6.3 Dónde se consume la rotación: el popup del listing
+
+**La rotación de §6.2 surte en el POPUP de los listings** (`src/components/
+listing-popup/ListingPopup.tsx`), NO en el directorio `/agentes`.
+
+- Al abrir el popup de un listing, se muestra el/los realtor(s) que patrocinan la
+  **zona del listing** en orden de rotación ponderada estable por sesión.
+- `community_id` = `listing.barrio_id` (ya disponible en el popup), `zona_nivel =
+  'barrio'`. Los slots activos de esa zona salen de `realtor_slot`, ordenados por
+  `ordenar_por_rotacion(session_id)` → el popup muestra el tope (o los primeros N).
+- Mismo `session_id` toda la sesión → el realtor mostrado en el popup es estable,
+  no cambia al reabrir; entre sesiones rota (pos1 más seguido, pos20 nunca invisible).
+
+**La página `/agentes` (`src/routes/agentes.tsx`) muestra TODA la info y NO rota** —
+directorio completo, orden estable (verificado/rating), sin permutación.
+
+Decisión de alcance del usuario (2026-11-16): este workstream construye SOLO el
+modelo de datos (§6.1) y la lógica de ordenamiento (§6.2). El consumo en el popup,
+el directorio `/agentes` y el dashboard (§6.4) NO se tocan acá.
+
+### 6.4 Realtor Dashboard — `GET /realtor/mi-posicion`
+
+Extiende el dashboard (`api/routers/realtor.py`). Por cada zona donde el agente
+tiene slot activo:
+
+| Campo | Fuente |
+|---|---|
+| `posicion` | `realtor_slot.posicion` |
+| `precio_mensual` | `realtor_slot_config.precio_mensual` de su posición |
+| `slots_ocupados` / `slots_totales` (20) | count activos de la zona |
+| `puestos_libres` | 20 − ocupados |
+| `costo_siguiente` | precio de la posición libre más baja (query §6.2) |
+| `impresiones_30d` | `user_events` `event_type='realtor_impression'`, `metadata->>'agent_id'` = él, 30d |
+| `contactos_30d` | `user_events` `event_type='realtor_contact'`, idem |
+
+### 6.5 Tracking para calibrar pesos (lo importante)
+
+Todo va a `public.user_events` (un solo stream, ya particionado — migr 0120; ya
+soporta `event_type='impression'`). Se graba **la posición del slot** (1–20), que
+es la perilla a calibrar, en `metadata`:
+
+```
+impresión → event_type='realtor_impression', entity_type='realtor_slot',
+            entity_id=<agent_id>, metadata={community_id, zona_nivel, posicion}
+contacto  → event_type='realtor_contact',    (mismos campos)
+```
+
+Rollup para calibrar (impresión→contacto por posición, agregando TODAS las zonas):
+
+```sql
+SELECT (metadata->>'posicion')::int AS posicion,
+       count(*) FILTER (WHERE event_type='realtor_impression') AS impresiones,
+       count(*) FILTER (WHERE event_type='realtor_contact')    AS contactos,
+       round(count(*) FILTER (WHERE event_type='realtor_contact')::numeric
+             / NULLIF(count(*) FILTER (WHERE event_type='realtor_impression'),0), 4) AS ctr
+FROM public.user_events
+WHERE event_type IN ('realtor_impression','realtor_contact')
+  AND created_at > now() - interval '90 days'
+GROUP BY 1 ORDER BY 1;
+```
+
+Con esa curva CTR-por-posición se re-tunean los `peso` de `realtor_slot_config`
+(UPDATE, sin deploy). **Railway es la fuente de verdad**; GHL solo pago + notif.
+
+### 6.6 Estado
+
+- [x] **Migración alembic** `0125_realtor_slots.py`: `realtor_slot_config` +
+      `realtor_slot` + seed 20 filas (precio placeholder, peso 20..1).
+- [x] **Lógica de ordenamiento** `api/services/realtor_slot_order.py` (§6.2),
+      con self-check (`python api/services/realtor_slot_order.py`).
+- [ ] (fuera de alcance de este workstream) consumo en el popup del listing
+      (`ListingPopup.tsx`, `community_id = listing.barrio_id`), el asignador
+      `asignar_siguiente_posicion()` + webhook de pago, tracking de impresión/
+      contacto, y `GET /realtor/mi-posicion` (§6.4 — no se toca).
