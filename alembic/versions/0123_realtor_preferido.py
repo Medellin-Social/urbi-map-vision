@@ -29,6 +29,7 @@ def upgrade() -> None:
         zona_nivel    TEXT NOT NULL CHECK (zona_nivel IN ('barrio','comuna')),
         zona_codigo   TEXT NOT NULL,
         posicion      SMALLINT NOT NULL CHECK (posicion BETWEEN 1 AND 8),
+        CONSTRAINT chk_realtor_slot_cap CHECK (zona_nivel = 'comuna' OR posicion <= 4),
         agent_id      UUID NOT NULL REFERENCES agent(id) ON DELETE CASCADE,
         tipo          TEXT NOT NULL DEFAULT 'pago' CHECK (tipo IN ('pago','gratis')),
         estado        TEXT NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','vencido','cancelado')),
@@ -45,6 +46,17 @@ def upgrade() -> None:
     op.execute("""CREATE UNIQUE INDEX IF NOT EXISTS uq_realtor_slot_agente
         ON realtor_slot(zona_nivel, zona_codigo, agent_id) WHERE estado = 'activo'""")
     op.execute("CREATE INDEX IF NOT EXISTS idx_realtor_slot_zona ON realtor_slot(zona_nivel, zona_codigo, estado)")
+
+    # Ledger de pagos: idempotencia real por pago_ref (sobrevive a renovaciones del slot)
+    op.execute("""
+    CREATE TABLE IF NOT EXISTS realtor_slot_pago (
+        pago_ref   TEXT PRIMARY KEY,
+        slot_id    UUID REFERENCES realtor_slot(id) ON DELETE SET NULL,
+        agent_id   UUID NOT NULL,
+        zona_nivel TEXT NOT NULL,
+        zona_codigo TEXT NOT NULL,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )""")
 
     op.execute("""
     CREATE TABLE IF NOT EXISTS realtor_rotacion (
@@ -72,5 +84,6 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.execute("DROP TABLE IF EXISTS realtor_slot_precio")
+    op.execute("DROP TABLE IF EXISTS realtor_slot_pago")
     op.execute("DROP TABLE IF EXISTS realtor_rotacion")
     op.execute("DROP TABLE IF EXISTS realtor_slot")

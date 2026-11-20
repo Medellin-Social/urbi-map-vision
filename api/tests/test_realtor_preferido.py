@@ -72,3 +72,68 @@ def test_comuna_tiene_8():
 def test_zona_invalida():
     with pytest.raises(svc.SlotError):
         run(svc.asignar_slot(FakeConn([]), "x", "ciudad", "1"))
+
+
+class ValConn:
+    def __init__(self, existe=True):
+        self.existe = existe
+
+    async def fetchval(self, q, *a):
+        return 1 if self.existe else None
+
+
+def test_validar_zona():
+    run(svc.validar_zona(ValConn(), "barrio", "12"))
+    run(svc.validar_zona(ValConn(), "comuna", "101"))
+    for nivel, cod, conn in [("barrio", "abc", ValConn()), ("barrio", "9999", ValConn(False)),
+                             ("comuna", "x", ValConn()), ("ciudad", "1", ValConn())]:
+        with pytest.raises(svc.SlotError):
+            run(svc.validar_zona(conn, nivel, cod))
+
+
+class PagoConn(FakeConn):
+    def __init__(self):
+        super().__init__([])
+        self.refs = set()
+
+    async def fetchval(self, q, *a):
+        if "INSERT INTO realtor_slot_pago" in q:
+            if a[0] in self.refs:
+                return None
+            self.refs.add(a[0])
+            return 1
+        return await super().fetchval(q, *a)
+
+
+class _Tx:
+    async def __aenter__(self): return self
+    async def __aexit__(self, *a): return False
+
+
+class _Acq(_Tx):
+    def __init__(self, c): self.c = c
+    async def __aenter__(self): return self.c
+
+
+class FakePool:
+    def __init__(self, c): self.c = c
+    def acquire(self): return _Acq(self.c)
+
+
+def test_pago_idempotente():
+    c = PagoConn()
+    c.transaction = lambda: _Tx()
+    pool = FakePool(c)
+    r1 = run(svc.procesar_pago_slot(pool, "ag", "comuna", "3", 1, "ord_1"))
+    r2 = run(svc.procesar_pago_slot(pool, "ag", "comuna", "3", 1, "ord_1"))
+    assert r1["accion"] == "asignado" and r2["accion"] == "duplicado" and len(c.inserts) == 1
+
+
+def test_elegir_rotados_ventana_y_vuelta():
+    activos = ["a", "b", "c"]
+    w = svc.ROTACION_SEG
+    assert svc.elegir_rotados(activos, 2, ahora=0) == ["a", "b"]
+    assert svc.elegir_rotados(activos, 2, ahora=w) == ["b", "c"]
+    assert svc.elegir_rotados(activos, 2, ahora=2 * w) == ["c", "a"]
+    assert svc.elegir_rotados(["x"], 2, ahora=5 * w) == ["x"]
+    assert svc.elegir_rotados([], 2) == []

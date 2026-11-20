@@ -80,6 +80,10 @@ async def checkout(body: CheckoutIn, user: dict = Depends(get_current_user), poo
     o modo simulado si no hay link configurado."""
     agent_id = await _agente_activo(user, pool)
     async with pool.acquire() as conn:
+        try:
+            await svc.validar_zona(conn, body.zona_nivel, body.zona_codigo)
+        except svc.SlotError as e:
+            raise HTTPException(status_code=422, detail=str(e))
         activos = await svc.slots_activos(conn, body.zona_nivel, body.zona_codigo)
         precio = await svc.precio_slot(conn, body.zona_nivel, body.zona_codigo)
         email = await conn.fetchval("SELECT email FROM agent WHERE id = $1", agent_id)
@@ -122,6 +126,7 @@ async def admin_asignar(body: AsignarIn, admin: dict = Depends(require_admin), p
     try:
         async with pool.acquire() as conn:
             async with conn.transaction():
+                await svc.validar_zona(conn, body.zona_nivel, body.zona_codigo)
                 return await svc.asignar_slot(conn, body.agent_id, body.zona_nivel, body.zona_codigo,
                                               body.tipo, body.meses, "admin")
     except svc.SlotError as e:
@@ -155,3 +160,56 @@ async def admin_cobertura(nivel: Optional[Nivel] = None, admin: dict = Depends(r
             sin, total = [], 0
     return {"zonas": [dict(r) for r in zonas], "barrios_total": total,
             "barrios_sin_preferido": [dict(r) for r in sin]}
+
+
+@router.get("/zonas")
+@limiter.limit("30/minute")
+async def zonas(request: Request, pool=Depends(get_pool)):
+    """Selector de zona de la landing: barrios y comunas con nivel, precio y cupos de pago."""
+    from api.routers.admin import _MUNICIPIO_A_PSEUDO_COMUNA
+    async with pool.acquire() as conn:
+        precios = {(r["zona_nivel"], r["nivel"]): float(r["precio_mensual"])
+                   for r in await conn.fetch("SELECT zona_nivel, nivel, precio_mensual FROM realtor_slot_precio")}
+        ocup = {(r["zona_nivel"], r["zona_codigo"]): r["pagos"] for r in await conn.fetch(
+            "SELECT zona_nivel, zona_codigo, COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos "
+            "FROM realtor_slot WHERE estado='activo' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) GROUP BY 1,2")}
+        try:
+            niv = {(r["zona_nivel"], r["zona_codigo"]): r["nivel"] for r in await conn.fetch(
+                "SELECT zona_nivel, zona_codigo::text AS zona_codigo, nivel FROM analytics.zonas_nivel_precio")}
+        except Exception:
+            niv = {}
+        barrios = await conn.fetch(
+            "SELECT id::text AS codigo, INITCAP(LOWER(nombre)) AS nombre, municipio FROM raw.barrios "
+            "WHERE municipio IS NOT NULL ORDER BY municipio, nombre")
+        comunas = await conn.fetch(
+            "SELECT DISTINCT bc.cd_comuna::text AS codigo, INITCAP(LOWER(b.comuna)) AS nombre "
+            "FROM analytics.barrios_cd bc JOIN raw.barrios b ON b.id = bc.barrio_id "
+            "WHERE b.municipio = 'MEDELLIN' AND bc.cd_comuna IS NOT NULL ORDER BY 1")
+
+    def fila(nivel_z, codigo, nombre, extra=None):
+        n = niv.get((nivel_z, codigo), "C")
+        cap = svc.CAPACIDAD[nivel_z]
+        d = {"zona_nivel": nivel_z, "zona_codigo": codigo, "nombre": nombre, "nivel": n,
+             "precio_mensual": precios.get((nivel_z, n), 0.0), "cupos": max(cap - ocup.get((nivel_z, codigo), 0), 0)}
+        if extra:
+            d.update(extra)
+        return d
+
+    out_c = [fila("comuna", r["codigo"], r["nombre"] or r["codigo"], {"municipio": "MEDELLIN"}) for r in comunas]
+    out_c += [fila("comuna", cod, mun.title(), {"municipio": mun}) for mun, cod in _MUNICIPIO_A_PSEUDO_COMUNA.items()]
+    return {"barrios": [fila("barrio", r["codigo"], r["nombre"], {"municipio": r["municipio"]}) for r in barrios],
+            "comunas": out_c, "capacidad": svc.CAPACIDAD}
+
+
+class CasaIn(BaseModel):
+    agent_id: str
+    es_realtor_casa: bool = True
+
+
+@router.post("/admin/casa")
+async def admin_casa(body: CasaIn, admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+    """Marca/desmarca al realtor de la casa que ocupa el preferido gratis de arranque (cron lo siembra)."""
+    r = await pool.execute("UPDATE agent SET es_realtor_casa = $1 WHERE id = $2::uuid", body.es_realtor_casa, body.agent_id)
+    if r.endswith(" 0"):
+        raise HTTPException(status_code=404, detail="Agente no encontrado")
+    return {"ok": True}

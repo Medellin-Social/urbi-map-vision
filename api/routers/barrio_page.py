@@ -52,6 +52,7 @@ class RealtorCard(BaseModel):
     agencia_nombre: Optional[str]
     rating_promedio: Optional[float]
     n_resenas: int
+    tier: Optional[str] = None
 
 
 class BarrioPageOut(BaseModel):
@@ -108,7 +109,7 @@ LIMIT 2
 # Realtor Preferido: los 2 que "tocan" en la rotación fija de los slots de la comuna.
 _PREFERIDOS_SQL = """
 SELECT a.id::text, a.nombre, a.foto_url, a.bio, ag.nombre AS agencia_nombre,
-       rev.rating_promedio, rev.n_resenas
+       rev.rating_promedio, rev.n_resenas, a.tier
 FROM agent a
 LEFT JOIN LATERAL (SELECT ag2.nombre FROM agency_member am JOIN agency ag2 ON ag2.id = am.agency_id
                    WHERE am.agent_id = a.id LIMIT 1) ag ON true
@@ -120,23 +121,23 @@ WHERE a.id = ANY($1::uuid[]) AND a.estado = 'activo'
 """
 
 
-async def _preferidos_rotados(pool, zona: str) -> list:
-    """Hasta 2 realtors preferidos de la comuna, en orden de rotación (avanza 1 por vista).
-    Vacío si la comuna aún no tiene slots → el caller cae al esquema de sponsorship."""
-    from api.services.realtor_preferido_service import slots_activos
+async def _preferidos_rotados(pool, zona: str, barrio_id: Optional[int] = None) -> list:
+    """Hasta 2 realtors preferidos: slots del BARRIO primero, los de la comuna completan.
+    Rotación por ventana de tiempo (sin escrituras → seguro detrás de caché). Vacío → fallback sponsorship."""
+    from api.services.realtor_preferido_service import elegir_rotados, slots_activos
     async with pool.acquire() as conn:
-        async with conn.transaction():
-            activos = await slots_activos(conn, "comuna", zona)
-            if not activos:
-                return []
-            contador = await conn.fetchval(
-                "INSERT INTO realtor_rotacion (zona_nivel, zona_codigo, contador) VALUES ('comuna', $1, 1) "
-                "ON CONFLICT (zona_nivel, zona_codigo) DO UPDATE SET contador = realtor_rotacion.contador + 1 "
-                "RETURNING contador - 1", zona)
-            n = len(activos)
-            orden = [activos[(contador + i) % n]["agent_id"] for i in range(min(2, n))]
-            rows = {r["id"]: r for r in await conn.fetch(_PREFERIDOS_SQL, orden)}
-    return [rows[str(a)] for a in orden if str(a) in rows]
+        elegidos: list = []
+        if barrio_id is not None:
+            elegidos = elegir_rotados([r["agent_id"] for r in await slots_activos(conn, "barrio", str(barrio_id))], 2)
+        if len(elegidos) < 2:
+            com = [r["agent_id"] for r in await slots_activos(conn, "comuna", zona)]
+            for a in elegir_rotados(com, 2):
+                if len(elegidos) < 2 and a not in elegidos:
+                    elegidos.append(a)
+        if not elegidos:
+            return []
+        rows = {r["id"]: r for r in await conn.fetch(_PREFERIDOS_SQL, elegidos)}
+    return [rows[str(a)] for a in elegidos if str(a) in rows]
 
 
 @router.get("", response_model=BarrioPageOut)
@@ -145,6 +146,7 @@ async def get_barrio_page(
     request: Request,
     cd_comuna: Optional[int] = Query(None),
     municipio: Optional[str] = Query(None, max_length=120),
+    barrio_id: Optional[int] = Query(None),
     pool=Depends(get_pool),
 ):
     muni = municipio.upper() if municipio else None
@@ -162,7 +164,7 @@ async def get_barrio_page(
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
     try:
-        preferidos = await _preferidos_rotados(pool, zona)
+        preferidos = await _preferidos_rotados(pool, zona, barrio_id)
     except Exception:  # tabla aún no migrada u otro fallo: no tumbar la página
         logger.exception("preferidos_rotados")
         preferidos = []

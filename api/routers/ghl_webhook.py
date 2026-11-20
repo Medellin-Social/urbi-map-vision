@@ -48,6 +48,10 @@ from api.db import get_pool
 from api.limiter import limiter
 from api.utils import ghl_client
 
+import logging
+
+logger = logging.getLogger(__name__)
+
 router = APIRouter()
 
 
@@ -326,11 +330,12 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
                 "SELECT id::text FROM agent WHERE lower(email) = $1 AND estado::text = 'activo'", email)
         if not agent_id:
             raise HTTPException(status_code=404, detail="agente activo no encontrado")
-        if pago_ref and await conn.fetchval("SELECT 1 FROM realtor_slot WHERE pago_ref = $1 LIMIT 1", pago_ref):
-            return
     try:
         await procesar_pago_slot(pool, str(agent_id), zona_nivel, zona_codigo, meses, pago_ref)
     except SlotError as e:
+        # Dinero cobrado pero sin slot: requiere acción humana (reasignar o reembolsar).
+        logger.error("realtor_slot PAGO SIN SLOT pago_ref=%s agent=%s zona=%s/%s: %s",
+                     pago_ref, agent_id, zona_nivel, zona_codigo, e)
         raise HTTPException(status_code=409, detail=str(e))
 
 

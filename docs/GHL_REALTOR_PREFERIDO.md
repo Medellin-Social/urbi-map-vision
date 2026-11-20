@@ -68,3 +68,14 @@ Usos: resumir conversaciones por oportunidad, redactar el recordatorio de vencim
 
 Admin: `POST /api/v1/realtor-preferido/admin/asignar` con `tipo:"gratis"`. Ver faltantes: `GET /admin/cobertura`.
 Un pagador desplaza al gratis solo cuando la zona está llena.
+
+## Lo único que falta: conectar GHL (checklist final)
+
+1. Env backend: `GHL_SLOT_CHECKOUT_URL` (Order Form + Stripe), `GHL_WEBHOOK_SECRET`. Sin el link, la landing muestra "pago próximamente".
+2. Env front: `VITE_GHL_EXTRA_HOSTS` si el checkout está en un dominio propio.
+3. Workflow GHL tras el pago: POST `/api/v1/webhook/ghl` con `object_type: "realtor_slot"`, header `X-Webhook-Secret`, y `pago_ref`, email, zona, meses. Luego agregar el tag **Preferred** al contacto.
+4. Rama 409/404 del webhook: tarea + reembolso manual.
+5. Marcar el realtor de la casa: `POST /api/v1/realtor-preferido/admin/casa` `{agent_id}` (el cron siembra 1 gratis por barrio).
+6. Reemplazar los precios de ejemplo en `realtor_slot_precio` (`es_ejemplo=TRUE`).
+
+Flujo: landing → `/checkout` → GHL/Stripe → webhook → slot activo → cron diario (`realtor_slots`) vence, sincroniza tier y avisa.
