@@ -31,7 +31,7 @@ import { auth } from "@/lib/auth";
 import { ReclamarListingModal } from "@/components/ReclamarListingModal";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
-import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, SimilarListing } from "@/lib/adapters";
+import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, SimilarListing, ListingCaracteristicas } from "@/lib/adapters";
 import { toEmbedSrc } from "@/lib/embed";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
@@ -191,6 +191,78 @@ function amenityIcon(a: string): React.ElementType {
     if (re.test(a)) return Icon;
   }
   return Check;
+}
+
+// ─── Ficha del inmueble — caracteristicas ricas que diligencia el realtor ────────
+const _CAP = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const _ESTADO: Record<string, string> = { nuevo: "Nuevo", usado: "Usado", remodelado: "Remodelado", sobre_planos: "Sobre planos" };
+const _VISTA: Record<string, string> = { exterior: "Exterior", interior: "Interior", panoramica: "Panorámica" };
+
+function FichaCaracteristicas({ c }: { c?: ListingCaracteristicas | null }) {
+  if (!c || typeof c !== "object") return null;
+  // Campos escalares → filas etiqueta/valor
+  const rows: { label: string; value: string }[] = [];
+  const add = (label: string, value: unknown, suffix = "") => {
+    if (value === null || value === undefined || value === "" ) return;
+    rows.push({ label, value: `${value}${suffix}` });
+  };
+  add("Área privada", c.area_privada_m2, " m²");
+  add("Área construida", c.area_construida_m2, " m²");
+  add("Año de construcción", c.ano_construccion);
+  if (c.estado) rows.push({ label: "Estado", value: _ESTADO[c.estado] ?? _CAP(String(c.estado)) });
+  add("Piso", c.piso);
+  add("Niveles", c.niveles);
+  if (c.orientacion) rows.push({ label: "Orientación", value: _CAP(String(c.orientacion)) });
+  if (c.vista) rows.push({ label: "Vista", value: _VISTA[c.vista] ?? _CAP(String(c.vista)) });
+  add("Clósets", c.closets);
+  add("Depósito (arriendo)", c.deposito_meses, " meses");
+  add("Estadía mínima", c.estadia_minima_meses, " meses");
+  if (c.disponible_desde) rows.push({ label: "Disponible desde", value: String(c.disponible_desde) });
+
+  // Booleanos "sí" → chips de features
+  const flags: string[] = [];
+  if (c.parqueadero_cubierto) flags.push("Parqueadero cubierto");
+  if (c.precio_negociable) flags.push("Precio negociable");
+  if (c.acepta_permuta) flags.push("Acepta permuta");
+  if (c.acepta_credito) flags.push("Apto para crédito");
+  if (c.comision_incluida) flags.push("Comisión incluida");
+
+  const servicios = Array.isArray(c.servicios_incluidos) ? c.servicios_incluidos.filter(Boolean) : [];
+  const requisitos = Array.isArray(c.requisitos) ? c.requisitos.filter(Boolean) : [];
+
+  if (rows.length === 0 && flags.length === 0 && servicios.length === 0 && requisitos.length === 0) return null;
+
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-sm font-semibold text-[#111418]">Ficha del inmueble</h3>
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-baseline justify-between gap-2 border-b border-dashed border-[#E5E0D5] pb-1">
+              <dt className="text-xs text-[#5B5F5C]">{r.label}</dt>
+              <dd className="text-xs font-semibold text-[#111418] text-right">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {flags.map((f) => (
+            <span key={f} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+              style={{ background: "#E7F4EC", border: "0.5px solid #0F8A4F", color: "#0A5C36" }}>
+              ✓ {f}
+            </span>
+          ))}
+        </div>
+      )}
+      {servicios.length > 0 && (
+        <p className="text-xs text-[#5B5F5C]"><span className="font-semibold text-[#111418]">Servicios incluidos:</span> {servicios.map((s) => _CAP(String(s))).join(" · ")}</p>
+      )}
+      {requisitos.length > 0 && (
+        <p className="text-xs text-[#5B5F5C]"><span className="font-semibold text-[#111418]">Requisitos:</span> {requisitos.map((s) => _CAP(String(s))).join(" · ")}</p>
+      )}
+    </div>
+  );
 }
 
 function Amenidades({ items }: { items: string[] }) {
@@ -1739,6 +1811,9 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
   // Analysis sections (left col + mobile)
   const analysisContent = listing ? (
     <>
+      {/* Ficha del inmueble — caracteristicas ricas (solo listings propios) */}
+      <FichaCaracteristicas c={listing.caracteristicas} />
+
       {/* Qué tiene — amenidades */}
       {listing.amenidades && listing.amenidades.length > 0 && (
         <Amenidades items={listing.amenidades} />
