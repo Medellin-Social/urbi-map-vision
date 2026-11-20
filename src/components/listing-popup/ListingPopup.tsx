@@ -116,7 +116,9 @@ export function ListingPopup({ listing, onClose, onViewMore, splitLayout = false
     const ax = anchorX ?? mapLeft + mapW / 2;
     const left = Math.max(mapLeft + 8, Math.min(ax - w / 2, window.innerWidth - 8 - w));
     // Vertical estilo Zillow: SIEMPRE debajo del pin; solo arriba si abajo no cabe.
-    const ay = anchorY ?? mapTop + 12;
+    // anchorY=0 (click sintético del tour desde la lista) o un pin arriba del mapa
+    // empujaría el popup sobre los filtros → ánclalo dentro de la región del mapa.
+    const ay = anchorY && anchorY >= mapTop ? anchorY : mapTop + 12;
     const spaceBelow = window.innerHeight - ay - gap - pad;
     const spaceAbove = ay - mapTop - gap - pad;
     const below = spaceBelow >= 260 || spaceBelow >= spaceAbove;
