@@ -23,7 +23,7 @@ from api.utils.body_limit import BodySizeLimitMiddleware
 from api.utils.anti_scrape import AntiScrapeMiddleware
 from api.utils.session_cookie import SessionCookieMiddleware
 from api.dependencies import auth_cookie_mode
-from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrio_page, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_leads, ghl_webhook, historial, intake, link_review, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, stats, suscripciones, tracking, trm, usuario, visitas, zonas
+from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrio_page, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_leads, ghl_webhook, historial, intake, link_review, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, realtor_preferido, stats, suscripciones, tracking, trm, usuario, visitas, zonas
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -246,6 +246,7 @@ app.include_router(asignador.router,        prefix="/api/v1",                   
 app.include_router(realtor.router,          prefix="/api/v1/realtor",              tags=["realtor-dashboard"])
 app.include_router(agency.router,           prefix="/api/v1/agency",               tags=["agency-dashboard"])
 app.include_router(visitas.router,          prefix="/api/v1/visitas",              tags=["visitas"])
+app.include_router(realtor_preferido.router, prefix="/api/v1/realtor-preferido", tags=["realtor-preferido"])
 app.include_router(zonas.router,            prefix="/api/v1/zonas",                tags=["zonas"])
 app.include_router(ghl_webhook.router,       prefix="/api/v1/webhook",              tags=["ghl-webhook"])
 app.include_router(ghl_leads.router,         prefix="/api/v1/ghl",                  tags=["ghl-leads"])

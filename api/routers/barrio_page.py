@@ -105,6 +105,40 @@ LIMIT 2
 """
 
 
+# Realtor Preferido: los 2 que "tocan" en la rotación fija de los slots de la comuna.
+_PREFERIDOS_SQL = """
+SELECT a.id::text, a.nombre, a.foto_url, a.bio, ag.nombre AS agencia_nombre,
+       rev.rating_promedio, rev.n_resenas
+FROM agent a
+LEFT JOIN LATERAL (SELECT ag2.nombre FROM agency_member am JOIN agency ag2 ON ag2.id = am.agency_id
+                   WHERE am.agent_id = a.id LIMIT 1) ag ON true
+LEFT JOIN LATERAL (
+    SELECT ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio, COUNT(*)::int AS n_resenas
+    FROM agent_review WHERE agent_id = a.id
+) rev ON true
+WHERE a.id = ANY($1::uuid[]) AND a.estado = 'activo'
+"""
+
+
+async def _preferidos_rotados(pool, zona: str) -> list:
+    """Hasta 2 realtors preferidos de la comuna, en orden de rotación (avanza 1 por vista).
+    Vacío si la comuna aún no tiene slots → el caller cae al esquema de sponsorship."""
+    from api.services.realtor_preferido_service import slots_activos
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            activos = await slots_activos(conn, "comuna", zona)
+            if not activos:
+                return []
+            contador = await conn.fetchval(
+                "INSERT INTO realtor_rotacion (zona_nivel, zona_codigo, contador) VALUES ('comuna', $1, 1) "
+                "ON CONFLICT (zona_nivel, zona_codigo) DO UPDATE SET contador = realtor_rotacion.contador + 1 "
+                "RETURNING contador - 1", zona)
+            n = len(activos)
+            orden = [activos[(contador + i) % n]["agent_id"] for i in range(min(2, n))]
+            rows = {r["id"]: r for r in await conn.fetch(_PREFERIDOS_SQL, orden)}
+    return [rows[str(a)] for a in orden if str(a) in rows]
+
+
 @router.get("", response_model=BarrioPageOut)
 @limiter.limit("60/minute")
 async def get_barrio_page(
@@ -126,6 +160,14 @@ async def get_barrio_page(
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+
+    try:
+        preferidos = await _preferidos_rotados(pool, zona)
+    except Exception:  # tabla aún no migrada u otro fallo: no tumbar la página
+        logger.exception("preferidos_rotados")
+        preferidos = []
+    if preferidos:
+        realtors = preferidos
 
     return BarrioPageOut(
         embajador=EmbajadorOut(**dict(emb)) if emb else None,
