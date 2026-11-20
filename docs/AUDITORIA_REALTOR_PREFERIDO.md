@@ -43,7 +43,7 @@ flowchart LR
 
 ## Compatibilidad verificada (leyendo migraciones)
 
-- Un solo head alembic (0128 sobre 0127). `gen_random_uuid()` ya se usa en 0045/0058.
+- Un solo head alembic (0130 sobre 0129 sobre 0128). `gen_random_uuid()` ya se usa en 0045/0058.
 - `agent`: UUID, `estado` enum (se castea a texto), `email`, `usuario_id`, `bio` (0098), `foto_url`. `agency_member`, `agent_review.calificacion` existen.
 - `raw.barrios.id` SERIAL, `municipio`, `nombre` existen; `zona_codigo` barrio = `id::text` igual que sponsorship.
 - `analytics.zonas_nivel_precio` es dbt: puede no existir en DEV → hay try/except y nivel por defecto "C".
@@ -53,7 +53,7 @@ flowchart LR
 
 - Hueco 1: la página de barrio recibe `barrio_id` y mezcla slots de barrio + comuna.
 - Hueco 2: nueva landing `/planes/featured-realtor` con selector de zona y checkout.
-- Hueco 3: migración 0129 + cron `realtor_slots` (siembra 1 gratis por barrio con el realtor "casa"; falta marcar quién es con `POST /realtor-preferido/admin/casa`).
+- Hueco 3: migración 0130 + cron `realtor_slots` (siembra 1 gratis por barrio con el realtor "casa"; falta marcar quién es con `POST /realtor-preferido/admin/casa`).
 - Hueco 6: rotación por ventana de tiempo (20 s), sin escrituras por vista.
 - Hueco 8: cron diario vence slots, sincroniza `agent.tier` y avisa por email 5 días antes.
 
