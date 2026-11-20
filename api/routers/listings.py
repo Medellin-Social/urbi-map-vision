@@ -222,6 +222,8 @@ class ListingDetail(ListingFull):
     parqueaderos: Optional[int] = None
     piso: Optional[int] = None
     nombre_edificio: Optional[str] = None
+    # Ficha rica del realtor (listing.caracteristicas JSONB) — solo listings propios.
+    caracteristicas: Optional[dict] = None
     # Barrio context fields
     yield_bruto_pct: Optional[float] = None
     score_corto: Optional[float] = None
@@ -1041,6 +1043,7 @@ SELECT
     END::bigint                        AS avaluo_m2_catastro,
     _lp_owner.tour_url,
     _lp_owner.video_url,
+    _lp_owner.caracteristicas,
     COALESCE(_lp_owner.nombre_edificio, l.nombre_edificio) AS nombre_edificio
 FROM listing l
 JOIN raw.barrios b ON b.id = l.barrio_id
@@ -1086,7 +1089,8 @@ LEFT JOIN LATERAL (
       AND entity_id = l.url
 ) _vistas ON TRUE
 LEFT JOIN (
-    SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url, lo.nombre_edificio
+    SELECT lo.id::text AS lp_url, u.plan AS owner_plan, lo.tour_url, lo.video_url, lo.nombre_edificio,
+           lo.caracteristicas
     FROM public.listing lo
     JOIN public.owner o ON o.id = lo.owner_id
     JOIN public.usuarios u ON u.id = o.usuario_id
@@ -2016,6 +2020,12 @@ async def get_listing_by_id(
     if not row:
         raise HTTPException(status_code=404, detail="Listing not found")
     row_d = dict(row)
+    # caracteristicas (JSONB) llega como str JSON (sin codec en el pool) → a dict.
+    if isinstance(row_d.get("caracteristicas"), str):
+        try:
+            row_d["caracteristicas"] = json.loads(row_d["caracteristicas"])
+        except Exception:
+            row_d["caracteristicas"] = None
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")  # before url is nulled for 'propio'
     _finalize_row(row_d, await get_usd_rate())
     row_d["precio_historia"] = [dict(h) for h in historia] if historia else []

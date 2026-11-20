@@ -242,7 +242,9 @@ async def crear_listing(
     cedula_catastral:  Optional[str]   = Form(None),      # CBML / catastro — llave de parcela
     lat:               Optional[float] = Form(None),
     lon:               Optional[float] = Form(None),
+    titulo_custom:     Optional[str]   = Form(None),   # título del aviso (si vacío, se arma solo)
     descripcion:       Optional[str]   = Form(None),
+    caracteristicas:   Optional[str]   = Form(None),   # ficha rica JSON (año, área privada, estado, piso, orientación…)
     tour_url:          Optional[str]   = Form(None),   # tour 3D/360 (Matterport, Kuula…)
     video_url:         Optional[str]   = Form(None),   # video (YouTube, Vimeo)
     # Paso 4
@@ -265,10 +267,10 @@ async def crear_listing(
         raise HTTPException(400, "Falta la ubicación (pin en el mapa)")
     if not (direccion or "").strip():
         raise HTTPException(400, "La dirección exacta es obligatoria")
-    # #11: matrícula obligatoria solo en listings NUEVOS (identidad de propiedad +
-    # dedup). Los existentes no se tocan.
-    if not (matricula_inmobiliaria or "").strip():
-        raise HTTPException(400, "La matrícula inmobiliaria es obligatoria para publicar")
+    # #11: matrícula obligatoria solo en VENTAS nuevas (identidad de propiedad +
+    # dedup ORIP). En arriendo no aplica. Los existentes no se tocan.
+    if tipo_operacion == "venta" and not (matricula_inmobiliaria or "").strip():
+        raise HTTPException(400, "La matrícula inmobiliaria es obligatoria para publicar en venta")
 
     pool = get_pool()
     operacion = _OPERACION_MAP.get(tipo_operacion)
@@ -314,7 +316,19 @@ async def crear_listing(
         except Exception:
             pass
 
-    titulo = f"{tipo_inmueble.capitalize()} en {operacion} · {barrio_nom or municipio_nom or 'Medellín'}"
+    # Ficha rica (JSONB catch-all). Solo se persiste si parsea a objeto.
+    caracteristicas_obj = {}
+    if caracteristicas:
+        try:
+            parsed = json.loads(caracteristicas)
+            if isinstance(parsed, dict):
+                caracteristicas_obj = {k: v for k, v in parsed.items() if v not in (None, "", [], {})}
+        except Exception:
+            pass
+
+    # Título: el realtor puede escribir el suyo (mejor SEO/UX); si no, se arma solo.
+    titulo = (titulo_custom or "").strip() or \
+        f"{tipo_inmueble.capitalize()} en {operacion} · {barrio_nom or municipio_nom or 'Medellín'}"
 
     # Guardia de datos mínimos (mismo que la máquina de estados). Ningún listing
     # incompleto se publica, aunque el request salte el front.
@@ -349,7 +363,7 @@ async def crear_listing(
                     titulo, descripcion,
                     nombre_contacto, telefono, email_contacto, horario_contacto,
                     declaraciones, destacado, tour_url, video_url, nombre_edificio,
-                    matricula_inmobiliaria, cedula_catastral,
+                    matricula_inmobiliaria, cedula_catastral, caracteristicas,
                     published_at, created_at, updated_at
                 ) VALUES (
                     $1, $2, $3, NULL, NULL,
@@ -362,7 +376,7 @@ async def crear_listing(
                     $20, $21, $22, $23,
                     $24, $25,
                     $26, $27, $28, $29,
-                    $30::jsonb, $31, $32, $33, $35, $36, $37, NOW(), NOW(), NOW()
+                    $30::jsonb, $31, $32, $33, $35, $36, $37, $38::jsonb, NOW(), NOW(), NOW()
                 )
                 """,
                 listing_id, slug, owner_id,
@@ -380,6 +394,7 @@ async def crear_listing(
                 nombre_edificio,  # $35
                 (matricula_inmobiliaria or "").strip() or None,  # $36
                 (cedula_catastral or "").strip() or None,        # $37
+                json.dumps(caracteristicas_obj) if caracteristicas_obj else None,  # $38
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
