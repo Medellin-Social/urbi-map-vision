@@ -390,7 +390,7 @@ async def aceptar_invite(
     # hasta que el realtor complete su perfil; aceptable para el esqueleto.
     if agent_nuevo:
         try:
-            await ghl_client.sync_agent(agent_id)
+            ghl_client.spawn(ghl_client.sync_agent(agent_id))
         except Exception:
             log.exception("sync_agent(%s) falló", agent_id)  # best-effort, no bloquea la aceptación
 

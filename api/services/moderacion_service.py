@@ -37,9 +37,7 @@ async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
         await insert_listing_into_cache(pool, listing.id)
     except Exception:
         logger.exception("aprobar: insert_listing_into_cache falló para %s", listing.id)
-    await ghl_client.sync_listing(listing.id)
-
-
+    ghl_client.spawn(ghl_client.sync_listing(listing.id))
 async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> None:
     """en_revision → rechazado + bitácora con el motivo."""
     if not motivo:
@@ -55,4 +53,4 @@ async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> N
             "VALUES ($1, $2, 'rechazado', $3, $4)",
             str(uuid.uuid4()), listing.id, motivo, moderador_id,
         )
-    await ghl_client.sync_listing(listing.id)
+    ghl_client.spawn(ghl_client.sync_listing(listing.id))

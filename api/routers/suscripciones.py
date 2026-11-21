@@ -166,7 +166,7 @@ async def registro_agente(
     # Realtor nuevo → GHL (Contact). Best-effort: hoy sync_agent levanta
     # (stub sin contrato) → se loguea y sigue, igual que afiliados/embajadores.
     try:
-        await ghl_client.sync_agent(row["id"])
+        ghl_client.spawn(ghl_client.sync_agent(row["id"]))
     except Exception:
         log.exception("sync_agent(%s) falló", row["id"])  # best-effort, no bloquea el registro
     return {"id": str(row["id"]), "estado": row["estado"]}

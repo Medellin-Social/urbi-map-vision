@@ -301,7 +301,7 @@ async def tomar(intake_id: str, user: dict = Depends(get_current_user), pool=Dep
     try:
         res = await tomar_del_pool(intake_id, agent, pool)
         from api.utils import ghl_client
-        await ghl_client.sync_owner_intake(intake_id)
+        ghl_client.spawn(ghl_client.sync_owner_intake(intake_id))
         return res
     except AsignadorError as e:
         raise HTTPException(status_code=403, detail=str(e))
@@ -413,7 +413,7 @@ async def editar_listing(
         )
     if not row:
         raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     actualizado = sorted(campos) + (["ubicacion"] if lat is not None and lon is not None else [])
     return {"id": listing_id, "actualizado": actualizado}
 
@@ -500,7 +500,7 @@ async def cerrar_listing(
         )
     except Exception:
         log.warning("conversion event insert falló (listing=%s)", listing_id, exc_info=True)
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
 
 
@@ -537,7 +537,7 @@ async def cambiar_estado_listing(
                 "UPDATE listing SET estado = $2::listing_estado, updated_at = NOW() WHERE id = $1",
                 listing_id, nuevo,
             )
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": nuevo}
 
 
@@ -716,7 +716,7 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
             "UPDATE listing SET estado = 'en_revision', updated_at = NOW() WHERE id = $1",
             row["listing_id"],
         )
-    await ghl_client.sync_listing(str(row["listing_id"]))
+    ghl_client.spawn(ghl_client.sync_listing(str(row["listing_id"])))
     return {"listing_id": str(row["listing_id"]), "estado": "en_revision"}
 
 

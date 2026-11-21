@@ -112,7 +112,7 @@ async def confirmar_simulado(body: CheckoutIn, user: dict = Depends(get_current_
         r = await svc.procesar_pago_slot(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses, "simulado")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    await ghl_client.sync_agent_safe(agent_id)
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return r
 
 
@@ -134,7 +134,7 @@ async def admin_asignar(body: AsignarIn, admin: dict = Depends(require_admin), p
                                            body.tipo, body.meses, "admin")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    await ghl_client.sync_agent_safe(body.agent_id)
+    ghl_client.spawn(ghl_client.sync_agent_safe(body.agent_id))
     return r
 
 
@@ -217,5 +217,5 @@ async def admin_casa(body: CasaIn, admin: dict = Depends(require_admin), pool=De
     r = await pool.execute("UPDATE agent SET es_realtor_casa = $1 WHERE id = $2::uuid", body.es_realtor_casa, body.agent_id)
     if r.endswith(" 0"):
         raise HTTPException(status_code=404, detail="Agente no encontrado")
-    await ghl_client.sync_agent_safe(body.agent_id)
+    ghl_client.spawn(ghl_client.sync_agent_safe(body.agent_id))
     return {"ok": True}

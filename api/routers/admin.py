@@ -1389,7 +1389,7 @@ async def editar_tienda(request: Request, tienda_id: int, body: DestacadoPatch =
         raise HTTPException(status_code=404, detail="Negocio no encontrado")
     await _audit(pool, admin, "editar_tienda", "tienda", str(tienda_id),
                  {"destacado": row["destacado"], "nivel": row["destacado_nivel"], "zona": row["destacado_zona_codigo"]}, request)
-    await ghl_client.sync_tienda(tienda_id)
+    ghl_client.spawn(ghl_client.sync_tienda(tienda_id))
     return dict(row)
 
 
@@ -1435,7 +1435,7 @@ async def aprobar_tienda(request: Request, tienda_id: int, admin: dict = Depends
     if not row:
         raise HTTPException(status_code=404, detail="Negocio no encontrado o ya activo")
     await _audit(pool, admin, "aprobar_tienda", "tienda", str(tienda_id), None, request)
-    await ghl_client.sync_tienda(tienda_id)
+    ghl_client.spawn(ghl_client.sync_tienda(tienda_id))
     return {"id": tienda_id, "activo": True}
 
 

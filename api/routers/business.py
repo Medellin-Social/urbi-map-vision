@@ -90,7 +90,7 @@ async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=De
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
     try:
-        await ghl_client.push_negocio_lead_to_ghl(row["id"], body.model_dump())
+        ghl_client.spawn(ghl_client.push_negocio_lead_to_ghl(row["id"], body.model_dump()))
     except Exception:
         logger.exception("push_negocio_lead_to_ghl(%s) falló", row["id"])
     return AplicarOut(
