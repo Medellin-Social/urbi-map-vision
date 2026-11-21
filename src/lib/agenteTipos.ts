@@ -17,6 +17,14 @@ export const AGENTE_TIPO_LABEL: Record<AgenteTipo, { es: string; en: string }> =
   casa:      { es: "Realtor de la casa", en: "House realtor" },
 };
 
+/** Descripción corta para el filtro del directorio. */
+export const AGENTE_TIPO_DESC: Record<AgenteTipo, { es: string; en: string }> = {
+  preferred: { es: "Destacado en su barrio",           en: "Featured in their neighborhood" },
+  certified: { es: "Certificado por Medellín Social",  en: "Certified by Medellín Social" },
+  member:    { es: "Miembro de la red",                en: "Network member" },
+  casa:      { es: "Agente del equipo Medellín Social", en: "Medellín Social team agent" },
+};
+
 export const AGENTE_TIPO_STYLE: Record<AgenteTipo, { bg: string; fg: string; border: string }> = {
   preferred: { bg: "#FCD116", fg: "#3D3000", border: "#E0B800" },
   certified: { bg: "#E6F4EC", fg: "#0A5C36", border: "#0F8A4F" },

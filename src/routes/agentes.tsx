@@ -3,13 +3,13 @@ import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { MapPin, MessageCircle, Users, ArrowRight, Search, ShieldCheck, HelpCircle } from "@/lib/icons";
+import { MapPin, MessageCircle, Users, ArrowRight, Search, ShieldCheck, HelpCircle, Star, User, Home } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { K as TOKENS } from "@/design/tokens";
 import { type Agente, Stars, waFromTel, iniciales, perfilHref, AgenteTipoBadges } from "@/components/agentes/agenteShared";
-import { AGENTE_TIPOS, AGENTE_TIPO_STYLE, agenteTipoLabel, type AgenteTipo } from "@/lib/agenteTipos";
+import { AGENTE_TIPOS, AGENTE_TIPO_STYLE, AGENTE_TIPO_DESC, agenteTipoLabel, type AgenteTipo } from "@/lib/agenteTipos";
 
 export const Route = createFileRoute("/agentes")({
   head: () => seo({ title: "Agentes inmobiliarios · Medellín Social", description: "Encuentra agentes inmobiliarios verificados por zona en Medellín y el Valle de Aburrá.", path: "/agentes" }),
@@ -136,6 +136,74 @@ function AgenteRow({ a }: { a: Agente }) {
   );
 }
 
+const TIPO_ICON: Record<AgenteTipo, typeof Star> = { preferred: Star, certified: ShieldCheck, member: User, casa: Home };
+
+// Filtro por tipo de agente, compacto: píldoras en una línea (ícono + nombre +
+// conteo) que envuelven. Multi-selección en OR; "Todos" limpia. La descripción
+// de cada tipo va en el tooltip (title) para no ocupar espacio.
+function TipoAgenteFiltro({ value, onToggle, onClear, conteo, total, lang }: {
+  value: AgenteTipo[];
+  onToggle: (t: AgenteTipo) => void;
+  onClear: () => void;
+  conteo: Record<AgenteTipo, number>;
+  total: number;
+  lang: string;
+}) {
+  const en = lang === "en";
+  const todos = value.length === 0;
+  const Pill = ({ id, on, onClick, icon: Icon, label, desc, n, color }: {
+    id: string; on: boolean; onClick: () => void; icon: typeof Star;
+    label: string; desc: string; n: number; color: { bg: string; fg: string; border: string };
+  }) => (
+    <button
+      type="button"
+      data-testid={`tipo-agente-${id}`}
+      aria-pressed={on}
+      title={desc}
+      onClick={onClick}
+      className="inline-flex h-8 items-center gap-1.5 rounded-full pl-2 pr-2.5 text-xs font-semibold transition hover:shadow-sm focus:outline-none focus-visible:ring-2"
+      style={{
+        background: on ? color.bg : "#FFFFFF",
+        color: on ? color.fg : K.ink,
+        border: `1px solid ${on ? color.border : K.line}`,
+      }}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: on ? color.fg : color.border }} />
+      <span>{label}</span>
+      <span className="tabular-nums" style={{ color: on ? color.fg : K.muted, opacity: on ? 0.75 : 1 }}>{n}</span>
+    </button>
+  );
+
+  return (
+    <div data-i18n-skip>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>
+          {en ? "Agent type" : "Tipo de agente"}
+        </span>
+        {!todos && (
+          <button type="button" onClick={onClear} className="text-xs font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
+            {en ? "Clear" : "Limpiar"}
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={en ? "Agent type" : "Tipo de agente"}>
+        <Pill
+          id="todos" on={todos} onClick={onClear} icon={Users}
+          label={en ? "All" : "Todos"} desc={en ? "The whole directory" : "Todo el directorio"}
+          n={total} color={{ bg: K.tealLight, fg: K.tealDeep, border: K.teal }}
+        />
+        {AGENTE_TIPOS.map((t) => (
+          <Pill
+            key={t} id={t} on={value.includes(t)} onClick={() => onToggle(t)} icon={TIPO_ICON[t]}
+            label={agenteTipoLabel(t, lang)} desc={AGENTE_TIPO_DESC[t][en ? "en" : "es"]}
+            n={conteo[t]} color={AGENTE_TIPO_STYLE[t]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AgenteRowSkeleton() {
   return (
     <div className="flex animate-pulse items-center gap-4 rounded-2xl border-l-4 p-5" style={{ borderLeftColor: K.line, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}>
@@ -242,44 +310,14 @@ function AgentesPage() {
               </select>
             </div>
 
-            <div data-i18n-skip>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>
-                {lang === "en" ? "Agent type" : "Tipo de agente"}
-              </label>
-              <div className="flex flex-wrap gap-1.5" role="group" aria-label={lang === "en" ? "Agent type" : "Tipo de agente"}>
-                <button
-                  type="button"
-                  data-testid="tipo-agente-todos"
-                  aria-pressed={tiposFiltro.length === 0}
-                  onClick={() => setTiposFiltro([])}
-                  className="min-h-[36px] rounded-full px-3 text-xs font-semibold transition"
-                  style={tiposFiltro.length === 0
-                    ? { background: K.ink, color: "#FFFFFF", border: `1px solid ${K.ink}` }
-                    : { background: "#FFFFFF", color: K.ink, border: `1px solid ${K.line}` }}
-                >
-                  {lang === "en" ? "All" : "Todos"}
-                </button>
-                {AGENTE_TIPOS.map((t) => {
-                  const on = tiposFiltro.includes(t);
-                  const s = AGENTE_TIPO_STYLE[t];
-                  return (
-                    <button
-                      key={t}
-                      type="button"
-                      data-testid={`tipo-agente-${t}`}
-                      aria-pressed={on}
-                      onClick={() => toggleTipo(t)}
-                      className="min-h-[36px] rounded-full px-3 text-xs font-semibold transition"
-                      style={on
-                        ? { background: s.bg, color: s.fg, border: `2px solid ${s.border}` }
-                        : { background: "#FFFFFF", color: K.ink, border: `1px solid ${K.line}` }}
-                    >
-                      {agenteTipoLabel(t, lang)} <span style={{ opacity: 0.6 }}>({conteoTipo[t]})</span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
+            <TipoAgenteFiltro
+              value={tiposFiltro}
+              onToggle={toggleTipo}
+              onClear={() => setTiposFiltro([])}
+              conteo={conteoTipo}
+              total={agentes.length}
+              lang={lang}
+            />
           </aside>
 
           {/* Columna 2: barra de orden + resultados */}

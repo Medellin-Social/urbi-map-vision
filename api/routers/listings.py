@@ -1632,20 +1632,35 @@ class AgenteDirectorio(BaseModel):
 # (flag real que ya mantiene el sistema, no inventado). rating_promedio/n_resenas
 # de agent_review — pre-agregados en su propio CTE porque unirlos crudo al de sp
 # (otro 1-a-muchos) infla el array_agg de zonas por producto cartesiano.
-_AGENTES_DIRECTORIO_SQL = """
-WITH sp AS (
-    SELECT am.agent_id,
-           CASE s.zona_nivel
-             WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
-                                  JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
-                                  WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
-             WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
-             ELSE NULL
-           END AS zona_nombre
+# Zonas VIGENTES de cada agente = patrocinio exclusivo (modelo viejo, `sponsorship`)
+# + cupos de Realtor Preferido (4/barrio, 8/comuna; pago o gratis). Mismo código
+# de zona en ambos: barrio = raw.barrios.id, comuna = cd_comuna. `exclusivo` solo
+# es true para sponsorship. CTE reutilizable: define `zonas_ag` y `sp` (con nombre).
+_ZONAS_AGENTE_CTE = """
+zonas_ag AS (
+    SELECT am.agent_id, s.zona_nivel::text AS nivel, s.zona_codigo::text AS codigo, true AS exclusivo
     FROM sponsorship s
     JOIN agency_member am ON am.agency_id = s.agency_id
     WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+    UNION
+    SELECT rps.agent_id, rps.zona_nivel, rps.zona_codigo, false
+    FROM realtor_preferido_slot rps
+    WHERE rps.estado = 'activo' AND (rps.fecha_fin IS NULL OR rps.fecha_fin >= CURRENT_DATE)
 ),
+sp AS (
+    SELECT z.agent_id, z.nivel, z.exclusivo,
+           CASE z.nivel
+             WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
+                                  JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
+                                  WHERE bc.cd_comuna = z.codigo::int LIMIT 1)
+             WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = z.codigo::int)
+             ELSE NULL
+           END AS zona_nombre
+    FROM zonas_ag z
+)"""
+
+_AGENTES_DIRECTORIO_SQL = """
+WITH __ZONAS_AGENTE_CTE__,
 rev AS (
     SELECT agent_id,
            ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio,
@@ -1670,7 +1685,7 @@ WHERE a.estado = 'activo'
 GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY a.nombre
-""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE)
 
 
 @router.get("/agentes", response_model=list[AgenteDirectorio])
@@ -1725,7 +1740,7 @@ class AgentePerfilResena(BaseModel):
 class AgentePerfilZona(BaseModel):
     nivel: str
     nombre: Optional[str] = None
-    exclusivo: bool = True  # zonas vienen de sponsorship = modelo exclusivo por zona
+    exclusivo: bool = True  # true = patrocinio exclusivo (sponsorship); false = cupo de Realtor Preferido
 
 
 class AgentePerfil(BaseModel):
@@ -1832,18 +1847,12 @@ ORDER BY l.updated_at DESC
 """
 
 _AGENTE_PERFIL_ZONAS_SQL = """
-SELECT DISTINCT s.zona_nivel::text AS nivel,
-       CASE s.zona_nivel
-         WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
-                              JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
-                              WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
-         WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
-         ELSE NULL
-       END AS nombre
-FROM sponsorship s
-JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
-WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
-"""
+WITH __ZONAS_AGENTE_CTE__
+SELECT sp.nivel, sp.zona_nombre AS nombre, bool_or(sp.exclusivo) AS exclusivo
+FROM sp
+WHERE sp.agent_id = $1::uuid
+GROUP BY sp.nivel, sp.zona_nombre
+""".replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE)
 
 _AGENTE_PERFIL_RESENAS_SQL = """
 SELECT r.calificacion, r.comentario, r.created_at,
@@ -1919,7 +1928,7 @@ async def get_agente_perfil(request: Request, agent_id: str):
         mediana_resp_horas=round(float(base["mediana_resp_horas"]), 1) if base["mediana_resp_horas"] is not None else None,
         n_leads=n_leads, tasa_respuesta=_tasa(base["n_resp"]), tasa_oferta=_tasa(base["n_ofertas"]),
         tasa_conversion=_tasa(base["n_conversiones"]),
-        zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"]) for z in zonas
+        zonas=[AgentePerfilZona(nivel=z["nivel"], nombre=z["nombre"], exclusivo=z["exclusivo"]) for z in zonas
                if z["nombre"]],
         activos=activos, cierres=cierres, n_activos=len(activos), n_cierres=len(cierres),
         vendidas_12m=int(base["vendidas_12m"] or 0),
@@ -2013,32 +2022,13 @@ async def contactar_agente(
 
 # ── Agentes similares (misma zona patrocinada) ────────────────────────────────
 _AGENTES_SIMILARES_SQL = """
-WITH mis_zonas AS (
-    SELECT s.zona_nivel, s.zona_codigo
-    FROM sponsorship s
-    JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
-    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
-),
+WITH __ZONAS_AGENTE_CTE__,
 otros AS (
-    SELECT DISTINCT am.agent_id
-    FROM sponsorship s
-    JOIN mis_zonas mz ON mz.zona_nivel = s.zona_nivel AND mz.zona_codigo = s.zona_codigo
-    JOIN agency_member am ON am.agency_id = s.agency_id
-    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
-      AND am.agent_id <> $1
-),
-sp AS (
-    SELECT am.agent_id,
-           CASE s.zona_nivel
-             WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b
-                                  JOIN analytics.barrios_cd bc ON bc.barrio_id = b.id
-                                  WHERE bc.cd_comuna = s.zona_codigo::int LIMIT 1)
-             WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id = s.zona_codigo::int)
-             ELSE NULL
-           END AS zona_nombre
-    FROM sponsorship s
-    JOIN agency_member am ON am.agency_id = s.agency_id
-    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+    -- agentes con al menos una zona en común (patrocinio o cupo Preferido)
+    SELECT DISTINCT o.agent_id
+    FROM zonas_ag mine
+    JOIN zonas_ag o ON o.nivel = mine.nivel AND o.codigo = mine.codigo
+    WHERE mine.agent_id = $1::uuid AND o.agent_id <> $1::uuid
 ),
 rev AS (
     SELECT agent_id, ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio,
@@ -2063,7 +2053,7 @@ GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY rev.rating_promedio DESC NULLS LAST, a.nombre
 LIMIT 6
-""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE)
 
 
 @router.get("/agentes/{agent_id}/similares", response_model=list[AgenteDirectorio])

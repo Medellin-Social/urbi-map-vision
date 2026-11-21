@@ -72,7 +72,6 @@ type Props = {
     pisoMin: number | null;
     segmento?: Segmento | null;
     ocultarDestacados?: boolean;
-    tipoAgente?: string[] | null;
   };
   /** Hold viewport fetching (e.g. until the residential/commercial segment is chosen). */
   paused?: boolean;
@@ -1396,7 +1395,7 @@ export function MapView({
       mlsFilters?.habitaciones, mlsFilters?.banos, mlsFilters?.areaMin, mlsFilters?.areaMax,
       mlsFilters?.estrato?.join(","), mlsFilters?.tipoInmueble?.join(","), mlsFilters?.diasMercado, mlsFilters?.busqueda,
       mlsFilters?.amenidades?.join(","), mlsFilters?.estadoInmueble, mlsFilters?.pisoMin,
-      mlsFilters?.segmento, mlsFilters?.ocultarDestacados, mlsFilters?.tipoAgente?.join(","), priceCurrency, priceTrm]);
+      mlsFilters?.segmento, mlsFilters?.ocultarDestacados, priceCurrency, priceTrm]);
 
   // ── Polígonos de barrio: fuente cargada una vez; capas por zoom range ──────
   // NINGUNA derivación por cámara: mover/zoomear el mapa no cambia zona ni filtros.

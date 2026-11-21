@@ -20,8 +20,6 @@ export type ListingQueryFilters = {
   pisoMin?: number | null;
   segmento?: Segmento | "todos" | null;
   ocultarDestacados?: boolean | null;
-  /** Tipos de agente (OR): member|certified|preferred|casa. Solo listings con agente. */
-  tipoAgente?: string[] | null;
 };
 
 export type ZoneSelection = {
@@ -37,12 +35,10 @@ export function hasExplicitZone(z: ZoneSelection): boolean {
 
 export function appendSegmentParams(
   params: URLSearchParams,
-  f: Pick<ListingQueryFilters, "segmento" | "ocultarDestacados" | "tipoAgente">,
+  f: Pick<ListingQueryFilters, "segmento" | "ocultarDestacados">,
 ): void {
   if (f.segmento) params.set("segmento", f.segmento);
   if (f.ocultarDestacados) params.set("ocultar_destacados", "true");
-  // Orden estable → misma cache key para la misma selección.
-  if (f.tipoAgente?.length) for (const t of [...f.tipoAgente].sort()) params.append("tipo_agente", t);
 }
 
 /** Zone params. zona_completa is sent ONLY for an explicit zone (drops bbox server-side). */
