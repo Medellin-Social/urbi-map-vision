@@ -278,26 +278,38 @@ async def webhook_stripe(request: Request):
         if first_time is None:
             return {"received": True, "duplicate": True}
 
-    if etype == "checkout.session.completed":
-        meta       = data.get("metadata", {})
-        usuario_id = int(meta.get("usuario_id", 0))
-        plan       = meta.get("plan", "")
-        stripe_sub = data.get("subscription")
-        customer   = data.get("customer")
-        if usuario_id and plan:
-            await _activar_plan(usuario_id, plan, "USD",
-                                stripe_sub_id=stripe_sub,
-                                stripe_customer_id=customer)
+    try:
+        if etype == "checkout.session.completed":
+            meta       = data.get("metadata", {})
+            usuario_id = int(meta.get("usuario_id", 0))
+            plan       = meta.get("plan", "")
+            stripe_sub = data.get("subscription")
+            customer   = data.get("customer")
+            if usuario_id and plan:
+                await _activar_plan(usuario_id, plan, "USD",
+                                    stripe_sub_id=stripe_sub,
+                                    stripe_customer_id=customer)
 
-    elif etype == "invoice.payment_succeeded":
-        stripe_sub = data.get("subscription")
-        if stripe_sub:
-            await _renovar_suscripcion(stripe_sub_id=stripe_sub)
+        elif etype == "invoice.payment_succeeded":
+            stripe_sub = data.get("subscription")
+            if stripe_sub:
+                await _renovar_suscripcion(stripe_sub_id=stripe_sub)
 
-    elif etype in ("invoice.payment_failed", "customer.subscription.deleted"):
-        stripe_sub = data.get("id") if etype == "customer.subscription.deleted" else data.get("subscription")
-        if stripe_sub:
-            await _marcar_vencida(stripe_sub_id=stripe_sub)
+        elif etype in ("invoice.payment_failed", "customer.subscription.deleted"):
+            stripe_sub = data.get("id") if etype == "customer.subscription.deleted" else data.get("subscription")
+            if stripe_sub:
+                await _marcar_vencida(stripe_sub_id=stripe_sub)
+    except Exception:
+        # La activación falló: liberar el event_id para que el reintento de Stripe
+        # (que recibe 500) vuelva a procesarlo en vez de tomarlo por duplicado y
+        # perder el plan pagado.
+        if event_id:
+            try:
+                await get_pool().execute("DELETE FROM public.stripe_events WHERE event_id = $1", event_id)
+            except Exception:
+                log.exception("No se pudo liberar stripe_events %s", event_id)
+        log.exception("Webhook Stripe %s (%s) falló; se pedirá reintento", event_id, etype)
+        raise HTTPException(500, "Error procesando el evento")
 
     return {"received": True}
 
