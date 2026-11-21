@@ -481,6 +481,10 @@ UPDATE {table}
 _LISTING_FILTER_INDEXES = (
     "CREATE INDEX ON {t} (tipo_operacion, lower(tipo_inmueble), precio_cop)",
     "CREATE INDEX ON {t} (lat, lon)",
+    # id público del listing = hash de url (mismo cálculo que SELECT ... AS id en los
+    # routers). Sin este índice cada /listings/{id}, /similares, /favoritos... hace
+    # seq-scan + md5 por fila. La expresión DEBE coincidir literal con la del WHERE.
+    "CREATE INDEX ON {t} ((('x'||substr(md5(url),1,8))::bit(32)::int))",
 )
 
 
