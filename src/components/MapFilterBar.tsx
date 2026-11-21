@@ -23,7 +23,27 @@ import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
 
 // ─── Shared filter state (lifted to map.tsx, passed down to both FilterBar and MLSPanel) ────
+// Orden de la lista que elige el usuario. "destacados" = orden del server (pro-first);
+// el resto reordena en cliente (MLSPanel.sortListings). Vive aquí, junto a los filtros,
+// porque el selector "Ordenar por" está dentro del panel de filtros.
+export type SortKey = "destacados" | "precio_asc" | "precio_desc" | "nuevo" | "area_desc";
+export const SORT_OPTIONS: { key: SortKey; es: string; en: string }[] = [
+  { key: "destacados",  es: "Destacados",     en: "Featured" },
+  { key: "precio_desc", es: "Precio ↑",       en: "Price ↑" },
+  { key: "precio_asc",  es: "Precio ↓",       en: "Price ↓" },
+  { key: "nuevo",       es: "Más nuevo",      en: "Newest" },
+  { key: "area_desc",   es: "Área ↓",         en: "Area ↓" },
+];
+
+/** Label of the combined sort + filters control, in both languages. */
+export function sortFiltersLabel(lang: string, count = 0): string {
+  const base = lang === "en" ? "Sort by & filters" : "Ordenar por & filtros";
+  return count > 0 ? `${base} (${count})` : base;
+}
+
 export type SharedFilters = {
+  /** List order (client-side sort; not sent to the API). */
+  orden: SortKey;
   tipoOp: "todos" | "venta" | "arriendo";
   precioMin: number | null;
   precioMax: number | null;
@@ -48,6 +68,7 @@ export type SharedFilters = {
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
+  orden: "destacados",
   tipoOp: "todos",
   precioMin: null,
   precioMax: null,
@@ -248,6 +269,7 @@ type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
 
 function countActive(f: SharedFilters): number {
   let n = 0;
+  if (f.orden !== "destacados") n++;
   if (f.precioMax !== null || f.precioMin !== null) n++;
   if (f.habitaciones !== null) n++;
   if (f.ocultarDestacados) n++;
@@ -1265,6 +1287,7 @@ export function MapFilterBar({
   // ── Desktop pill row ───────────────────────────────────────────────────────
   const habBanosActive = filters.habitaciones !== null || filters.banos !== null;
   const filtrosCount = [
+    filters.orden !== "destacados",
     (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
     filters.areaMin !== null || filters.areaMax !== null,
@@ -1360,12 +1383,12 @@ export function MapFilterBar({
         />
       </div>
 
-      {/* Filtros */}
-      <div style={{ position: "relative", flexShrink: 0 }}>
+      {/* Ordenar por & filtros */}
+      <div style={{ position: "relative", flexShrink: 0 }} data-i18n-skip>
         <FilterPill
-          label={filtrosCount > 0 ? `Filtros (${filtrosCount})` : "Filtros"}
+          label={sortFiltersLabel(lang, filtrosCount)}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ antiguedad: null, estrato: null, diasMercado: null, soloPromium: false, areaMin: null, areaMax: null, estadoInmueble: null, pisoMin: null, ocultarDestacados: false }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ orden: "destacados", antiguedad: null, estrato: null, diasMercado: null, soloPromium: false, areaMin: null, areaMax: null, estadoInmueble: null, pisoMin: null, ocultarDestacados: false }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1441,10 +1464,26 @@ export function MapFilterBar({
         }}
       >
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }}>Filtros</span>
+          <span style={{ fontSize: 16, fontWeight: 700, color: C.ink }} data-i18n-skip>{sortFiltersLabel(lang)}</span>
           <button onClick={() => setMobileOpen(false)} aria-label="Cerrar" style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, minWidth: 44, minHeight: 44, display: "flex", alignItems: "center", justifyContent: "center" }}>
             <X size={20} />
           </button>
+        </div>
+
+        {/* Ordenar por — primera opción de la hoja */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelSm} data-i18n-skip>{lang === "en" ? "Sort by" : "Ordenar por"}</span>
+          <select
+            data-testid="orden-select-mobile"
+            data-i18n-skip
+            value={filters.orden}
+            onChange={(e) => onFiltersChange({ orden: e.target.value as SortKey })}
+            style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${filters.orden !== "destacados" ? C.teal : C.border}`, borderRadius: 8, minHeight: 44, padding: "8px 10px", fontSize: 16, color: C.ink, background: "#fff", cursor: "pointer" }}
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
+            ))}
+          </select>
         </div>
 
         {/* Segmento */}
@@ -1866,9 +1905,23 @@ export function MapFilterBar({
         return (
           <PanelShell innerRef={dropdownRef} style={wrapStyle} onDone={close} en={lang === "en"}>
             <div style={{ ...panelBase, minWidth: 300 }}>
-              <span style={{ ...labelSm, fontSize: 13, fontWeight: 700, marginBottom: 16 }}>
-                Filtros
+              <span style={{ ...labelSm, fontSize: 13, fontWeight: 700, marginBottom: 16 }} data-i18n-skip>
+                {sortFiltersLabel(lang)}
               </span>
+
+              {/* Ordenar por */}
+              <span style={labelSm} data-i18n-skip>{lang === "en" ? "Sort by" : "Ordenar por"}</span>
+              <select
+                data-testid="orden-select"
+                data-i18n-skip
+                value={filters.orden}
+                onChange={(e) => onFiltersChange({ orden: e.target.value as SortKey })}
+                style={{ width: "100%", boxSizing: "border-box", border: `1px solid ${filters.orden !== "destacados" ? C.teal : C.border}`, borderRadius: 8, height: 34, padding: "0 10px", fontSize: 12, color: C.ink, background: C.white, cursor: "pointer", marginBottom: 16 }}
+              >
+                {SORT_OPTIONS.map((o) => (
+                  <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
+                ))}
+              </select>
 
               {/* Área */}
               <span style={labelSm}>Área {areaUnitLabel}</span>
@@ -2101,7 +2154,7 @@ export function MapFilterBar({
                 }}
               >
                 <SlidersHorizontal size={13} />
-                Filtros
+                <span data-i18n-skip>{sortFiltersLabel(lang)}</span>
                 {activeCount > 0 && (
                   <span style={{
                     background: "#fff", color: C.teal,
