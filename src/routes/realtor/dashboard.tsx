@@ -907,8 +907,8 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
           </button>
         </div>
 
-        <div className="grid gap-5 overflow-y-auto px-5 py-5">
-          <FieldGroup title="Datos del aviso">
+        <div className="grid gap-5 overflow-y-auto px-5 py-5 sm:grid-cols-2">
+          <FieldGroup title="Datos del aviso" cols={2}>
             <Field label="Título del aviso" className="sm:col-span-2">
               <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={inputCls} placeholder="Apartamento en El Poblado con balcón" />
             </Field>
@@ -949,7 +949,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             </Field>
           </FieldGroup>
 
-          <FieldGroup title="Ubicación">
+          <FieldGroup title="Ubicación" className="sm:col-span-2">
             <Field label="Nombre del edificio / unidad">
               <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={inputCls} placeholder="Torre Alción" />
             </Field>
@@ -958,7 +958,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             </Field>
           </FieldGroup>
 
-          <div>
+          <div className="sm:col-span-2">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amenidades</h4>
             <div className="flex flex-wrap gap-2">
               {EDITOR_AMENIDADES.map((a) => {
@@ -985,7 +985,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} min-h-24 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
           </Field>
 
-          <div>
+          <div className="sm:col-span-2">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Agregar fotos {fotos.length > 0 && <span className="text-foreground">({fotos.length} seleccionadas)</span>}
             </h4>
@@ -1019,11 +1019,11 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
   );
 }
 
-function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function FieldGroup({ title, className = "", cols = 3, children }: { title: string; className?: string; cols?: 2 | 3; children: React.ReactNode }) {
   return (
-    <div>
+    <div className={className}>
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
+      <div className={`grid grid-cols-2 gap-3 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{children}</div>
     </div>
   );
 }
