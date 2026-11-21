@@ -337,6 +337,8 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
         logger.error("realtor_slot PAGO SIN SLOT pago_ref=%s agent=%s zona=%s/%s: %s",
                      pago_ref, agent_id, zona_nivel, zona_codigo, e)
         raise HTTPException(status_code=409, detail=str(e))
+    from api.utils import ghl_client
+    await ghl_client.sync_agent_safe(agent_id)
 
 
 _HANDLERS = {

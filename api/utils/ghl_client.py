@@ -984,7 +984,8 @@ async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
         contact_id = await upsert_contact(
             email=campos.get("email"), nombre=campos.get("nombre"),
             phone=campos.get("telefono"),
-            tags=["agent", f"agent-{campos.get('estado') or 'pending'}"],
+            tags=["agent", f"agent-{campos.get('estado') or 'pending'}",
+                  *(campos.get("tags_extra") or [])],
         )
     except Exception as e:
         logger.error("push_agent_to_ghl(%s) falló: %s", agent_id, e)
@@ -999,7 +1000,8 @@ async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
 
 
 _AGENT_SELECT = """
-    SELECT nombre, email, telefono, estado::text AS estado, motivo_estado, foto_url
+    SELECT nombre, email, telefono, estado::text AS estado, motivo_estado, foto_url,
+           es_realtor_casa
     FROM public.agent WHERE id = $1
 """
 
@@ -1015,7 +1017,52 @@ async def sync_agent(agent_id: str) -> Optional[str]:
     row = await pool.fetchrow(_AGENT_SELECT, agent_id)
     if row is None:
         return None
-    return await push_agent_to_ghl(agent_id, dict(row))
+    campos = dict(row)
+    # Tags de Realtor Preferido: zonas con slot activo + realtor casa.
+    extra = []
+    slots = await pool.fetch(
+        "SELECT zona_nivel, zona_codigo FROM public.realtor_preferido_slot "
+        "WHERE agent_id = $1 AND estado = 'activo'", agent_id)
+    if slots:
+        extra.append("realtor-preferido")
+        extra += [f"zona-{x['zona_nivel']}-{x['zona_codigo']}" for x in slots]
+    if campos.pop("es_realtor_casa", False):
+        extra.append("realtor-casa")
+    campos["tags_extra"] = extra
+    return await push_agent_to_ghl(agent_id, campos)
+
+
+async def sync_agent_safe(agent_id) -> None:
+    """sync_agent que nunca levanta (para call sites que no deben fallar)."""
+    try:
+        await sync_agent(str(agent_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("sync_agent(%s) falló", agent_id)
+
+
+async def sync_owner_intake(intake_id: str) -> Optional[str]:
+    """Owner con intake -> Contact (tags owner, owner-intake-<estado>). Best-effort."""
+    if not is_configured():
+        return None
+    try:
+        pool = get_pool()
+        row = await pool.fetchrow(
+            "SELECT i.estado::text AS estado, o.email, o.nombre, o.telefono "
+            "FROM public.intake i JOIN public.owner o ON o.id = i.owner_id WHERE i.id = $1", intake_id)
+        if row is None:
+            return None
+        contact_id = await upsert_contact(
+            email=row["email"], nombre=row["nombre"], phone=row["telefono"],
+            tags=["owner", f"owner-intake-{row['estado']}"])
+        await _record_sync_result("owner_intake", str(intake_id), contact_id, "synced", None)
+        return contact_id
+    except Exception as e:  # noqa: BLE001
+        logger.error("sync_owner_intake(%s) falló: %s", intake_id, e)
+        try:
+            await _record_sync_result("owner_intake", str(intake_id), "", "failed", str(e))
+        except Exception:  # noqa: BLE001
+            pass
+        return None
 
 
 # ── Visita (solicitud de cita a un listing) → Appointment / Calendar ────────

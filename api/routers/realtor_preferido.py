@@ -18,6 +18,7 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
 from api.routers.admin import require_admin
+from api.utils import ghl_client
 from api.services import realtor_preferido_service as svc
 
 router = APIRouter()
@@ -108,9 +109,11 @@ async def confirmar_simulado(body: CheckoutIn, user: dict = Depends(get_current_
         raise HTTPException(status_code=403, detail="Confirmación simulada deshabilitada")
     agent_id = await _agente_activo(user, pool)
     try:
-        return await svc.procesar_pago_slot(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses, "simulado")
+        r = await svc.procesar_pago_slot(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses, "simulado")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await ghl_client.sync_agent_safe(agent_id)
+    return r
 
 
 class AsignarIn(BaseModel):
@@ -127,10 +130,12 @@ async def admin_asignar(body: AsignarIn, admin: dict = Depends(require_admin), p
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await svc.validar_zona(conn, body.zona_nivel, body.zona_codigo)
-                return await svc.asignar_slot(conn, body.agent_id, body.zona_nivel, body.zona_codigo,
-                                              body.tipo, body.meses, "admin")
+                r = await svc.asignar_slot(conn, body.agent_id, body.zona_nivel, body.zona_codigo,
+                                           body.tipo, body.meses, "admin")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    await ghl_client.sync_agent_safe(body.agent_id)
+    return r
 
 
 @router.delete("/admin/slot/{slot_id}")
@@ -212,4 +217,5 @@ async def admin_casa(body: CasaIn, admin: dict = Depends(require_admin), pool=De
     r = await pool.execute("UPDATE agent SET es_realtor_casa = $1 WHERE id = $2::uuid", body.es_realtor_casa, body.agent_id)
     if r.endswith(" 0"):
         raise HTTPException(status_code=404, detail="Agente no encontrado")
+    await ghl_client.sync_agent_safe(body.agent_id)
     return {"ok": True}

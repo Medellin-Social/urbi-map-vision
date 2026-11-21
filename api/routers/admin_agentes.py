@@ -5,6 +5,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
+from api.utils import ghl_client
 from api.limiter import limiter
 from api.routers.admin import _audit, _verify_admin_password, require_admin
 from api.services.agent_service import (
@@ -59,6 +60,7 @@ async def aprobar(request: Request, agent_id: str, req: AprobarRequest = Body(..
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "aprobar_agente", "agent", agent_id, None, request)
+    await ghl_client.sync_agent_safe(agent_id)
     return {"id": agent_id, "estado": "activo"}
 
 

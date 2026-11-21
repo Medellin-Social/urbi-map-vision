@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 
 from api.db import get_pool
+from api.utils import ghl_client
 from api.dependencies import get_current_user
 from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
@@ -117,6 +118,9 @@ async def crear_intake_endpoint(
         import logging
         logging.getLogger(__name__).exception("intake %s: auto-asignación falló", intake["id"])
 
+    await ghl_client.sync_owner_intake(intake["id"])  # best-effort: no levanta
+    if agent_id:
+        await ghl_client.sync_agent_safe(agent_id)
     return {"id": intake["id"], "estado": estado, "agent_id": agent_id}
 
 
