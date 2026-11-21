@@ -21,7 +21,6 @@ from api.utils.pii import mask_email
 from html import escape as _html_escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 _SMTP_HOST  = os.getenv("SMTP_HOST", "smtp.gmail.com")
 _SMTP_PORT  = int(os.getenv("SMTP_PORT", "587"))
@@ -172,7 +171,6 @@ async def notify_agente_aprobado(email: str, nombre: str, dashboard_url: str) ->
 
 
 async def send_verify_email(to: str, nombre: str, verify_url: str) -> None:
-    nombre_h = esc(nombre)
     verify_url_h = safe_url(verify_url)
     nombre_display = esc(nombre or to)
     html = _wrap(f"""
@@ -193,7 +191,6 @@ async def send_verify_email(to: str, nombre: str, verify_url: str) -> None:
 
 
 async def send_reset_password(to: str, nombre: str, reset_url: str) -> None:
-    nombre_h = esc(nombre)
     reset_url_h = safe_url(reset_url)
     nombre_display = esc(nombre or to)
     html = _wrap(f"""

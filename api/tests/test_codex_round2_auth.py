@@ -141,7 +141,6 @@ async def _google(client):
 
 
 async def test_google_requires_sub_in_the_verified_token(monkeypatch):
-    import httpx
     from api.routers import auth as auth_mod
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
 

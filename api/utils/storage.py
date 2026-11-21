@@ -21,13 +21,11 @@ so the feature doesn't break in dev without credentials.
 from __future__ import annotations
 
 import asyncio
-import mimetypes
 import os
 import uuid
-from pathlib import PurePosixPath
 
 import boto3
-from botocore.exceptions import BotoCoreError, ClientError
+from botocore.exceptions import ClientError
 
 # Acepta los nombres S3_* (originales) y los AWS_* que usa el .env de R2.
 _BUCKET       = os.getenv("S3_BUCKET")       or os.getenv("AWS_BUCKET", "")

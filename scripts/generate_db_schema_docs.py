@@ -6,7 +6,6 @@ known local<->prod schema drift. Run against local; re-check the GROUPS dict
 below if new tables were added and don't fall into an existing domain.
 """
 import os
-import re
 from datetime import date
 import psycopg2
 

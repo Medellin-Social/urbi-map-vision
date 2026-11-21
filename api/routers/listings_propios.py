@@ -14,7 +14,7 @@ import uuid
 from types import SimpleNamespace
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from api.limiter import limiter
 from pydantic import BaseModel, Field
 

@@ -1,6 +1,5 @@
 """Link checker unit tests. ALL HTTP is mocked with respx (no network); the DB layer is an in-memory fake."""
 import asyncio
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -8,7 +7,6 @@ import pytest
 import respx
 
 from scraping.link_checker import runner, store
-from scraping.link_checker.classify import Fetch, classify
 from scraping.link_checker.config import Markers, Settings
 from scraping.link_checker.fetcher import LinkFetcher
 from scraping.link_checker.state import next_state

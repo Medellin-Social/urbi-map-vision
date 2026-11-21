@@ -13,7 +13,6 @@ import json
 import requests
 from pathlib import Path
 from shapely.geometry import shape, mapping
-from shapely.ops import unary_union
 
 HEADERS = {"User-Agent": "urbi-map-vision/1.0 (educational/research)"}
 OUT_DIR = Path(__file__).parent.parent / "public" / "data"

@@ -5,7 +5,7 @@ from typing import Optional
 
 import bcrypt
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 import jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator

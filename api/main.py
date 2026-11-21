@@ -271,11 +271,3 @@ if _ADMIN_DIST.exists():
         return FileResponse(str(_ADMIN_DIST / "index.html"))
 
 
-@app.get("/health", tags=["meta"])
-async def health():
-    try:
-        pool = get_pool()
-        db_ok = pool is not None
-    except RuntimeError:
-        db_ok = False
-    return {"status": "ok", "version": "1.0.0", "db": db_ok}

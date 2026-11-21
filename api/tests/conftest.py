@@ -1,6 +1,5 @@
 """Shared fixtures for API tests. Uses httpx.AsyncClient against the real FastAPI app."""
 import os
-import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 

@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from api.db import get_pool
-from api.dependencies import get_current_user, get_optional_user
+from api.dependencies import get_current_user
 from api.utils import ghl_client
 from api.utils.pii import mask_email
 
