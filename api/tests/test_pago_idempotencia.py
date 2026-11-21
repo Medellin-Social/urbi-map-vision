@@ -26,3 +26,10 @@ async def test_asignar_zona_toma_advisory_lock_antes_de_chequear(monkeypatch):
     with pytest.raises(z.ZonaOcupadaError):
         await z.asignar_zona(conn, "x", "barrio", "5")
     assert "pg_advisory_xact_lock" in calls[0] and calls[1] == "agency"
+
+
+def test_ghl_urls_inseguras_se_descartan():
+    ev = g._evento_payload_to_row({"external_url": "javascript:alert(1)", "photo_url": "https://x.com/a.jpg", "event_title": "t"})
+    assert "url_externo" not in ev and ev["foto_url"] == "https://x.com/a.jpg"
+    tn = g._tienda_payload_to_row({"website": "data:text/html,<script>", "name": "n"})
+    assert "website" not in tn and tn["nombre"] == "n"
