@@ -1026,6 +1026,30 @@ async def sync_agent(agent_id: str) -> Optional[str]:
 # con Talal. Sin contrato NO se arma mapeo de campos (a diferencia de evento/
 # deal/referidor, que sí tenían mapeo propuesto). Ver §7 Visita del contrato.
 
+async def push_lead_servicio_to_ghl(lead_id, campos: dict, label: str) -> Optional[str]:
+    """leads_servicio ("Más información": realtor de la casa / property manager /
+    administración) -> Contact (tag servicio-<tipo>) + nota + oportunidad en el
+    pipeline "visitas" (leads de clientes). Best-effort: no levanta."""
+    if not is_configured():
+        return None
+    try:
+        tipo = campos.get("tipo") or "servicio"
+        contact_id = await upsert_contact(
+            email=campos.get("email"), nombre=campos.get("nombre"),
+            phone=campos.get("telefono"), tags=["mas-informacion", f"servicio-{tipo.replace('_', '-')}"],
+        )
+        await add_contact_note(contact_id, (
+            f"Más información #{lead_id}\nNecesita: {label}\nBarrio: {campos.get('barrio')}\n"
+            f"Anuncio: {campos.get('listing_url')}\nMensaje: {campos.get('mensaje')}"
+        ))
+        await upsert_opportunity(contact_id, "visitas", f"{label}: {campos.get('nombre')}")
+        return contact_id
+    except Exception as e:
+        logger.error("push_lead_servicio_to_ghl(%s) falló: %s", lead_id, e)
+        await _record_push_failure("lead_servicio", lead_id, str(e))
+        return None
+
+
 async def push_negocio_lead_to_ghl(lead_id, campos: dict) -> Optional[str]:
     """leads_negocio -> Contact (tag negocio-local) + nota + oportunidad en
     pipeline "Local Businesses". Best-effort: no levanta."""

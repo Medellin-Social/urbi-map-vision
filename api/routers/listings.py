@@ -129,7 +129,8 @@ _AMENIDADES_VARIANTS: dict[str, list[str]] = {
 #   preferred = slot de PAGO activo y vigente en realtor_preferido_slot
 #   certified = agent.certificado
 #   casa      = agent.es_realtor_casa (realtor de la casa, relleno gratis)
-#   member    = nivel base: ni certified ni preferred
+#   member    = Agente registrado: registro pagado ($25, Programa de agentes) y
+#               ni certified ni preferred
 AGENTE_TIPOS = ("member", "certified", "preferred", "casa")
 
 
@@ -141,12 +142,36 @@ def _agente_tipos_sql(a: str = "a") -> str:
     cert = f"COALESCE({a}.certificado, false)"
     return (
         f"CASE WHEN {a}.id IS NULL THEN NULL ELSE array_remove(ARRAY["
-        f"CASE WHEN NOT {cert} AND NOT {pref} THEN 'member' END, "
+        f"CASE WHEN NOT {cert} AND NOT {pref} AND {a}.registro_pagado_at IS NOT NULL THEN 'member' END, "
         f"CASE WHEN {cert} THEN 'certified' END, "
         f"CASE WHEN {pref} THEN 'preferred' END, "
         f"CASE WHEN COALESCE({a}.es_realtor_casa, false) THEN 'casa' END"
         f"]::text[], NULL) END"
     )
+
+
+def _preferente_zonas_sql(a: str = "a") -> str:
+    """JSON [{nivel, nombre}] de los cupos PAGADOS vigentes de Realtor Preferido del
+    agente `a` -> etiqueta "Agente preferente de barrio · Laureles". Los cupos 'gratis'
+    (realtor de la casa) no son la distinción de pago y no aparecen aquí."""
+    return (
+        f"(SELECT COALESCE(json_agg(json_build_object('nivel', _pz.zona_nivel, 'nombre', "
+        f"CASE _pz.zona_nivel WHEN 'barrio' THEN (SELECT _b.nombre FROM raw.barrios _b "
+        f"WHERE _b.id::text = _pz.zona_codigo) ELSE (SELECT _b.comuna FROM raw.barrios _b "
+        f"JOIN analytics.barrios_cd _bc ON _bc.barrio_id = _b.id WHERE _bc.cd_comuna::text = _pz.zona_codigo "
+        f"LIMIT 1) END) ORDER BY _pz.zona_nivel DESC, _pz.zona_codigo), '[]'::json)::text "
+        f"FROM realtor_preferido_slot _pz WHERE _pz.agent_id = {a}.id AND _pz.tipo = 'pago' "
+        f"AND _pz.estado = 'activo' AND (_pz.fecha_fin IS NULL OR _pz.fecha_fin >= CURRENT_DATE))"
+    )
+
+
+def _parse_preferente(v) -> list[dict]:
+    if not v:
+        return []
+    try:
+        return [z for z in (json.loads(v) if isinstance(v, str) else v) if z.get("nombre")]
+    except (ValueError, TypeError):
+        return []
 
 
 def _norm_agente_tipos(tipos: Optional[list[str]]) -> Optional[list[str]]:
@@ -1624,6 +1649,13 @@ class AgenteDirectorio(BaseModel):
     rating_promedio: Optional[float] = None  # None = sin reseñas (nunca 0 falso)
     n_resenas: int = 0
     tipos: list[str] = []  # member|certified|preferred|casa — varios a la vez, calculados en vivo
+    preferente: list[dict] = []  # [{nivel, nombre}] cupos pagados de Realtor Preferido
+
+
+def _agente_directorio(r) -> "AgenteDirectorio":
+    d = dict(r)
+    d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
+    return AgenteDirectorio(**d)
 
 
 # zonas = nombres de comuna/barrio con sponsorship VIGENTE (fecha activa hoy) del
@@ -1672,7 +1704,7 @@ SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
        COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
-       __AGENTE_TIPOS__ AS tipos
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
 FROM agent a
 LEFT JOIN sp  ON sp.agent_id = a.id
 LEFT JOIN rev ON rev.agent_id = a.id
@@ -1681,11 +1713,14 @@ LEFT JOIN LATERAL (
     FROM agency_member am2 JOIN agency ag ON ag.id = am2.agency_id
     WHERE am2.agent_id = a.id LIMIT 1
 ) agcy ON true
-WHERE a.estado = 'activo'
+-- Programa de agentes: el directorio solo lista agentes registrados (registro pagado)
+-- o realtors de la casa.
+WHERE a.estado = 'activo' AND (a.registro_pagado_at IS NOT NULL OR a.es_realtor_casa)
 GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY a.nombre
-""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE)
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE) \
+   .replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
 @router.get("/agentes", response_model=list[AgenteDirectorio])
@@ -1699,7 +1734,7 @@ async def get_agentes_directorio(
     filtro = _norm_agente_tipos(tipo)
     pool = get_pool()
     rows = await pool.fetch(_AGENTES_DIRECTORIO_SQL)
-    out = [AgenteDirectorio(**dict(r)) for r in rows]
+    out = [_agente_directorio(r) for r in rows]
     if filtro:
         out = [a for a in out if set(a.tipos) & set(filtro)]
     return out
@@ -1779,6 +1814,8 @@ class AgentePerfil(BaseModel):
     precio_max: Optional[float] = None
     resenas: list[AgentePerfilResena] = []
     tipos: list[str] = []  # member|certified|preferred|casa — varios a la vez, calculados en vivo
+    preferente: list[dict] = []  # [{nivel, nombre}] cupos pagados de Realtor Preferido
+    representados: list[dict] = []  # anuncios importados con representación aprobada y cubierta
 
 
 _AGENTE_PERFIL_SQL = """
@@ -1797,7 +1834,7 @@ SELECT a.id::text, a.slug, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.nombre, a.fo
        (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM propiedad_evento pe
         WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
           AND pe.fecha > CURRENT_DATE - INTERVAL '12 months') AS vendidas_12m,
-       __AGENTE_TIPOS__ AS tipos
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
 FROM agent a
 LEFT JOIN LATERAL (
     SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada, ag.logo_url AS agencia_logo
@@ -1832,7 +1869,21 @@ LEFT JOIN LATERAL (
       AND v.created_at < NOW() - INTERVAL '48 hours'
 ) resp ON true
 WHERE a.id = $1 AND a.estado = 'activo'
-""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
+
+# Anuncios importados que el agente representa (Programa de agentes): solo con
+# representación APROBADA y cobertura pagada/incluida — nunca un perfil inferido.
+_AGENTE_REPRESENTADOS_SQL = """
+SELECT ('x'||substr(md5(l.url),1,8))::bit(32)::int AS map_id, l.url, l.precio_cop::float8 AS precio,
+       l.tipo_operacion AS operacion, l.tipo_inmueble, l.area_m2::float8 AS area_m2,
+       NULLIF(l.habitaciones, -1) AS habitaciones, b.nombre AS barrio, l.fotos[1] AS foto_portada
+FROM listing_representacion r
+JOIN staging.stg_listings_unificado l ON l.url = r.listing_url
+LEFT JOIN raw.barrios b ON b.id = l.barrio_id
+WHERE r.agent_id = $1::uuid AND r.estado = 'aprobado' AND r.cobertura <> 'ninguna'
+ORDER BY r.updated_at DESC
+LIMIT 60
+"""
 
 _AGENTE_PERFIL_LISTINGS_SQL = """
 SELECT l.id::text, ('x'||substr(md5(l.id::text),1,8))::bit(32)::int AS map_id,
@@ -1889,6 +1940,11 @@ async def get_agente_perfil(request: Request, agent_id: str):
     listings = await pool.fetch(_AGENTE_PERFIL_LISTINGS_SQL, real_id)
     zonas = await pool.fetch(_AGENTE_PERFIL_ZONAS_SQL, real_id)
     resenas = await pool.fetch(_AGENTE_PERFIL_RESENAS_SQL, real_id)
+    try:
+        representados = [dict(r) for r in await pool.fetch(_AGENTE_REPRESENTADOS_SQL, real_id)]
+    except Exception:
+        logger.exception("representados de %s falló", real_id)
+        representados = []
 
     activos, cierres, precios = [], [], []
     for r in listings:
@@ -1918,6 +1974,8 @@ async def get_agente_perfil(request: Request, agent_id: str):
         anios_experiencia=base["anios_experiencia"],
         idiomas=list(base["idiomas"] or []), especialidades=list(base["especialidades"] or []),
         tipos=list(base["tipos"] or []),
+        preferente=_parse_preferente(base["preferente_json"]),
+        representados=representados,
         licencias=licencias or [],
         telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
         agencia_verificada=base["agencia_verificada"], agencia_logo=base["agencia_logo"],
@@ -2039,9 +2097,10 @@ SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
        COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
        rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
-       __AGENTE_TIPOS__ AS tipos
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
 FROM otros o
 JOIN agent a ON a.id = o.agent_id AND a.estado = 'activo'
+     AND (a.registro_pagado_at IS NOT NULL OR a.es_realtor_casa)
 LEFT JOIN sp  ON sp.agent_id = a.id
 LEFT JOIN rev ON rev.agent_id = a.id
 LEFT JOIN LATERAL (
@@ -2053,7 +2112,8 @@ GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY rev.rating_promedio DESC NULLS LAST, a.nombre
 LIMIT 6
-""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE)
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__ZONAS_AGENTE_CTE__", _ZONAS_AGENTE_CTE) \
+   .replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
 @router.get("/agentes/{agent_id}/similares", response_model=list[AgenteDirectorio])
@@ -2065,7 +2125,7 @@ async def get_agentes_similares(request: Request, agent_id: str):
     if not real_id:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
     rows = await pool.fetch(_AGENTES_SIMILARES_SQL, real_id)
-    return [AgenteDirectorio(**dict(r)) for r in rows]
+    return [_agente_directorio(r) for r in rows]
 
 
 @router.get("/{listing_id}", response_model=ListingDetail)
@@ -2107,9 +2167,36 @@ class ListingAgente(BaseModel):
     zona_nivel: str  # 'barrio' | 'comuna'
 
 
+class ListingRepresentante(BaseModel):
+    id: str
+    slug: Optional[str] = None
+    nombre: str
+    telefono: str
+    foto_url: Optional[str] = None
+    agencia_nombre: Optional[str] = None
+    tipos: list[str] = []
+    preferente: list[dict] = []
+
+
 class ListingAgentes(BaseModel):
     comuna: Optional[ListingAgente] = None
     barrio: Optional[ListingAgente] = None
+    # Programa de agentes: agente registrado que representa ESTE anuncio (representación
+    # aprobada + cobertura). None = el anuncio no tiene agente registrado -> aviso.
+    representante: Optional[ListingRepresentante] = None
+
+
+_LISTING_REPRESENTANTE_SQL = """
+SELECT a.id::text, a.slug, a.nombre, a.telefono, a.foto_url,
+       (SELECT ag.nombre FROM agency_member am JOIN agency ag ON ag.id = am.agency_id
+        WHERE am.agent_id = a.id LIMIT 1) AS agencia_nombre,
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
+FROM staging.stg_listings_unificado l
+JOIN listing_representacion r ON r.listing_url = l.url AND r.estado = 'aprobado' AND r.cobertura <> 'ninguna'
+JOIN agent a ON a.id = r.agent_id AND a.estado = 'activo' AND a.registro_pagado_at IS NOT NULL
+WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
+LIMIT 1
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
 _LISTING_AGENTE_SQL = """
@@ -2145,6 +2232,16 @@ async def get_listing_agente(request: Request, listing_id: int):
     pool = get_pool()
     rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     out = ListingAgentes()
+    try:
+        rep = await pool.fetchrow(_LISTING_REPRESENTANTE_SQL, listing_id)
+    except Exception:
+        logger.exception("representante de listing %s falló", listing_id)
+        rep = None
+    if rep:
+        d = dict(rep)
+        d["tipos"] = list(d["tipos"] or [])
+        d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
+        out.representante = ListingRepresentante(**d)
     for r in rows:
         ag = ListingAgente(**dict(r))
         if ag.zona_nivel == "comuna":
