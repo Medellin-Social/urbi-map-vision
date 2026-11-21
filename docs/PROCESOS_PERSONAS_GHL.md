@@ -127,3 +127,6 @@ Construye: workflows de §2, pipelines extra, custom fields, webhook saliente co
 - Marcar realtor casa en prod = acción admin (no migración); hacerlo tras verificar en DEV.
 - Corregir §1.1–§1.4 en código → DEV → verificar → prod.
 - Configurar en Railway: `GHL_SLOT_CHECKOUT_URL`, `GHL_WEBHOOK_SECRET`.
+
+
+**Ruteo de visitas (2026-11-21, verificado en DEV):** sin agente de zona, el drawer muestra el realtor que toca en la rotación (`/realtor-preferido/siguiente`) con un checkbox «¿quieres que te contacte?». Si el comprador acepta, `POST /visitas` lleva `agent_id`; el backend lo honra solo si el agente está activo y con slot vigente. Orden: listing propio → patrocinio de agencia → realtor preferido aceptado.
