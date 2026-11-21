@@ -34,10 +34,12 @@ def _validar_zona(zona_nivel: str) -> None:
 
 async def nivel_zona(conn, zona_nivel: str, zona_codigo: str) -> str:
     try:
-        n = await conn.fetchval(
-            "SELECT nivel FROM analytics.zonas_nivel_precio WHERE zona_nivel = $1 AND zona_codigo = $2",
-            zona_nivel, zona_codigo,
-        )
+        # savepoint: si la tabla no existe, no aborta la transacción del caller
+        async with conn.transaction():
+            n = await conn.fetchval(
+                "SELECT nivel FROM analytics.zonas_nivel_precio WHERE zona_nivel = $1 AND zona_codigo = $2",
+                zona_nivel, zona_codigo,
+            )
     except Exception:  # dbt aún no corrió en este env → nivel por defecto
         return NIVEL_DEFAULT
     return n or NIVEL_DEFAULT

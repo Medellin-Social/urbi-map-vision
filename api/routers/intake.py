@@ -213,7 +213,9 @@ async def aceptar_intake_endpoint(
             agent.id,
         )
         if agency_id is None:
-            raise HTTPException(status_code=409, detail="El agente no pertenece a ninguna agency")
+            # Realtor independiente: se le crea su agency personal (owner).
+            async with conn.transaction():
+                agency_id = await get_or_create_agency(conn, agent.id)
 
     if row["listing_id"]:
         # Flujo "publica primero" (0053): el owner ya publicó y el intake nació

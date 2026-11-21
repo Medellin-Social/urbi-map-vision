@@ -131,6 +131,26 @@ async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
         zona = await resolver_zona(intake.geom, pool)
         barrio_id = zona["barrio_id"]
 
+    # 1b. Realtor Preferido (slot activo en la zona): rotación round-robin.
+    try:
+        from api.services.realtor_preferido_service import siguiente_realtor
+        async with pool.acquire() as conn:
+            elegido = await siguiente_realtor(conn, "barrio", str(barrio_id))
+            if elegido:
+                await conn.execute(
+                    "UPDATE intake SET agent_id = $1::uuid, estado = 'asignado', updated_at = NOW() "
+                    "WHERE id = $2 AND estado = 'nuevo'",
+                    elegido["id"], intake.id,
+                )
+        if elegido:
+            intake.agent_id = elegido["id"]
+            intake.estado = "asignado"
+            await _notificar_lead_asignado(elegido["id"], intake.id, pool)
+            return {"resultado": "asignado", "estado": "asignado",
+                    "agent_id": elegido["id"], "via": "realtor_preferido"}
+    except Exception:
+        logger.exception("Ruteo por slot falló; sigue a patrocinadores/pool")
+
     # 2. Patrocinadores vigentes (ordenados por antigüedad; [0] = más antiguo).
     agencies = await patrocinadores_vigentes("barrio", barrio_id, pool)
     reparto = len(agencies) > 1  # informativo; TODO reparto: round-robin/tier/carga

@@ -32,6 +32,8 @@ from api.utils.pii import mask_email
 
 logger = logging.getLogger(__name__)
 
+from api.services.zona_sponsor_service import get_or_create_agency
+
 router = APIRouter()
 
 _APP_URL = os.getenv("APP_URL", "https://medellin.social")
@@ -351,6 +353,15 @@ async def crear_listing(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # Realtor (sistema nuevo `agent`): el listing queda a su nombre.
+            nuevo_agent_id = nuevo_agency_id = None
+            if es_agente:
+                nuevo_agent_id = await conn.fetchval(
+                    "SELECT id FROM agent WHERE usuario_id = $1 AND estado = 'activo' LIMIT 1",
+                    current_user["id"],
+                )
+                if nuevo_agent_id:
+                    nuevo_agency_id = await get_or_create_agency(conn, nuevo_agent_id)
             await conn.execute(
                 """
                 INSERT INTO listing (
@@ -366,7 +377,7 @@ async def crear_listing(
                     matricula_inmobiliaria, cedula_catastral, caracteristicas,
                     published_at, created_at, updated_at
                 ) VALUES (
-                    $1, $2, $3, NULL, NULL,
+                    $1, $2, $3, $39, $40,
                     CASE WHEN $34 THEN 'publicado'::listing_estado ELSE 'en_revision'::listing_estado END,
                     $34,
                     ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, FALSE,
@@ -395,6 +406,7 @@ async def crear_listing(
                 (matricula_inmobiliaria or "").strip() or None,  # $36
                 (cedula_catastral or "").strip() or None,        # $37
                 json.dumps(caracteristicas_obj) if caracteristicas_obj else None,  # $38
+                nuevo_agent_id, nuevo_agency_id,  # $39, $40
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
