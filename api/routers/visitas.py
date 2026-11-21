@@ -105,6 +105,8 @@ class VisitaRequest(BaseModel):
     mensaje: Optional[str] = Field(None, max_length=1000)
     # True cuando el inmueble no tiene agente patrocinador de zona → va al buzón interno.
     sin_agente: bool = False
+    # Realtor Preferido que el comprador aceptó (id mostrado por la rotación).
+    agent_id: Optional[str] = Field(None, pattern=r"^[0-9a-fA-F-]{36}$")
     # Calificación del lead (modelo Zillow paso 2) — todos opcionales: el form los
     # pide sin obligar para no frenar la conversión. Literal valida en el boundary.
     intencion: Optional[Literal["vivir", "invertir"]] = None
@@ -164,29 +166,16 @@ async def crear_visita(
         # — sin esto el agent_id quedaba NULL y la visita no le llegaba a nadie.
         if agent_id is None:
             agent_id = await conn.fetchval(_VISITA_ZONA_AGENT_SQL, req.listing_url)
-        # Realtor Preferido (slot pagado): round-robin por barrio, luego comuna.
-        if agent_id is None:
-            try:
-                from api.services.realtor_preferido_service import siguiente_realtor
-                z = await conn.fetchrow(
-                    "SELECT l.barrio_id::text AS barrio, bc.cd_comuna::text AS comuna "
-                    "FROM staging.stg_listings_unificado l "
-                    "LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id "
-                    "WHERE l.url = $1 LIMIT 1", req.listing_url)
-                if z is None:
-                    z = await conn.fetchrow(
-                        "SELECT barrio_id::text AS barrio, NULL::text AS comuna FROM listing "
-                        "WHERE id::text = $1 AND barrio_id IS NOT NULL", req.listing_url)
-                if z:
-                    el = None
-                    if z["barrio"]:
-                        el = await siguiente_realtor(conn, "barrio", z["barrio"])
-                    if el is None and z["comuna"]:
-                        el = await siguiente_realtor(conn, "comuna", z["comuna"])
-                    if el:
-                        agent_id = el["id"]
-            except Exception:
-                log.exception("ruteo visita a realtor preferido falló (url=%s)", req.listing_url)
+        # Realtor Preferido: el comprador aceptó que el realtor mostrado en la página
+        # (rotación de /realtor-preferido/siguiente) lo contacte → el lead va a ese
+        # agente. Solo se honra si tiene un slot activo vigente (no se confía en el cliente).
+        if agent_id is None and req.agent_id:
+            agent_id = await conn.fetchval(
+                "SELECT a.id FROM agent a WHERE a.id = $1::uuid AND a.estado::text = 'activo' "
+                "AND EXISTS (SELECT 1 FROM realtor_preferido_slot s WHERE s.agent_id = a.id "
+                "AND s.estado = 'activo' AND (s.fecha_fin IS NULL OR s.fecha_fin >= CURRENT_DATE))",
+                req.agent_id,
+            )
         row = await conn.fetchrow(
             """
             INSERT INTO visita_solicitud

@@ -1039,9 +1039,19 @@ function CampoSelect({
 }
 
 function ScheduleVisitModal({
-  agente, listingId, listingUrl, onClose,
-}: { agente?: ApiListingAgente | null; listingId?: number | null; listingUrl?: string | null; onClose: () => void }) {
+  agente, listingId, listingUrl, barrioId, onClose,
+}: { agente?: ApiListingAgente | null; listingId?: number | null; listingUrl?: string | null; barrioId?: number | string | null; onClose: () => void }) {
   const { lang } = useLang();
+  // Realtor Preferido (rotación): sin agente de zona, se le ofrece al comprador que
+  // el realtor que toca en la rotación lo contacte. Si acepta, el lead va a él.
+  const [preferido, setPreferido] = useState<{ id: string; nombre: string; foto_url?: string | null; agencia_nombre?: string | null } | null>(null);
+  const [quierePreferido, setQuierePreferido] = useState(false);
+  useEffect(() => {
+    if (agente || barrioId == null) return;
+    apiFetch<{ realtor: { id: string; nombre: string; foto_url?: string | null; agencia_nombre?: string | null } | null }>(
+      API_ENDPOINTS.realtorPreferidoSiguiente("barrio", barrioId),
+    ).then((r) => setPreferido(r.realtor ?? null)).catch(() => {});
+  }, [agente, barrioId]);
   // Slots reales del agente de zona (horario propio menos reservados). Si no hay
   // agente/horario configurado, cae al horario genérico (fallback).
   const [slotMap, setSlotMap] = useState<Record<string, string[]> | null>(null);
@@ -1105,7 +1115,8 @@ function ScheduleVisitModal({
             plazo: plazo || undefined,
             credito: credito || undefined,
             // Sin agente de zona → el backend enruta al buzón interno por email.
-            sin_agente: !agente,
+            sin_agente: !agente && !(preferido && quierePreferido),
+            agent_id: !agente && preferido && quierePreferido ? preferido.id : undefined,
           }),
         });
       }
@@ -1234,6 +1245,15 @@ function ScheduleVisitModal({
               <Clock className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#6E726E]" />
             </div>
           </div>
+
+          {preferido && (
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl p-3" style={{ border: "1px solid #0F8A4F", background: "#E7F4EC" }}>
+              <input type="checkbox" checked={quierePreferido} onChange={(e) => setQuierePreferido(e.target.checked)} className="mt-1 h-4 w-4" />
+              <span className="text-[13px]" style={{ color: "#0A5C36" }}>
+                ¿Quieres que nuestro realtor preferido <strong>{preferido.nombre}</strong>{preferido.agencia_nombre ? ` (${preferido.agencia_nombre})` : ""} te contacte y te ayude a encontrar tu hogar?
+              </span>
+            </label>
+          )}
 
           {/* Contacto del solicitante — para que el agente devuelva la llamada */}
           <div className="grid grid-cols-2 gap-2">
@@ -2161,7 +2181,7 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
           )}
         </AnimatePresence>
         {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
-        {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
+        {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
         {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
       </>
     );
@@ -2304,7 +2324,7 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
         )}
       </AnimatePresence>
       {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
-      {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
+      {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
       {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
     </>
   );

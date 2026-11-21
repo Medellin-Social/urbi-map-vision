@@ -50,6 +50,8 @@ export const API_ENDPOINTS = {
   realtorPerfil: `${API_BASE_URL}/realtor/me`,
   listingSlots: (id: number) => `${API_BASE_URL}/listings/${id}/slots`,
   visitas: `${API_BASE_URL}/visitas`,
+  realtorPreferidoSiguiente: (zonaNivel: string, zonaCodigo: string | number) =>
+    `${API_BASE_URL}/realtor-preferido/siguiente?zona_nivel=${zonaNivel}&zona_codigo=${encodeURIComponent(String(zonaCodigo))}`,
   track: `${API_BASE_URL}/track`,
   trackImpressions: `${API_BASE_URL}/track/impressions`,
 
