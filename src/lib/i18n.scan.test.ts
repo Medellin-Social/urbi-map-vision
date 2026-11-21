@@ -37,7 +37,7 @@ const KNOWN_GAPS = new Set<string>([]);
 // Place names and brand strings: correct as-is in both languages.
 const NAMES = new Set<string>([
   "Doce de Octubre", "La Candelaria", "Itagüí", "La Estrella", "LA ESTRELLA", "Valle de Aburrá",
-  "VALLE DE ABURRÁ", "Medellín — Comunas", "El Colombiano", "Español", "Admin · Medellín Social", "Café",
+  "VALLE DE ABURRÁ", "Medellín — Comunas", "El Colombiano", "Español", "Admin · Medellín Social", "Café", "Torre Alción",
 ]);
 
 function literals(src: string): string[] {

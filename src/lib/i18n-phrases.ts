@@ -2963,4 +2963,18 @@ export const PHRASES: Array<[string, string]> = [
   ["Mi perfil · Medellín Social", "My profile · Medellín Social"],
   ["Tu cuenta en Medellín Social.", "Your Medellín Social account."],
   ["Aún no guardas zonas. Toca ⭐ en un barrio del mapa para empezar tu huella.", "You haven't saved any zones yet. Tap ⭐ on a neighborhood on the map to start your footprint."],
+  // ── Auditoría 2026-11-21: literales nuevos (publicar, dashboard, modal visita) ──
+  ["Así quedará tu aviso", "This is how your listing will look"],
+  ["Cédula catastral", "Cadastral ID"],
+  ["Lo que pregunta todo el que arrienda, antes de llamar.", "What every renter asks before calling."],
+  ["Medidas y distribución", "Dimensions and layout"],
+  ["Se añaden a las existentes; la primera queda como portada.", "They are added to the existing ones; the first one becomes the cover."],
+  ["Señales que mueven la decisión del comprador-inversionista.", "Signals that move the buyer-investor's decision."],
+  ["Sin foto", "No photo"],
+  ["Todo al día.", "All up to date."],
+  ["Tu foto de portada", "Your cover photo"],
+  ["Zonas de interés", "Areas of interest"],
+  ["y sube tu puntaje.", "and raise your score."],
+  ["¿Quieres que nuestro realtor preferido", "Do you want our preferred realtor"],
+  ["te contacte y te ayude a encontrar tu hogar?", "to contact you and help you find your home?"],
 ];
