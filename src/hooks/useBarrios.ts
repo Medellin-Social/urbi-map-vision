@@ -570,6 +570,7 @@ export type ListingsApiFilters = {
   tipo_inmueble?: string[] | null;
   segmento?: "residencial" | "comercial" | "todos" | null;
   ocultar_destacados?: boolean | null;
+  tipo_agente?: string[] | null;
 };
 
 export function useListings(
@@ -606,7 +607,7 @@ export function useListings(
       if (extraFilters?.tipo_inmueble?.length) {
         for (const t of extraFilters.tipo_inmueble) params.append("tipo_inmueble", t);
       }
-      appendSegmentParams(params, { segmento: extraFilters?.segmento, ocultarDestacados: extraFilters?.ocultar_destacados });
+      appendSegmentParams(params, { segmento: extraFilters?.segmento, ocultarDestacados: extraFilters?.ocultar_destacados, tipoAgente: extraFilters?.tipo_agente });
       return apiFetch<ApiListingsResponse>(`${API_ENDPOINTS.allListings}?${params}`);
     },
     enabled: forceEnabled || barrioId != null || cdComuna != null || !!municipioNombre,

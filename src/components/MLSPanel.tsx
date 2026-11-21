@@ -11,6 +11,7 @@ import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { getToken } from "@/lib/apiClient";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
 import { type SharedFilters, type SortKey, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
+import { AgenteTipoBadges } from "@/components/agentes/agenteShared";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
 import { useIsPro, useIsAgente } from "@/components/LockedField";
@@ -345,6 +346,8 @@ function ListingCard({
             ★ Destacado
           </span>
         )}
+        {/* Tipo(s) del agente que publica — en vivo, varios a la vez; nada en scrapeados */}
+        <AgenteTipoBadges tipos={listing.agente_tipos} size="xs" />
         {listing.disponible_actualmente === false && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 border border-border">
             YA NO DISPONIBLE

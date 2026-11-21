@@ -122,7 +122,57 @@ _AMENIDADES_VARIANTS: dict[str, list[str]] = {
 }
 
 
-def _build_amenidades_sql(keys: list[str], base: int = 17) -> tuple[str, list]:
+# ── Tipos de agente (multi, calculados EN VIVO) ───────────────────────────────
+# Un agente puede tener varios tipos a la vez y cambian con el tiempo (pago que
+# vence, certificación), por eso NO se guardan: se derivan en cada query con el
+# mismo criterio que realtor_preferido_service.sincronizar_tier:
+#   preferred = slot de PAGO activo y vigente en realtor_preferido_slot
+#   certified = agent.certificado
+#   casa      = agent.es_realtor_casa (realtor de la casa, relleno gratis)
+#   member    = nivel base: ni certified ni preferred
+AGENTE_TIPOS = ("member", "certified", "preferred", "casa")
+
+
+def _agente_tipos_sql(a: str = "a") -> str:
+    """SQL text[] con los tipos vigentes del agente `a` (NULL si `a` no existe)."""
+    pref = (f"EXISTS (SELECT 1 FROM realtor_preferido_slot _rps WHERE _rps.agent_id = {a}.id "
+            f"AND _rps.tipo = 'pago' AND _rps.estado = 'activo' "
+            f"AND (_rps.fecha_fin IS NULL OR _rps.fecha_fin >= CURRENT_DATE))")
+    cert = f"COALESCE({a}.certificado, false)"
+    return (
+        f"CASE WHEN {a}.id IS NULL THEN NULL ELSE array_remove(ARRAY["
+        f"CASE WHEN NOT {cert} AND NOT {pref} THEN 'member' END, "
+        f"CASE WHEN {cert} THEN 'certified' END, "
+        f"CASE WHEN {pref} THEN 'preferred' END, "
+        f"CASE WHEN COALESCE({a}.es_realtor_casa, false) THEN 'casa' END"
+        f"]::text[], NULL) END"
+    )
+
+
+def _norm_agente_tipos(tipos: Optional[list[str]]) -> Optional[list[str]]:
+    """Valida/normaliza el filtro ?tipo_agente=. None = sin filtro."""
+    if not tipos:
+        return None
+    vals = sorted({t.strip().lower() for t in tipos if t and t.strip()})
+    bad = [t for t in vals if t not in AGENTE_TIPOS]
+    if bad:
+        raise HTTPException(status_code=422, detail=f"tipo_agente inválido: {', '.join(bad)} (use {', '.join(AGENTE_TIPOS)})")
+    return vals or None
+
+
+# Join listing propio → owner (plan) + agente (tipos). LEFT en owner/agente: un
+# listing de agente puede no tener owner y viceversa; sigue siendo 1 fila por listing.
+_LP_JOIN_SELECT = (
+    "SELECT lo.id::text AS lp_url, u.plan AS owner_plan, "
+    + _agente_tipos_sql("a") + " AS agente_tipos\n"
+    "    FROM public.listing lo\n"
+    "    LEFT JOIN public.owner o ON o.id = lo.owner_id\n"
+    "    LEFT JOIN public.usuarios u ON u.id = o.usuario_id\n"
+    "    LEFT JOIN public.agent a ON a.id = lo.agent_id AND a.estado = 'activo'"
+)
+
+
+def _build_amenidades_sql(keys: list[str], base: int = 18) -> tuple[str, list]:
     """Returns (WHERE clauses string, extra positional args). Each key adds one AND EXISTS pair."""
     clauses: list[str] = []
     extra: list = []
@@ -187,6 +237,9 @@ class ListingFull(BaseModel):
     tier: Optional[str] = None
     favoritos_count: Optional[int] = None
     foto_principal: Optional[str] = None
+    # Tipos vigentes del agente que publicó el listing (solo listings propios con
+    # agente; null en scrapeados). Multi y en vivo — ver _agente_tipos_sql.
+    agente_tipos: Optional[list[str]] = None
     # Barrio context — always included (from analytics.barrios_contexto JOIN)
     barrio_score: Optional[float] = None   # ctx.score_corto
     barrio_yield: Optional[float] = None   # ctx.yield_bruto_pct
@@ -390,7 +443,8 @@ SELECT
     -- portada_r2 guardó URLs rotas (host vacío, objeto inexistente). Servir el CDN
     -- original hasta que R2 esté realmente poblado; re-añadir COALESCE(mm.portada_r2,…) ahí.
     l.foto_principal AS foto_principal,
-    l.nombre_edificio
+    l.nombre_edificio,
+    _lp_owner.agente_tipos
 FROM lraw l
 LEFT JOIN raw.barrios b                ON b.id = l.barrio_id
 LEFT JOIN analytics.listings_georef g  ON g.url = l.url
@@ -404,11 +458,8 @@ LEFT JOIN (
     FROM raw.favoritos_listings GROUP BY url
 ) _fav ON _fav.url = l.url
 LEFT JOIN (
-    -- Modelo unificado (migr 0053): staging.url = listing.id::text → owner → usuario.
-    SELECT lo.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listing lo
-    JOIN public.owner o ON o.id = lo.owner_id
-    JOIN public.usuarios u ON u.id = o.usuario_id
+    -- Modelo unificado (migr 0053): staging.url = listing.id::text → owner → usuario (+ agente).
+    __LP_JOIN_SELECT__
 ) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
 WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]   IS NULL OR l.barrio_id = ANY($2))
@@ -435,6 +486,7 @@ WHERE ($1::text    IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($17::boolean IS NOT TRUE OR NOT COALESCE(
         l.tier IN ('agente_premium', 'agencia_premium')
         OR (l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente')), FALSE))
+  AND ($18::text[] IS NULL OR COALESCE(_lp_owner.agente_tipos && $18::text[], FALSE))
   {amenidades_filter}
 ORDER BY
     CASE WHEN $9::boolean IS TRUE THEN 0
@@ -450,7 +502,7 @@ ORDER BY
     -- Orden por PRECIO TOTAL, no precio/m²: un lote enorme (768k/m² pero 40B
     -- totales) no debe aparecer entre los "más baratos".
     l.precio ASC NULLS LAST
-""".replace("__COMERCIAL_RE__", _COMERCIAL_RE)
+""".replace("__COMERCIAL_RE__", _COMERCIAL_RE).replace("__LP_JOIN_SELECT__", _LP_JOIN_SELECT)
 _LISTINGS_SQL_TMPL = _LISTINGS_SQL_TMPL.replace("__LINK_ALIVE__", _LINK_ALIVE_STG)
 _LISTINGS_SQL = _LISTINGS_SQL_TMPL.format(amenidades_filter="")
 
@@ -509,10 +561,7 @@ LEFT JOIN raw.barrios b               ON b.id = l.barrio_id
 LEFT JOIN analytics.listings_georef g ON g.url = l.url
 LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
 LEFT JOIN (
-    SELECT lo.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listing lo
-    JOIN public.owner o ON o.id = lo.owner_id
-    JOIN public.usuarios u ON u.id = o.usuario_id
+    __LP_JOIN_SELECT__
 ) _lp_owner ON _lp_owner.lp_url = l.url AND l.fuente = 'propio'
 WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($2::int[]  IS NULL OR l.barrio_id = ANY($2))
@@ -539,8 +588,9 @@ WHERE ($1::text   IS NULL OR UPPER(b.municipio) = UPPER($1))
   AND ($17::boolean IS NOT TRUE OR NOT COALESCE(
         l.tier IN ('agente_premium', 'agencia_premium')
         OR (l.fuente = 'propio' AND _lp_owner.owner_plan IN ('pro', 'agente')), FALSE))
+  AND ($18::text[] IS NULL OR COALESCE(_lp_owner.agente_tipos && $18::text[], FALSE))
   {amenidades_filter}
-""".replace("__COMERCIAL_RE__", _COMERCIAL_RE)
+""".replace("__COMERCIAL_RE__", _COMERCIAL_RE).replace("__LP_JOIN_SELECT__", _LP_JOIN_SELECT)
 _COUNT_SQL_TMPL = _COUNT_SQL_TMPL.replace("__LINK_ALIVE__", _LINK_ALIVE_STG)
 _COUNT_SQL = _COUNT_SQL_TMPL.format(amenidades_filter="")
 
@@ -734,6 +784,7 @@ async def get_all_listings(
     amenidades: Optional[list[str]] = Query(default=None),
     segmento: Optional[str] = Query(default=None, pattern="^(residencial|comercial|todos)$"),
     ocultar_destacados: bool = Query(default=False),
+    tipo_agente: Optional[list[str]] = Query(default=None, description="member|certified|preferred|casa (OR); solo listings con agente"),
     incluir_inactivos: bool = Query(default=False, description="admin only: include listings retired for a dead link"),
     moneda: str = Query(default="COP", pattern="^(COP|USD)$"),
     limit: int = Query(default=200, ge=1, le=500),
@@ -742,6 +793,7 @@ async def get_all_listings(
 ):
     if estrato_real is not None and estrato_real not in (1, 2, 3, 4, 5, 6):
         raise HTTPException(status_code=422, detail="estrato_real must be 1–6")
+    tipo_agente_arg = _norm_agente_tipos(tipo_agente)
 
     pool = get_pool()
     rate = await get_usd_rate()
@@ -785,7 +837,7 @@ async def get_all_listings(
         return (municipio, barrio_ids, tipo_op, tipo_inmueble_arg,
                 precio_min, precio_max, area_min, habitaciones, only_premium,
                 area_max, banos, cd_comuna, estrato_real, antiguedad, amoblado,
-                seg, ocultar_destacados) + tuple(am_extra)
+                seg, ocultar_destacados, tipo_agente_arg) + tuple(am_extra)
 
     # Unified venta+arriendo path: 2 parallel fetches → balanced results, 1 HTTP round-trip.
     # Only applies when: no tipo_operacion filter, barrio selected, no premium, no personalization, page 0.
@@ -814,7 +866,7 @@ async def get_all_listings(
             municipio is None and barrio_ids is None and cd_comuna is None
             and estrato_real is None and antiguedad is None and not amenidades
             and not only_premium and not perfil_dict and fetch_offset == 0
-            and not ocultar_destacados
+            and not ocultar_destacados and tipo_agente_arg is None
         )
         listings_sql = _lk(_LISTINGS_ALLCITY_SQL, _inc) if allcity_fast else _eff_listings_sql
         total, rows = await asyncio.gather(
@@ -1135,6 +1187,7 @@ class ViewportListing(BaseModel):
     fuente: Optional[str] = None
     fuente_display: Optional[str] = None
     tier: Optional[str] = None
+    agente_tipos: Optional[list[str]] = None  # tipos vigentes del agente (null = sin agente)
     estrato_real: Optional[int] = None
     barrio_id: Optional[int] = None
     barrio_nombre: Optional[str] = None
@@ -1193,10 +1246,7 @@ _VIEWPORT_DM_JOIN = ""
 # panel list: a premium tier, or an own listing whose owner is on a pro/agente plan.
 # Needs alias `l` for the listing and `_lp` for _VIEWPORT_OWNER_JOIN.
 _VIEWPORT_OWNER_JOIN = """LEFT JOIN (
-    SELECT lo.id::text AS lp_url, u.plan AS owner_plan
-    FROM public.listing lo
-    JOIN public.owner o ON o.id = lo.owner_id
-    JOIN public.usuarios u ON u.id = o.usuario_id
+    """ + _LP_JOIN_SELECT + """
 ) _lp ON _lp.lp_url = l.url AND l.fuente = 'propio'"""
 _VIEWPORT_FEATURED_PRED = (
     "(l.tier IN ('agente_premium', 'agencia_premium') "
@@ -1232,6 +1282,7 @@ _VIEWPORT_EXTRA_WHERE = """\
           AND (_pi.raw_data->>'nroPiso')::int >= $22))
   AND ($23::text   IS NULL OR ($23 = 'comercial') = (lower(coalesce(l.tipo_inmueble, '')) ~ '__COMERCIAL_RE__'))
   AND ($24::boolean IS NOT TRUE OR NOT COALESCE((__FEATURED__), FALSE))
+  AND ($25::text[] IS NULL OR COALESCE(_lp.agente_tipos && $25::text[], FALSE))
 """.replace("__COMERCIAL_RE__", _COMERCIAL_RE)
 
 # UI amenity key → substring patterns matched (ILIKE, OR) against the source
@@ -1357,7 +1408,8 @@ SELECT
     b.nombre                     AS barrio_nombre,
     b.municipio                  AS municipio,
     g.estrato_real,
-    (CURRENT_DATE - g.fecha_primera_vez::date)::int AS dias_en_mercado
+    (CURRENT_DATE - g.fecha_primera_vez::date)::int AS dias_en_mercado,
+    _lp.agente_tipos
 FROM lraw l
 LEFT JOIN analytics.listings_georef g  ON g.url = l.url
 LEFT JOIN public.listing_link_health _llh ON _llh.url = l.url
@@ -1403,7 +1455,7 @@ ORDER BY
 _VIEWPORT_POINTS_THIN_SQL = """
 SELECT * FROM (
     SELECT t.*, ROW_NUMBER() OVER (
-        PARTITION BY floor(t.lat / $25::float8), floor(t.lon / $25::float8)
+        PARTITION BY floor(t.lat / $26::float8), floor(t.lon / $26::float8)
         ORDER BY t._prio, t.url) AS _cell_rn
     FROM (""" + _VIEWPORT_POINTS_BODY + """) t
 ) c
@@ -1441,6 +1493,7 @@ async def get_listings_viewport(
     piso_min: Optional[int] = Query(default=None),
     segmento: Optional[str] = Query(default=None, pattern="^(residencial|comercial|todos)$"),
     ocultar_destacados: bool = Query(default=False),
+    tipo_agente: Optional[list[str]] = Query(default=None, description="member|certified|preferred|casa (OR); solo listings con agente"),
     moneda: str = Query(default="COP", pattern="^(COP|USD)$"),
     zona_completa: bool = Query(default=False),
     compact: bool = Query(default=False),
@@ -1478,6 +1531,7 @@ async def get_listings_viewport(
         (dias_mercado or None), (busqueda.strip() if busqueda and busqueda.strip() else None),
         _amenidad_like_patterns(amenidades),
         estado_inmueble, piso_min, seg, ocultar_destacados,
+        _norm_agente_tipos(tipo_agente),
     )
 
     def _vl(r) -> ViewportListing:
@@ -1569,6 +1623,7 @@ class AgenteDirectorio(BaseModel):
     agencia_verificada: bool = False
     rating_promedio: Optional[float] = None  # None = sin reseñas (nunca 0 falso)
     n_resenas: int = 0
+    tipos: list[str] = []  # member|certified|preferred|casa — varios a la vez, calculados en vivo
 
 
 # zonas = nombres de comuna/barrio con sponsorship VIGENTE (fecha activa hoy) del
@@ -1601,7 +1656,8 @@ rev AS (
 SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
        COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
-       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
+       __AGENTE_TIPOS__ AS tipos
 FROM agent a
 LEFT JOIN sp  ON sp.agent_id = a.id
 LEFT JOIN rev ON rev.agent_id = a.id
@@ -1614,16 +1670,24 @@ WHERE a.estado = 'activo'
 GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY a.nombre
-"""
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
 
 
 @router.get("/agentes", response_model=list[AgenteDirectorio])
 @limiter.limit("60/minute")
-async def get_agentes_directorio(request: Request):
-    """Directorio público de agentes activos, para /agentes ('Encuentra un agente')."""
+async def get_agentes_directorio(
+    request: Request,
+    tipo: Optional[list[str]] = Query(default=None, description="member|certified|preferred|casa (OR)"),
+):
+    """Directorio público de agentes activos, para /agentes ('Encuentra un agente').
+    `?tipo=` filtra por tipo de agente (un agente puede tener varios)."""
+    filtro = _norm_agente_tipos(tipo)
     pool = get_pool()
     rows = await pool.fetch(_AGENTES_DIRECTORIO_SQL)
-    return [AgenteDirectorio(**dict(r)) for r in rows]
+    out = [AgenteDirectorio(**dict(r)) for r in rows]
+    if filtro:
+        out = [a for a in out if set(a.tipos) & set(filtro)]
+    return out
 
 
 # ── Perfil público de un agente (tipo Zillow) ─────────────────────────────────
@@ -1672,7 +1736,7 @@ class AgentePerfil(BaseModel):
     foto_url: Optional[str] = None
     bio: Optional[str] = None
     titulo: Optional[str] = None               # rol ("Agente de compra y venta")
-    verificado: bool = False                   # agent.verificado (badge "Agente verificado")
+    verificado: bool = False                   # = agent.certificado (badge "Agente verificado")
     anios_experiencia: Optional[int] = None    # NULL hasta que el agente lo complete
     idiomas: list[str] = []
     especialidades: list[str] = []
@@ -1699,11 +1763,14 @@ class AgentePerfil(BaseModel):
     precio_min: Optional[float] = None
     precio_max: Optional[float] = None
     resenas: list[AgentePerfilResena] = []
+    tipos: list[str] = []  # member|certified|preferred|casa — varios a la vez, calculados en vivo
 
 
 _AGENTE_PERFIL_SQL = """
 SELECT a.id::text, a.slug, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.nombre, a.foto_url,
-       a.bio, a.titulo, COALESCE(a.verificado, false) AS verificado,
+       -- agent.verificado no existe en ninguna migración (500 en /agentes/{id}); el
+       -- flag real de "verificado por el equipo" es agent.certificado (migr 0130).
+       a.bio, a.titulo, COALESCE(a.certificado, false) AS verificado,
        a.anios_experiencia, a.idiomas, a.especialidades, a.licencias,
        a.telefono, a.created_at AS miembro_desde,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
@@ -1714,7 +1781,8 @@ SELECT a.id::text, a.slug, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.nombre, a.fo
        COALESCE(resp.n_conversiones, 0) AS n_conversiones,
        (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM propiedad_evento pe
         WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
-          AND pe.fecha > CURRENT_DATE - INTERVAL '12 months') AS vendidas_12m
+          AND pe.fecha > CURRENT_DATE - INTERVAL '12 months') AS vendidas_12m,
+       __AGENTE_TIPOS__ AS tipos
 FROM agent a
 LEFT JOIN LATERAL (
     SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada, ag.logo_url AS agencia_logo
@@ -1749,7 +1817,7 @@ LEFT JOIN LATERAL (
       AND v.created_at < NOW() - INTERVAL '48 hours'
 ) resp ON true
 WHERE a.id = $1 AND a.estado = 'activo'
-"""
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
 
 _AGENTE_PERFIL_LISTINGS_SQL = """
 SELECT l.id::text, ('x'||substr(md5(l.id::text),1,8))::bit(32)::int AS map_id,
@@ -1840,6 +1908,7 @@ async def get_agente_perfil(request: Request, agent_id: str):
         titulo=base["titulo"], verificado=base["verificado"],
         anios_experiencia=base["anios_experiencia"],
         idiomas=list(base["idiomas"] or []), especialidades=list(base["especialidades"] or []),
+        tipos=list(base["tipos"] or []),
         licencias=licencias or [],
         telefono=base["telefono"], agencia_nombre=base["agencia_nombre"],
         agencia_verificada=base["agencia_verificada"], agencia_logo=base["agencia_logo"],
@@ -1979,7 +2048,8 @@ rev AS (
 SELECT a.id::text, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
        COALESCE(array_agg(DISTINCT sp.zona_nombre) FILTER (WHERE sp.zona_nombre IS NOT NULL), '{}') AS zonas,
        agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada,
-       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas
+       rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
+       __AGENTE_TIPOS__ AS tipos
 FROM otros o
 JOIN agent a ON a.id = o.agent_id AND a.estado = 'activo'
 LEFT JOIN sp  ON sp.agent_id = a.id
@@ -1993,7 +2063,7 @@ GROUP BY a.id, a.slug, a.nombre, a.foto_url, a.telefono, a.email,
          agcy.agencia_nombre, agcy.agencia_verificada, rev.rating_promedio, rev.n_resenas
 ORDER BY rev.rating_promedio DESC NULLS LAST, a.nombre
 LIMIT 6
-"""
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a"))
 
 
 @router.get("/agentes/{agent_id}/similares", response_model=list[AgenteDirectorio])

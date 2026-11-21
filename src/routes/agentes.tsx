@@ -1,4 +1,4 @@
-import { Name } from "@/lib/i18n";
+import { Name, useLang } from "@/lib/i18n";
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
@@ -8,7 +8,8 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { K as TOKENS } from "@/design/tokens";
-import { type Agente, Stars, waFromTel, iniciales, perfilHref } from "@/components/agentes/agenteShared";
+import { type Agente, Stars, waFromTel, iniciales, perfilHref, AgenteTipoBadges } from "@/components/agentes/agenteShared";
+import { AGENTE_TIPOS, AGENTE_TIPO_STYLE, agenteTipoLabel, type AgenteTipo } from "@/lib/agenteTipos";
 
 export const Route = createFileRoute("/agentes")({
   head: () => seo({ title: "Agentes inmobiliarios · Medellín Social", description: "Encuentra agentes inmobiliarios verificados por zona en Medellín y el Valle de Aburrá.", path: "/agentes" }),
@@ -75,6 +76,8 @@ function AgenteRow({ a }: { a: Agente }) {
           <Link {...perfilLink} className="max-w-full break-words text-left text-xl font-bold leading-tight tracking-tight transition hover:opacity-70 sm:text-2xl" style={{ color: K.ink, fontFamily: K.serif }}>
             <Name>{a.nombre}</Name>
           </Link>
+
+          <AgenteTipoBadges tipos={a.tipos} className="mt-1" />
 
           {a.rating_promedio != null ? (
             <div className="mt-0.5 flex items-center gap-1.5">
@@ -153,9 +156,19 @@ function AgentesPage() {
   });
   const agentes = data ?? [];
 
+  const { lang } = useLang();
   const [busqueda, setBusqueda] = useState("");
   const [zonaFiltro, setZonaFiltro] = useState("");
+  // Tipos seleccionados (OR). Vacío = todos. Un agente puede tener varios tipos.
+  const [tiposFiltro, setTiposFiltro] = useState<AgenteTipo[]>([]);
   const [orden, setOrden] = useState<SortKey>("nombre");
+  const toggleTipo = (t: AgenteTipo) =>
+    setTiposFiltro((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const conteoTipo = useMemo(() => {
+    const c: Record<AgenteTipo, number> = { member: 0, certified: 0, preferred: 0, casa: 0 };
+    for (const a of agentes) for (const t of a.tipos ?? []) if (t in c) c[t as AgenteTipo]++;
+    return c;
+  }, [agentes]);
 
   const zonasDisponibles = useMemo(
     () => Array.from(new Set(agentes.flatMap((a) => a.zonas))).sort(),
@@ -171,6 +184,9 @@ function AgentesPage() {
     if (zonaFiltro) {
       lista = lista.filter((a) => a.zonas.includes(zonaFiltro));
     }
+    if (tiposFiltro.length > 0) {
+      lista = lista.filter((a) => (a.tipos ?? []).some((t) => tiposFiltro.includes(t as AgenteTipo)));
+    }
     const orden_ = [...lista];
     if (orden === "rating") {
       orden_.sort((a, b) => {
@@ -185,7 +201,7 @@ function AgentesPage() {
       orden_.sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
     return orden_;
-  }, [agentes, busqueda, zonaFiltro, orden]);
+  }, [agentes, busqueda, zonaFiltro, tiposFiltro, orden]);
 
   const inputStyle: React.CSSProperties = { border: `1px solid ${K.line}`, background: "#FFFFFF", color: K.ink };
 
@@ -224,6 +240,45 @@ function AgentesPage() {
                 <option value="">Todos los sectores</option>
                 {zonasDisponibles.map((z) => <option key={z} value={z}>{z}</option>)}
               </select>
+            </div>
+
+            <div data-i18n-skip>
+              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>
+                {lang === "en" ? "Agent type" : "Tipo de agente"}
+              </label>
+              <div className="flex flex-wrap gap-1.5" role="group" aria-label={lang === "en" ? "Agent type" : "Tipo de agente"}>
+                <button
+                  type="button"
+                  data-testid="tipo-agente-todos"
+                  aria-pressed={tiposFiltro.length === 0}
+                  onClick={() => setTiposFiltro([])}
+                  className="min-h-[36px] rounded-full px-3 text-xs font-semibold transition"
+                  style={tiposFiltro.length === 0
+                    ? { background: K.ink, color: "#FFFFFF", border: `1px solid ${K.ink}` }
+                    : { background: "#FFFFFF", color: K.ink, border: `1px solid ${K.line}` }}
+                >
+                  {lang === "en" ? "All" : "Todos"}
+                </button>
+                {AGENTE_TIPOS.map((t) => {
+                  const on = tiposFiltro.includes(t);
+                  const s = AGENTE_TIPO_STYLE[t];
+                  return (
+                    <button
+                      key={t}
+                      type="button"
+                      data-testid={`tipo-agente-${t}`}
+                      aria-pressed={on}
+                      onClick={() => toggleTipo(t)}
+                      className="min-h-[36px] rounded-full px-3 text-xs font-semibold transition"
+                      style={on
+                        ? { background: s.bg, color: s.fg, border: `2px solid ${s.border}` }
+                        : { background: "#FFFFFF", color: K.ink, border: `1px solid ${K.line}` }}
+                    >
+                      {agenteTipoLabel(t, lang)} <span style={{ opacity: 0.6 }}>({conteoTipo[t]})</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </aside>
 

@@ -269,6 +269,8 @@ export type ApiListing = {
   id: number;
   fuente?: string | null;
   fuente_display?: string | null;
+  /** Tipos vigentes del agente que publicó el listing (member|certified|preferred|casa). null = sin agente. */
+  agente_tipos?: string[] | null;
   tipo_operacion?: string | null;
   tipo_inmueble?: string | null;
   precio_cop?: number | null;

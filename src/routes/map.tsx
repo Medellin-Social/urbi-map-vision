@@ -222,7 +222,8 @@ function MapPageInner() {
     tipo_inmueble: sharedFilters.tipoInmueble,
     segmento:     sharedFilters.segmento,
     ocultar_destacados: sharedFilters.ocultarDestacados,
-  }), [sharedFilters.segmento, sharedFilters.ocultarDestacados, sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad,
+    tipo_agente:  sharedFilters.tipoAgente,
+  }), [sharedFilters.segmento, sharedFilters.ocultarDestacados, sharedFilters.tipoAgente, sharedFilters.areaMin, sharedFilters.areaMax, sharedFilters.banos, sharedFilters.antiguedad,
        sharedFilters.amenidades, sharedFilters.amoblado, sharedFilters.precioMin, sharedFilters.precioMax,
        sharedFilters.habitaciones, sharedFilters.tipoInmueble]);
 
@@ -241,7 +242,8 @@ function MapPageInner() {
     pisoMin:        sharedFilters.pisoMin,
     segmento:       sharedFilters.segmento,
     ocultarDestacados: sharedFilters.ocultarDestacados,
-  }), [sharedFilters.segmento, sharedFilters.ocultarDestacados, sharedFilters.habitaciones, sharedFilters.banos, sharedFilters.areaMin, sharedFilters.areaMax,
+    tipoAgente:     sharedFilters.tipoAgente,
+  }), [sharedFilters.segmento, sharedFilters.ocultarDestacados, sharedFilters.tipoAgente, sharedFilters.habitaciones, sharedFilters.banos, sharedFilters.areaMin, sharedFilters.areaMax,
        sharedFilters.estrato, sharedFilters.tipoInmueble, sharedFilters.diasMercado, sharedFilters.busqueda,
        sharedFilters.amenidades, sharedFilters.estadoInmueble, sharedFilters.pisoMin]);
 

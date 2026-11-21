@@ -8,6 +8,37 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { K } from "@/design/tokens";
+import { useLang } from "@/lib/i18n";
+import { AGENTE_TIPO_STYLE, agenteTipoLabel, normalizarTipos } from "@/lib/agenteTipos";
+
+/** Insignias de tipo de agente (varias a la vez). No pinta nada si no hay tipos. */
+export function AgenteTipoBadges({ tipos, size = "sm", className = "" }: {
+  tipos: readonly string[] | null | undefined;
+  size?: "xs" | "sm";
+  className?: string;
+}) {
+  const { lang } = useLang();
+  const lista = normalizarTipos(tipos);
+  if (lista.length === 0) return null;
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+  return (
+    <span className={`inline-flex flex-wrap gap-1 ${className}`} data-testid="agente-tipos" data-i18n-skip>
+      {lista.map((t) => {
+        const s = AGENTE_TIPO_STYLE[t];
+        return (
+          <span
+            key={t}
+            data-tipo={t}
+            className={`inline-flex items-center rounded-full font-bold uppercase tracking-wide ${pad}`}
+            style={{ background: s.bg, color: s.fg, border: `1px solid ${s.border}` }}
+          >
+            {agenteTipoLabel(t, lang)}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 export type Agente = {
@@ -22,6 +53,7 @@ export type Agente = {
   agencia_verificada: boolean;
   rating_promedio: number | null; // null = sin reseñas — nunca un 0 inventado
   n_resenas: number;
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
 };
 
 // Ruta del perfil: usa slug si existe, si no el UUID (el endpoint resuelve ambos).
@@ -49,6 +81,7 @@ export type AgentePerfil = {
   n_activos: number; n_cierres: number; vendidas_12m: number;
   precio_min: number | null; precio_max: number | null;
   resenas: PerfilResena[];
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

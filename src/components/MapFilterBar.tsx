@@ -18,6 +18,7 @@ import { useUnit } from "@/hooks/useUnit";
 import { useIsTablet } from "@/hooks/use-mobile";
 import { useBarrioSearch } from "@/hooks/useBarrioSearch";
 import { TIPOS_POR_SEGMENTO, type Segmento } from "@/lib/segmento";
+import { AGENTE_TIPOS, AGENTE_TIPO_STYLE, agenteTipoLabel, type AgenteTipo } from "@/lib/agenteTipos";
 import type { SearchOption } from "@/lib/barrioSearch";
 import type { MapTab } from "./MapNavbar";
 import type { BarrioOption } from "@/lib/adapters";
@@ -39,6 +40,46 @@ export const SORT_OPTIONS: { key: SortKey; es: string; en: string }[] = [
 export function sortFiltersLabel(lang: string, count = 0): string {
   const base = lang === "en" ? "Sort by & filters" : "Ordenar por & filtros";
   return count > 0 ? `${base} (${count})` : base;
+}
+
+/** Chips multi-selección de tipo de agente (OR). Vacío = todos los listings. */
+function TipoAgenteChips({ value, onChange, lang, touch = false }: {
+  value: AgenteTipo[] | null;
+  onChange: (v: AgenteTipo[] | null) => void;
+  lang: string;
+  touch?: boolean;
+}) {
+  const sel = value ?? [];
+  const toggle = (t: AgenteTipo) => {
+    const next = sel.includes(t) ? sel.filter((x) => x !== t) : [...sel, t];
+    onChange(next.length ? next : null);
+  };
+  return (
+    <div role="group" aria-label={lang === "en" ? "Agent type" : "Tipo de agente"} data-i18n-skip
+      style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+      {AGENTE_TIPOS.map((t) => {
+        const on = sel.includes(t);
+        const s = AGENTE_TIPO_STYLE[t];
+        return (
+          <button
+            key={t}
+            type="button"
+            data-testid={`filtro-tipo-agente-${t}`}
+            aria-pressed={on}
+            onClick={() => toggle(t)}
+            style={{
+              minHeight: touch ? 44 : 30, padding: "0 12px", borderRadius: 999, cursor: "pointer",
+              fontSize: touch ? 14 : 12, fontWeight: 600,
+              background: on ? s.bg : C.white, color: on ? s.fg : C.ink,
+              border: on ? `2px solid ${s.border}` : `1px solid ${C.border}`,
+            }}
+          >
+            {agenteTipoLabel(t, lang)}
+          </button>
+        );
+      })}
+    </div>
+  );
 }
 
 export type SharedFilters = {
@@ -65,6 +106,8 @@ export type SharedFilters = {
   segmento: Segmento;
   /** Hide featured/tier listings (sent as ocultar_destacados). */
   ocultarDestacados: boolean;
+  /** Tipos de agente (OR) — solo listings publicados por un agente (sent as tipo_agente). */
+  tipoAgente: AgenteTipo[] | null;
 };
 
 export const EMPTY_SHARED_FILTERS: SharedFilters = {
@@ -88,6 +131,7 @@ export const EMPTY_SHARED_FILTERS: SharedFilters = {
   pisoMin: null,
   segmento: "residencial",
   ocultarDestacados: false,
+  tipoAgente: null,
 };
 
 export const TAB_TIPO_OP: Record<MapTab, "venta" | "arriendo" | "todos"> = {
@@ -270,6 +314,7 @@ type DropdownId = "precio" | "habBanos" | "tipo" | "filtros" | "amenidades";
 function countActive(f: SharedFilters): number {
   let n = 0;
   if (f.orden !== "destacados") n++;
+  if ((f.tipoAgente?.length ?? 0) > 0) n++;
   if (f.precioMax !== null || f.precioMin !== null) n++;
   if (f.habitaciones !== null) n++;
   if (f.ocultarDestacados) n++;
@@ -1288,6 +1333,7 @@ export function MapFilterBar({
   const habBanosActive = filters.habitaciones !== null || filters.banos !== null;
   const filtrosCount = [
     filters.orden !== "destacados",
+    (filters.tipoAgente?.length ?? 0) > 0,
     (filters.estrato?.length ?? 0) > 0,
     filters.diasMercado !== null,
     filters.areaMin !== null || filters.areaMax !== null,
@@ -1388,7 +1434,7 @@ export function MapFilterBar({
         <FilterPill
           label={sortFiltersLabel(lang, filtrosCount)}
           active={filtrosCount > 0}
-          onClear={filtrosCount > 0 ? () => onFiltersChange({ orden: "destacados", antiguedad: null, estrato: null, diasMercado: null, soloPromium: false, areaMin: null, areaMax: null, estadoInmueble: null, pisoMin: null, ocultarDestacados: false }) : undefined}
+          onClear={filtrosCount > 0 ? () => onFiltersChange({ orden: "destacados", tipoAgente: null, antiguedad: null, estrato: null, diasMercado: null, soloPromium: false, areaMin: null, areaMax: null, estadoInmueble: null, pisoMin: null, ocultarDestacados: false }) : undefined}
           onClick={(a) => toggle("filtros", a)}
           isOpen={open === "filtros"}
         />
@@ -1484,6 +1530,12 @@ export function MapFilterBar({
               <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
             ))}
           </select>
+        </div>
+
+        {/* Tipo de agente (multi) */}
+        <div style={{ marginBottom: 20 }}>
+          <span style={labelSm} data-i18n-skip>{lang === "en" ? "Agent type" : "Tipo de agente"}</span>
+          <TipoAgenteChips value={filters.tipoAgente} onChange={(v) => onFiltersChange({ tipoAgente: v })} lang={lang} touch />
         </div>
 
         {/* Segmento */}
@@ -1922,6 +1974,12 @@ export function MapFilterBar({
                   <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
                 ))}
               </select>
+
+              {/* Tipo de agente (multi) */}
+              <span style={labelSm} data-i18n-skip>{lang === "en" ? "Agent type" : "Tipo de agente"}</span>
+              <div style={{ marginBottom: 16 }}>
+                <TipoAgenteChips value={filters.tipoAgente} onChange={(v) => onFiltersChange({ tipoAgente: v })} lang={lang} />
+              </div>
 
               {/* Área */}
               <span style={labelSm}>Área {areaUnitLabel}</span>

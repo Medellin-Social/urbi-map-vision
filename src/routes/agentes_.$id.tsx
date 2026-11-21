@@ -15,6 +15,7 @@ import { K } from "@/design/tokens";
 import {
   type AgentePerfil, type PerfilListing, type Agente, type PerfilLicencia,
   Stars, ResenaForm, ContactoAgenteForm, fmtPrecio, rangoPrecio, waFromTel, iniciales, perfilHref,
+  AgenteTipoBadges,
 } from "@/components/agentes/agenteShared";
 
 const ESPECIALIDAD_LABEL: Record<string, string> = {
@@ -207,7 +208,11 @@ function AgentePerfilPage() {
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h1 className="text-3xl font-bold leading-tight tracking-tight break-words" style={{ color: K.ink, fontFamily: K.serif }}><Name>{p.nombre}</Name></h1>
-                    {p.verificado && (
+                    {/* Tipos de agente (varios a la vez). "Certificado" reemplaza al viejo
+                        sello "Agente verificado" (verificado = agent.certificado). */}
+                    {p.tipos?.length ? (
+                      <AgenteTipoBadges tipos={p.tipos} />
+                    ) : p.verificado && (
                       <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: K.tealLight, color: K.tealDeep }}>
                         <ShieldCheck className="h-3.5 w-3.5" /> Agente verificado
                       </span>

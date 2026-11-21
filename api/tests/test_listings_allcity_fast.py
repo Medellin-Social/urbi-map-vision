@@ -18,10 +18,10 @@ from api.routers import listings as L
 
 ALL_NULL = (None, None, None, None, None, None, None, None, False,
             None, None, None, None, None, None,
-            None, False)  # + $16 segmento, $17 ocultar_destacados
+            None, False, None)  # + $16 segmento, $17 ocultar_destacados, $18 tipo_agente
 VENTA = (None, None, "venta", None, None, None, None, None, False,
          None, None, None, None, None, None,
-         None, False)
+         None, False, None)
 
 
 async def _fetch(conn, sql, args, limit=500):
