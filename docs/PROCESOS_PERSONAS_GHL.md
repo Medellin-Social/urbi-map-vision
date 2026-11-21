@@ -53,6 +53,7 @@ Leyenda: ✅ probado local · 📖 leído en código, no ejecutado · 🔴 falla
 ## 1b. Conexión sitio→GHL (implementada y verificada en DEV, 2026-11-21)
 Best-effort (nunca bloquea la acción). Se sincroniza el agente a GHL tras: aprobar, asignar slot, marcar casa, pago de slot (checkout simulado y webhook `realtor_slot`). Tags reales: `agent`, `agent-<estado>`, `realtor-preferido`, `zona-<barrio|comuna>-<id>`, `realtor-casa`. Opp en pipeline Realtors: `new` → `paid` al activar. Owner con intake → Contact `owner` + `owner-intake-<estado>`.
 Webhook verificado: 401 sin secret, 200 con secret, idempotente por `pago_ref`, 404 agente inexistente.
+**Ampliado (2026-11-21, verificado en DEV):** rechazar/suspender agente → re-sync (tag `agent-rechazado|inactivo`); cron `run_realtor_slots` re-sincroniza agentes cuyo slot venció/se sembró (quita `zona-*`); intake aceptado/tomado del pool → `owner-intake-<estado>`; registro de usuario → Contact `buyer`; pasantía → Contact `pasante`; `/mi-negocio` → Contact `negocio-local`,`negocio-pendiente`. Verificado con contactos reales buyer y pasante (borrados). Sin verificar: cron, `/mi-negocio`, owner-intake. Sin hacer: ruteo de visita al realtor del slot, embajador/afiliado aprobar, vista de fallos de sync, reintentos.
 **Nota:** los pipelines reales hoy solo tienen `new`/`paid`; las etapas `approved/active/...` de abajo son propuesta, aún no existen en GHL.
 
 ## 2. Convenciones GHL (lo que hay que crear una vez)
