@@ -697,6 +697,18 @@ async def _expand_neighbors(
     return result
 
 
+# Pool = 10 conexiones. El listado lanza hasta 4 consultas en paralelo por request
+# (venta+arriendo × COUNT+LISTINGS); sin tope, 3 requests simultáneos agotan el pool y
+# bloquean el resto de la API. Cada consulta toma UN cupo (sin esperar otro mientras lo
+# tiene → sin deadlock) y se dejan 2 conexiones libres para los demás endpoints.
+_LISTING_DB_SLOTS = asyncio.Semaphore(8)
+
+
+async def _limited(coro):
+    async with _LISTING_DB_SLOTS:
+        return await coro
+
+
 async def _count_and_fetch(
     pool: Any, args: tuple, fetch_limit: int, fetch_offset: int,
     count_sql: str | None = None,
@@ -706,8 +718,8 @@ async def _count_and_fetch(
     csql = count_sql if count_sql is not None else _COUNT_SQL
     lsql = (listings_sql if listings_sql is not None else _LISTINGS_SQL) + f" LIMIT {fetch_limit} OFFSET {fetch_offset}"
     count, rows = await asyncio.gather(
-        pool.fetchval(csql, *args),
-        pool.fetch(lsql, *args),
+        _limited(pool.fetchval(csql, *args)),
+        _limited(pool.fetch(lsql, *args)),
     )
     return count or 0, rows
 
@@ -818,8 +830,8 @@ async def get_all_listings(
         )
         listings_sql = _lk(_LISTINGS_ALLCITY_SQL, _inc) if allcity_fast else _eff_listings_sql
         total, rows = await asyncio.gather(
-            pool.fetchval(_eff_count_sql, *args),
-            pool.fetch(listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+            _limited(pool.fetchval(_eff_count_sql, *args)),
+            _limited(pool.fetch(listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args)),
         )
         total = total or 0
 
