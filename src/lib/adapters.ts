@@ -247,9 +247,23 @@ export type ApiListingAgente = {
   zona_nivel: string; // 'barrio' | 'comuna'
 };
 
+/** Agente registrado que representa ESTE anuncio (Programa de agentes): solo con
+ *  representación aprobada y cobertura. null → anuncio sin agente registrado. */
+export type ApiListingRepresentante = {
+  id: string;
+  slug: string | null;
+  nombre: string;
+  telefono: string;
+  foto_url?: string | null;
+  agencia_nombre?: string | null;
+  tipos: string[];
+  preferente: { nivel: string; nombre: string }[];
+};
+
 export type ApiListingAgentes = {
   comuna?: ApiListingAgente | null; // patrocinio caro → tarjeta principal
   barrio?: ApiListingAgente | null; // patrocinio barato → tarjeta secundaria
+  representante?: ApiListingRepresentante | null;
 };
 
 export type SimilarListing = {

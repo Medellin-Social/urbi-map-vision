@@ -19,6 +19,7 @@ import { API_ENDPOINTS } from "@/config/api";
 import { auth } from "@/lib/auth";
 import { toast } from "sonner";
 import { K as TOKENS } from "@/design/tokens";
+import { ProgramaTab } from "./-ProgramaTab";
 
 // Ruta ofuscada (no /admin). El gate real es el backend (ADMIN_EMAIL); esto solo
 // evita descubrimiento casual. beforeLoad exige sesión; los datos 403 si no eres admin.
@@ -36,13 +37,14 @@ export const Route = createFileRoute("/panel-x9k2/")({
 
 const K = TOKENS;
 
-type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "eventos" | "negocios" | "seguridad";
+type Tab = "overview" | "usuarios" | "leads" | "listings" | "realtors" | "programa" | "eventos" | "negocios" | "seguridad";
 const TABS: { id: Tab; label: string; Icon: typeof Users }[] = [
   { id: "overview",  label: "Resumen",   Icon: LayoutDashboard },
   { id: "usuarios",  label: "Usuarios",  Icon: Users },
   { id: "leads",     label: "Leads",     Icon: UserSearch },
   { id: "listings",  label: "Listings",  Icon: ClipboardList },
   { id: "realtors",  label: "Realtors",  Icon: ShieldCheck },
+  { id: "programa",  label: "Programa",  Icon: ClipboardList },
   { id: "eventos",   label: "Eventos",   Icon: Star },
   { id: "negocios",  label: "Negocios",  Icon: Store },
   { id: "seguridad", label: "Seguridad", Icon: ShieldAlert },
@@ -111,6 +113,7 @@ function AdminPanel() {
         {tab === "leads"     && <LeadsTab />}
         {tab === "listings"  && <ListingsTab />}
         {tab === "realtors"  && <RealtorsTab />}
+        {tab === "programa"  && <ProgramaTab />}
         {tab === "eventos"   && <EventosTab />}
         {tab === "negocios"  && <NegociosTab />}
         {tab === "seguridad" && <SeguridadTab />}

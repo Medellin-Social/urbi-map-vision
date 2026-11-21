@@ -161,9 +161,12 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     { href: '/map',         label: t('Mapa', 'Map') },
     { href: '/vender',      label: t('Vender o arrendar tu inmueble', 'Sell or rent your property') },
     { href: '/agentes',     label: t('Encuentra un agente', 'Find an agent') },
+    { href: '/agentes/estados', label: t('Guía de estados de agentes', 'Agent status guide') },
+    { href: '/mas-informacion', label: t('¿Necesitas realtor, manager o administración?', 'Need a realtor, manager or administration?') },
+    { href: '/agentes/programa', label: t('Registrarme como agente', 'Register as an agent') },
   ]
   // Simulador/Comparador/Calculadora salieron del navbar → solo en el dashboard del realtor.
-  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes']
+  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes', '/mas-informacion']
     .some(h => path === h || path.startsWith(h + '/'))
   const reItemStyle: CSSProperties = {
     display: 'block', padding: '9px 12px', borderRadius: 7,

@@ -211,7 +211,7 @@ function AgentePerfilPage() {
                     {/* Tipos de agente (varios a la vez). "Certificado" reemplaza al viejo
                         sello "Agente verificado" (verificado = agent.certificado). */}
                     {p.tipos?.length ? (
-                      <AgenteTipoBadges tipos={p.tipos} />
+                      <AgenteTipoBadges tipos={p.tipos} preferente={p.preferente} linked />
                     ) : p.verificado && (
                       <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: K.tealLight, color: K.tealDeep }}>
                         <ShieldCheck className="h-3.5 w-3.5" /> Agente verificado
@@ -308,6 +308,24 @@ function AgentePerfilPage() {
                     ? <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{p.activos.map((l) => <ListingCard key={l.id} l={l} />)}</div>
                     : <p className="text-xs" style={{ color: K.muted }}>Sin propiedades publicadas por ahora.</p>}
                 </Seccion>
+
+                {(p.representados?.length ?? 0) > 0 && (
+                  <Seccion titulo={`Anuncios que representa (${p.representados!.length})`} sub="Inmuebles inscritos por el agente para figurar como su representante">
+                    <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                      {p.representados!.map((l) => (
+                        <a key={l.map_id} href={`/map?listing=${l.map_id}`} className="block overflow-hidden rounded-xl transition hover:shadow-sm" style={{ border: `1px solid ${K.line}`, background: "#FFFFFF" }}>
+                          <div className="aspect-[4/3] w-full" style={{ background: K.surface }}>
+                            {l.foto_portada && <img src={l.foto_portada} alt="" className="h-full w-full object-cover" loading="lazy" />}
+                          </div>
+                          <div className="p-2.5">
+                            <div className="text-sm font-bold" style={{ color: K.ink }}>{fmtPrecio(l.precio) || "Precio a consultar"}</div>
+                            <div className="truncate text-[11px]" style={{ color: K.muted }}><Name>{l.barrio ?? ""}</Name></div>
+                          </div>
+                        </a>
+                      ))}
+                    </div>
+                  </Seccion>
+                )}
 
                 <Seccion titulo={`Vendidas${p.n_cierres ? ` (${p.n_cierres})` : ""}`} sub="Propiedades que cerró en la plataforma">
                   {p.cierres.length > 0
