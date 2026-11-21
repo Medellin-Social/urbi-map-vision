@@ -45,10 +45,7 @@ async def aplicar_embajador(request: Request, body: AplicarEmbajadorIn = Body(..
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
 
-    try:
-        await ghl_client.sync_referidor(row["id"])
-    except Exception:
-        logger.exception("sync_referidor(%s) falló", row["id"])  # best-effort, no bloquea la aplicación
+    ghl_client.spawn(ghl_client.sync_referidor(row["id"]))  # background, best-effort
 
     return AplicarOut(
         ok=True,

@@ -79,6 +79,44 @@ def _should_retry(method: str, exc: Optional[Exception], resp: Optional[httpx.Re
     return False
 
 
+_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """AsyncClient compartido (keep-alive/pool de conexiones) en vez de uno por llamada."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=_TIMEOUT)
+    return _client
+
+
+async def aclose() -> None:
+    """Cierra el cliente compartido (shutdown de la app)."""
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+
+
+_bg_tasks: set = set()
+
+
+def spawn(coro) -> None:
+    """Corre un sync a GHL fuera del request (hasta ~45 s con reintentos).
+
+    Best-effort: los push_* ya registran sus fallos en ghl_push_failures; aquí solo
+    se loguea cualquier excepción residual y se guarda referencia para que el task
+    no sea recolectado a mitad de vuelo."""
+    task = asyncio.ensure_future(coro)
+    _bg_tasks.add(task)
+
+    def _done(t):
+        _bg_tasks.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            logger.error("sync GHL en background falló: %r", t.exception())
+    task.add_done_callback(_done)
+
+
 async def _request(method: str, path: str, **kwargs) -> httpx.Response:
     """HTTP call to GHL with timeout + bounded retries (see _should_retry).
     Raises httpx.HTTPStatusError / httpx.TransportError after the last attempt."""
@@ -90,8 +128,7 @@ async def _request(method: str, path: str, **kwargs) -> httpx.Response:
         resp: Optional[httpx.Response] = None
         exc: Optional[Exception] = None
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.request(method, f"{_BASE_URL}{path}", headers=_headers(), **kwargs)
+            resp = await _get_client().request(method, f"{_BASE_URL}{path}", headers=_headers(), **kwargs)
         except httpx.TransportError as e:
             exc = last_exc = e
         if resp is not None and resp.status_code < 400:

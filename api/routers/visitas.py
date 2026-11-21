@@ -215,15 +215,12 @@ async def crear_visita(
     # (best-effort, fuera de la transacción). Antes el lead solo aparecía en su
     # dashboard si refrescaba; ahora recibe el aviso.
     if agent_id:
-        await notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool)
-    # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
+        ghl_client.spawn(notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool))
+    # Sin agente de zona → notificar al buzón interno (hilo aparte; best-effort).
     if req.sin_agente:
-        await asyncio.to_thread(_send_visita_email, req, fecha)
+        ghl_client.spawn(asyncio.to_thread(_send_visita_email, req, fecha))
     # Push best-effort a GHL como Contact (+ nota). Las visitas también salen por
     # PULL (/api/v1/ghl/leads); un fallo aquí queda en ghl_push_failures y no
     # rompe la solicitud.
-    try:
-        await ghl_client.sync_visita(row["id"])
-    except Exception:
-        log.exception("sync_visita(%s) falló", row["id"])
+    ghl_client.spawn(ghl_client.sync_visita(row["id"]))
     return {"id": str(row["id"]), "estado": "pendiente"}

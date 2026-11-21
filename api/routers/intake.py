@@ -118,9 +118,9 @@ async def crear_intake_endpoint(
         import logging
         logging.getLogger(__name__).exception("intake %s: auto-asignación falló", intake["id"])
 
-    await ghl_client.sync_owner_intake(intake["id"])  # best-effort: no levanta
+    ghl_client.spawn(ghl_client.sync_owner_intake(intake["id"]))  # background, best-effort
     if agent_id:
-        await ghl_client.sync_agent_safe(agent_id)
+        ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": intake["id"], "estado": estado, "agent_id": agent_id}
 
 
@@ -269,7 +269,7 @@ async def aceptar_intake_endpoint(
             SimpleNamespace(id=intake_id, declaraciones=decl), pool
         )
 
-    await ghl_client.sync_owner_intake(intake_id)
+    ghl_client.spawn(ghl_client.sync_owner_intake(intake_id))
     return {"intake_id": intake_id, "listing_id": listing_id,
             "estado": "aceptado", "dd_items": dd_items}
 

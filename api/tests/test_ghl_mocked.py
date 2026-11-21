@@ -50,6 +50,8 @@ def ghl(monkeypatch):
             return state["handler"](req)
         return _RealAsyncClient(transport=httpx.MockTransport(h), **{k: v for k, v in kw.items() if k == "timeout"})
     monkeypatch.setattr(G.httpx, "AsyncClient", factory)
+    # el cliente httpx es compartido a nivel módulo: forzar uno nuevo con el mock
+    monkeypatch.setattr(G, "_client", None)
     return pool, calls, state
 
 
@@ -289,3 +291,17 @@ async def test_lead_by_id_bad_uuid_is_404_not_500(leads, monkeypatch):
 async def test_visita_push_is_still_a_stub():
     with pytest.raises(NotImplementedError):
         await G.push_visita_to_ghl("any", {})
+
+
+async def test_spawn_loguea_excepcion_y_libera_referencia(caplog):
+    import asyncio
+
+    async def boom():
+        raise RuntimeError("fallo-sync")
+
+    with caplog.at_level("ERROR"):
+        G.spawn(boom())
+        assert len(G._bg_tasks) == 1
+        await asyncio.sleep(0.05)
+    assert not G._bg_tasks
+    assert "fallo-sync" in caplog.text or any(r.exc_info for r in caplog.records)

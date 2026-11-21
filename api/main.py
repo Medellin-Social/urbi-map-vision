@@ -108,6 +108,8 @@ async def lifespan(app: FastAPI):
     _refresh_task = asyncio.create_task(run_periodic_cache_refresh(pool))
     yield
     _refresh_task.cancel()
+    from api.utils import ghl_client as _ghl
+    await _ghl.aclose()
     await close_pool()
 
 
