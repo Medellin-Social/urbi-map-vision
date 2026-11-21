@@ -18,6 +18,7 @@ from api.limiter import _client_ip, limiter, view_throttle
 from api.services.asignador_service import asignar_intake
 from api.services.intake_service import get_or_create_owner
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
+from api.utils.ttl_cache import TTLCache
 from api.services.trm_service import cop_from_moneda, get_usd_rate, usd_from_cop
 
 logger = logging.getLogger(__name__)
@@ -702,6 +703,7 @@ async def _expand_neighbors(
 # bloquean el resto de la API. Cada consulta toma UN cupo (sin esperar otro mientras lo
 # tiene → sin deadlock) y se dejan 2 conexiones libres para los demás endpoints.
 _LISTING_DB_SLOTS = asyncio.Semaphore(8)
+_VIEWPORT_CACHE = TTLCache(ttl=30, maxsize=200)
 
 
 async def _limited(coro):
@@ -1502,6 +1504,18 @@ async def get_listings_viewport(
             d["direccion_raw"] = None
         return ViewportListing(**d)
 
+    # Cache de servidor (30 s): la respuesta es pública e idéntica para todos; los
+    # admins con inactivos van siempre a la DB. Clave = filtros + zoom + formato.
+    _vkey = None if _inc else repr((args, zoom, compact, moneda, rate))
+    if _vkey is not None:
+        _hit = _VIEWPORT_CACHE.get(_vkey)
+        if _hit is not None:
+            body, etag = _hit
+            headers = {"Cache-Control": "public, max-age=60, stale-while-revalidate=240", "ETag": etag}
+            if request.headers.get("if-none-match") == etag:
+                return Response(status_code=304, headers=headers)
+            return Response(content=body, media_type="application/json", headers=headers)
+
     if zoom >= _VIEWPORT_FULL_POINTS_ZOOM:
         rows = await pool.fetch(_lk(_VIEWPORT_POINTS_SQL, _inc) + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
         result = ViewportResponse(mode="points", zoom=zoom, listings=[_vl(r) for r in rows])
@@ -1527,6 +1541,8 @@ async def get_listings_viewport(
     # 60 s fresh + SWR: map data refreshes hourly server-side; 5 min max-age on top of
     # the client cache made new/removed listings look 5-10 min late.
     headers = {"Cache-Control": "private, no-store" if _inc else "public, max-age=60, stale-while-revalidate=240", "ETag": etag}
+    if _vkey is not None:
+        _VIEWPORT_CACHE.set(_vkey, (body, etag))
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     # Send the already-serialized body directly — no json.loads + JSONResponse

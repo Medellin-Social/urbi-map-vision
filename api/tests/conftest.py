@@ -1,5 +1,6 @@
 """Shared fixtures for API tests. Uses httpx.AsyncClient against the real FastAPI app."""
 import os
+import pytest
 import pytest_asyncio
 from httpx import AsyncClient, ASGITransport
 
@@ -30,3 +31,12 @@ async def client():
     finally:
         await close_pool()
         limiter.enabled = True
+
+
+@pytest.fixture(autouse=True)
+def _limpiar_caches_ttl():
+    """Los caches en memoria de /viewport y /barrios no deben filtrar entre tests."""
+    from api.routers import barrios, listings
+    listings._VIEWPORT_CACHE.clear()
+    barrios._BARRIOS_ROWS_CACHE.clear()
+    yield
