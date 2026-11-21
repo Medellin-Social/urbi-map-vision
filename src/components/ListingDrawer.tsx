@@ -8,7 +8,7 @@ import {
 import { motion, AnimatePresence, useDragControls } from "framer-motion";
 import { useQuery } from "@tanstack/react-query";
 import {
-  X, Heart, Phone, ExternalLink, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
+  X, Heart, Phone, ChevronDown, ChevronUp, ChevronLeft, ChevronRight,
   MapPin, Clock, Building2, Bed, Bath, Maximize2, Share2,
   Shield, Bell, BellRing, User, BarChart2, Plus, Check, Calendar,
   Home, Car, Layers, Map,
@@ -74,12 +74,6 @@ function diasLabel(dias: number | null | undefined, lang: string): string | null
   if (dias < 365) { const m = Math.floor(dias / 30); return en ? `${m} mo ago` : `Hace ${m} mes${m > 1 ? "es" : ""}`; }
   const y = Math.floor(dias / 365); return en ? `${y}+ yr ago` : `Hace +${y} año${y > 1 ? "s" : ""}`;
 }
-
-const SOURCE_LABEL: Record<string, string> = {
-  fincaraiz:      "Ver en Fincaraíz →",
-  metrocuadrado:  "Ver en Metrocuadrado →",
-  medellinliving: "Ver en MedellinLiving →",
-};
 
 function normalizeTipoOp(val: string | null | undefined): "arriendo" | "venta" {
   if (!val) return "venta";
@@ -1558,7 +1552,6 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
   if (!listingId) return null;
 
   const tipoOp = normalizeTipoOp(listing?.tipo_operacion);
-  const fuente = (listing?.fuente ?? "").toLowerCase();
   const lat    = listing?.lat;
   const lon    = listing?.lon;
 

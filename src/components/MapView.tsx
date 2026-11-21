@@ -11,7 +11,7 @@ import { usePriceFormat } from "@/hooks/usePriceFormat";
 import type { Segmento } from "@/lib/segmento";
 import { toast } from "sonner";
 import { auth, MAP_STYLES } from "@/lib/auth";
-import { barrioToNeighborhood, type ApiBarrio, type Neighborhood } from "@/lib/adapters";
+import { type ApiBarrio, type Neighborhood } from "@/lib/adapters";
 import { useBarriosRaw, useScoreThresholds, useComunasMetrics, type ComunaMetrics } from "@/hooks/useBarrios";
 import type { ApiListing } from "@/lib/adapters";
 import { apiFetch } from "@/lib/apiClient";
@@ -26,7 +26,6 @@ type ViewportResponse = {
   listings: ApiListing[];
 };
 import {
-  OPP_COLORS,
   PALETTE_EVENT,
   THRESHOLDS_EVENT,
   getActivePaletteId,
@@ -161,7 +160,6 @@ const COMUNA_FILL_MAX_ZOOM = BARRIO_MIN_ZOOM;
 const _REAL_ID_MAX = 800_000;
 
 // Municipalities not included in map data
-const _HIDDEN_MUNICIPIOS = ["CALDAS", "COPACABANA", "GIRARDOTA", "BARBOSA"];
 
 // Fallback static files for municipio blocks — only fetched when API omits them
 // GeoJSON oficial de comunas + municipios (~1.1MB): se baja UNA vez por sesión y lo
@@ -212,12 +210,8 @@ function featureCentroid(feat: mapboxgl.MapboxGeoJSONFeature): [number, number] 
 // Listing popups are the React <ListingPopup> (no HTML-string builder).
 
 export function MapView({
-  onSelect,
-  selectedId,
   perfil,
   risk,
-  mostrarOportunidades = false,
-  budgetRange,
   onViewLevelChange,
   returnToComunasRef,
   onGoToMLS,
@@ -239,7 +233,6 @@ export function MapView({
   onListingClickFromMap,
   onListingDoubleClickFromMap,
   activeBarrioName,
-  activeTab,
   onBarrioClick,
   flyToBarriosRef,
   cooperativeGestures = false,
@@ -265,9 +258,7 @@ export function MapView({
   const onComunaClickRef = useRef(onComunaClick);
   useEffect(() => { onComunaClickRef.current = onComunaClick; }, [onComunaClick]);
   const barriosRef = useRef<ApiBarrio[]>([]);
-  const markersRef = useRef<mapboxgl.Marker[]>([]);
   const mlsLastFlyToRef = useRef<number | null>(null);
-  const zoneFlyRef = useRef<string | null>(null);  // last comuna/municipio flown-to
   const selectedBarrioRef = useRef<number | null>(null);  // barrio con relleno de selección (explícito: click/búsqueda)
   const flattenSkipRef = useRef(false);  // skip listings-toggle pitch easeTo when a zone fit drives it
   const pendingFlyRef = useRef<{ lat: number; lng: number; zoom: number } | null>(null);  // deep-link flyTo que llegó antes del "load" del mapa
@@ -321,8 +312,8 @@ export function MapView({
 
 
   const riskRef = useRef(risk);
-  const [scorePalette, setScorePalette] = useState<ScorePaletteId>(() => getActivePaletteId(risk));
-  const [thresholdVersion, setThresholdVersion] = useState(0);
+  const [, setScorePalette] = useState<ScorePaletteId>(() => getActivePaletteId(risk));
+  const [, setThresholdVersion] = useState(0);
 
   useEffect(() => {
     const onPalette = () => setScorePalette(getActivePaletteId(riskRef.current));
@@ -1517,30 +1508,6 @@ export function MapView({
       map.flyTo({ center: [lng, lat], zoom, pitch: 0, speed: 0.9 });
     };
   });
-
-
-  // ── Markers de oportunidades ─────────────────────────────────────────────────
-  function addOpportunityMarkers(map: MapboxMap) {
-    markersRef.current.forEach((m) => m.remove());
-    markersRef.current = [];
-    barriosRef.current.forEach((b) => {
-      const opp = b.oportunidad;
-      if (!opp.detectada) return;
-      const nb = barrioToNeighborhood(b);
-      const color = OPP_COLORS[opp.tipo as keyof typeof OPP_COLORS] ?? "#FFF6D6";
-      const el = document.createElement("div");
-      el.className = "opp-pulse-dot";
-      el.style.setProperty("--opp-color", color);
-      el.title = `${opp.tipo ?? ""} — ${opp.descripcion ?? ""}`;
-      el.addEventListener("click", (ev) => {
-        ev.stopPropagation();
-        map.flyTo({ center: [nb.lng, nb.lat], zoom: 14.5, speed: 0.8 });
-        onSelect(nb);
-      });
-      const marker = new mapboxgl.Marker({ element: el }).setLngLat([nb.lng, nb.lat]).addTo(map);
-      markersRef.current.push(marker);
-    });
-  }
 
   if (tokenError) {
     return (

@@ -5,7 +5,7 @@ import { RouteError, RoutePending } from "@/components/RouteStates";
 import { useQuery } from "@tanstack/react-query";
 import {
   ArrowLeft, Bed, Bath, Maximize2, Building2, Calendar,
-  TrendingUp, Phone, ExternalLink, AlertCircle, MapPin, Share2, X as CloseIcon,
+  TrendingUp, Phone, AlertCircle, MapPin, Share2, X as CloseIcon,
 } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
@@ -28,12 +28,6 @@ export const Route = createFileRoute("/listing/$id")({
   errorComponent: RouteError,
   pendingComponent: RoutePending,
 });
-
-const SOURCE_LABEL: Record<string, string> = {
-  fincaraiz: "Ver en Fincaraíz",
-  metrocuadrado: "Ver en Metrocuadrado",
-  medellinliving: "Ver en MedellinLiving",
-};
 
 function TipoOpBadge({ tipo }: { tipo?: string | null }) {
   return (
@@ -164,7 +158,6 @@ export function ListingDetailContent({
 }) {
   const { lat, lon } = listing;
   const { formatPrice, formatSecondary, formatPricePerArea } = usePriceFormat();
-  const fuente = (listing.fuente ?? "").toLowerCase();
   const tipoOp = listing.tipo_operacion ?? "venta";
 
   const heroMapUrl =

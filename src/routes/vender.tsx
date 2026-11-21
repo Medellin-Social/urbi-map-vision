@@ -2,7 +2,7 @@ import { Name } from "@/lib/i18n";
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { formatMoney } from "@/lib/format";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import {
@@ -108,15 +108,6 @@ function IconCheck({ size = 14, color = "currentColor" }: { size?: number; color
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round">
       <polyline points="20 6 9 17 4 12" />
-    </svg>
-  );
-}
-
-function IconUser({ size = 24, color = "currentColor" }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   );
 }
@@ -836,7 +827,6 @@ function ArrriendoMetrics({
 function ProCtaBlock({
   intencion,
   isPro,
-  isLogged,
 }: {
   intencion: "venta" | "arriendo";
   isPro: boolean;
@@ -969,7 +959,6 @@ function ProAnalysisBlock({ intencion }: { intencion: "venta" | "arriendo" }) {
 
 function ProTeaserInline({
   intencion,
-  isLogged,
 }: {
   intencion: "venta" | "arriendo";
   isLogged: boolean;

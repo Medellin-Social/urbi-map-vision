@@ -239,7 +239,6 @@ function TabBarrios({
   forcedIds?: number[];
   forcedFiltro?: string | null;
 }) {
-  const isPro = useIsPro();
   const { data: barriosRaw = [], isPlaceholderData } = useBarriosRaw();
   const barrios = useMemo(() => barriosRaw.map(barrioToNeighborhood), [barriosRaw]);
   const [ids, setIds] = useState<number[]>(forcedIds ?? []);
@@ -493,14 +492,6 @@ function priceBadgeColor(pct: number | null | undefined): string {
   return "#CE1126";
 }
 
-function diasLabel(dias: number | null | undefined): string | null {
-  if (dias == null || dias < 0) return null;
-  if (dias === 0) return "Hoy";
-  if (dias < 7) return `${dias}d`;
-  if (dias < 30) return `${Math.floor(dias / 7)}sem`;
-  return `${Math.floor(dias / 30)}mes`;
-}
-
 function bestIdx(vals: (number | null | undefined)[], dir: "↑" | "↓"): number {
   const defined = vals.map((v, i) => ({ v, i })).filter(({ v }) => v != null) as { v: number; i: number }[];
   if (defined.length === 0) return -1;
@@ -591,7 +582,7 @@ function getWinnerIdx(listings: ComparadorListing[], goal?: string): number {
   return scores.reduce((best, cur) => cur.score > best.score ? cur : best).idx;
 }
 
-function WinnerCard({ listing, idx, goal }: { listing: ComparadorListing; idx: number; goal?: string }) {
+function WinnerCard({ listing, idx: _idx, goal }: { listing: ComparadorListing; idx: number; goal?: string }) {
   const navigate = useNavigate();
 
   const reasonLabel = goal === "investor" || goal === "airbnb"
@@ -670,14 +661,13 @@ function toIdArray(val: unknown): number[] {
 
 function TabInmuebles({
   initialIds,
-  onSwitchTab,
 }: {
   initialIds?: number[] | string;
   onSwitchTab: () => void;
 }) {
   const isPro = useIsPro();
   const qc = useQueryClient();
-  const { listings: storeListings, removeListing, clearAll } = useComparadorStore();
+  const { listings: storeListings, clearAll } = useComparadorStore();
   const safeInitial = toIdArray(initialIds);
   const [ids, setIds] = useState<number[]>(safeInitial.length > 0 ? safeInitial : storeListings.map((l) => l.id));
 

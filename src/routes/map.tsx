@@ -322,7 +322,6 @@ function MapPageInner() {
   // Conteo real del backend (COUNT(*)), no el length de la página capada (200/500) — evita
   // mostrar "200" como si fuera el total cuando hay más resultados sin cargar.
   const realTotal = globalSearch ? globalData?.total : (mlsBarrio ? mlsData?.total : undefined);
-  const mlsTotal = realTotal ?? mergedListings.length;
 
   // Panel zone label — real barrio > active commune > active municipality > Medellín default
   const activePanelName = activeComuna ?? activeMunicipio;
@@ -700,7 +699,6 @@ function MapPageInner() {
   function handleListingDoubleClickFromMap(id: number) {
     setHighlightedListingId(id);
     setMiniPopupData(null);
-    const listing = viewportListings.find((l) => l.id === id) ?? mergedListings.find((l) => l.id === id);
     openListingDetail(id);  // listing_detail lo emite el ListingDrawer al montar
   }
 

@@ -3,7 +3,6 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { appendSegmentParams } from "@/lib/listingParams";
 import { barrioToNeighborhood, appendPriceParams, type ApiBarrio, type ApiListingsResponse } from "@/lib/adapters";
-import { setScoreThresholds } from "@/config/mapColors";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
