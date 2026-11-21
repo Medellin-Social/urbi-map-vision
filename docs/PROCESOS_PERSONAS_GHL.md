@@ -50,6 +50,11 @@ Leyenda: ✅ probado local · 📖 leído en código, no ejecutado · 🔴 falla
 11. 🟡 Pago→slot depende de un workflow GHL que **no existe aún**; si pagan y falla, queda 409 + log y requiere humano.
 12. 🟡 Moneda/idioma/país del comprador no se guardan (clave para extranjeros).
 
+## 1b. Conexión sitio→GHL (implementada y verificada en DEV, 2026-11-21)
+Best-effort (nunca bloquea la acción). Se sincroniza el agente a GHL tras: aprobar, asignar slot, marcar casa, pago de slot (checkout simulado y webhook `realtor_slot`). Tags reales: `agent`, `agent-<estado>`, `realtor-preferido`, `zona-<barrio|comuna>-<id>`, `realtor-casa`. Opp en pipeline Realtors: `new` → `paid` al activar. Owner con intake → Contact `owner` + `owner-intake-<estado>`.
+Webhook verificado: 401 sin secret, 200 con secret, idempotente por `pago_ref`, 404 agente inexistente.
+**Nota:** los pipelines reales hoy solo tienen `new`/`paid`; las etapas `approved/active/...` de abajo son propuesta, aún no existen en GHL.
+
 ## 2. Convenciones GHL (lo que hay que crear una vez)
 
 **Auth sitio→GHL:** Private Integration token (`GHL_PRIVATE_TOKEN`, `GHL_LOCATION_ID`). **GHL→sitio:** `POST /api/v1/webhook/ghl`, header `X-Webhook-Secret`.
