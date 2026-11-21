@@ -138,7 +138,10 @@ const TIPOS_OP = [
   { v: "arriendo", l: "Arriendo" },
 ];
 const TIPOS_IN = [
-  { v: "apartamento", l: "Apartamento" }, { v: "casa", l: "Casa" },
+  // "apartaestudio" es solo de UI: se envía como apartamento con 0 habitaciones
+  // (así lo modela todo el sistema — migración 0105 — y el enum intake_tipo_inmueble).
+  { v: "apartamento", l: "Apartamento" }, { v: "apartaestudio", l: "Apartaestudio" },
+  { v: "casa", l: "Casa" }, { v: "finca", l: "Finca" },
   { v: "lote", l: "Lote" },
   { v: "local", l: "Local" }, { v: "oficina", l: "Oficina" },
   { v: "bodega", l: "Bodega" }, { v: "otro", l: "Otro" },
@@ -355,12 +358,65 @@ function Toggle({
   );
 }
 
+// ── Geocoding (dirección → pin) ────────────────────────────────────────────────
+
+// Valle de Aburrá + alrededores: acota resultados para que "Calle 10" no caiga en otra ciudad.
+const GEO_BBOX = "-75.80,5.95,-75.25,6.55";
+const GEO_PROXIMITY = "-75.5812,6.2442";
+
+/** Quita lo que el geocoder no entiende (apto, interior, torre…) y normaliza "#". */
+function limpiarDireccion(dir: string): string {
+  return dir
+    .split(/,|\b(?:apto|apartamento|apt|int|interior|torre|bloque|piso|oficina|of|local|casa)\b\.?/i)[0]
+    .replace(/[#№]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type GeoHit = { lat: number; lon: number; exacta: boolean; tipos?: string[] };
+
+async function geocodificar(q: string, signal: AbortSignal): Promise<GeoHit | null> {
+  const url =
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json` +
+    `?access_token=${MAPBOX_TOKEN}&country=co&language=es&limit=1` +
+    `&bbox=${GEO_BBOX}&proximity=${GEO_PROXIMITY}`;
+  const r = await fetch(url, { signal });
+  if (!r.ok) return null;
+  const f = (await r.json())?.features?.[0];
+  if (!f?.center) return null;
+  const tipos: string[] = f.place_type ?? [];
+  return {
+    lon: f.center[0], lat: f.center[1], tipos,
+    exacta: tipos.includes("address") || tipos.includes("poi"),
+  };
+}
+
+/** Dirección exacta (Mapbox) primero; si no aparece, el punto del barrio elegido
+ *  (de nuestra base — Mapbox no conoce bien los barrios). Pin aproximado que la persona ajusta. */
+async function ubicarDireccion(
+  direccion: string, barrio: BarrioOpt | undefined, municipio: string, signal: AbortSignal,
+): Promise<GeoHit | null> {
+  const ciudad = [municipio || "Medellín", "Antioquia"].join(", ");
+  const dir = limpiarDireccion(direccion);
+  let calle: GeoHit | null = null;
+  if (dir.length >= 5) {
+    // Sin el nombre del barrio en la query: Mapbox lo confunde y empeora el match.
+    const hit = await geocodificar(`${dir}, ${ciudad}`, signal);
+    if (hit?.exacta) return hit;
+    // Calle/vía sin número: mejor que nada, pero el barrio (si lo hay) es más preciso.
+    if (hit && !hit.tipos?.some((t) => ["place", "region", "district", "country"].includes(t))) calle = hit;
+  }
+  if (barrio?.lat != null && barrio?.lon != null) return { lat: barrio.lat, lon: barrio.lon, exacta: false };
+  return calle ? { ...calle, exacta: false } : null;
+}
+
 // ── Location picker ────────────────────────────────────────────────────────────
 
 function LocationPicker({
   lat, lon, onChange,
 }: {
   lat: number | null; lon: number | null;
+  /** Solo se llama cuando la PERSONA mueve el pin (clic o arrastre). */
   onChange: (lat: number, lon: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -418,6 +474,16 @@ function LocationPicker({
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pin puesto desde fuera (geocoding de la dirección): mover marcador y centrar.
+  useEffect(() => {
+    const map = mapRef.current, marker = markerRef.current;
+    if (!map || !marker || lat == null || lon == null) return;
+    const cur = marker.getLngLat();
+    if (Math.abs(cur.lat - lat) < 1e-7 && Math.abs(cur.lng - lon) < 1e-7) return;
+    marker.setLngLat([lon, lat]);
+    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 16), duration: 800 });
+  }, [lat, lon]);
 
   if (mapError) {
     return (
@@ -663,7 +729,7 @@ function Step1({
           <Chips options={TIPOS_OP} value={data.tipo_operacion} onSelect={(v) => setData({ tipo_operacion: v })} />
         </Field>
         <Field label="Tipo de inmueble" required info="Determina qué compradores lo ven y con qué propiedades se compara para estimar su precio.">
-          <Chips options={TIPOS_IN} value={data.tipo_inmueble} onSelect={(v) => setData({ tipo_inmueble: v })} />
+          <Chips options={TIPOS_IN} value={data.tipo_inmueble} onSelect={(v) => setData(v === "apartaestudio" ? { tipo_inmueble: v, habitaciones: "" } : { tipo_inmueble: v })} />
         </Field>
       </Section>
 
@@ -734,12 +800,12 @@ function Step2({
 }: {
   data: FormData; setData: (p: Partial<FormData>) => void;
 }) {
-  const showLote     = ["lote", "casa", "otro"].includes(data.tipo_inmueble);
-  const showHab      = !["lote", "local", "bodega", "oficina"].includes(data.tipo_inmueble);
-  const showPiso     = !["lote", "casa"].includes(data.tipo_inmueble);
-  const showEdificio = !["lote", "casa", "bodega"].includes(data.tipo_inmueble);
-  const showNiveles  = ["casa", "otro"].includes(data.tipo_inmueble);
-  const esResidencial = ["apartamento", "casa", "otro"].includes(data.tipo_inmueble);
+  const showLote     = ["lote", "casa", "finca", "otro"].includes(data.tipo_inmueble);
+  const showHab      = !["lote", "local", "bodega", "oficina", "apartaestudio"].includes(data.tipo_inmueble);
+  const showPiso     = !["lote", "casa", "finca"].includes(data.tipo_inmueble);
+  const showEdificio = !["lote", "casa", "finca", "bodega"].includes(data.tipo_inmueble);
+  const showNiveles  = ["casa", "finca", "otro"].includes(data.tipo_inmueble);
+  const esResidencial = ["apartamento", "apartaestudio", "casa", "finca", "otro"].includes(data.tipo_inmueble);
   const esVenta      = data.tipo_operacion === "venta";
   const esArriendo   = data.tipo_operacion === "arriendo";
   const tieneParq    = !!data.parqueaderos && data.parqueaderos !== "0";
@@ -919,7 +985,10 @@ function Step2({
 
 // ── Step 3 ─────────────────────────────────────────────────────────────────────
 
-type BarrioOpt = { id: number; nombre: string; municipio: string; comuna: string };
+type BarrioOpt = {
+  id: number; nombre: string; municipio: string; comuna: string;
+  lat?: number | null; lon?: number | null;
+};
 
 function Step3({
   data, setData, photos, setPhotos,
@@ -948,6 +1017,42 @@ function Step3({
   const barriosFiltrados = data.municipio && data.comuna
     ? barrios.filter((b) => b.municipio === data.municipio && b.comuna === data.comuna)
     : [];
+
+  // ── Dirección → pin automático. Si la persona mueve el pin, se respeta: ya no se
+  // auto-mueve (puede volver a ubicarlo con el botón "Ubicar por dirección").
+  const [geo, setGeo] = useState<"idle" | "buscando" | "exacta" | "aprox" | "barrio" | "no" | "manual">("idle");
+  const pinManual = useRef(false);
+  const geoQuery = [data.direccion.trim(), data.barrio_id, data.municipio].join("|");
+  // Al volver a este paso con pin ya puesto, no re-geocodificar lo mismo.
+  const lastQuery = useRef(data.lat != null ? geoQuery : "");
+  const abortRef = useRef<AbortController | null>(null);
+
+  const ubicar = (forzar: boolean) => {
+    if (!forzar && (pinManual.current || geoQuery === lastQuery.current)) return;
+    if (!data.direccion.trim() && !data.barrio_nombre) return;
+    lastQuery.current = geoQuery;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setGeo("buscando");
+    const barrioSel = barrios.find((b) => String(b.id) === data.barrio_id);
+    ubicarDireccion(data.direccion, barrioSel, data.municipio, ctrl.signal)
+      .then((hit) => {
+        if (ctrl.signal.aborted) return;
+        if (!hit) { setGeo("no"); return; }
+        if (forzar) pinManual.current = false;
+        setData({ lat: hit.lat, lon: hit.lon });
+        setGeo(hit.exacta ? "exacta" : data.direccion.trim() ? "aprox" : "barrio");
+      })
+      .catch(() => { if (!ctrl.signal.aborted) setGeo("no"); });
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => ubicar(false), 900);
+    return () => clearTimeout(t);
+  }, [geoQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -1026,13 +1131,38 @@ function Step3({
           <span>Ubicación en el mapa <span style={{ color: K.coral, fontSize: 12 }}>*</span></span>
           <InfoDot text="El pin fija el punto exacto para mostrar tu inmueble en el lugar correcto del mapa (al público se muestra aproximado). También ayuda a no duplicarlo con otros avisos." />
         </h3>
-        <p style={{ fontSize: 13, color: K.muted, marginBottom: 12 }}>
-          Haz clic en el mapa o arrastra el pin para marcar la ubicación exacta de la propiedad.
+        <p style={{ fontSize: 13, color: K.muted, marginBottom: 8 }}>
+          Ubicamos el pin con la dirección que escribiste. Si no quedó exacto, haz clic en el mapa o arrastra el pin.
         </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, minHeight: 28 }}>
+          <button
+            type="button"
+            onClick={() => ubicar(true)}
+            disabled={geo === "buscando" || (!data.direccion.trim() && !data.barrio_nombre)}
+            style={{
+              fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+              border: `1px solid ${K.teal}`, background: "transparent", color: K.teal,
+              cursor: "pointer", opacity: geo === "buscando" ? 0.6 : 1,
+            }}
+          >
+            {geo === "buscando" ? "Buscando…" : "Ubicar por dirección"}
+          </button>
+          <span role="status" style={{ fontSize: 12, color: geo === "no" ? K.coral : K.muted }}>
+            {geo === "exacta" && "Pin ubicado en la dirección. Revisa que esté en el lugar correcto."}
+            {geo === "aprox" && "No encontramos la dirección exacta; pusimos el pin en el barrio. Ajústalo en el mapa."}
+            {geo === "barrio" && "Pusimos el pin en el barrio. Escribe la dirección para afinarlo."}
+            {geo === "no" &&"No pudimos ubicar la dirección. Marca el punto en el mapa."}
+            {geo === "manual" && "Ubicación ajustada por ti."}
+          </span>
+        </div>
         <LocationPicker
           lat={data.lat}
           lon={data.lon}
-          onChange={(lat, lon) => setData({ lat, lon })}
+          onChange={(lat, lon) => {
+            pinManual.current = true;
+            setGeo("manual");
+            setData({ lat, lon });
+          }}
         />
       </div>
 
@@ -1794,14 +1924,16 @@ function PublicarPage() {
       const fd = new FormData();
       const cop = parseCOP(form.precio_cop);
       fd.append("tipo_operacion",    form.tipo_operacion);
-      fd.append("tipo_inmueble",     form.tipo_inmueble);
+      const esEstudio = form.tipo_inmueble === "apartaestudio";
+      fd.append("tipo_inmueble",     esEstudio ? "apartamento" : form.tipo_inmueble);
+      if (esEstudio) fd.append("habitaciones", "0");
       if (form.titulo.trim())        fd.append("titulo_custom", form.titulo.trim());
       fd.append("precio_cop",        String(cop));
       if (form.tiene_admin && form.administracion_cop)
         fd.append("administracion_cop", String(parseCOP(form.administracion_cop)));
       if (form.area_m2)     fd.append("area_m2",      form.area_m2);
       if (form.area_lote_m2) fd.append("area_lote_m2", form.area_lote_m2);
-      if (form.habitaciones) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
+      if (form.habitaciones && !esEstudio) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
       if (form.banos)        fd.append("banos",        form.banos === "4+" ? "4" : form.banos);
       if (form.parqueaderos) fd.append("parqueaderos", form.parqueaderos === "3+" ? "3" : form.parqueaderos);
       if (form.estrato)           fd.append("estrato",           form.estrato);

@@ -1688,6 +1688,15 @@ export const PHRASES: Array<[string, string]> = [
 
   // ── Tipos de inmueble ─────────────────────────────────────────────────────
   ["Apartamento", "Apartment"],
+  ["Apartaestudio", "Studio"],
+  ["Ubicamos el pin con la dirección que escribiste. Si no quedó exacto, haz clic en el mapa o arrastra el pin.", "We placed the pin using the address you entered. If it's not exact, click the map or drag the pin."],
+  ["Ubicar por dirección", "Locate by address"],
+  ["Buscando…", "Searching…"],
+  ["Pin ubicado en la dirección. Revisa que esté en el lugar correcto.", "Pin placed at the address. Check that it's in the right spot."],
+  ["No encontramos la dirección exacta; pusimos el pin en el barrio. Ajústalo en el mapa.", "We couldn't find the exact address; we placed the pin in the neighborhood. Adjust it on the map."],
+  ["No pudimos ubicar la dirección. Marca el punto en el mapa.", "We couldn't locate the address. Mark the spot on the map."],
+  ["Ubicación ajustada por ti.", "Location adjusted by you."],
+  ["Pusimos el pin en el barrio. Escribe la dirección para afinarlo.", "We placed the pin in the neighborhood. Enter the address to refine it."],
   ["Oficina", "Office"],
   ["Bodega", "Storage"],
   ["Remodelado", "Renovated"],
