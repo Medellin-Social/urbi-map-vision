@@ -5,13 +5,13 @@
 - es_realtor_casa: agente(s) que cubren con slot 'gratis' los barrios sin preferido
   (cron scripts/seed_preferidos_gratis.py, idempotente).
 
-Revision ID: 0124
-Revises: 0123
+Revision ID: 0129
+Revises: 0128
 """
 from alembic import op
 
-revision = "0124"
-down_revision = "0123"
+revision = "0130"
+down_revision = "0129"
 branch_labels = None
 depends_on = None
 
@@ -23,11 +23,11 @@ def upgrade() -> None:
     op.execute("ALTER TABLE agent ADD COLUMN IF NOT EXISTS certificado BOOLEAN NOT NULL DEFAULT FALSE")
     op.execute("ALTER TABLE agent ADD COLUMN IF NOT EXISTS es_realtor_casa BOOLEAN NOT NULL DEFAULT FALSE")
     # Aviso de vencimiento: una sola vez por slot
-    op.execute("ALTER TABLE realtor_slot ADD COLUMN IF NOT EXISTS aviso_vencimiento_at TIMESTAMPTZ")
+    op.execute("ALTER TABLE realtor_preferido_slot ADD COLUMN IF NOT EXISTS aviso_vencimiento_at TIMESTAMPTZ")
 
 
 def downgrade() -> None:
-    op.execute("ALTER TABLE realtor_slot DROP COLUMN IF EXISTS aviso_vencimiento_at")
+    op.execute("ALTER TABLE realtor_preferido_slot DROP COLUMN IF EXISTS aviso_vencimiento_at")
     op.execute("ALTER TABLE agent DROP COLUMN IF EXISTS es_realtor_casa")
     op.execute("ALTER TABLE agent DROP COLUMN IF EXISTS certificado")
     op.execute("ALTER TABLE agent DROP CONSTRAINT IF EXISTS chk_agent_tier")
