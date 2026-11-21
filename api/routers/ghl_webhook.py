@@ -313,17 +313,20 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
     from api.services.realtor_preferido_service import SlotError, procesar_pago_slot
 
     props = payload.get("properties") or payload
-    pool = get_pool()
     agent_id = props.get("agent_id")
     email = (props.get("agent_email") or "").strip().lower()
     zona_nivel, zona_codigo = props.get("zona_nivel"), str(props.get("zona_codigo") or "")
-    pago_ref = props.get("pago_ref")
+    pago_ref = str(props.get("pago_ref") or "").strip()
+    if not pago_ref or pago_ref == "simulado":
+        # Sin pago_ref real no hay idempotencia: un reenvío extendería el slot dos veces.
+        raise HTTPException(status_code=400, detail="falta pago_ref (id de la orden)")
     if not zona_codigo or (not agent_id and not email):
         raise HTTPException(status_code=400, detail="falta agent_id/agent_email o zona_codigo")
     try:
         meses = max(1, min(12, int(props.get("meses") or 1)))
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="meses inválido")
+    pool = get_pool()
     async with pool.acquire() as conn:
         if not agent_id:
             agent_id = await conn.fetchval(
