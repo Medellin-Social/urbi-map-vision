@@ -55,10 +55,7 @@ export function SimuladorTab() {
   const [barrioId, setBarrioId] = useState<number | null>(null);
   const [presupuesto, setPresupuesto] = useState(500);
   const [modalidad, setModalidad] = useState<Modalidad>("renta_larga");
-  const [horizonte, setHorizonte] = useState(5);
-  const [credito, setCredito] = useState(false);
-  const [cuotaInicial, setCuotaInicial] = useState(30);
-  const [tasa, setTasa] = useState(12);
+  const horizonte = 5;
 
   const { data: comunas } = useBarriosComunas();
   const { data: barrios } = useBarriosPorComuna(comuna);
@@ -68,8 +65,7 @@ export function SimuladorTab() {
     if (barrioId == null) return;
     const req: SimulacionRequest = {
       barrio_id: barrioId, presupuesto_cop: presupuesto * 1e6, tipo_inversion: modalidad,
-      horizonte_anos: horizonte, con_credito: credito,
-      ...(credito ? { cuota_inicial_pct: cuotaInicial, tasa_anual_pct: tasa, plazo_anos: 20 } : {}),
+      horizonte_anos: horizonte, con_credito: false,
     };
     sim.mutate(req);
   };
@@ -110,28 +106,8 @@ export function SimuladorTab() {
               <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Modalidad</span>
               <Segmented value={modalidad} onChange={setModalidad} options={MODALIDADES} />
             </div>
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Horizonte</span>
-              <Segmented value={String(horizonte)} onChange={(v) => setHorizonte(Number(v))}
-                options={[{ v: "3", label: "3 años" }, { v: "5", label: "5 años" }, { v: "10", label: "10 años" }]} />
-            </div>
           </div>
           <div className="flex flex-wrap items-center gap-4">
-            <label className="flex items-center gap-2 text-[12px]" style={{ color: C.ink }}>
-              <input type="checkbox" checked={credito} onChange={(e) => setCredito(e.target.checked)} /> Con crédito
-            </label>
-            {credito && (
-              <>
-                <label className="flex items-center gap-1.5 text-[12px]" style={{ color: C.sub }}>
-                  Cuota inicial <input type="number" value={cuotaInicial} onChange={(e) => setCuotaInicial(Number(e.target.value))}
-                    className="w-16 rounded-lg border px-2 py-1 text-right" style={{ borderColor: C.line }} />%
-                </label>
-                <label className="flex items-center gap-1.5 text-[12px]" style={{ color: C.sub }}>
-                  Tasa E.A. <input type="number" value={tasa} onChange={(e) => setTasa(Number(e.target.value))}
-                    className="w-16 rounded-lg border px-2 py-1 text-right" style={{ borderColor: C.line }} />%
-                </label>
-              </>
-            )}
             <button onClick={correr} disabled={barrioId == null || sim.isPending}
               className="ml-auto rounded-xl px-6 py-2.5 text-[13px] font-bold text-white transition hover:opacity-90 disabled:opacity-40"
               style={{ background: C.brand }}>
@@ -152,11 +128,6 @@ export function SimuladorTab() {
             <Stat label="Recupero" value={r.recupero.neto_anos != null ? `${r.recupero.neto_anos.toFixed(0)} años` : `${r.recupero.bruto_anos.toFixed(0)} años`} sub="recuperar la inversión" />
             <Stat label="Ingreso/mes" value={fmtCOP(r.ingresos.mensual_cop)} sub={`${fmtCOP(r.ingresos.anual_cop)}/año`} />
             <Stat label="Ganancia 5 años" value={fmtCOP(r.valorizacion.ganancia_5anos_cop)} sub={`+${r.valorizacion.tasa_anual_pct.toFixed(1)}%/año`} accent={C.good} />
-            <Stat label="Valor a 5 años" value={fmtCOP(r.valorizacion.valor_5anos_cop)} sub={`hoy ${fmtCOP(r.presupuesto_cop)}`} />
-            <Stat label="Retorno total 5a" value={fmtCOP(r.valorizacion.retorno_total_5anos_cop)} sub="valorización + renta" accent={C.good} />
-            <Stat label="Área comprable" value={`${Math.round(r.area_comprable_m2)} m²`} sub={`con $${(r.presupuesto_cop / 1e6).toFixed(0)}M`} />
-            {r.estado_precio && <Stat label="Precio de zona" value={r.estado_precio} sub="vs. precio justo" accent={/sobre/i.test(r.estado_precio) ? C.bad : /bajo/i.test(r.estado_precio) ? C.good : C.ink} />}
-            {r.seguridad_score != null && <Gauge value={r.seguridad_score} label="Seguridad" sub={r.zona_categoria ?? undefined} />}
           </div>
 
           {/* Proyección */}
@@ -186,31 +157,6 @@ export function SimuladorTab() {
           <div className="grid gap-5 lg:grid-cols-2">
             {r.flujo_caja_desglose && <FlujoCaja f={r.flujo_caja_desglose} />}
 
-            {/* Comparativo de modalidades */}
-            {r.comparativo_modalidades && r.comparativo_modalidades.length > 0 && (
-              <Card title="⚖️ Airbnb vs renta media vs larga">
-                <div className="flex flex-col gap-2.5">
-                  {r.comparativo_modalidades.map((m) => {
-                    const y = m.yield_neto_pct ?? 0;
-                    const maxY = Math.max(...r.comparativo_modalidades!.map((x) => x.yield_neto_pct ?? 0), 1);
-                    return (
-                      <div key={m.tipo} className="flex items-center gap-3">
-                        <div className="w-24 shrink-0 text-[12px]" style={{ color: C.ink, fontWeight: m.es_recomendada ? 700 : 400 }}>
-                          {m.label}{m.es_recomendada && " ★"}
-                        </div>
-                        <div className="h-6 flex-1 overflow-hidden rounded" style={{ background: C.soft }}>
-                          <div className="flex h-full items-center justify-end rounded pr-2" style={{ width: `${Math.max(8, (y / maxY) * 100)}%`, background: m.es_recomendada ? C.brand : C.cat[0] }}>
-                            <span className="text-[11px] font-bold text-white tabular-nums">{y.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                        <div className="w-16 shrink-0 text-right text-[10.5px]" style={{ color: C.muted }}>{m.riesgo}</div>
-                      </div>
-                    );
-                  })}
-                </div>
-                <div className="mt-3 text-[10.5px]" style={{ color: C.muted }}>Yield neto por modalidad · ★ = recomendada para esta zona.</div>
-              </Card>
-            )}
           </div>
 
           {r.resumen && <div className="rounded-2xl px-5 py-4 text-[13px] leading-relaxed" style={{ background: C.soft, color: C.ink, border: `1px solid ${C.line}` }}>{r.resumen}</div>}
