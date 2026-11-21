@@ -87,8 +87,14 @@ async def reactivate_listing(conn, fuente: str, url: str) -> bool:
         return False
     first = logged[0]
     if mirrors:
+        # raw.*.url_validada_at is `timestamp` WITHOUT tz (naive); transitions stores it as timestamptz
+        # (aware). asyncpg rejects binding an aware datetime to the naive column. Server is UTC, so the
+        # UTC wall-clock == the original naive value — strip tzinfo to round-trip faithfully.
+        pv = first["prev_url_validada_at"]
+        if pv is not None and pv.tzinfo is not None:
+            pv = pv.replace(tzinfo=None)
         await conn.execute(f"UPDATE {table} SET activo = $2, url_activa = $3, url_validada_at = $4 WHERE url = $1",
-                           url, first["prev_activo"], first["prev_url_activa"], first["prev_url_validada_at"])
+                           url, first["prev_activo"], first["prev_url_activa"], pv)
     else:
         await conn.execute(f"UPDATE {table} SET activo = $2 WHERE url = $1", url, first["prev_activo"])
     await conn.execute("UPDATE public.listing_link_transitions SET reverted_at = now() WHERE id = ANY($1::bigint[])",
