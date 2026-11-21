@@ -299,7 +299,10 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
 async def tomar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     agent = await _agent_del_usuario(user, pool)
     try:
-        return await tomar_del_pool(intake_id, agent, pool)
+        res = await tomar_del_pool(intake_id, agent, pool)
+        from api.utils import ghl_client
+        await ghl_client.sync_owner_intake(intake_id)
+        return res
     except AsignadorError as e:
         raise HTTPException(status_code=403, detail=str(e))
 

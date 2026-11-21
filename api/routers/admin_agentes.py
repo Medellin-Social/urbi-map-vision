@@ -73,6 +73,7 @@ async def rechazar(request: Request, agent_id: str, req: MotivoRequest = Body(..
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "rechazar_agente", "agent", agent_id, {"motivo": req.motivo}, request)
+    await ghl_client.sync_agent_safe(agent_id)
     return {"id": agent_id, "estado": "rechazado"}
 
 
@@ -86,6 +87,7 @@ async def suspender(request: Request, agent_id: str, req: MotivoConPasswordReque
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "suspender_agente", "agent", agent_id, {"motivo": req.motivo}, request)
+    await ghl_client.sync_agent_safe(agent_id)
     return {"id": agent_id, "estado": "inactivo"}
 
 

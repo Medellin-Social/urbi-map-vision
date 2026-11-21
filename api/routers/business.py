@@ -418,4 +418,8 @@ async def submit_negocio(
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    from api.utils import ghl_client
+    await ghl_client.sync_contact_safe(
+        current_user.get("email"), body.nombre, body.telefono or body.whatsapp,
+        ["negocio-local", "negocio-pendiente"], "mi-negocio")
     return MiNegocioOut(id=row["id"], estado="pendiente")

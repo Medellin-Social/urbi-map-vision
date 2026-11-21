@@ -269,6 +269,7 @@ async def aceptar_intake_endpoint(
             SimpleNamespace(id=intake_id, declaraciones=decl), pool
         )
 
+    await ghl_client.sync_owner_intake(intake_id)
     return {"intake_id": intake_id, "listing_id": listing_id,
             "estado": "aceptado", "dd_items": dd_items}
 

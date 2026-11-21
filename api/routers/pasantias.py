@@ -43,6 +43,8 @@ async def aplicar_pasantia(request: Request, body: AplicarPasantiaIn = Body(...)
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    from api.utils import ghl_client
+    await ghl_client.sync_contact_safe(body.email, body.nombre, body.telefono, ["pasante"], "pasantias")
     return AplicarOut(
         ok=True,
         aplicacion_id=row["id"],

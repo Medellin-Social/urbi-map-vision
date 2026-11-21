@@ -253,6 +253,11 @@ async def register(request: Request, background: BackgroundTasks, req: RegisterR
         req.email, password_hash, req.nombre, req.apellido, req.telefono, req.origen,
         HABEAS_DATA_VERSION, req.consent_whatsapp,
     )
+    if user_id is not None:
+        from api.utils import ghl_client
+        background.add_task(ghl_client.sync_contact_safe, req.email,
+                            f"{req.nombre or ''} {req.apellido or ''}".strip() or None,
+                            req.telefono, ["buyer"], "registro")
     if user_id is not None and await email_throttle.allow_shared(pool, f"verify:{req.email}"):
         background.add_task(_issue_verification, pool, user_id, req.email, req.nombre or "")
     return RegisterResponse()

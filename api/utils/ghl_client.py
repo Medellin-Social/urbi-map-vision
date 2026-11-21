@@ -1065,6 +1065,17 @@ async def sync_owner_intake(intake_id: str) -> Optional[str]:
         return None
 
 
+async def sync_contact_safe(email, nombre=None, phone=None, tags=None, source: str = "sitio") -> Optional[str]:
+    """Contact genérico con tags (buyer, pasante, negocio-local...). Best-effort, nunca levanta."""
+    if not is_configured() or not email:
+        return None
+    try:
+        return await upsert_contact(email=email, nombre=nombre, phone=phone, tags=list(tags or []), source=source)
+    except Exception as e:  # noqa: BLE001
+        logger.error("sync_contact_safe(%s) falló: %s", email, e)
+        return None
+
+
 # ── Visita (solicitud de cita a un listing) → Appointment / Calendar ────────
 # NO está en el contrato de Talal todavía — ningún §lo cubre. Flujo pedido por
 # negocio: el botón "Agendar visita" lleva al comprador a la página de
