@@ -27,6 +27,8 @@ Leyenda: ✅ probado local · 📖 leído en código, no ejecutado · 🔴 falla
 
 ## 1. Lógica mala encontrada (ordenada por impacto)
 
+> ✅ Fallas 1–4 **corregidas y verificadas en DEV** (2026-11-21): slot rutea leads, independiente acepta intake, listing con agent_id/agency, nivel_zona con savepoint. Pendiente prod.
+
 1. 🔴 **El slot pagado no recibe leads.** `asignador_service.asignar_intake` rutea solo por
    *agency patrocinadora* (sistema viejo). `siguiente_realtor()` solo lo usa el endpoint público.
    Pagar/recibir un slot no cambia a quién llega el lead. → Hacer que `asignar_intake` use
