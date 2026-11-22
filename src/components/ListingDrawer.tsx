@@ -833,7 +833,8 @@ function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { li
   const dParque = c?.dist_parque_km;
   if (dParque != null) facts.push({ icon: "🏞️", label: fl("Parque"), ...km(dParque), ratio: scaleRatio(dParque, "parque"), cat: "lugares" });
   const dMall = c?.dist_mall_km;
-  if (dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall"), cat: "lugares" });
+  // Solo residencial: para un local un mall cerca es COMPETENCIA, no amenidad → se oculta en comercial.
+  if (!esComercial && dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall"), cat: "lugares" });
   // Zonas verdes: % de cobertura (indice_verde_pct). Mediana Medellín = 2.4%, p90 = 11.7%
   // → un 3% está sobre la mitad de los barrios (ámbar), NO rojo. Antes un tope de 35%
   // pintaba de rojo barrios realmente verdes.
