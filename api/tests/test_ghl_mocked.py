@@ -242,7 +242,7 @@ def _lead_row():
     return dict(id="11111111-1111-1111-1111-111111111111", created_at=now, estado="pendiente",
                 nombre="N", telefono="3", email="e@x.co", listing_url="u", fecha_visita=None,
                 mensaje=None, agent_id=None, intencion="vivir", presupuesto=None, plazo=None,
-                credito=None, horas_sin_responder=2)
+                credito=None, horas_sin_responder=2, external_id=None)
 
 
 @pytest_asyncio.fixture
@@ -288,9 +288,20 @@ async def test_lead_by_id_bad_uuid_is_404_not_500(leads, monkeypatch):
 
 
 # ── stub behaviour pinned ────────────────────────────────────────────────────
-async def test_visita_push_is_still_a_stub():
-    with pytest.raises(NotImplementedError):
-        await G.push_visita_to_ghl("any", {})
+async def test_visita_push_best_effort_registra_fallo(monkeypatch):
+    """Si GHL falla, push_visita_to_ghl no lanza: devuelve None y registra el fallo."""
+    fallos = []
+
+    async def boom(**kw):
+        raise RuntimeError("ghl caído")
+
+    async def rec(tipo, ref, err):
+        fallos.append((tipo, ref))
+
+    monkeypatch.setattr(G, "upsert_contact", boom)
+    monkeypatch.setattr(G, "_record_push_failure", rec)
+    assert await G.push_visita_to_ghl("v1", {"email": "a@b.co"}) is None
+    assert fallos == [("visita", "v1")]
 
 
 async def test_spawn_loguea_excepcion_y_libera_referencia(caplog):
