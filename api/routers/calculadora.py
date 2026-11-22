@@ -637,7 +637,7 @@ _LISTING_SIMUL_SQL = """
         g.estrato_manzana
     FROM staging.stg_listings_unificado l
     LEFT JOIN analytics.listings_georef g ON g.url = l.url
-    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1::bigint
+    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1::int
     LIMIT 1
 """
 
@@ -673,7 +673,7 @@ _ALTERNATIVAS_SQL = """
       AND l.precio_cop <= $1
       AND ctx.yield_bruto_pct IS NOT NULL
       AND l.fotos IS NOT NULL AND array_length(l.fotos, 1) > 0
-      AND ('x'||substr(md5(l.url),1,8))::bit(32)::int != $2::bigint
+      AND ('x'||substr(md5(l.url),1,8))::bit(32)::int != $2::int
     ORDER BY ctx.yield_bruto_pct DESC NULLS LAST
     LIMIT 25
 """
