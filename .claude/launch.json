@@ -1,0 +1,26 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "web",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:Path = \"$env:LOCALAPPDATA\\Programs\\node-v26.13.1-win-x64;$env:Path\"; npm run dev -- --host 127.0.0.1 --port 5173"
+      ],
+      "port": 5173
+    },
+    {
+      "name": "web-mock",
+      "runtimeExecutable": "powershell",
+      "runtimeArgs": [
+        "-NoProfile",
+        "-Command",
+        "$env:Path = \"$env:LOCALAPPDATA\\Programs\\node-v26.13.1-win-x64;$env:Path\"; $env:VITE_REALTOR_USE_MOCK='true'; npm run dev -- --host localhost --port 5199 --strictPort"
+      ],
+      "port": 5199,
+      "autoPort": false
+    }
+  ]
+}

@@ -1,16 +1,26 @@
-import { Name } from "@/lib/i18n";
+import { Name, useLang } from "@/lib/i18n";
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { MapPin, MessageCircle, Users, ArrowRight, Search, ShieldCheck, HelpCircle } from "@/lib/icons";
+import { MapPin, MessageCircle, Users, ArrowRight, Search, ShieldCheck, HelpCircle, Star, User, Home } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { K as TOKENS } from "@/design/tokens";
-import { type Agente, Stars, waFromTel, iniciales, perfilHref } from "@/components/agentes/agenteShared";
+import { type Agente, Stars, waFromTel, iniciales, perfilHref, AgenteTipoBadges } from "@/components/agentes/agenteShared";
+import { AGENTE_TIPOS, AGENTE_TIPO_STYLE, AGENTE_TIPO_DESC, agenteTipoLabel, type AgenteTipo } from "@/lib/agenteTipos";
+
+type Search = { zona?: string; comuna?: string; tipo?: string };
 
 export const Route = createFileRoute("/agentes")({
+  // ?zona=<barrio>&comuna=<comuna>&tipo=certified,preferred — lo usa el aviso de
+  // "agente no registrado" del anuncio para conservar la ubicación del inmueble.
+  validateSearch: (s: Record<string, unknown>): Search => ({
+    zona: typeof s.zona === "string" && s.zona ? s.zona.slice(0, 120) : undefined,
+    comuna: typeof s.comuna === "string" && s.comuna ? s.comuna.slice(0, 120) : undefined,
+    tipo: typeof s.tipo === "string" && s.tipo ? s.tipo.slice(0, 80) : undefined,
+  }),
   head: () => seo({ title: "Agentes inmobiliarios · Medellín Social", description: "Encuentra agentes inmobiliarios verificados por zona en Medellín y el Valle de Aburrá.", path: "/agentes" }),
   component: AgentesPage,
 });
@@ -29,8 +39,8 @@ const FAQ: { q: string; a: string }[] = [
     a: "Nada. Hablar con cualquier agente del directorio es gratis y directo por WhatsApp, sin intermediarios ni formularios.",
   },
   {
-    q: "¿Los agentes están verificados?",
-    a: "Cada agente pasa por una revisión antes de aparecer en el directorio. Cuando trabaja con una agencia que además tiene el sello ✓ verificada, esa agencia fue revisada aparte.",
+    q: "¿Qué significan las etiquetas de cada agente?",
+    a: "Agente registrado: se inscribió y dio su información. Agente certificado: además aprobó el examen EASE y la revisión de su trayectoria. Preferente de barrio o comuna: posicionamiento pagado en esa zona (la certificación se indica aparte). Toca una etiqueta para ver la guía completa.",
   },
   {
     q: "¿Las reseñas son reales?",
@@ -75,6 +85,8 @@ function AgenteRow({ a }: { a: Agente }) {
           <Link {...perfilLink} className="max-w-full break-words text-left text-xl font-bold leading-tight tracking-tight transition hover:opacity-70 sm:text-2xl" style={{ color: K.ink, fontFamily: K.serif }}>
             <Name>{a.nombre}</Name>
           </Link>
+
+          <AgenteTipoBadges tipos={a.tipos} preferente={a.preferente} className="mt-1" linked />
 
           {a.rating_promedio != null ? (
             <div className="mt-0.5 flex items-center gap-1.5">
@@ -133,6 +145,74 @@ function AgenteRow({ a }: { a: Agente }) {
   );
 }
 
+const TIPO_ICON: Record<AgenteTipo, typeof Star> = { preferred: Star, certified: ShieldCheck, member: User, casa: Home };
+
+// Filtro por tipo de agente, compacto: píldoras en una línea (ícono + nombre +
+// conteo) que envuelven. Multi-selección en OR; "Todos" limpia. La descripción
+// de cada tipo va en el tooltip (title) para no ocupar espacio.
+function TipoAgenteFiltro({ value, onToggle, onClear, conteo, total, lang }: {
+  value: AgenteTipo[];
+  onToggle: (t: AgenteTipo) => void;
+  onClear: () => void;
+  conteo: Record<AgenteTipo, number>;
+  total: number;
+  lang: string;
+}) {
+  const en = lang === "en";
+  const todos = value.length === 0;
+  const Pill = ({ id, on, onClick, icon: Icon, label, desc, n, color }: {
+    id: string; on: boolean; onClick: () => void; icon: typeof Star;
+    label: string; desc: string; n: number; color: { bg: string; fg: string; border: string };
+  }) => (
+    <button
+      type="button"
+      data-testid={`tipo-agente-${id}`}
+      aria-pressed={on}
+      title={desc}
+      onClick={onClick}
+      className="inline-flex h-8 items-center gap-1.5 rounded-full pl-2 pr-2.5 text-xs font-semibold transition hover:shadow-sm focus:outline-none focus-visible:ring-2"
+      style={{
+        background: on ? color.bg : "#FFFFFF",
+        color: on ? color.fg : K.ink,
+        border: `1px solid ${on ? color.border : K.line}`,
+      }}
+    >
+      <Icon className="h-3.5 w-3.5 shrink-0" style={{ color: on ? color.fg : color.border }} />
+      <span>{label}</span>
+      <span className="tabular-nums" style={{ color: on ? color.fg : K.muted, opacity: on ? 0.75 : 1 }}>{n}</span>
+    </button>
+  );
+
+  return (
+    <div data-i18n-skip>
+      <div className="mb-1.5 flex items-center justify-between">
+        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>
+          {en ? "Agent type" : "Tipo de agente"}
+        </span>
+        {!todos && (
+          <button type="button" onClick={onClear} className="text-xs font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
+            {en ? "Clear" : "Limpiar"}
+          </button>
+        )}
+      </div>
+      <div className="flex flex-wrap gap-1.5" role="group" aria-label={en ? "Agent type" : "Tipo de agente"}>
+        <Pill
+          id="todos" on={todos} onClick={onClear} icon={Users}
+          label={en ? "All" : "Todos"} desc={en ? "The whole directory" : "Todo el directorio"}
+          n={total} color={{ bg: K.tealLight, fg: K.tealDeep, border: K.teal }}
+        />
+        {AGENTE_TIPOS.map((t) => (
+          <Pill
+            key={t} id={t} on={value.includes(t)} onClick={() => onToggle(t)} icon={TIPO_ICON[t]}
+            label={agenteTipoLabel(t, lang)} desc={AGENTE_TIPO_DESC[t][en ? "en" : "es"]}
+            n={conteo[t]} color={AGENTE_TIPO_STYLE[t]}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function AgenteRowSkeleton() {
   return (
     <div className="flex animate-pulse items-center gap-4 rounded-2xl border-l-4 p-5" style={{ borderLeftColor: K.line, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}>
@@ -153,14 +233,28 @@ function AgentesPage() {
   });
   const agentes = data ?? [];
 
+  const { lang } = useLang();
+  const search = Route.useSearch();
   const [busqueda, setBusqueda] = useState("");
-  const [zonaFiltro, setZonaFiltro] = useState("");
+  const [zonaFiltro, setZonaFiltro] = useState(search.zona ?? "");
+  // Tipos seleccionados (OR). Vacío = todos. Un agente puede tener varios tipos.
+  const [tiposFiltro, setTiposFiltro] = useState<AgenteTipo[]>(
+    () => (search.tipo ?? "").split(",").filter((x): x is AgenteTipo => (AGENTE_TIPOS as string[]).includes(x)),
+  );
   const [orden, setOrden] = useState<SortKey>("nombre");
+  const toggleTipo = (t: AgenteTipo) =>
+    setTiposFiltro((prev) => (prev.includes(t) ? prev.filter((x) => x !== t) : [...prev, t]));
+  const conteoTipo = useMemo(() => {
+    const c: Record<AgenteTipo, number> = { member: 0, certified: 0, preferred: 0, casa: 0 };
+    for (const a of agentes) for (const t of a.tipos ?? []) if (t in c) c[t as AgenteTipo]++;
+    return c;
+  }, [agentes]);
 
   const zonasDisponibles = useMemo(
-    () => Array.from(new Set(agentes.flatMap((a) => a.zonas))).sort(),
-    [agentes],
+    () => Array.from(new Set([...agentes.flatMap((a) => a.zonas), ...(zonaFiltro ? [zonaFiltro] : [])])).sort(),
+    [agentes, zonaFiltro],
   );
+  const norm = (x: string) => x.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
 
   const visibles = useMemo(() => {
     let lista = agentes;
@@ -169,7 +263,12 @@ function AgentesPage() {
       lista = lista.filter((a) => a.nombre.toLowerCase().includes(q));
     }
     if (zonaFiltro) {
-      lista = lista.filter((a) => a.zonas.includes(zonaFiltro));
+      const z = norm(zonaFiltro);
+      lista = lista.filter((a) => a.zonas.some((x) => norm(x) === z)
+        || (a.preferente ?? []).some((p) => norm(p.nombre) === z));
+    }
+    if (tiposFiltro.length > 0) {
+      lista = lista.filter((a) => (a.tipos ?? []).some((t) => tiposFiltro.includes(t as AgenteTipo)));
     }
     const orden_ = [...lista];
     if (orden === "rating") {
@@ -185,7 +284,7 @@ function AgentesPage() {
       orden_.sort((a, b) => a.nombre.localeCompare(b.nombre));
     }
     return orden_;
-  }, [agentes, busqueda, zonaFiltro, orden]);
+  }, [agentes, busqueda, zonaFiltro, tiposFiltro, orden]);
 
   const inputStyle: React.CSSProperties = { border: `1px solid ${K.line}`, background: "#FFFFFF", color: K.ink };
 
@@ -199,6 +298,11 @@ function AgentesPage() {
           <p className="mt-2 max-w-lg text-[15px] leading-relaxed" style={{ color: K.muted }}>
             Contacta directamente a un agente que trabaja en Medellín. Sin formularios, sin esperar una llamada.
           </p>
+          <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-sm font-semibold">
+            <Link to="/agentes/estados" style={{ color: K.tealDeep }}>Guía de estados de agentes</Link>
+            <Link to="/mas-informacion" style={{ color: K.tealDeep }}>¿Necesitas un realtor, manager o administración?</Link>
+            <Link to="/agentes/programa" style={{ color: K.tealDeep }}>¿Eres agente? Regístrate</Link>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
@@ -225,6 +329,15 @@ function AgentesPage() {
                 {zonasDisponibles.map((z) => <option key={z} value={z}>{z}</option>)}
               </select>
             </div>
+
+            <TipoAgenteFiltro
+              value={tiposFiltro}
+              onToggle={toggleTipo}
+              onClear={() => setTiposFiltro([])}
+              conteo={conteoTipo}
+              total={agentes.length}
+              lang={lang}
+            />
           </aside>
 
           {/* Columna 2: barra de orden + resultados */}
@@ -272,6 +385,20 @@ function AgentesPage() {
               <div className="rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
                 <p className="text-sm font-semibold" style={{ color: K.ink }}>Ningún agente coincide con tu búsqueda</p>
                 <p className="mt-1 text-xs" style={{ color: K.muted }}>Prueba con otro nombre o sector.</p>
+                <div className="mt-4 flex flex-wrap justify-center gap-2">
+                  {search.comuna && norm(search.comuna) !== norm(zonaFiltro) && (
+                    <button type="button" data-testid="ampliar-comuna" onClick={() => setZonaFiltro(search.comuna!)}
+                      className="rounded-full px-4 py-2 text-xs font-semibold text-white" style={{ background: K.teal }}>
+                      {lang === "en" ? `Widen to commune ${search.comuna}` : `Ampliar a la comuna ${search.comuna}`}
+                    </button>
+                  )}
+                  {(zonaFiltro || tiposFiltro.length > 0) && (
+                    <button type="button" onClick={() => { setZonaFiltro(""); setTiposFiltro([]); }}
+                      className="rounded-full px-4 py-2 text-xs font-semibold" style={{ border: `1px solid ${K.line}`, color: K.ink, background: "#FFFFFF" }}>
+                      {lang === "en" ? "Clear filters" : "Borrar filtros"}
+                    </button>
+                  )}
+                </div>
               </div>
             )}
 

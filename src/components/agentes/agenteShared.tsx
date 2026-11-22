@@ -8,6 +8,60 @@ import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { useQueryClient } from "@tanstack/react-query";
 import { K } from "@/design/tokens";
+import { useLang } from "@/lib/i18n";
+import {
+  AGENTE_TIPO_ANCLA, AGENTE_TIPO_DESC, AGENTE_TIPO_STYLE, agenteTipoLabel, normalizarTipos, preferenteLabel,
+  type AgenteTipo, type ZonaPreferente,
+} from "@/lib/agenteTipos";
+
+/** Insignias de tipo de agente (varias a la vez). No pinta nada si no hay tipos.
+ *  `preferente` (zonas de cupos pagados) reemplaza la insignia genérica por una por
+ *  zona: "Preferente de barrio · Laureles". `linked` hace que cada insignia abra su
+ *  sección en la guía pública /agentes/estados (no usar dentro de otro <a>). */
+export function AgenteTipoBadges({ tipos, preferente, size = "sm", className = "", linked = false }: {
+  tipos: readonly string[] | null | undefined;
+  preferente?: readonly ZonaPreferente[] | null;
+  size?: "xs" | "sm";
+  className?: string;
+  linked?: boolean;
+}) {
+  const { lang } = useLang();
+  const lista = normalizarTipos(tipos);
+  if (lista.length === 0) return null;
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+  const zonas = preferente?.filter((z) => z.nombre) ?? [];
+  const items: { key: string; tipo: AgenteTipo; label: string; ancla: string }[] = [];
+  for (const t of lista) {
+    if (t === "preferred" && zonas.length > 0) {
+      for (const z of zonas) {
+        items.push({ key: `pref-${z.nivel}-${z.nombre}`, tipo: t, label: preferenteLabel(z, lang),
+          ancla: z.nivel === "comuna" ? "preferente-comuna" : "preferente-barrio" });
+      }
+    } else {
+      items.push({ key: t, tipo: t, label: agenteTipoLabel(t, lang), ancla: AGENTE_TIPO_ANCLA[t] });
+    }
+  }
+  const verGuia = lang === "en" ? "What does this status mean?" : "¿Qué significa este estado?";
+  return (
+    <span className={`inline-flex flex-wrap gap-1 ${className}`} data-testid="agente-tipos" data-i18n-skip>
+      {items.map((it) => {
+        const s = AGENTE_TIPO_STYLE[it.tipo];
+        const cls = `inline-flex items-center rounded-full font-bold uppercase tracking-wide ${pad}`;
+        const style = { background: s.bg, color: s.fg, border: `1px solid ${s.border}` };
+        return linked ? (
+          <a key={it.key} data-tipo={it.tipo} href={`/agentes/estados#${it.ancla}`} className={`${cls} hover:opacity-80`}
+            style={style} title={verGuia}>
+            {it.label}
+          </a>
+        ) : (
+          <span key={it.key} data-tipo={it.tipo} className={cls} style={style} title={AGENTE_TIPO_DESC[it.tipo][lang === "en" ? "en" : "es"]}>
+            {it.label}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 export type Agente = {
@@ -22,6 +76,8 @@ export type Agente = {
   agencia_verificada: boolean;
   rating_promedio: number | null; // null = sin reseñas — nunca un 0 inventado
   n_resenas: number;
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
+  preferente?: ZonaPreferente[]; // cupos pagados de Realtor Preferido (zona precisa)
 };
 
 // Ruta del perfil: usa slug si existe, si no el UUID (el endpoint resuelve ambos).
@@ -49,6 +105,9 @@ export type AgentePerfil = {
   n_activos: number; n_cierres: number; vendidas_12m: number;
   precio_min: number | null; precio_max: number | null;
   resenas: PerfilResena[];
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
+  preferente?: ZonaPreferente[];
+  representados?: { map_id: number; url: string; precio: number | null; operacion: string | null; tipo_inmueble: string | null; area_m2: number | null; habitaciones: number | null; barrio: string | null; foto_portada: string | null }[];
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

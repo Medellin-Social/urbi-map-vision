@@ -17,6 +17,8 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
     [t('Lista tu negocio', 'List your business'), '/negocios/unirse'],
     [t('Sé Embajador del Barrio', 'Become an Ambassador'), '/embajador'],
     [t('Programa de Afiliados', 'Affiliate Program'), '/afiliado'],
+    [t('Registrarme como agente', 'Register as an agent'), '/agentes/programa'],
+    [t('Guía de estados de agentes', 'Agent status guide'), '/agentes/estados'],
   ]
 
   return (

@@ -116,7 +116,11 @@ async def barrios_form():
             id,
             nombre,
             municipio,
-            COALESCE(NULLIF(TRIM(comuna), ''), municipio) AS comuna
+            COALESCE(NULLIF(TRIM(comuna), ''), municipio) AS comuna,
+            -- Punto dentro del polígono (no centroide: cae fuera en barrios cóncavos).
+            -- El form lo usa como pin inicial cuando la dirección no se geocodifica.
+            ROUND(ST_Y(ST_PointOnSurface(geometry))::numeric, 6)::float AS lat,
+            ROUND(ST_X(ST_PointOnSurface(geometry))::numeric, 6)::float AS lon
         FROM raw.barrios
         WHERE nombre IS NOT NULL
           AND municipio IS NOT NULL

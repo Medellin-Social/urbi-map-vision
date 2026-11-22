@@ -4,11 +4,11 @@ from __future__ import annotations
 import logging
 import os
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Literal, Optional
 
 from api.limiter import limiter
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from api.config.planes import PLANES
 from api.db import get_pool
@@ -123,6 +123,13 @@ async def iniciar_suscripcion(
 class AgenteRegistroIn(BaseModel):
     nombre: str
     telefono: str
+    # Programa de agentes (doc §Cómo inscribirte, paso 1): perfil profesional y agencia.
+    bio: Optional[str] = Field(default=None, max_length=2000)
+    anios_experiencia: Optional[int] = Field(default=None, ge=0, le=80)
+    zonas_servicio: list[str] = Field(default_factory=list, max_length=20)
+    agencia_tipo: Literal["independiente", "agencia"] = "independiente"
+    agencia_nombre: Optional[str] = Field(default=None, max_length=160)
+    agencia_nit: Optional[str] = Field(default=None, max_length=40)
 
 
 @router.post("/agente/registro")
@@ -163,6 +170,38 @@ async def registro_agente(
     )
     if row["usuario_id"] != current_user["id"]:
         raise HTTPException(409, "Este correo ya está asociado a otro perfil de agente. Contacta a soporte.")
+    if body.agencia_tipo == "agencia" and not (body.agencia_nombre or "").strip():
+        raise HTTPException(422, "Indica el nombre de tu agencia")
+    zonas = [z.strip()[:80] for z in body.zonas_servicio if z and z.strip()]
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            # Perfil: solo completa campos vacíos o mientras está pendiente (no pisa un perfil aprobado).
+            await conn.execute(
+                """UPDATE agent SET
+                       bio = CASE WHEN estado = 'pendiente' OR bio IS NULL THEN COALESCE($2, bio) ELSE bio END,
+                       anios_experiencia = CASE WHEN estado = 'pendiente' OR anios_experiencia IS NULL
+                                                THEN COALESCE($3, anios_experiencia) ELSE anios_experiencia END,
+                       zonas_servicio = CASE WHEN cardinality($4::text[]) > 0 THEN $4::text[] ELSE zonas_servicio END,
+                       updated_at = now()
+                   WHERE id = $1""",
+                row["id"], (body.bio or "").strip() or None, body.anios_experiencia, zonas)
+            # Agencia declarada: se crea SIN verificar (el equipo la verifica). Nunca se une a una
+            # agencia existente por nombre — eso permitiría reclamar la agencia de otro.
+            ya = await conn.fetchval("SELECT 1 FROM agency_member WHERE agent_id = $1", row["id"])
+            if not ya and body.agencia_tipo == "agencia":
+                agency_id = await conn.fetchval(
+                    "INSERT INTO agency (nombre, nit, tipo, verificada) VALUES ($1, $2, 'agencia', false) RETURNING id",
+                    body.agencia_nombre.strip(), (body.agencia_nit or "").strip() or None)
+                await conn.execute(
+                    "INSERT INTO agency_member (agency_id, agent_id, rol) VALUES ($1, $2, 'owner')",
+                    agency_id, row["id"])
+    if row["estado"] == "pendiente":
+        try:
+            from api.utils.email import notify_admin_new_agente
+            await notify_admin_new_agente(body.nombre.strip(), "—", current_user["email"], body.telefono.strip(),
+                                          f"{_FRONTEND_URL}/panel-x9k2")
+        except Exception:
+            log.exception("notify_admin_new_agente falló")
     # Realtor nuevo → GHL (Contact). Best-effort: hoy sync_agent levanta
     # (stub sin contrato) → se loguea y sigue, igual que afiliados/embajadores.
     try:
