@@ -1,4 +1,5 @@
 import json
+import logging
 from typing import Any, Dict, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
@@ -69,6 +70,8 @@ _SQL = """
     ) ipvn ON TRUE
     WHERE sc.barrio_id = $1
 """
+
+log = logging.getLogger(__name__)
 
 
 # ── Modelos ──────────────────────────────────────────────────────────────────
@@ -537,6 +540,7 @@ async def simular(request: Request, req: SimulacionRequest, current_user: Option
                 es_recomendada=False,
             ))
         except Exception:
+            log.warning("calculadora: comparativo %s falló", tipo_c, exc_info=True)
             comparativo_list.append(ComparativoModalidad(
                 tipo=tipo_c, label=_TIPO_LABELS[tipo_c],
                 riesgo=_TIPO_RIESGO[tipo_c],
@@ -562,7 +566,7 @@ async def simular(request: Request, req: SimulacionRequest, current_user: Option
                 current_user["id"], "simulacion", req.barrio_id, meta,
             )
         except Exception:
-            pass  # historial failure must not break simulacion
+            log.warning("calculadora: historial no guardado", exc_info=True)  # no rompe la simulación
 
     return SimulacionResponse(
         barrio=barrio_nombre,

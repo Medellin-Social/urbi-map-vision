@@ -109,9 +109,33 @@ const ROBOTS_TXT = [
   `Sitemap: ${SITE_URL}/sitemap.xml`,
   '',
 ].join('\n');
-function sitemapXml() {
-  const urls = SITEMAP_PATHS.map((p) => `  <url><loc>${SITE_URL}${p === '/' ? '/' : p}</loc></url>`).join('\n');
-  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${urls}\n</urlset>\n`;
+// Listings activos para el sitemap: se piden a la API (que ya cachea 1 h) y se
+// guardan en memoria; si la API falla se sirve lo último bueno o solo las páginas fijas.
+let listingIdsCache = { t: 0, ids: [] };
+async function listingIds() {
+  if (Date.now() - listingIdsCache.t < 3_600_000) return listingIdsCache.ids;
+  try {
+    const r = await fetch(`${API_ORIGIN}/api/v1/listings/sitemap-ids`, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; urbi-sitemap)' },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const rows = await r.json();
+    listingIdsCache = { t: Date.now(), ids: Array.isArray(rows) ? rows : [] };
+  } catch (err) {
+    console.warn('[sitemap] ids de listings no disponibles:', err?.message || err);
+    listingIdsCache.t = Date.now() - 3_600_000 + 60_000; // reintenta en 1 min
+  }
+  return listingIdsCache.ids;
+}
+async function sitemapXml() {
+  const fijas = SITEMAP_PATHS.map((p) => `  <url><loc>${SITE_URL}${p === '/' ? '/' : p}</loc></url>`);
+  const ids = (await listingIds()).slice(0, 49_000).filter((x) => /^-?\d+$/.test(String(x?.id)));
+  const dinamicas = ids.map((x) => {
+    const lm = typeof x.fecha === 'string' && /^\d{4}-\d{2}-\d{2}/.test(x.fecha) ? `<lastmod>${x.fecha.slice(0, 10)}</lastmod>` : '';
+    return `  <url><loc>${SITE_URL}/listing/${x.id}</loc>${lm}</url>`;
+  });
+  return `<?xml version="1.0" encoding="UTF-8"?>\n<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">\n${[...fijas, ...dinamicas].join('\n')}\n</urlset>\n`;
 }
 
 // CSP violation reports (report-only policy): logged in one line each, capped so a
@@ -310,7 +334,7 @@ createServer(async (req, res) => {
     const robots = url.pathname === '/robots.txt';
     res.setHeader('Content-Type', robots ? MIME['.txt'] : MIME['.xml']);
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.end(robots ? ROBOTS_TXT : sitemapXml());
+    return res.end(robots ? ROBOTS_TXT : await sitemapXml());
   }
 
   try {

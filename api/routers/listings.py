@@ -1427,6 +1427,35 @@ ORDER BY c._prio, ('x' || substr(md5(c.url), 1, 8))::bit(32)::int, c.url
 """
 
 
+_SITEMAP_TTL_S = 3600
+_sitemap_cache: dict = {"t": 0.0, "rows": []}
+
+
+@router.get("/sitemap-ids")
+@limiter.limit("30/minute")
+async def sitemap_ids(request: Request):
+    """Ids públicos para el sitemap (solo id + fecha, sin payload). Cache 1 h en memoria;
+    tope 50.000 (límite de un sitemap)."""
+    import time as _time
+
+    now = _time.monotonic()
+    if _sitemap_cache["rows"] and now - _sitemap_cache["t"] < _SITEMAP_TTL_S:
+        return _sitemap_cache["rows"]
+    sql = f"""
+        SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id, fecha_scraping
+        FROM staging.stg_listings_unificado
+        WHERE url IS NOT NULL AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
+          AND (precio_cop >= 500000 OR (tipo_operacion = 'arriendo' AND precio_cop >= 150000))
+          AND {_LINK_ALIVE_STG}
+        ORDER BY fecha_scraping DESC NULLS LAST
+        LIMIT 50000
+    """
+    rows = await get_pool().fetch(sql)
+    out = [{"id": r["id"], "fecha": r["fecha_scraping"]} for r in rows]
+    _sitemap_cache.update(t=now, rows=out)
+    return out
+
+
 @router.get("/viewport", response_model=ViewportResponse)
 @limiter.limit("120/minute")
 async def get_listings_viewport(
