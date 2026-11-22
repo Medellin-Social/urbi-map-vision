@@ -2,7 +2,8 @@ import { seo } from "@/lib/seo";
 import { createFileRoute } from '@tanstack/react-router'
 import { formatMoney } from "@/lib/format";
 import { useQuery } from '@tanstack/react-query'
-import { useState, useMemo } from 'react'
+import { useMemo } from 'react'
+import { useT } from '@/lib/i18n'
 import { apiFetch } from '@/lib/apiClient'
 import { API_ENDPOINTS } from '@/config/api'
 import type { ApiListingsResponse, ApiListing } from '@/lib/adapters'
@@ -41,41 +42,6 @@ const STATS = [
   { value: '15–20%',       label: 'Compradores extranjeros',     note: 'Del mercado nacional' },
 ]
 
-const CATEGORIAS = [
-  {
-    label:    'Comprar',
-    sub:      'Apartamentos y casas en venta',
-    href:     '/map?tipo_operacion=venta',
-    bg:       `linear-gradient(145deg, ${K.tealDeep} 0%, ${K.teal} 100%)`,
-    fg:       '#fff',
-    emoji:    '🏡',
-  },
-  {
-    label:    'Arrendar',
-    sub:      'Arriendos en toda el área metropolitana',
-    href:     '/map?tipo_operacion=arriendo',
-    bg:       `linear-gradient(145deg, #00286B 0%, ${K.azul} 100%)`,
-    fg:       '#fff',
-    emoji:    '🔑',
-  },
-  {
-    label:    'Vender',
-    sub:      'Publica tu propiedad en minutos',
-    href:     '/vender',
-    bg:       `linear-gradient(145deg, #9E0D1D 0%, ${K.rojo} 100%)`,
-    fg:       '#fff',
-    emoji:    '📋',
-  },
-  {
-    label:    'Invertir',
-    sub:      'Analiza barrios con datos reales',
-    href:     '/map',
-    bg:       `linear-gradient(145deg, #F2B807 0%, ${K.amarillo} 100%)`,
-    fg:       K.ink,
-    emoji:    '📈',
-  },
-]
-
 // ── Icons ──────────────────────────────────────────────────────────────────────
 
 function IcoLinkedIn() {
@@ -111,116 +77,169 @@ function IcoGlobe() {
   )
 }
 
-// ── Section 1: Hero ────────────────────────────────────────────────────────────
+// ── Section 1: Hero + 4 acciones (Ken, 21-nov) ────────────────────────────────
+
+type Choice = { label: string; href: string }
+type Action = { emoji: string; title: string; href?: string; choices?: Choice[]; bg: string; fg: string }
+
+function ActionCard({ a }: { a: Action }) {
+  const base: React.CSSProperties = {
+    background: a.bg, color: a.fg, borderRadius: 16, padding: '28px 22px 22px', minHeight: 170,
+    display: 'flex', flexDirection: 'column', textDecoration: 'none', textAlign: 'left',
+  }
+  const head = (
+    <>
+      <div style={{ fontSize: '2rem', marginBottom: 10 }} aria-hidden>{a.emoji}</div>
+      <div style={{ fontFamily: K.serif, fontWeight: 800, fontSize: '1.3rem', flex: 1 }}>{a.title}</div>
+    </>
+  )
+  if (!a.choices) {
+    return (
+      <a href={a.href} style={base}>
+        {head}
+        <div style={{ fontFamily: K.manrope, fontWeight: 700, fontSize: '.9rem', marginTop: 16 }} aria-hidden>→</div>
+      </a>
+    )
+  }
+  return (
+    <div style={base}>
+      {head}
+      <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+        {a.choices.map((c) => (
+          <a key={c.href} href={c.href} style={{ fontFamily: K.manrope, fontWeight: 800, fontSize: '.82rem', padding: '8px 14px', borderRadius: 999, background: 'rgba(255,255,255,.18)', border: '1px solid rgba(255,255,255,.45)', color: a.fg, textDecoration: 'none' }}>
+            {c.label}
+          </a>
+        ))}
+      </div>
+    </div>
+  )
+}
 
 function HeroSection() {
-  const [modo, setModo] = useState<'comprar' | 'arrendar' | 'invertir'>('comprar')
-
-  const modoHref = {
-    comprar:  '/map?tipo_operacion=venta',
-    arrendar: '/map?tipo_operacion=arriendo',
-    invertir: '/map',
-  }
-
-  const tabs: { key: typeof modo; label: string }[] = [
-    { key: 'comprar',  label: 'Comprar'  },
-    { key: 'arrendar', label: 'Arrendar' },
-    { key: 'invertir', label: 'Invertir' },
+  const t = useT()
+  const actions: Action[] = [
+    { emoji: '🔑', title: t('Arrendar mi casa', 'Rent my home'), bg: `linear-gradient(145deg, #00286B 0%, ${K.azul} 100%)`, fg: '#fff', choices: [
+      { label: t('Largo plazo', 'Long term'), href: '/publicar?operacion=arriendo&plazo=largo' },
+      { label: t('Corto plazo', 'Short term'), href: '/publicar?operacion=arriendo&plazo=corto' },
+    ] },
+    { emoji: '📋', title: t('Vender mi casa', 'Sell my home'), href: '/publicar?operacion=venta', bg: `linear-gradient(145deg, #9E0D1D 0%, ${K.rojo} 100%)`, fg: '#fff' },
+    { emoji: '🏡', title: t('Buscar casa', 'Find a home'), bg: `linear-gradient(145deg, ${K.tealDeep} 0%, ${K.teal} 100%)`, fg: '#fff', choices: [
+      { label: t('Comprar', 'Buy'), href: '/map?tipo_operacion=venta' },
+      { label: t('Arrendar', 'Rent'), href: '/map?tipo_operacion=arriendo' },
+    ] },
+    { emoji: '🤝', title: t('Soy agente', "I'm an agent"), href: '#agentes', bg: `linear-gradient(145deg, #F2B807 0%, ${K.amarillo} 100%)`, fg: K.ink },
   ]
-
   return (
     <section style={{
       background: `linear-gradient(160deg, ${K.paper} 52%, ${K.coralLight} 100%)`,
       borderBottom: `1px solid ${K.line}`,
-      padding: 'clamp(64px, 12vw, 112px) 24px clamp(56px, 10vw, 88px)',
-      textAlign: 'center',
+      padding: 'clamp(56px, 10vw, 96px) 24px clamp(48px, 8vw, 72px)',
     }}>
-      <div style={{ maxWidth: 740, margin: '0 auto' }}>
-        <div style={{
-          display: 'inline-flex', alignItems: 'center', gap: 6,
-          background: K.coralLight, color: K.coral,
-          fontFamily: K.manrope,
-          fontSize: '.62rem', fontWeight: 800,
-          textTransform: 'uppercase', letterSpacing: '1.6px',
-          padding: '5px 16px', borderRadius: 999, marginBottom: 32,
-        }}>
-          Medellín Social · Real Estate
-        </div>
-
-        <h1 style={{
-          fontFamily: K.serif,
-          fontWeight: 900,
-          fontSize: 'clamp(2.4rem, 7vw, 4rem)',
-          color: K.ink,
-          lineHeight: 1.05,
-          letterSpacing: -2,
-          margin: '0 0 24px',
-        }}>
-          El mercado inmobiliario<br />
-          del Valle de Aburrá,<br />
-          <span style={{ color: K.coral }}>en tus manos.</span>
+      <div style={{ maxWidth: 1100, margin: '0 auto', textAlign: 'center' }}>
+        <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2rem, 5.6vw, 3.4rem)', color: K.ink, lineHeight: 1.08, letterSpacing: -1.5, margin: '0 auto 20px', maxWidth: 900 }}>
+          {t('Publicá o buscá inmuebles para comprar o arrendar, un barrio a la vez.', 'List or search for properties to buy or rent, one neighborhood at a time.')}
         </h1>
-
-        <p style={{
-          fontFamily: K.manrope,
-          fontSize: 'clamp(.92rem, 2vw, 1.05rem)',
-          color: K.muted,
-          lineHeight: 1.7,
-          maxWidth: 460,
-          margin: '0 auto 44px',
-        }}>
-          54,000+ propiedades. Datos reales.<br />
-          Inversores locales y extranjeros.
+        <p style={{ fontFamily: K.manrope, fontSize: 'clamp(.95rem, 2vw, 1.1rem)', color: K.muted, lineHeight: 1.7, maxWidth: 640, margin: '0 auto 40px' }}>
+          {t('Publicá tu casa en venta o arriendo, o buscá en toda la ciudad, por comuna o hasta un barrio específico.', 'List homes for sale or rent, or search citywide, by comuna, or down to an individual barrio.')}
         </p>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 16 }}>
+          {actions.map((a) => <ActionCard key={a.title} a={a} />)}
+        </div>
+      </div>
+    </section>
+  )
+}
 
-        {/* Filter tabs */}
-        <div style={{
-          display: 'inline-flex',
-          gap: 0,
-          background: K.surface,
-          border: `1px solid ${K.line}`,
-          borderRadius: 999,
-          padding: 4,
-          marginBottom: 28,
-        }}>
-          {tabs.map(t => (
-            <button
-              key={t.key}
-              onClick={() => setModo(t.key)}
-              style={{
-                padding: '9px 24px',
-                borderRadius: 999,
-                border: 'none',
-                cursor: 'pointer',
-                fontFamily: K.manrope,
-                fontWeight: 700,
-                fontSize: '.84rem',
-                letterSpacing: '.2px',
-                transition: 'background .15s, color .15s, box-shadow .15s',
-                background: modo === t.key ? K.ink : 'transparent',
-                color:      modo === t.key ? '#fff' : K.muted,
-                boxShadow:  modo === t.key ? '0 2px 8px rgba(20,32,29,0.22)' : 'none',
-              }}
-            >
-              {t.label}
-            </button>
+// Placeholder hasta que se grabe el video (spec 2.1).
+function VideoPlaceholder({ label }: { label: string }) {
+  return (
+    <div role="img" aria-label={label} style={{
+      aspectRatio: '16 / 9', width: '100%', borderRadius: 16, background: `linear-gradient(145deg, ${K.ink} 0%, #2A1A10 100%)`,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, color: '#fff',
+    }}>
+      <div aria-hidden style={{ width: 64, height: 64, borderRadius: 999, background: K.coral, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.6rem' }}>▶</div>
+      <div style={{ fontFamily: K.manrope, fontWeight: 700, fontSize: '.9rem', opacity: .8 }}>{label}</div>
+    </div>
+  )
+}
+
+function TutorialSection() {
+  const t = useT()
+  return (
+    <section style={{ background: K.paper, padding: 'clamp(40px, 7vw, 72px) 24px', borderBottom: `1px solid ${K.line}` }}>
+      <div style={{ maxWidth: 860, margin: '0 auto' }}>
+        <VideoPlaceholder label={t('Video tutorial: muy pronto', 'Tutorial video: coming soon')} />
+      </div>
+    </section>
+  )
+}
+
+function ValueSection() {
+  const t = useT()
+  const blocks = [
+    { h: t('Todas las plataformas en una.', 'Every listing platform, consolidated.'), p: t('El único lugar donde tenés que buscar.', 'The only place you need to look.') },
+    { h: t('Vendedores: todos los que buscan llegan acá.', 'Sellers: everyone who is looking comes here.'), p: '' },
+    { h: t('¿Necesitás ayuda?', 'Need help?'), p: t('Trabajá con un realtor certificado preferido.', 'Work with a preferred certified realtor.') },
+    { h: t('¿Sos realtor?', 'Are you a realtor?'), p: t('Registrate como realtor.', 'Become a registered realtor.') },
+  ]
+  return (
+    <section style={{ background: K.surface, padding: 'clamp(40px, 7vw, 72px) 24px', borderBottom: `1px solid ${K.line}` }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 28 }}>
+        {blocks.map((x, n) => (
+          <div key={x.h} style={{ borderTop: `3px solid ${K.ink}`, paddingTop: 16 }}>
+            <div style={{ fontFamily: K.serif, fontWeight: 900, color: K.coral, marginBottom: 6 }}>{`0${n + 1}`}</div>
+            <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.35rem', color: K.ink, margin: '0 0 8px', letterSpacing: -.4 }}>{x.h}</h2>
+            {x.p && <p style={{ fontFamily: K.manrope, color: K.muted, lineHeight: 1.6, margin: 0 }}>{x.p}</p>}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
+function AgentesSection() {
+  const t = useT()
+  const tiers = [
+    { h: t('Listing gratis', 'Free listing'), p: t('Tu inmueble aparece porque reunimos todos los listings.', 'Your listing shows up because we aggregate every listing.') },
+    { h: t('Registrado', 'Registered'), p: t('Gratis. Tu perfil sale en tus listings y recibís tus leads directo.', 'Free. Your profile shows on your listings and you get your leads directly.') },
+    { h: 'Barrio Preferred', p: t('4 cupos por barrio. Rotás en los listings sin agente de ese barrio.', '4 slots per barrio. You rotate on that barrio’s unregistered listings.') },
+    { h: 'Comuna Preferred', p: t('8 cupos por comuna. Rotás en toda la comuna.', '8 slots per comuna. You rotate across the whole comuna.') },
+  ]
+  return (
+    <section id="agentes" style={{ background: K.paper, padding: 'clamp(48px, 8vw, 88px) 24px', borderBottom: `1px solid ${K.line}`, scrollMarginTop: 80 }}>
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.6rem, 4vw, 2.4rem)', color: K.ink, margin: '0 0 28px', letterSpacing: -.8 }}>
+          {t('Para realtors', 'For realtors')}
+        </h2>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(230px, 1fr))', gap: 16, marginBottom: 40 }}>
+          {tiers.map((x) => (
+            <div key={x.h} style={{ background: K.surface, border: `1px solid ${K.line}`, borderRadius: 14, padding: '20px 18px' }}>
+              <div style={{ fontFamily: K.serif, fontWeight: 800, fontSize: '1.15rem', color: K.ink, marginBottom: 6 }}>{x.h}</div>
+              <div style={{ fontFamily: K.manrope, fontSize: '.88rem', color: K.muted, lineHeight: 1.55 }}>{x.p}</div>
+            </div>
           ))}
         </div>
-
-        <br />
-
-        <a
-          href={modoHref[modo]}
-          style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            background: K.coral, color: '#fff',
-            fontFamily: K.manrope, fontWeight: 800, fontSize: '.92rem',
-            padding: '14px 32px', borderRadius: 999,
-            textDecoration: 'none', letterSpacing: '.2px',
-            boxShadow: '0 4px 20px rgba(216,90,48,0.28)',
-          }}
-        >
-          Ver propiedades →
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 28, alignItems: 'center', marginBottom: 36 }}>
+          <div>
+            <h3 style={{ fontFamily: K.serif, fontWeight: 800, fontSize: '1.3rem', color: K.ink, margin: '0 0 10px' }}>
+              {t('Cómo funciona la rotación', 'How the rotation works')}
+            </h3>
+            <p style={{ fontFamily: K.manrope, color: K.muted, lineHeight: 1.6, margin: '0 0 16px' }}>
+              {t('Los leads de los listings sin agente se reparten por turnos entre los realtors preferidos: 4 por barrio, 8 por comuna. Cada uno recibe su turno.', 'Leads from unregistered listings are shared in turns among preferred realtors: 4 per barrio, 8 per comuna. Each one takes a turn.')}
+            </p>
+            <div aria-hidden style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {[1, 2, 3, 4].map((n) => (
+                <span key={n} style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ width: 40, height: 40, borderRadius: 999, background: n === 1 ? K.coral : K.surface, color: n === 1 ? '#fff' : K.ink, border: `1px solid ${K.line}`, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontFamily: K.manrope, fontWeight: 800 }}>{n}</span>
+                  <span style={{ color: K.muted }}>{n < 4 ? '→' : '↺'}</span>
+                </span>
+              ))}
+            </div>
+          </div>
+          <VideoPlaceholder label={t('Video para agentes: muy pronto', 'Agent video: coming soon')} />
+        </div>
+        <a href="/agentes/registro" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, background: K.coral, color: '#fff', fontFamily: K.manrope, fontWeight: 800, fontSize: '.95rem', padding: '15px 32px', borderRadius: 999, textDecoration: 'none' }}>
+          {t('Registrate como realtor →', 'Become a registered realtor →')}
         </a>
       </div>
     </section>
@@ -533,85 +552,6 @@ function HistoriaSection() {
   )
 }
 
-// ── Section 4: Categorías visuales ────────────────────────────────────────────
-
-function CategoriasSection() {
-  return (
-    <section style={{
-      background: K.paper,
-      borderBottom: `1px solid ${K.line}`,
-      padding: 'clamp(48px, 8vw, 80px) 24px',
-    }}>
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-        <h2 style={{
-          fontFamily: K.serif, fontWeight: 800,
-          fontSize: 'clamp(1.5rem, 3.5vw, 2.1rem)',
-          color: K.ink, margin: '0 0 32px', letterSpacing: -.5,
-          textAlign: 'center',
-        }}>
-          ¿Qué estás buscando?
-        </h2>
-
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
-          gap: 16,
-        }}>
-          {CATEGORIAS.map(cat => (
-            <a
-              key={cat.label}
-              href={cat.href}
-              style={{
-                background: cat.bg,
-                borderRadius: 16,
-                padding: '36px 24px 28px',
-                display: 'flex', flexDirection: 'column',
-                textDecoration: 'none',
-                color: cat.fg,
-                transition: 'transform .15s, box-shadow .15s',
-                minHeight: 180,
-              }}
-              onMouseEnter={e => {
-                const el = e.currentTarget as HTMLAnchorElement
-                el.style.transform = 'translateY(-3px)'
-                el.style.boxShadow = '0 12px 40px rgba(0,0,0,0.2)'
-              }}
-              onMouseLeave={e => {
-                const el = e.currentTarget as HTMLAnchorElement
-                el.style.transform = 'none'
-                el.style.boxShadow = 'none'
-              }}
-            >
-              <div style={{ fontSize: '2rem', marginBottom: 12 }}>{cat.emoji}</div>
-              <div style={{
-                fontFamily: K.serif, fontWeight: 800,
-                fontSize: '1.3rem', marginBottom: 6,
-              }}>
-                {cat.label}
-              </div>
-              <div style={{
-                fontFamily: K.manrope,
-                fontSize: '.85rem', color: cat.fg, opacity: .78,
-                lineHeight: 1.5, flex: 1,
-              }}>
-                {cat.sub}
-              </div>
-              <div style={{
-                fontFamily: K.manrope,
-                marginTop: 20, fontSize: '.78rem',
-                fontWeight: 700, color: cat.fg, opacity: .9,
-                letterSpacing: '.2px',
-              }}>
-                Explorar →
-              </div>
-            </a>
-          ))}
-        </div>
-      </div>
-    </section>
-  )
-}
-
 // ── Section 5: Métricas del mercado ───────────────────────────────────────────
 
 function StatsSection() {
@@ -714,9 +654,11 @@ function RealEstatePage() {
   return (
     <>
       <HeroSection />
+      <TutorialSection />
+      <ValueSection />
+      <AgentesSection />
       <ListingsDestacadosSection />
       <HistoriaSection />
-      <CategoriasSection />
       <StatsSection />
       <FinalCTASection />
     </>
