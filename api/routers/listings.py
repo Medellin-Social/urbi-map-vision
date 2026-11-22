@@ -631,8 +631,7 @@ _BARRIO_CTX_KEYS = (
 # amenidades, dias_en_mercado) son públicos y NO se tocan. El shape no cambia:
 # los campos siguen existiendo, van null para el público.
 #
-# Público (gancho del usuario gratis, roles doc): si está cara/barata
-# (buena_oferta, pct_bajo_mediana), valor/renta estimados del barrio
+# Público (gancho del usuario gratis, roles doc): valor/renta estimados del barrio
 # (precio_m2_mediana_barrio, p25/p75, arriendo_p50_barrio, arr_p25/p75),
 # avaluo_m2_catastro y el historial (var_anual_pct) — NO se gatean.
 # Gate de 3 niveles (doc de roles):
@@ -640,6 +639,8 @@ _BARRIO_CTX_KEYS = (
 #     historial de precio (gancho de registro; anónimo ve el fallback degradado).
 #   Realtor (paga): scores de inversión + inteligencia profunda.
 # precio_historia pasó a PÚBLICO (estilo Zillow: el historial de precio no se gatea).
+# buena_oferta/pct_bajo_mediana: KPI de perfil inversor ("cara/barata vs mercado")
+# → realtor-only (revierte el #2 que los hacía públicos; decisión producto 2026-11).
 _REGISTERED_FIELDS = ("yield_estimado", "yield_bruto_pct")
 # To-do §2: seguridad pasó de realtor-only a PÚBLICA (gratis para todos) — ya no
 # está en esta lista. Los scores de inversión y liquidez siguen siendo realtor.
@@ -648,6 +649,7 @@ _REALTOR_FIELDS = (
     "score_corto", "score_mediano", "score_largo",
     "indice_nomada", "barrio_score", "barrio_yield",
     "tiempo_estimado_venta",
+    "buena_oferta", "pct_bajo_mediana",
 )
 # Compat: algunos tests/refs esperan el set completo gated.
 _MARKET_INTEL_FIELDS = _REGISTERED_FIELDS + _REALTOR_FIELDS
@@ -907,10 +909,13 @@ async def get_all_listings(
         # Extraer ctx de barrio ANTES del gate — la personalización lo necesita
         # (comportamiento idéntico al actual para usuarios públicos).
         barrio_ctx = {k: row_d.get(k) for k in _BARRIO_CTX_KEYS} if perfil_dict else None
+        # buena_oferta ahora es realtor-gated, pero la personalización lo pondera
+        # (peso 0.10) → snapshot pre-gate para no degradar el ranking del gratis.
+        _oferta_raw = row_d.get("buena_oferta")
         _gate_market_fields(row_d, current_user)
         _finalize_row(row_d, rate)
         if perfil_dict:
-            score, razones = calcular_relevancia(row_d, barrio_ctx, perfil_dict)
+            score, razones = calcular_relevancia({**row_d, "buena_oferta": _oferta_raw}, barrio_ctx, perfil_dict)
 
             # Apply prefiltro penalties (soft — bias sort, don't hard-remove)
             prefiltros = _get_prefiltros(perfil_dict)
@@ -1738,6 +1743,174 @@ async def get_agentes_directorio(
     if filtro:
         out = [a for a in out if set(a.tipos) & set(filtro)]
     return out
+
+
+# ── Directorio paginado + filtrado + ordenado (estilo realtor.com) ─────────────
+# OJO orden de rutas: este GET /agentes/buscar DEBE ir antes de GET /agentes/{agent_id}
+# o FastAPI matchea "buscar" como agent_id.
+class AgenteCard(BaseModel):
+    id: str
+    slug: Optional[str] = None
+    nombre: str
+    foto_url: Optional[str] = None
+    telefono: Optional[str] = None
+    agencia_nombre: Optional[str] = None
+    agencia_verificada: bool = False
+    agencia_logo: Optional[str] = None
+    verificado: bool = False
+    rating_promedio: Optional[float] = None
+    n_resenas: int = 0
+    zonas: list[str] = []
+    exclusivo: bool = False
+    destacado: bool = False          # patrocinador de zona flotado arriba en orden 'relevantes'
+    bio_corta: Optional[str] = None
+    idiomas: list[str] = []
+    especialidades: list[str] = []
+    anios_experiencia: Optional[int] = None
+    n_activos: int = 0
+    cerradas_12m: int = 0
+    precio_min: Optional[float] = None
+    precio_max: Optional[float] = None
+    # Programa de agentes: insignias de tipo (member/certified/preferred/casa) y
+    # zonas de Realtor Preferido pagadas — mismos datos que el directorio /agentes.
+    tipos: list[str] = []
+    preferente: list[dict] = []
+
+
+class AgentesBuscarResponse(BaseModel):
+    items: list[AgenteCard]
+    total: int
+    page: int
+    page_size: int
+
+
+# intención/tipo → especialidades que filtran (overlap). Vocabulario del perfil.
+_INTENCION_ESP = {"comprar": ["compra"], "vender": ["venta"], "arrendar": ["arriendo"]}
+_TIPO_ESP = {"compra-venta": ["compra", "venta"], "arrendamiento": ["arriendo"], "inversion": ["inversion"]}
+_ORDEN_SQL = {
+    "relevantes":       "exclusivo DESC, rating_promedio DESC NULLS LAST, n_activos DESC",
+    "mas-vendidos":     "cerradas_12m DESC, rating_promedio DESC NULLS LAST",
+    "mejor-calificados":"rating_promedio DESC NULLS LAST, n_resenas DESC",
+    "mas-propiedades":  "n_activos DESC, rating_promedio DESC NULLS LAST",
+}
+
+# Agregados por agente (sin N+1): agencia, reseñas, listings activos, cierres 12m, zonas.
+_AGENTE_CARD_BASE = """
+    SELECT a.id::text, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.slug, a.nombre, a.foto_url, a.telefono,
+           COALESCE(a.verificado, false) AS verificado,
+           left(a.bio, 180) AS bio_corta, a.anios_experiencia,
+           COALESCE(a.idiomas, '{}') AS idiomas, COALESCE(a.especialidades, '{}') AS especialidades,
+           agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada, agcy.agencia_logo,
+           rev.rating_promedio, COALESCE(rev.n_resenas, 0) AS n_resenas,
+           COALESCE(lst.n_activos, 0) AS n_activos, lst.precio_min, lst.precio_max,
+           COALESCE(ven.cerradas_12m, 0) AS cerradas_12m,
+           COALESCE(spz.zonas, '{}') AS zonas, COALESCE(spz.exclusivo, false) AS exclusivo,
+           __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
+    FROM agent a
+    LEFT JOIN LATERAL (
+        SELECT ag.nombre AS agencia_nombre, ag.verificada AS agencia_verificada, ag.logo_url AS agencia_logo
+        FROM agency_member am JOIN agency ag ON ag.id = am.agency_id WHERE am.agent_id = a.id LIMIT 1
+    ) agcy ON true
+    LEFT JOIN LATERAL (
+        SELECT ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio, COUNT(*)::int AS n_resenas
+        FROM agent_review WHERE agent_id = a.id
+    ) rev ON true
+    LEFT JOIN LATERAL (
+        SELECT COUNT(*)::int AS n_activos, MIN(precio)::float8 AS precio_min, MAX(precio)::float8 AS precio_max
+        FROM listing WHERE agent_id = a.id AND estado = 'publicado'
+    ) lst ON true
+    LEFT JOIN LATERAL (
+        SELECT COUNT(DISTINCT matricula_inmobiliaria)::int AS cerradas_12m
+        FROM propiedad_evento WHERE agent_id = a.id AND tipo_evento = 'venta'
+          AND matricula_inmobiliaria IS NOT NULL AND fecha > CURRENT_DATE - INTERVAL '12 months'
+    ) ven ON true
+    LEFT JOIN LATERAL (
+        SELECT array_agg(DISTINCT zn) FILTER (WHERE zn IS NOT NULL) AS zonas, bool_or(true) AS exclusivo
+        FROM sponsorship s
+        JOIN agency_member am2 ON am2.agency_id = s.agency_id AND am2.agent_id = a.id
+        CROSS JOIN LATERAL (SELECT CASE s.zona_nivel
+              WHEN 'comuna' THEN (SELECT b.comuna FROM raw.barrios b JOIN analytics.barrios_cd bc ON bc.barrio_id=b.id WHERE bc.cd_comuna=s.zona_codigo::int LIMIT 1)
+              WHEN 'barrio' THEN (SELECT nombre FROM raw.barrios WHERE id=s.zona_codigo::int) END AS zn) z
+        WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+    ) spz ON true
+    WHERE a.estado = 'activo'
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
+
+
+@router.get("/agentes/buscar", response_model=AgentesBuscarResponse)
+@limiter.limit("60/minute")
+async def buscar_agentes(
+    request: Request,
+    ciudad: Optional[str] = Query(default=None),       # slug de ciudades
+    zona: Optional[str] = Query(default=None),         # nombre/slug de barrio o comuna
+    comuna: Optional[str] = Query(default=None),       # comuna (deep-link del aviso "agente no registrado")
+    nombre: Optional[str] = Query(default=None),       # nombre agente o agencia
+    intencion: Optional[str] = Query(default=None),    # comprar|vender|arrendar
+    tipo: Optional[str] = Query(default=None),         # todos|compra-venta|arrendamiento|inversion
+    idiomas: Optional[str] = Query(default=None),      # csv
+    especialidad: Optional[str] = Query(default=None),
+    precio_min: Optional[float] = Query(default=None),
+    precio_max: Optional[float] = Query(default=None),
+    rating_min: Optional[float] = Query(default=None),
+    orden: str = Query(default="relevantes"),
+    pg: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=50),
+):
+    """Búsqueda paginada de agentes con filtros + orden. 1 query (CTE + window count)."""
+    pool = get_pool()
+    conds, args = [], []
+    def add(expr: str, val):
+        args.append(val)
+        conds.append(expr.replace("$$", f"${len(args)}"))
+
+    if ciudad:
+        cid = await pool.fetchval("SELECT id FROM ciudades WHERE slug = $1 OR lower(nombre) = lower($1)", ciudad)
+        if cid is not None:
+            add("c.ciudad_id = $$", cid)
+    if nombre:
+        add("(c.nombre ILIKE '%'||$$||'%' OR c.agencia_nombre ILIKE '%'||$$||'%')", nombre)
+    if zona:
+        add("EXISTS (SELECT 1 FROM unnest(c.zonas) z WHERE z ILIKE '%'||$$||'%')", zona.replace("-", " "))
+    if comuna:
+        add("EXISTS (SELECT 1 FROM unnest(c.zonas) z WHERE z ILIKE '%'||$$||'%')", comuna.replace("-", " "))
+    # intención + tipo → especialidades (overlap)
+    esp_overlap = list(_INTENCION_ESP.get(intencion or "", [])) + list(_TIPO_ESP.get(tipo or "", []))
+    if especialidad:
+        esp_overlap.append(especialidad)
+    if esp_overlap:
+        add("c.especialidades && $$::text[]", list(set(esp_overlap)))
+    if idiomas:
+        add("c.idiomas && $$::text[]", [s.strip() for s in idiomas.split(",") if s.strip()])
+    if precio_min is not None:
+        add("c.precio_max >= $$", precio_min)
+    if precio_max is not None:
+        add("c.precio_min <= $$", precio_max)
+    if rating_min is not None:
+        add("c.rating_promedio >= $$", rating_min)
+
+    where = (" AND " + " AND ".join(conds)) if conds else ""
+    order_by = _ORDEN_SQL.get(orden, _ORDEN_SQL["relevantes"])
+    offset = (pg - 1) * page_size
+    args_page = args + [page_size, offset]
+    sql = (
+        "WITH c AS (" + _AGENTE_CARD_BASE + ") "
+        "SELECT *, count(*) OVER() AS total FROM c WHERE true" + where +
+        f" ORDER BY {order_by}, nombre LIMIT ${len(args)+1} OFFSET ${len(args)+2}"
+    )
+    rows = await pool.fetch(sql, *args_page)
+    total = int(rows[0]["total"]) if rows else 0
+    destacar = orden == "relevantes"
+    items = []
+    for r in rows:
+        d = {k: r[k] for k in r.keys() if k not in ("total", "ciudad_id")}
+        d["zonas"] = list(d.get("zonas") or [])
+        d["idiomas"] = list(d.get("idiomas") or [])
+        d["especialidades"] = list(d.get("especialidades") or [])
+        d["destacado"] = bool(destacar and d.get("exclusivo"))
+        d["tipos"] = list(d.get("tipos") or [])
+        d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
+        items.append(AgenteCard(**d))
+    return AgentesBuscarResponse(items=items, total=total, page=pg, page_size=page_size)
 
 
 # ── Perfil público de un agente (tipo Zillow) ─────────────────────────────────

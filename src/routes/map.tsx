@@ -13,6 +13,7 @@ import { getStoredSegmento, setStoredSegmento, pruneTiposForSegmento, mapTourRea
 import { MapFilterBar, EMPTY_SHARED_FILTERS, TAB_TIPO_OP, type SharedFilters } from "@/components/MapFilterBar";
 import { MapView } from "@/components/MapView";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
+import { useIsAgente } from "@/components/LockedField";
 import type { Neighborhood } from "@/lib/adapters";
 import type { ApiListing } from "@/lib/adapters";
 import { auth } from "@/lib/auth";
@@ -132,9 +133,13 @@ function MapPageInner() {
     }
   }, []);
   const [selected, setSelected] = useState<Neighborhood | null>(null);
-  const [mostrarOportunidades, setMostrarOportunidades] = useState(
+  const isAgente = useIsAgente();
+  const [mostrarOportunidadesPref, setMostrarOportunidades] = useState(
     () => auth.get()?.mostrarOportunidades ?? false
   );
+  // Oportunidad detectada = KPI inversor → solo realtors. Gate cliente (el server
+  // además nullea barrio.oportunidad y 403ea /oportunidades para no-agentes).
+  const mostrarOportunidades = isAgente && mostrarOportunidadesPref;
   const [perfil, setPerfil] = useState<string | undefined>(
     () => GOAL_TO_PERFIL[auth.get()?.goal ?? ""] as string | undefined,
   );

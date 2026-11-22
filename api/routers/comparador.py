@@ -8,7 +8,8 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from api.db import get_pool
-from api.dependencies import get_current_user, get_optional_user
+from api.dependencies import get_current_user, get_optional_user, require_agente
+from api.routers.listings import _gate_market_fields
 
 router = APIRouter()
 
@@ -110,7 +111,7 @@ async def eliminar_comparacion(
 @router.get("/listings")
 async def batch_listings(
     ids: str,
-    current_user: Optional[dict] = Depends(get_optional_user),
+    current_user: dict = Depends(require_agente),  # comparador = solo realtors
 ):
     """Devuelve datos completos de hasta 5 listings para la tabla comparativa."""
     try:
@@ -210,4 +211,5 @@ async def batch_listings(
         """,
         id_list,
     )
-    return [dict(r) for r in rows]
+    # KPIs inversor (buena_oferta, pct_bajo_mediana, scores, yields) = realtor-only.
+    return [_gate_market_fields(dict(r), current_user) for r in rows]

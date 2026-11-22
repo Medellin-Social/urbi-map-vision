@@ -14,7 +14,7 @@ import { type SharedFilters, type SortKey, EMPTY_SHARED_FILTERS } from "@/compon
 import { AgenteTipoBadges } from "@/components/agentes/agenteShared";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
-import { useIsPro, useIsAgente } from "@/components/LockedField";
+import { useIsAgente } from "@/components/LockedField";
 import { useLang } from "@/lib/i18n";
 import { useUnit, formatArea } from "@/hooks/useUnit";
 import { toast } from "sonner";
@@ -159,7 +159,6 @@ function ListingCard({
   // Entrada escalonada: cascada continua en ciclos de 8 (acotado, sin delays que
   // crezcan sin fin en el infinite scroll). Reduced-motion lo anula vía la clase.
   const enterDelay = `${(index % 8) * 0.04}s`;
-  const isPro = useIsPro();
   const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
   // Alcance (capa 1): impresión de la tarjeta de listing. Merge con cardRef
@@ -351,14 +350,6 @@ function ListingCard({
         {listing.disponible_actualmente === false && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 border border-border">
             YA NO DISPONIBLE
-          </span>
-        )}
-        {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
-          <span
-            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-            style={{ background: '#E7F4EC', color: '#0A5C36', border: '0.5px solid #0F8A4F' }}
-          >
-            BUENA OFERTA
           </span>
         )}
         {listing.amoblado && (
