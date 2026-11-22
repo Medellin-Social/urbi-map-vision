@@ -49,7 +49,7 @@ export const Route = createFileRoute("/listing/$id")({
   // fall back to the generic head. Humans are sent on to /map by the component (client side).
   loader: async ({ params }) => {
     const id = Number(params.id);
-    if (!Number.isInteger(id) || id <= 0) return null;
+    if (!Number.isInteger(id) || id === 0) return null;
     try { return await apiFetch<ApiListingDetail>(API_ENDPOINTS.listing(id)); }
     catch { return null; }
   },
