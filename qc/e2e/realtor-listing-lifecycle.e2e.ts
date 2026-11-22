@@ -59,7 +59,7 @@ test.describe("Centro de agente — render de las 5 secciones", () => {
     await expect(page.getByRole("link", { name: /Crear listing/ })).toBeVisible();
 
     await go("Bandeja y agenda");
-    for (const id of ["bandeja", "agenda"]) await sub(id);
+    for (const id of ["propietarios", "visitas", "interesados"]) await sub(id);
 
     await go("Mercado");
     for (const id of ["zonas", "inteligencia"]) await sub(id);
