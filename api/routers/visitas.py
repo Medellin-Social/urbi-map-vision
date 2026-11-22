@@ -155,6 +155,26 @@ async def crear_visita(
         except ValueError:
             raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
     async with pool.acquire() as conn:
+        # La URL debe ser un inmueble real (listing propio o scrapeado): evita visitas
+        # fantasma y que el cliente dispare emails/pushes con URLs inventadas.
+        existe = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM listing WHERE id::text = $1) "
+            "OR EXISTS (SELECT 1 FROM staging.stg_listings_unificado WHERE url = $1)",
+            req.listing_url,
+        )
+        if not existe:
+            raise HTTPException(status_code=404, detail="Inmueble no encontrado")
+        # Dedup: mismo inmueble + mismo contacto en la última hora → misma solicitud.
+        contacto = (req.telefono or "").strip() or (str(user["id"]) if user else "")
+        if contacto:
+            previa = await conn.fetchrow(
+                "SELECT id FROM visita_solicitud WHERE listing_url = $1 "
+                "AND COALESCE(telefono, usuario_id::text, '') = $2 "
+                "AND created_at > NOW() - INTERVAL '1 hour' LIMIT 1",
+                req.listing_url, contacto,
+            )
+            if previa:
+                return {"id": str(previa["id"]), "estado": "pendiente"}
         # Auto-populate agent_id if listing.id::text matches the url (new listing model)
         agent_id = await conn.fetchval(
             "SELECT agent_id FROM listing WHERE id::text = $1",
@@ -217,7 +237,8 @@ async def crear_visita(
     if agent_id:
         ghl_client.spawn(notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool))
     # Sin agente de zona → notificar al buzón interno (hilo aparte; best-effort).
-    if req.sin_agente:
+    # sin_agente lo decide el servidor: solo si no hay agente resuelto (no se confía en el cliente).
+    if req.sin_agente and agent_id is None:
         ghl_client.spawn(asyncio.to_thread(_send_visita_email, req, fecha))
     # Push best-effort a GHL como Contact (+ nota). Las visitas también salen por
     # PULL (/api/v1/ghl/leads); un fallo aquí queda en ghl_push_failures y no

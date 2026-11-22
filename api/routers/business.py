@@ -2,7 +2,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -57,13 +57,13 @@ async def get_planes(pool=Depends(get_pool)):
 # ── Aplicar (lead form) ───────────────────────────────────────────────────────
 
 class AplicarIn(BaseModel):
-    nombre_negocio: str
-    email: str
-    telefono: Optional[str] = None
-    categoria: Optional[str] = None
+    nombre_negocio: str = Field(min_length=1, max_length=160)
+    email: EmailStr = Field(max_length=254)
+    telefono: Optional[str] = Field(None, max_length=30)
+    categoria: Optional[str] = Field(None, max_length=80)
     barrio_id: Optional[int] = None
-    plan_tipo: Optional[str] = None
-    mensaje: Optional[str] = None
+    plan_tipo: Optional[str] = Field(None, max_length=40)
+    mensaje: Optional[str] = Field(None, max_length=1000)
 
 
 class AplicarOut(BaseModel):
@@ -75,6 +75,13 @@ class AplicarOut(BaseModel):
 @router.post("/aplicar", response_model=AplicarOut)
 @limiter.limit("5/minute")
 async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=Depends(get_pool)):
+    # Dedup: mismo correo en las últimas 24 h → devolvemos la misma solicitud (sin duplicar fila ni push a GHL).
+    previa = await pool.fetchval(
+        "SELECT id FROM public.leads_negocio WHERE lower(email) = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1",
+        body.email.lower(),
+    )
+    if previa:
+        return AplicarOut(ok=True, lead_id=previa, mensaje="Gracias por tu interés. Te contactaremos en las próximas 24 horas.")
     try:
         row = await pool.fetchrow(
             """

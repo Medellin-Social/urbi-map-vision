@@ -2,7 +2,7 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
-from pydantic import BaseModel
+from pydantic import BaseModel, EmailStr, Field
 
 from api.db import get_pool
 from api.limiter import limiter
@@ -12,12 +12,12 @@ router = APIRouter()
 
 
 class AplicarPasantiaIn(BaseModel):
-    nombre: str
-    email: str
-    telefono: Optional[str] = None
-    programa_semestre: str
-    ruta_interes: str
-    mensaje: Optional[str] = None
+    nombre: str = Field(min_length=1, max_length=120)
+    email: EmailStr = Field(max_length=254)
+    telefono: Optional[str] = Field(None, max_length=30)
+    programa_semestre: str = Field(min_length=1, max_length=120)
+    ruta_interes: str = Field(min_length=1, max_length=120)
+    mensaje: Optional[str] = Field(None, max_length=1000)
 
 
 class AplicarOut(BaseModel):
@@ -29,6 +29,13 @@ class AplicarOut(BaseModel):
 @router.post("/aplicar", response_model=AplicarOut)
 @limiter.limit("5/minute")
 async def aplicar_pasantia(request: Request, body: AplicarPasantiaIn = Body(...), pool=Depends(get_pool)):
+    # Dedup: mismo correo en las últimas 24 h → devolvemos la misma solicitud (sin duplicar fila ni push a GHL).
+    previa = await pool.fetchval(
+        "SELECT id FROM public.aplicaciones_pasantia WHERE lower(email) = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1",
+        body.email.lower(),
+    )
+    if previa:
+        return AplicarOut(ok=True, aplicacion_id=previa, mensaje="¡Recibimos tu aplicación! Te contactamos en menos de 48 horas.")
     try:
         row = await pool.fetchrow(
             """
