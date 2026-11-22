@@ -400,7 +400,9 @@ class MiNegocioOut(BaseModel):
 
 
 @router.post("/mi-negocio", response_model=MiNegocioOut, status_code=201)
+@limiter.limit("5/minute")
 async def submit_negocio(
+    request: Request,
     body: MiNegocioIn = Body(...),
     current_user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
