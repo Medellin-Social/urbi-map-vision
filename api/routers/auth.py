@@ -15,6 +15,9 @@ from api.db import get_pool
 from api.dependencies import JWT_ALGORITHM, JWT_SECRET, REQUIRE_EMAIL_VERIFICATION, current_token, get_current_user, token_key
 from api.legal import HABEAS_DATA_VERSION
 from api.limiter import email_throttle, limiter, login_fail_throttle
+import logging
+
+log = logging.getLogger(__name__)
 
 _APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
@@ -148,6 +151,7 @@ async def _send_quietly(coro_fn, **kwargs) -> None:
     try:
         await coro_fn(**kwargs)
     except Exception:
+        log.warning("_send_quietly: excepción suprimida (best-effort)", exc_info=True)
         pass  # ponytail: silent — user can request resend later
 
 

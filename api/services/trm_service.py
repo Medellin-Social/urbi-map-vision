@@ -15,6 +15,9 @@ from typing import Optional
 
 from api.config import EUR_TO_COP, USD_TO_COP
 from api.db import get_pool
+import logging
+
+log = logging.getLogger(__name__)
 
 _FALLBACK = {"USD": USD_TO_COP, "EUR": EUR_TO_COP}
 _TTL = 300  # seconds
@@ -42,6 +45,7 @@ async def get_trm(moneda: str = "USD") -> tuple[float, Optional[str]]:
             valor = float(row["valor"])
             vigencia = row["vigencia"]
     except Exception:
+        log.warning("get_trm: excepción suprimida (best-effort)", exc_info=True)
         pass  # keep env fallback — never break the map over the rate
     _cache[moneda] = (valor, vigencia, time.monotonic())
     return valor, vigencia

@@ -10,6 +10,9 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import client_ip, limiter
 from api.utils import ghl_client
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -69,6 +72,7 @@ async def _audit(pool, admin: dict, accion: str, entidad: str, entidad_id: str |
             client_ip(request),
         )
     except Exception:
+        log.warning("_audit: excepción suprimida (best-effort)", exc_info=True)
         pass  # el audit log nunca debe tumbar la acción que audita
 
 
@@ -181,6 +185,7 @@ async def dashboard(admin: dict = Depends(require_admin)):
             "SELECT perfil_riesgo, COUNT(*) AS n FROM perfil_inversor WHERE perfil_riesgo IS NOT NULL GROUP BY perfil_riesgo"
         )
     except Exception:
+        log.warning("dashboard: excepción suprimida (best-effort)", exc_info=True)
         riesgo_rows = await pool.fetch(
             "SELECT riesgo AS perfil_riesgo, COUNT(*) AS n FROM perfil_inversor WHERE riesgo IS NOT NULL GROUP BY riesgo"
         )
@@ -208,6 +213,7 @@ async def dashboard(admin: dict = Depends(require_admin)):
             """
         )
     except Exception:
+        log.warning("dashboard: excepción suprimida (best-effort)", exc_info=True)
         pres_rows = await pool.fetch(
             """
             SELECT
@@ -966,6 +972,7 @@ async def list_leads(admin: dict = Depends(require_admin)):
             """
         )
     except Exception:
+        log.warning("list_leads: excepción suprimida (best-effort)", exc_info=True)
         return {"leads": [], "total": 0, "detail": "migration 0002 not yet applied"}
 
     leads = []

@@ -127,6 +127,7 @@ async def onboarding(request: Request, req: OnboardingRequest, current_user: dic
                 current_user["id"],
             )
     except Exception:
+        logger.warning("onboarding: excepción suprimida (best-effort)", exc_info=True)
         pass  # migration 0002 not yet applied in this environment
 
     return dict(row)

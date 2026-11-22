@@ -316,6 +316,7 @@ async def crear_listing(
         try:
             amenidades_arr = json.loads(amenidades)
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Ficha rica (JSONB catch-all). Solo se persiste si parsea a objeto.
@@ -326,6 +327,7 @@ async def crear_listing(
             if isinstance(parsed, dict):
                 caracteristicas_obj = {k: v for k, v in parsed.items() if v not in (None, "", [], {})}
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Título: el realtor puede escribir el suyo (mejor SEO/UX); si no, se arma solo.

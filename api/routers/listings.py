@@ -786,6 +786,7 @@ async def get_all_listings(
             if prow and prow["objetivo"]:
                 perfil_dict = dict(prow)
         except Exception:
+            logger.warning("get_all_listings: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     am_clauses, am_extra = _build_amenidades_sql(amenidades or [])
@@ -2053,6 +2054,7 @@ async def get_listing_by_id(
         try:
             row_d["caracteristicas"] = json.loads(row_d["caracteristicas"])
         except Exception:
+            logger.warning("get_listing_by_id: excepción suprimida (best-effort)", exc_info=True)
             row_d["caracteristicas"] = None
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")  # before url is nulled for 'propio'
     _finalize_row(row_d, await get_usd_rate())

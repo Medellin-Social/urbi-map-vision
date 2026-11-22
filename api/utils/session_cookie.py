@@ -14,6 +14,9 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from api.dependencies import AUTH_COOKIE_NAME, auth_cookie_mode
+import logging
+
+log = logging.getLogger(__name__)
 
 _ISSUE_PATHS = (
     "/api/v1/auth/login",
@@ -60,6 +63,7 @@ class SessionCookieMiddleware(BaseHTTPMiddleware):
         try:
             token = json.loads(body).get("token")
         except Exception:
+            log.warning("dispatch: excepción suprimida (best-effort)", exc_info=True)
             token = None
         if token:
             new.set_cookie(AUTH_COOKIE_NAME, token, **_cookie_kwargs())

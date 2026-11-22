@@ -24,6 +24,9 @@ from api.utils.anti_scrape import AntiScrapeMiddleware
 from api.utils.session_cookie import SessionCookieMiddleware
 from api.dependencies import auth_cookie_mode
 from api.routers import admin, admin_agentes, afiliados, agency, alertas, asignador, auth, barrio_page, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_leads, ghl_webhook, historial, intake, link_review, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, realtor_preferido, stats, suscripciones, tracking, trm, usuario, visitas, zonas
+import logging
+
+log = logging.getLogger(__name__)
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -130,6 +133,7 @@ def _retry_after_seconds(exc: RateLimitExceeded) -> int:
     try:
         return max(1, int(exc.limit.limit.get_expiry()))
     except Exception:
+        log.warning("_retry_after_seconds: excepción suprimida (best-effort)", exc_info=True)
         return 60
 
 

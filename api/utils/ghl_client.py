@@ -1111,6 +1111,7 @@ async def sync_owner_intake(intake_id: str) -> Optional[str]:
         try:
             await _record_sync_result("owner_intake", str(intake_id), "", "failed", str(e))
         except Exception:  # noqa: BLE001
+            logger.warning("sync_owner_intake: excepción suprimida (best-effort)", exc_info=True)
             pass
         return None
 

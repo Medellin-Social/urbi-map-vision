@@ -20,6 +20,9 @@ from api.limiter import limiter
 from api.routers.admin import require_admin
 from api.utils import ghl_client
 from api.services import realtor_preferido_service as svc
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 Nivel = Literal["barrio", "comuna"]
@@ -162,6 +165,7 @@ async def admin_cobertura(nivel: Optional[Nivel] = None, admin: dict = Depends(r
                 "WHERE s.zona_nivel='barrio' AND s.zona_codigo=b.id::text AND s.estado='activo') ORDER BY b.nombre")
             total = await conn.fetchval("SELECT COUNT(*) FROM raw.barrios WHERE municipio ILIKE '%medellin%'")
         except Exception:
+            log.warning("admin_cobertura: excepción suprimida (best-effort)", exc_info=True)
             sin, total = [], 0
     return {"zonas": [dict(r) for r in zonas], "barrios_total": total,
             "barrios_sin_preferido": [dict(r) for r in sin]}
@@ -182,6 +186,7 @@ async def zonas(request: Request, pool=Depends(get_pool)):
             niv = {(r["zona_nivel"], r["zona_codigo"]): r["nivel"] for r in await conn.fetch(
                 "SELECT zona_nivel, zona_codigo::text AS zona_codigo, nivel FROM analytics.zonas_nivel_precio")}
         except Exception:
+            log.warning("zonas: excepción suprimida (best-effort)", exc_info=True)
             niv = {}
         barrios = await conn.fetch(
             "SELECT id::text AS codigo, INITCAP(LOWER(nombre)) AS nombre, municipio FROM raw.barrios "

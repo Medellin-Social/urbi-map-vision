@@ -14,6 +14,9 @@ from api.utils.ttl_cache import TTLCache
 from api.routers.listings import ListingFull, ListingsAllResponse, _finalize_row
 from api.services.trm_service import get_usd_rate
 from api.services.personalizacion import PRESUPUESTO_MAX
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -986,6 +989,7 @@ async def _load_aliases() -> list[dict]:
         """)
         return [dict(r) for r in rows]
     except Exception:
+        log.warning("_load_aliases: excepción suprimida (best-effort)", exc_info=True)
         return list(_BARRIO_ALIASES_FALLBACK)
 
 
@@ -1025,6 +1029,7 @@ async def buscar_barrio(response: Response, q: str = Query(..., min_length=2, ma
                 out.append({"alias": d["barrio_nombre"].title(), "alias_norm": _norm_q(d["barrio_nombre"]),
                             "asumido": False, **d})
         except Exception:
+            log.warning("buscar_barrio: excepción suprimida (best-effort)", exc_info=True)
             pass
     response.headers["Cache-Control"] = "public, max-age=300"
     return [BarrioAlias(**a) for a in out[:10]]
