@@ -1,5 +1,5 @@
 import logging
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Request
 from pydantic import BaseModel, EmailStr, Field
@@ -16,7 +16,7 @@ class AplicarPasantiaIn(BaseModel):
     email: EmailStr = Field(max_length=254)
     telefono: Optional[str] = Field(None, max_length=30)
     programa_semestre: str = Field(min_length=1, max_length=120)
-    ruta_interes: str = Field(min_length=1, max_length=120)
+    ruta_interes: Literal["media", "growth", "bizdev"]
     mensaje: Optional[str] = Field(None, max_length=1000)
 
 
