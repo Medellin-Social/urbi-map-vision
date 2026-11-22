@@ -74,3 +74,44 @@ async def test_una_excepcion_no_frena_el_resto(monkeypatch):
 
 def test_todo_tipo_reintentable_tiene_sync():
     assert set(svc.TIPOS_REINTENTABLES) == {"listing", "agency", "agent", "visita", "tienda", "evento", "referidor"}
+
+
+class _FakePool:
+    def __init__(self, rows):
+        self.rows, self.updated = rows, None
+
+    async def fetch(self, *a):
+        return self.rows
+
+    async def execute(self, sql, ids):
+        self.updated = ids
+
+
+def test_alertar_agotados_envia_y_marca(monkeypatch):
+    import asyncio
+
+    from api.services import ghl_retry_service as svc
+    sent = []
+
+    async def fake_send(to, subj, html):
+        sent.append((to, subj, html))
+
+    monkeypatch.setattr("api.utils.email.send_email", fake_send)
+    pool = _FakePool([{"id": 7, "object_type": "agent", "internal_object_id": "x<b>", "error": "boom",
+                       "attempts": 8, "last_failed_at": None}])
+    assert asyncio.run(svc.alertar_agotados(pool)) == 1
+    assert pool.updated == [7] and "x&lt;b&gt;" in sent[0][2]
+
+
+def test_alertar_agotados_si_email_falla_no_marca(monkeypatch):
+    import asyncio
+
+    from api.services import ghl_retry_service as svc
+
+    async def boom(*a):
+        raise RuntimeError("smtp")
+
+    monkeypatch.setattr("api.utils.email.send_email", boom)
+    pool = _FakePool([{"id": 1, "object_type": "agent", "internal_object_id": "a", "error": "e",
+                       "attempts": 8, "last_failed_at": None}])
+    assert asyncio.run(svc.alertar_agotados(pool)) == 0 and pool.updated is None

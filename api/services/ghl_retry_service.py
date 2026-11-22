@@ -95,3 +95,41 @@ async def _procesar(pool, rows) -> dict:
             fallaron += 1
     log.info("ghl_retry: %d intentados, %d resueltos, %d siguen fallando", len(rows), resueltos, fallaron)
     return {"intentados": len(rows), "resueltos": resueltos, "fallaron": fallaron}
+
+
+async def alertar_agotados(pool) -> int:
+    """Avisa UNA vez al admin (un solo email-resumen) de los fallos que ya agotaron
+    los reintentos automáticos. Marca alerta_agotado_at solo si el email salió, para
+    reintentar el aviso en la próxima corrida si el correo falló. Devuelve cuántos avisó."""
+    from html import escape
+
+    from api.utils.email import ADMIN_EMAIL, _wrap, send_email
+
+    rows = await pool.fetch(
+        "SELECT id, object_type, internal_object_id, error, attempts, last_failed_at "
+        "FROM public.ghl_push_failures "
+        "WHERE resolved_at IS NULL AND attempts >= $1 AND alerta_agotado_at IS NULL "
+        "ORDER BY last_failed_at LIMIT 50",
+        MAX_ATTEMPTS,
+    )
+    if not rows:
+        return 0
+    items = "".join(
+        f"<li><b>{escape(str(r['object_type']))}</b> {escape(str(r['internal_object_id']))} — "
+        f"{escape(str(r['error'] or '')[:200])}</li>"
+        for r in rows
+    )
+    html = _wrap(
+        f"<h2>{len(rows)} push(es) a GHL agotaron los reintentos</h2><ul>{items}</ul>"
+        "<p>Revisa y reintenta desde el panel admin (GHL → fallos).</p>"
+    )
+    try:
+        await send_email(ADMIN_EMAIL, f"[Urbi] {len(rows)} fallo(s) de GHL sin resolver", html)
+    except Exception:  # noqa: BLE001 — se reintenta el aviso en la próxima corrida
+        log.exception("no se pudo enviar el aviso de fallos GHL agotados")
+        return 0
+    await pool.execute(
+        "UPDATE public.ghl_push_failures SET alerta_agotado_at = now() WHERE id = ANY($1::bigint[])",
+        [r["id"] for r in rows],
+    )
+    return len(rows)

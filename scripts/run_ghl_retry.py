@@ -19,13 +19,16 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 
 async def main() -> None:
     from api import db
-    from api.services.ghl_retry_service import reintentar_pendientes
+    from api.services.ghl_retry_service import alertar_agotados, reintentar_pendientes
     from api.utils import ghl_client
 
     await db.create_pool()
     try:
         res = await reintentar_pendientes(db.get_pool())
         print(f"ghl_retry: {res}")
+        avisados = await alertar_agotados(db.get_pool())
+        if avisados:
+            print(f"ghl_retry: {avisados} fallo(s) agotado(s) avisados al admin")
     finally:
         await ghl_client.aclose()
         await db.close_pool()
