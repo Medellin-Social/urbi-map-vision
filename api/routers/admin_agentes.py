@@ -181,3 +181,37 @@ async def zonas_catalogo(admin: dict = Depends(require_admin), pool=Depends(get_
         "comunas": [{"cd_comuna": r["cd_comuna"], "nombre": r["nombre"]} for r in comunas],
         "barrios": [{"id": r["id"], "nombre": r["nombre"], "cd_comuna": r["cd_comuna"]} for r in barrios],
     }
+
+
+# ── Fallos de push a GHL (visibilidad + reintento manual) ────────────────────
+
+class ReintentarFallosRequest(BaseModel):
+    ids: list[int]
+
+
+@router.get("/ghl/fallos")
+async def ghl_fallos(
+    abiertos: bool = Query(True),
+    admin: dict = Depends(require_admin),
+    pool=Depends(get_pool),
+):
+    """Pushes a GHL que fallaron. `agotado` = superó el tope de reintentos automáticos."""
+    from api.services.ghl_retry_service import MAX_ATTEMPTS, listar_fallos
+    fallos = await listar_fallos(pool, solo_abiertos=abiertos)
+    return {"max_intentos": MAX_ATTEMPTS, "total": len(fallos), "fallos": fallos}
+
+
+@router.post("/ghl/fallos/reintentar")
+@limiter.limit("10/minute")
+async def ghl_fallos_reintentar(
+    request: Request,
+    req: ReintentarFallosRequest = Body(...),
+    admin: dict = Depends(require_admin),
+    pool=Depends(get_pool),
+):
+    """Reintento manual (ignora backoff y tope). Máx. 50 ids por llamada."""
+    from api.services.ghl_retry_service import reintentar_ids
+    ids = req.ids[:50]
+    res = await reintentar_ids(pool, ids)
+    await _audit(pool, admin, "ghl_reintentar", "ghl_push_failures", None, {"ids": ids, **res}, request)
+    return res

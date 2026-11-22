@@ -446,6 +446,18 @@ async def _record_sync_result(
     )
 
 
+async def resolve_push_failure(object_type: str, internal_id) -> None:
+    """Marca como resuelto el fallo abierto de este objeto (push exitoso). Nunca lanza."""
+    try:
+        await get_pool().execute(
+            "UPDATE public.ghl_push_failures SET resolved_at = now() "
+            "WHERE object_type = $1 AND internal_object_id = $2 AND resolved_at IS NULL",
+            object_type, str(internal_id),
+        )
+    except Exception:
+        logger.exception("ghl_push_failures resolve(%s, %s)", object_type, internal_id)
+
+
 async def _record_push_failure(object_type: str, internal_id, error: str) -> None:
     """First-time push that failed: there is no mapping row (ghl_object_id is
     NOT NULL there), so keep it in ghl_push_failures for a later retry instead
@@ -976,6 +988,7 @@ async def push_referidor_to_ghl(referidor_id: int, campos: dict) -> Optional[str
             f"Experiencia: {campos.get('experiencia')}\nMotivación: {campos.get('motivacion')}"
         ))
         await upsert_opportunity(contact_id, "embajadores", f"{tipo.capitalize()}: {campos.get('nombre') or referidor_id}")
+        await resolve_push_failure("referidor", referidor_id)
         return contact_id
     except Exception as e:
         logger.error("push_referidor_to_ghl(%s) falló: %s", referidor_id, e)
@@ -1137,6 +1150,7 @@ async def push_negocio_lead_to_ghl(lead_id, campos: dict) -> Optional[str]:
             f"Plan: {campos.get('plan_tipo')}\nMensaje: {campos.get('mensaje')}"
         ))
         await upsert_opportunity(contact_id, "negocios", f"Negocio: {campos.get('nombre_negocio')}")
+        await resolve_push_failure("negocio", lead_id)
         return contact_id
     except Exception as e:
         logger.error("push_negocio_lead_to_ghl(%s) falló: %s", lead_id, e)
@@ -1159,6 +1173,7 @@ async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
             f"Agente: {campos.get('agent_id')}"
         ))
         await upsert_opportunity(contact_id, "visitas", f"Visita: {campos.get('listing_url') or visita_id}")
+        await resolve_push_failure("visita", visita_id)
         return contact_id
     except Exception as e:
         logger.error("push_visita_to_ghl(%s) falló: %s", visita_id, e)
