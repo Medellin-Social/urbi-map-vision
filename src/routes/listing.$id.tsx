@@ -1,6 +1,7 @@
 import { Name } from "@/lib/i18n";
 import { seo } from "@/lib/seo";
-import { createFileRoute, redirect, Link } from "@tanstack/react-router";
+import { useEffect } from "react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { RouteError, RoutePending } from "@/components/RouteStates";
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -19,15 +20,80 @@ import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
 import { OriginalListingLink } from "@/components/OriginalListingLink";
 
+const GENERIC_LISTING_HEAD = {
+  title: "Inmueble · Medellín Social",
+  description: "Detalle del inmueble: precio, área, barrio, fotos y comparación con el mercado de la zona.",
+};
+
+const cop = (n: number) => `$${Math.round(n).toLocaleString("es-CO")} COP`;
+
+/** Title/description from the loader data; every field optional so a sparse listing never breaks. */
+export function listingSeoText(l: ApiListingDetail) {
+  const tipo = l.tipo_inmueble ? l.tipo_inmueble.charAt(0).toUpperCase() + l.tipo_inmueble.slice(1) : "Inmueble";
+  const op = l.tipo_operacion ? ` en ${l.tipo_operacion}` : "";
+  const zona = l.barrio_display || l.barrio_nombre || l.municipio_display || l.municipio || "Medellín";
+  const title = `${tipo}${op} en ${zona} · Medellín Social`;
+  const specs = [
+    l.habitaciones != null ? `${l.habitaciones} hab.` : null,
+    l.banos != null ? `${l.banos} baños` : null,
+    l.area_m2 != null ? `${Math.round(l.area_m2)} m²` : null,
+    l.precio_cop != null ? cop(l.precio_cop) : null,
+  ].filter(Boolean).join(" · ");
+  const body = l.descripcion?.replace(/\s+/g, " ").trim().slice(0, 120);
+  const description = [`${tipo}${op} en ${zona}.`, specs, body].filter(Boolean).join(" ").slice(0, 300);
+  return { title, description };
+}
+
 export const Route = createFileRoute("/listing/$id")({
-  head: () => seo({ title: "Inmueble · Medellín Social", description: "Detalle del inmueble: precio, área, barrio, fotos y comparación con el mercado de la zona." }),
-  beforeLoad: ({ params }) => {
-    throw redirect({ to: "/map", search: { listing: Number(params.id) } });
+  // Loader = SSR: crawlers/link previews get per-listing meta. No-throw: if the API fails we
+  // fall back to the generic head. Humans are sent on to /map by the component (client side).
+  loader: async ({ params }) => {
+    const id = Number(params.id);
+    if (!Number.isInteger(id) || id <= 0) return null;
+    try { return await apiFetch<ApiListingDetail>(API_ENDPOINTS.listing(id)); }
+    catch { return null; }
   },
-  component: ListingPage,
+  head: ({ loaderData, params }) => {
+    const l = loaderData as ApiListingDetail | null | undefined;
+    const path = `/listing/${params.id}`;
+    if (!l) return seo({ ...GENERIC_LISTING_HEAD, path });
+    const { title, description } = listingSeoText(l);
+    const base = seo({ title, description, path });
+    const img = l.foto_principal || l.fotos?.[0];
+    return {
+      ...base,
+      meta: [
+        ...base.meta,
+        { property: "og:type", content: "website" },
+        ...(img && /^https?:\/\//.test(img)
+          ? [{ property: "og:image", content: img }, { name: "twitter:image", content: img }]
+          : []),
+      ],
+    };
+  },
+  component: ListingRedirect,
   errorComponent: RouteError,
   pendingComponent: RoutePending,
 });
+
+/** The standalone page was retired in favour of the map drawer: keep the old redirect for
+ *  people, but render the listing summary in the SSR HTML so crawlers see real content. */
+function ListingRedirect() {
+  const { id } = Route.useParams();
+  const l = Route.useLoaderData() as ApiListingDetail | null;
+  const navigate = useNavigate();
+  useEffect(() => {
+    navigate({ to: "/map", search: { listing: Number(id) }, replace: true });
+  }, [id, navigate]);
+  if (!l) return null;
+  const { title, description } = listingSeoText(l);
+  return (
+    <main>
+      <h1>{title}</h1>
+      <p>{description}</p>
+    </main>
+  );
+}
 
 function TipoOpBadge({ tipo }: { tipo?: string | null }) {
   return (
@@ -684,7 +750,7 @@ export function ListingDetailContent({
 }
 
 // ─── Full page ─────────────────────────────────────────────────────────────────
-function ListingPage() {
+export function ListingPage() {
   const { id } = Route.useParams();
   const listingId = Number(id);
 
