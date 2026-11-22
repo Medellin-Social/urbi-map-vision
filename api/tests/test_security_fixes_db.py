@@ -237,10 +237,19 @@ async def test_suscribirse_does_not_leak_ids_or_existence(client):
         "SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='rol'"
     ):
         pytest.skip("usuarios.rol missing in this DB (schema drift, unrelated to this fix)")
-    a = await client.post("/api/v1/usuario/suscribirse", json={"nombre": "A", "email": email})
-    b = await client.post("/api/v1/usuario/suscribirse", json={"nombre": "A", "email": email})
+    body = {"nombre": "A", "email": email, "habeas_data": True}
+    a = await client.post("/api/v1/usuario/suscribirse", json=body)
+    b = await client.post("/api/v1/usuario/suscribirse", json=body)
     assert a.status_code == b.status_code == 200
     assert a.json() == b.json() == {"success": True}
+    # Consentimiento no verificado: alta anónima queda inactiva y sin sello de habeas data.
+    row = await pool.fetchrow(
+        "SELECT newsletter_activo, habeas_data_aceptado FROM usuarios WHERE email=$1", email)
+    assert not row["newsletter_activo"] and not row["habeas_data_aceptado"]
+    # Un anónimo no puede alterar el estado de una cuenta existente.
+    await pool.execute("UPDATE usuarios SET newsletter_activo=TRUE WHERE email=$1", email)
+    await client.post("/api/v1/usuario/suscribirse", json={**body, "newsletter_activo": False})
+    assert await pool.fetchval("SELECT newsletter_activo FROM usuarios WHERE email=$1", email) is True
 
 
 async def test_login_unknown_and_wrong_password_are_the_same_401(client):

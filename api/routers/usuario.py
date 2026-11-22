@@ -229,12 +229,13 @@ async def suscribirse(request: Request, body: SuscribirseIn, pool=Depends(get_po
             await pool.execute(
                 """
                 UPDATE public.usuarios SET
-                    newsletter_activo    = $2,
-                    newsletter_barrio_id = COALESCE($3, newsletter_barrio_id),
-                    newsletter_intereses = CASE WHEN $4::text IS NOT NULL
+                    -- fill-only: un anónimo no puede dar de baja, suscribir ni
+                    -- cambiar preferencias de una cuenta ajena (newsletter_activo
+                    -- NO se toca; el titular lo gestiona logueado).
+                    newsletter_barrio_id = COALESCE(newsletter_barrio_id, $3),
+                    newsletter_intereses = CASE WHEN newsletter_intereses IS NULL AND $4::text IS NOT NULL
                                                THEN ARRAY[$4::text]
                                                ELSE newsletter_intereses END,
-                    fecha_suscripcion    = COALESCE(fecha_suscripcion, NOW()),
                     -- fill-only: este endpoint es público/sin auth, no debe pisar
                     -- nombre/apellido de una cuenta ya existente (overwrite anónimo).
                     nombre               = COALESCE(nombre, $5),
@@ -243,7 +244,7 @@ async def suscribirse(request: Request, body: SuscribirseIn, pool=Depends(get_po
                     -- sellar habeas_data sobre una cuenta ajena fabricaría una
                     -- autorización (peor que no tenerla para una auditoría Ley 1581).
                     -- El titular lo otorga en el alta nueva (INSERT) o logueado.
-                WHERE id = $1
+                WHERE id = $1 AND $2::bool IS NOT NULL
                 """,
                 existing["id"], body.newsletter_activo, body.barrio_id,
                 body.intereses, body.nombre, body.apellido,
@@ -258,11 +259,11 @@ async def suscribirse(request: Request, body: SuscribirseIn, pool=Depends(get_po
                  habeas_data_aceptado, habeas_data_fecha, habeas_data_version, consent_whatsapp)
             VALUES ($1, $2, $3, $4, 'usuario', $5, $6,
                     CASE WHEN $7::text IS NOT NULL THEN ARRAY[$7::text] ELSE NULL END,
-                    NOW(), TRUE, NOW(), $8, $9)
+                    NOW(), FALSE, NULL, $8, $9)
             RETURNING id
             """,
             body.email, hashed, body.nombre, body.apellido,
-            body.newsletter_activo, body.barrio_id, body.intereses,
+            False, body.barrio_id, body.intereses,  # inactivo hasta que el titular confirme (consentimiento no verificado)
             HABEAS_DATA_VERSION, body.consent_whatsapp,
         )
         return SuscribirseOut(success=True)
