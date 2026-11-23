@@ -118,10 +118,12 @@ export function sortListings(list: ApiListing[], key: SortKey): ApiListing[] {
   const arr = [...list];
   const num = (v: number | null | undefined, fallback: number) => (v == null ? fallback : v);
   switch (key) {
-    case "precio_asc":  return arr.sort((a, b) => num(a.precio_cop, Infinity) - num(b.precio_cop, Infinity));
-    case "precio_desc": return arr.sort((a, b) => num(b.precio_cop, -Infinity) - num(a.precio_cop, -Infinity));
-    case "nuevo":       return arr.sort((a, b) => num(a.dias_en_mercado, Infinity) - num(b.dias_en_mercado, Infinity));
-    case "area_desc":   return arr.sort((a, b) => num(b.area_m2, -Infinity) - num(a.area_m2, -Infinity));
+    case "precio_asc":       return arr.sort((a, b) => num(a.precio_cop, Infinity) - num(b.precio_cop, Infinity));
+    case "precio_desc":      return arr.sort((a, b) => num(b.precio_cop, -Infinity) - num(a.precio_cop, -Infinity));
+    case "precio_m2_asc":    return arr.sort((a, b) => num(a.precio_m2, Infinity) - num(b.precio_m2, Infinity));
+    case "precio_m2_desc":   return arr.sort((a, b) => num(b.precio_m2, -Infinity) - num(a.precio_m2, -Infinity));
+    case "area_asc":         return arr.sort((a, b) => num(a.area_m2, Infinity) - num(b.area_m2, Infinity));
+    case "area_desc":        return arr.sort((a, b) => num(b.area_m2, -Infinity) - num(a.area_m2, -Infinity));
   }
 }
 

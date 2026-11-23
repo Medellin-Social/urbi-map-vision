@@ -26,18 +26,22 @@ import type { BarrioOption } from "@/lib/adapters";
 // Orden de la lista que elige el usuario. "destacados" = orden del server (pro-first);
 // el resto reordena en cliente (MLSPanel.sortListings). Vive aquí, junto a los filtros,
 // porque el selector "Ordenar por" está dentro del panel de filtros.
-export type SortKey = "destacados" | "precio_asc" | "precio_desc" | "nuevo" | "area_desc";
+export type SortKey =
+  | "destacados" | "precio_asc" | "precio_desc"
+  | "precio_m2_asc" | "precio_m2_desc" | "area_asc" | "area_desc";
 export const SORT_OPTIONS: { key: SortKey; es: string; en: string }[] = [
-  { key: "destacados",  es: "Destacados",     en: "Featured" },
-  { key: "precio_desc", es: "Precio ↑",       en: "Price ↑" },
-  { key: "precio_asc",  es: "Precio ↓",       en: "Price ↓" },
-  { key: "nuevo",       es: "Más nuevo",      en: "Newest" },
-  { key: "area_desc",   es: "Área ↓",         en: "Area ↓" },
+  { key: "destacados",     es: "Destacados",   en: "Featured" },
+  { key: "precio_asc",     es: "Precio ↑",     en: "Price ↑" },
+  { key: "precio_desc",    es: "Precio ↓",     en: "Price ↓" },
+  { key: "precio_m2_asc",  es: "Precio/m² ↑",  en: "Price/m² ↑" },
+  { key: "precio_m2_desc", es: "Precio/m² ↓",  en: "Price/m² ↓" },
+  { key: "area_asc",       es: "Área ↑",       en: "Area ↑" },
+  { key: "area_desc",      es: "Área ↓",       en: "Area ↓" },
 ];
 
 /** Label of the combined sort + filters control, in both languages. */
 export function sortFiltersLabel(lang: string, count = 0): string {
-  const base = lang === "en" ? "Sort by & filters" : "Ordenar por & filtros";
+  const base = lang === "en" ? "Sort & filter" : "Ordenar & filtro";
   return count > 0 ? `${base} (${count})` : base;
 }
 
@@ -115,6 +119,7 @@ type MapFilterBarProps = {
   // Cascader Comuna → Barrio (entre buscador y precio)
   activeComunaCd?: number | null;
   activeMunicipio?: string | null;
+  selectedBarrioId?: number | null;
   onComunaSelect?: (cd: number | null, nombre: string | null, municipio?: string | null) => void;
 };
 
@@ -146,10 +151,11 @@ function groupMunicipios(allBarrios?: BarrioOption[]): ComunaGroup[] {
 }
 
 /** Dos filtros independientes: [Comunas ▾] [Barrios ▾] */
-function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, onComunaSelect, onBarrioNavigate }: {
+function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, selectedBarrioId, onComunaSelect, onBarrioNavigate }: {
   allBarrios?: BarrioOption[];
   activeComunaCd?: number | null;
   activeMunicipio?: string | null;
+  selectedBarrioId?: number | null;
   onComunaSelect?: (cd: number | null, nombre: string | null, municipio?: string | null) => void;
   onBarrioNavigate?: (opt: BarrioOption) => void;
 }) {
@@ -218,16 +224,28 @@ function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, onComunaS
       </div>
 
       {/* Barrios — solo aparece cuando hay una zona activa */}
-      {activeGroup && barriosDeZona.length > 0 && (
+      {activeGroup && barriosDeZona.length > 0 && (() => {
+        // Controlado: refleja el barrio realmente seleccionado (mlsBarrio) si cae en
+        // esta zona; si no, muestra "Todo {Comuna}". Antes era defaultValue="" con
+        // reset tras cada pick → siempre mostraba "Todo {Comuna}".
+        const selectedInZone =
+          selectedBarrioId != null && barriosDeZona.some((b) => b.id === selectedBarrioId)
+            ? String(selectedBarrioId) : "";
+        return (
         <div style={{ position: "relative" }}>
           <select
-            defaultValue=""
+            value={selectedInZone}
             onChange={(e) => {
-              const b = barriosDeZona.find((x) => String(x.id) === e.target.value);
+              const v = e.target.value;
+              if (!v) {
+                // "Todo {Comuna}" → limpia el barrio volviendo al nivel comuna/municipio.
+                onComunaSelect?.(activeGroup.cd, activeGroup.nombre, activeGroup.municipio ?? null);
+                return;
+              }
+              const b = barriosDeZona.find((x) => String(x.id) === v);
               if (b) onBarrioNavigate?.(b);
-              e.target.value = "";
             }}
-            style={selectStyle(false)}
+            style={selectStyle(!!selectedInZone)}
           >
             <option value="">Todo {titleCase(activeGroup.nombre)}</option>
             {barriosDeZona.map((b) => (
@@ -235,7 +253,8 @@ function ZonaDosFiltros({ allBarrios, activeComunaCd, activeMunicipio, onComunaS
             ))}
           </select>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
@@ -1155,7 +1174,7 @@ function PanelShell({ innerRef, style, onDone, en, children }: {
 
 export function MapFilterBar({
   activeTab, onTabChange, filters, onFiltersChange, onResetAll, allBarrios, onBarrioNavigate, onBarrioClear,
-  activeComunaCd, activeMunicipio, onComunaSelect,
+  activeComunaCd, activeMunicipio, selectedBarrioId, onComunaSelect,
 }: MapFilterBarProps) {
   const isPro = useIsPro();
   const { lang } = useLang();
@@ -1342,6 +1361,7 @@ export function MapFilterBar({
         allBarrios={allBarrios}
         activeComunaCd={activeComunaCd}
         activeMunicipio={activeMunicipio}
+        selectedBarrioId={selectedBarrioId}
         onComunaSelect={onComunaSelect}
         onBarrioNavigate={onBarrioNavigate}
       />
@@ -1530,22 +1550,29 @@ export function MapFilterBar({
                 </optgroup>
               )}
             </select>
-            {activeComunaCd != null && (
+            {activeComunaCd != null && (() => {
+              const comunaG = groupComunas(allBarrios).find((g) => g.cd === activeComunaCd);
+              const barrios = comunaG?.barrios ?? [];
+              const selInZone =
+                selectedBarrioId != null && barrios.some((b) => b.id === selectedBarrioId)
+                  ? String(selectedBarrioId) : "";
+              return (
               <select
-                value=""
+                value={selInZone}
                 onChange={(e) => {
-                  const b = groupComunas(allBarrios).find((g) => g.cd === activeComunaCd)
-                    ?.barrios.find((x) => String(x.id) === e.target.value);
+                  const v = e.target.value;
+                  if (!v) { onComunaSelect?.(activeComunaCd, comunaG?.nombre ?? null); setMobileOpen(false); return; }
+                  const b = barrios.find((x) => String(x.id) === v);
                   if (b) { onBarrioNavigate?.(b); setMobileOpen(false); }
                 }}
                 style={{ flex: 1, minWidth: 0, boxSizing: "border-box", border: `1px solid ${C.border}`, borderRadius: 8, minHeight: 44, padding: "8px 10px", fontSize: 16, color: C.ink, background: "#fff" }}
               >
                 <option value="">Toda la comuna</option>
-                {(groupComunas(allBarrios).find((g) => g.cd === activeComunaCd)?.barrios ?? [])
-                  .slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
+                {barrios.slice().sort((a, b) => a.nombre.localeCompare(b.nombre))
                   .map((b) => <option key={b.id} value={b.id}>{titleCase(b.nombre)}</option>)}
               </select>
-            )}
+              );
+            })()}
           </div>
         </div>
 
@@ -1751,32 +1778,6 @@ export function MapFilterBar({
               </div>
             </div>
 
-            {/* Tiempo en mercado */}
-            <div style={{ marginBottom: 20 }}>
-              <span style={labelSm}>{isRent ? "Tiempo publicado" : "Tiempo en mercado"}</span>
-              <div style={{ display: "flex", gap: 6 }}>
-                {(isRent
-                  ? ([{ val: "nuevo", label: "Reciente" }, { val: "mas30", label: "+30 días" }, { val: "mas60", label: "+60 días" }] as const)
-                  : ([{ val: "nuevo", label: "Nuevo" }, { val: "reciente", label: "Reciente" }, { val: "demorado", label: "Demorado" }] as const)
-                ).map((opt) => {
-                  const active = filters.diasMercado === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      onClick={() => onFiltersChange({ diasMercado: active ? null : opt.val })}
-                      style={{
-                        flex: 1, minHeight: 44, padding: "8px 4px", borderRadius: 8, fontSize: 12,
-                        border: `1px solid ${active ? C.teal : C.border}`,
-                        background: active ? C.teal : C.white, color: active ? "#fff" : C.ink, cursor: "pointer",
-                      }}
-                    >
-                      {opt.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
             {/* Amenidades */}
             <div style={{ marginBottom: 20 }}>
               <span style={labelSm}>Amenidades</span>
@@ -1878,18 +1879,6 @@ export function MapFilterBar({
           </div>
         );
       case "filtros": {
-        const tiempoOpts = isRent
-          ? ([
-              { val: "nuevo",  label: "Recién publicado", sub: "< 7 días" },
-              { val: "mas30",  label: "Más de 30 días",   sub: "lleva tiempo" },
-              { val: "mas60",  label: "Más de 60 días",   sub: "negociable" },
-            ] as const)
-          : ([
-              { val: "nuevo",    label: "Nuevo",    sub: "< 7 días" },
-              { val: "reciente", label: "Reciente", sub: "< 30 días" },
-              { val: "demorado", label: "Demorado", sub: "> 90 días" },
-            ] as const);
-
         const proTeasers = isRent
           ? [
               { label: "Canon mediano del barrio", desc: "¿Está por encima o debajo del mercado?" },
@@ -1966,29 +1955,6 @@ export function MapFilterBar({
                       }}
                     >
                       {e}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Tiempo en mercado */}
-              <span style={labelSm}>{isRent ? "Tiempo publicado" : "Tiempo en mercado"}</span>
-              <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
-                {tiempoOpts.map((opt) => {
-                  const active = filters.diasMercado === opt.val;
-                  return (
-                    <button
-                      key={opt.val}
-                      onClick={() => onFiltersChange({ diasMercado: active ? null : opt.val })}
-                      style={{
-                        flex: 1, padding: "6px 4px", borderRadius: 8, cursor: "pointer",
-                        border: `1.5px solid ${active ? C.teal : C.border}`,
-                        background: active ? C.teal : "transparent",
-                        textAlign: "center",
-                      }}
-                    >
-                      <div style={{ fontSize: 11, fontWeight: 700, color: active ? "#fff" : C.ink, lineHeight: 1.3 }}>{opt.label}</div>
-                      <div style={{ fontSize: 9, color: active ? "rgba(255,255,255,0.75)" : C.muted }}>{opt.sub}</div>
                     </button>
                   );
                 })}
