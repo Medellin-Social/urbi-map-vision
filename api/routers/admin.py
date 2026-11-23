@@ -1443,6 +1443,14 @@ async def aprobar_tienda(request: Request, tienda_id: int, admin: dict = Depends
         raise HTTPException(status_code=404, detail="Negocio no encontrado o ya activo")
     await _audit(pool, admin, "aprobar_tienda", "tienda", str(tienda_id), None, request)
     ghl_client.spawn(ghl_client.sync_tienda(tienda_id))
+    dueno = await pool.fetchrow(
+        "SELECT t.nombre, u.email FROM tiendas t LEFT JOIN usuarios u ON u.id = t.subido_por WHERE t.id = $1",
+        tienda_id,
+    )
+    if dueno and dueno["email"]:
+        from api.utils.email import notify_tienda_aprobada
+        ghl_client.spawn(notify_tienda_aprobada(
+            dueno["email"], dueno["nombre"], os.getenv("APP_URL", "https://medellin.social")))
     return {"id": tienda_id, "activo": True}
 
 

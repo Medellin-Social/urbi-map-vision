@@ -169,6 +169,12 @@ async def registro_agente(
         ghl_client.spawn(ghl_client.sync_agent(row["id"]))
     except Exception:
         log.exception("sync_agent(%s) falló", row["id"])  # best-effort, no bloquea el registro
+    if row["estado"] == "pendiente":
+        from api.utils.email import notify_admin_new_agente, notify_agente_solicitud_recibida
+        app_url = os.getenv("APP_URL", "https://medellin.social")
+        ghl_client.spawn(notify_admin_new_agente(
+            body.nombre.strip(), "—", current_user["email"], body.telefono.strip(), f"{app_url}/admin"))
+        ghl_client.spawn(notify_agente_solicitud_recibida(current_user["email"], body.nombre.strip()))
     return {"id": str(row["id"]), "estado": row["estado"]}
 
 

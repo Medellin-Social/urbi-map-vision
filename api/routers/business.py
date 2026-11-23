@@ -100,6 +100,10 @@ async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=De
         ghl_client.spawn(ghl_client.push_negocio_lead_to_ghl(row["id"], body.model_dump()))
     except Exception:
         logger.exception("push_negocio_lead_to_ghl(%s) falló", row["id"])
+    from api.utils.email import notify_admin_negocio, notify_negocio_recibido
+    ghl_client.spawn(notify_admin_negocio("Nuevo lead de negocio", body.nombre_negocio, body.email,
+                                          body.telefono or "", f"{body.categoria or ''} · plan {body.plan_tipo or ''}"))
+    ghl_client.spawn(notify_negocio_recibido(body.email, body.nombre_negocio))
     return AplicarOut(
         ok=True,
         lead_id=row["id"],
@@ -431,4 +435,8 @@ async def submit_negocio(
     ghl_client.spawn(ghl_client.sync_contact_safe(
         current_user.get("email"), body.nombre, body.telefono or body.whatsapp,
         ["negocio-local", "negocio-pendiente"], "mi-negocio"))
+    from api.utils.email import notify_admin_negocio
+    ghl_client.spawn(notify_admin_negocio("Negocio nuevo pendiente de aprobar", body.nombre,
+                                          current_user.get("email") or "", body.telefono or body.whatsapp or "",
+                                          "Aprobar en /admin → tiendas pendientes"))
     return MiNegocioOut(id=row["id"], estado="pendiente")
