@@ -45,14 +45,6 @@ const ALL_STEPS: TourStep[] = [
     mobileOnly: true,
   },
   {
-    title: { es: "Elige tu barrio", en: "Choose your barrio" },
-    body: {
-      es: "Elige un barrio y vas directo a su página.",
-      en: "Pick a barrio and go straight to its page.",
-    },
-    selector: '[data-tour="barrio-select"]',
-  },
-  {
     title: { es: "Explora tu barrio", en: "Explore your barrio" },
     body: {
       es: "Toca una comuna en el mapa (o en la lista) y entras a su página: embajador, eventos, propiedades y negocios.",

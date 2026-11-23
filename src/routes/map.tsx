@@ -11,6 +11,7 @@ import { BarrioProvider } from "@/components/comunidad/BarrioContext";
 import { SegmentGate } from "@/components/SegmentGate";
 import { getStoredSegmento, setStoredSegmento, pruneTiposForSegmento, mapTourReady, type Segmento } from "@/lib/segmento";
 import { MapFilterBar, EMPTY_SHARED_FILTERS, TAB_TIPO_OP, type SharedFilters } from "@/components/MapFilterBar";
+import { saveSearch, getSearches, describeSearch, hasAnyFilter, type SavedSearch } from "@/lib/searchHistory";
 import { MapView } from "@/components/MapView";
 import { OpportunitiesPanel } from "@/components/OpportunitiesPanel";
 import { useIsAgente } from "@/components/LockedField";
@@ -196,6 +197,16 @@ function MapPageInner() {
 
   const [globalSearch, setGlobalSearch] = useState(false);
 
+  // Historial de búsquedas (localStorage). `lastSearch` alimenta el chip "Ver
+  // última búsqueda"; se hidrata post-mount para no romper SSR.
+  const [lastSearch, setLastSearch] = useState<SavedSearch | null>(null);
+  useEffect(() => {
+    const sync = () => setLastSearch(getSearches()[0] ?? null);
+    sync();
+    window.addEventListener("search-history-changed", sync);
+    return () => window.removeEventListener("search-history-changed", sync);
+  }, []);
+
   // Mobile: Zillow-style toggle between two FULL-SCREEN views (map ⟷ list).
   // Desktop ignores it — map + right panel show together. Full-screen map means the
   // screen center IS the real center, so camera auto-select (FIX 1d) needs no offset.
@@ -212,6 +223,15 @@ function MapPageInner() {
     sharedFilters.banos, sharedFilters.antiguedad,
     sharedFilters.busqueda,
   ].filter((v) => v !== null).length;
+
+  // Captura la búsqueda actual al historial, debounced, cuando hay filtros reales.
+  // ponytail: estados intermedios "asentados" (1.5s) pueden crear varias entradas;
+  // el dedup exacto colapsa repetidos. Upgrade: capturar solo on-commit explícito.
+  useEffect(() => {
+    if (!hasAnyFilter(sharedFilters)) return;
+    const id = setTimeout(() => saveSearch(sharedFilters), 1500);
+    return () => clearTimeout(id);
+  }, [sharedFilters]);
 
   // API-level filters derived from sharedFilters — trigger refetch when changed
   const apiFilters = useMemo<ListingsApiFilters>(() => ({
@@ -551,6 +571,26 @@ function MapPageInner() {
     setSharedFilters((f) => ({ ...EMPTY_SHARED_FILTERS, segmento: f.segmento, tipoOp: TAB_TIPO_OP[activeTab] }));
   }
 
+  // Aplica una búsqueda guardada: re-sincroniza tab por tipoOp, carga filtros y
+  // salta directo a resultados. Usado por el chip y por el deep-link ?restore=.
+  function restoreSearch(s: SavedSearch) {
+    setActiveTab(s.filters.tipoOp === "arriendo" ? "rent" : "buy");
+    setSharedFilters(s.filters);
+    setSegmentoGate("done");
+    setGlobalSearch(true);
+    setMapView("listings");
+  }
+
+  // Deep-link desde /perfil → Historial: /map?restore=<id>. Aplica y limpia el param.
+  useEffect(() => {
+    const id = new URLSearchParams(window.location.search).get("restore");
+    if (!id) return;
+    const s = getSearches().find((x) => x.id === id);
+    if (s) restoreSearch(s);
+    window.history.replaceState({}, "", "/map");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Called from barrio popup "Ver inversiones"
   function handleGoToMLS(barrio: Neighborhood) {
     const resolvedId = (barrio as Neighborhood & { barrio_id?: number }).barrio_id ?? barrio.id;
@@ -843,6 +883,7 @@ function MapPageInner() {
         hasActiveScope={!!mlsBarrio || !!activePanelName}
         activeComunaCd={activeComunaCd}
         activeMunicipio={activeMunicipio}
+        selectedBarrioId={mlsBarrio?.id ?? null}
         onComunaSelect={handleComunaSelect}
       />
       <ProfileChipMobile />
@@ -850,6 +891,25 @@ function MapPageInner() {
           abierto (popup/drawer). Si hay uno abierto (p.ej. deep-link /map?listing=),
           su z-120 bloqueaba clics del drawer — el corazón "no se podía activar". */}
       {segmentoGate === "open" && !listingDetailId && miniPopupData == null && <SegmentGate onChoose={handleChooseSegmento} />}
+
+      {/* Ver última búsqueda — al reabrir el mapa en limpio (sin filtros activos),
+          ofrece retomar la búsqueda anterior sin auto-aplicarla. */}
+      {lastSearch && !hasAnyFilter(sharedFilters) && !mlsBarrio && !globalSearch && activeTab !== "agent" && !listingDetailId && segmentoGate !== "open" && (
+        <button
+          onClick={() => restoreSearch(lastSearch)}
+          title={describeSearch(lastSearch.filters)}
+          style={{
+            position: "absolute", top: isMobile ? "calc(var(--map-header-h, 53px) + 98px)" : "calc(var(--map-header-h, 53px) + 56px)", left: "50%", transform: "translateX(-50%)",
+            zIndex: 24, background: "#FAF8F3", color: "#1e3a5f",
+            borderRadius: 999, padding: "6px 16px", fontSize: 12, fontWeight: 600,
+            border: "1px solid #1e3a5f", cursor: "pointer", whiteSpace: "nowrap",
+            maxWidth: "min(90vw, 420px)", overflow: "hidden", textOverflow: "ellipsis",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.18)",
+          }}
+        >
+          ↩ Ver última búsqueda · <span style={{ fontWeight: 400, opacity: 0.8 }}>{describeSearch(lastSearch.filters)}</span>
+        </button>
+      )}
 
       {/* Buscar en el Valle — filtros activos pero sin barrio/zona seleccionada.
           En split la lista ya muestra el baseline del Valle → innecesario. */}
