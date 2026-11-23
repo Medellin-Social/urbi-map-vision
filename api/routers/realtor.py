@@ -16,7 +16,8 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
-from api.services.listing_service import TRANSICIONES_VALIDAS, datos_minimos_completos
+from api.services.listing_service import TRANSICIONES_VALIDAS, EstadoError, datos_minimos_completos
+from api.services.moderacion_service import aprobar
 from api.utils import ghl_client
 from api.utils.storage import read_upload_bounded, upload_file
 
@@ -273,9 +274,12 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
 
 @router.get("/pool")
 async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    await _agent_del_usuario(user, pool)
+    agent = await _agent_del_usuario(user, pool)
     await sweep_asignados_vencidos(pool)
     async with pool.acquire() as conn:
+        # Zona-lock: el realtor solo ve los intakes del pool de SUS zonas
+        # (patrocinio barrio-directo o comuna). Huérfanos (sin patrocinador) no
+        # aparecen aquí — los revisa el admin.
         rows = await conn.fetch(
             """
             SELECT i.id::text AS id, i.tipo_inmueble::text AS tipo_inmueble,
@@ -285,8 +289,19 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
             FROM intake i
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
             WHERE i.estado = 'en_pool'
+              AND EXISTS (
+                SELECT 1 FROM sponsorship s
+                JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+                WHERE s.estado = 'activa'
+                  AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+                  AND ( (s.zona_nivel = 'barrio' AND s.zona_codigo = i.zona_codigo)
+                     OR (s.zona_nivel = 'comuna' AND s.zona_codigo IN (
+                           SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc
+                           WHERE bc.barrio_id::text = i.zona_codigo)) )
+              )
             ORDER BY i.created_at ASC
-            """
+            """,
+            agent.id,
         )
     return [
         {**dict(r), "precio_esperado": float(r["precio_esperado"] or 0),
@@ -681,7 +696,11 @@ async def subir_fotos(
 
 @router.post("/asignados/{intake_id}/publicar")
 async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    """Manda el borrador del listing asignado a revisión (borrador → en_revision)."""
+    """El realtor confirma los datos y publica al mapa (borrador → publicado).
+
+    El realtor de la zona ES el revisor: no pasa por admin. aprobar() setea
+    publicado+verificado+published_at e inserta en el cache (al mapa al instante).
+    """
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -709,12 +728,21 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
         chk = datos_minimos_completos(SimpleNamespace(**dict(row)))
         if not chk["ok"]:
             raise HTTPException(status_code=409, detail="Faltan datos mínimos: " + ", ".join(chk["faltan"]))
-        await conn.execute(
-            "UPDATE listing SET estado = 'en_revision', updated_at = NOW() WHERE id = $1",
-            row["listing_id"],
-        )
-    await ghl_client.sync_listing(str(row["listing_id"]))
-    return {"listing_id": str(row["listing_id"]), "estado": "en_revision"}
+    # 'rechazado' (admin lo devolvió) se re-finaliza igual que 'borrador': el
+    # realtor ya corrigió → publica. transition valida borrador→publicado + mínimos.
+    listing_obj = SimpleNamespace(
+        id=row["listing_id"], estado="borrador", published_at=None,
+        tipo_inmueble=row["tipo_inmueble"], operacion=row["operacion"], precio=row["precio"],
+        geom=row["geom"], barrio=row["barrio"], municipio=row["municipio"],
+        area_m2=row["area_m2"], titulo=row["titulo"],
+        habitaciones=row["habitaciones"], banos=row["banos"],
+        fotos_portada=row["fotos_portada"],
+    )
+    try:
+        await aprobar(listing_obj, str(agent.id), pool)  # realtor = moderador
+    except EstadoError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    return {"listing_id": str(row["listing_id"]), "estado": "publicado"}
 
 
 def _grado_servicio(med_horas: float | None) -> tuple[str, str]:

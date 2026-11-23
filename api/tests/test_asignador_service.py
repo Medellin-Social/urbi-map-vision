@@ -12,9 +12,10 @@ from api.services.asignador_service import (
 # ── Pool mockeado ─────────────────────────────────────────────────────────────
 
 class FakeConn:
-    def __init__(self, fetchrow_result="__row__"):
+    def __init__(self, fetchrow_result="__row__", fetchval_result="42"):
         self.executed = []
         self._fetchrow_result = fetchrow_result
+        self._fetchval_result = fetchval_result
 
     async def execute(self, sql, *args):
         self.executed.append((sql, args))
@@ -25,6 +26,10 @@ class FakeConn:
         if self._fetchrow_result == "__row__":
             return {"id": args[1] if len(args) > 1 else "x"}
         return self._fetchrow_result
+
+    async def fetchval(self, sql, *args):
+        # tomar_del_pool lee intake.zona_codigo (zona_cubierta se mockea aparte)
+        return self._fetchval_result
 
 
 class FakePool:
@@ -134,8 +139,16 @@ async def test_idempotente_sobre_asignado(patch_deps):
 
 # ── tomar_del_pool ────────────────────────────────────────────────────────────
 
+@pytest.fixture
+def _en_zona(monkeypatch):
+    """Por defecto el intake cae en la zona del realtor (zona-lock OK)."""
+    async def _cubierta(pool, barrio_id, agent_id=None):
+        return True
+    monkeypatch.setattr(asig, "zona_cubierta", _cubierta)
+
+
 @pytest.mark.asyncio
-async def test_tomar_del_pool_ok():
+async def test_tomar_del_pool_ok(_en_zona):
     conn = FakeConn(fetchrow_result="__row__")  # UPDATE afectó 1 fila
     agent = SimpleNamespace(id="agent-1", estado="activo")
     res = await tomar_del_pool("i-1", agent, FakePool(conn))
@@ -144,7 +157,7 @@ async def test_tomar_del_pool_ok():
 
 
 @pytest.mark.asyncio
-async def test_tomar_concurrente_segundo_recibe_ya_tomado():
+async def test_tomar_concurrente_segundo_recibe_ya_tomado(_en_zona):
     """UPDATE condicional afecta 0 filas → 'ya_tomado', NO excepción."""
     conn = FakeConn(fetchrow_result=None)  # RETURNING vacío = ya no estaba en pool
     agent = SimpleNamespace(id="agent-2", estado="activo")
@@ -159,3 +172,14 @@ async def test_tomar_agente_no_activo_rechazado():
         agent = SimpleNamespace(id="agent-x", estado=estado)
         with pytest.raises(AsignadorError, match="activo"):
             await tomar_del_pool("i-1", agent, FakePool(FakeConn()))
+
+
+@pytest.mark.asyncio
+async def test_tomar_fuera_de_zona_rechazado(monkeypatch):
+    """Zona-lock: un realtor activo NO toma un intake fuera de su zona."""
+    async def _no_cubierta(pool, barrio_id, agent_id=None):
+        return False
+    monkeypatch.setattr(asig, "zona_cubierta", _no_cubierta)
+    agent = SimpleNamespace(id="agent-1", estado="activo")
+    with pytest.raises(AsignadorError, match="zona"):
+        await tomar_del_pool("i-1", agent, FakePool(FakeConn()))

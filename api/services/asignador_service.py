@@ -16,7 +16,7 @@ import os
 from typing import Any, Dict, Optional
 
 from api.services.agent_service import ESTADOS_ASIGNABLES
-from api.services.sponsorship_service import patrocinadores_vigentes
+from api.services.sponsorship_service import patrocinadores_vigentes, zona_cubierta
 from api.services.zona_service import resolver_zona
 from api.utils.pii import mask_email
 
@@ -178,6 +178,14 @@ async def tomar_del_pool(intake_id: str, agent: Any, pool: Any) -> Dict[str, Any
     la carrera la resuelve la DB, no un select-then-update."""
     if _val(agent.estado) not in ESTADOS_ASIGNABLES:
         raise AsignadorError("El agente debe estar activo para tomar del pool")
+
+    # Zona-lock: un realtor solo toma intakes de SUS zonas (barrio o comuna).
+    async with pool.acquire() as conn:
+        zona_codigo = await conn.fetchval(
+            "SELECT zona_codigo FROM intake WHERE id = $1", intake_id
+        )
+    if zona_codigo is not None and not await zona_cubierta(pool, zona_codigo, agent.id):
+        raise AsignadorError("Este inmueble no está en tu zona")
 
     async with pool.acquire() as conn:
         # updated_at = NOW() resetea el reloj del timeout: el sweep cuenta las 24h
