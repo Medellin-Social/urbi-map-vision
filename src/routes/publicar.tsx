@@ -815,21 +815,21 @@ function Step2({
       <Section title="Medidas y distribución" subtitle="La base para tasar y comparar tu inmueble con la zona.">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <Field label="Área construida m²" info="Es la base del precio por m², la medida con la que comparamos tu inmueble con otros de la zona. Sin ella no se puede estimar bien su valor.">
-            <Input inputMode="decimal" value={data.area_m2} onChange={(e) => setData({ area_m2: e.target.value })} placeholder="0" />
+            <Input inputMode="numeric" value={data.area_m2} onChange={(e) => setData({ area_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
           </Field>
           {esResidencial ? (
             <Field label="Área privada m²" hint="(opcional)" info="El área privada (sin muros ni zonas comunes) es lo que figura en la escritura. Da transparencia y evita reclamos.">
-              <Input inputMode="decimal" value={data.area_privada_m2} onChange={(e) => setData({ area_privada_m2: e.target.value })} placeholder="0" />
+              <Input inputMode="numeric" value={data.area_privada_m2} onChange={(e) => setData({ area_privada_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
             </Field>
           ) : showLote ? (
             <Field label="Área del lote m²" info="En casas y lotes el valor del suelo suele pesar más que lo construido. Clave para tasar bien.">
-              <Input inputMode="decimal" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value })} placeholder="0" />
+              <Input inputMode="numeric" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
             </Field>
           ) : <div />}
         </div>
         {esResidencial && showLote && (
           <Field label="Área del lote m²" info="En casas y lotes el valor del suelo suele pesar más que lo construido. Clave para tasar bien.">
-            <Input inputMode="decimal" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value })} placeholder="0" />
+            <Input inputMode="numeric" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
           </Field>
         )}
 
@@ -1931,13 +1931,19 @@ function PublicarPage() {
       fd.append("precio_cop",        String(cop));
       if (form.tiene_admin && form.administracion_cop)
         fd.append("administracion_cop", String(parseCOP(form.administracion_cop)));
-      if (form.area_m2)     fd.append("area_m2",      form.area_m2);
-      if (form.area_lote_m2) fd.append("area_lote_m2", form.area_lote_m2);
+      // Áreas y piso son enteros (sin decimales). Los inputs ya filtran a dígitos;
+      // esto es defensa extra para que el backend nunca reciba coma/punto/letras (→422).
+      const numInt = (s: string) => s.replace(/[^\d]/g, "");
+      const areaM2 = numInt(form.area_m2);
+      const areaLote = numInt(form.area_lote_m2);
+      const pisoN = numInt(form.piso);
+      if (areaM2)     fd.append("area_m2",      areaM2);
+      if (areaLote)   fd.append("area_lote_m2", areaLote);
       if (form.habitaciones && !esEstudio) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
       if (form.banos)        fd.append("banos",        form.banos === "4+" ? "4" : form.banos);
       if (form.parqueaderos) fd.append("parqueaderos", form.parqueaderos === "3+" ? "3" : form.parqueaderos);
       if (form.estrato)           fd.append("estrato",           form.estrato);
-      if (form.piso)              fd.append("piso",              form.piso);
+      if (pisoN)                  fd.append("piso",              pisoN);
       if (form.nombre_edificio)   fd.append("nombre_edificio",   form.nombre_edificio);
       if (form.antiguedad)        fd.append("antiguedad",        form.antiguedad);
       if (form.amoblado)     fd.append("amoblado",     form.amoblado === "si" ? "true" : "false");
