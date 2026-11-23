@@ -324,3 +324,32 @@ def test_cli_parses_age_and_flags():
     a = build_parser().parse_args(["--limit", "5", "--source", "habi", "--older-than", "48h", "--dry-run"])
     assert a.limit == 5 and a.source == ["habi"] and a.older_than == timedelta(hours=48) and a.dry_run
     assert parse_age("7d") == timedelta(days=7)
+
+
+def test_retire_only_runs_auto_retire_and_skips_sweep(monkeypatch):
+    """--retire-only must call auto_retire and NOT fetch anything (the sweep crashing/OOM must not
+    be able to strand retirement). Regression guard for the stranded-auto_retire outage."""
+    from scraping.link_checker import __main__ as cli
+    from scraping.link_checker import runner as runner_mod
+    from api.services import link_review
+
+    called = {"retire": 0, "run": 0}
+
+    class _FakeConn:
+        async def close(self): pass
+
+    async def _fake_connect(*a, **k): return _FakeConn()
+    async def _fake_auto_retire(conn, *a, **k):
+        called["retire"] += 1
+        return 7
+    async def _boom_run(*a, **k):
+        called["run"] += 1
+        raise AssertionError("retire-only must not run the fetch sweep")
+
+    import asyncpg
+    monkeypatch.setattr(asyncpg, "connect", _fake_connect)
+    monkeypatch.setattr(link_review, "auto_retire", _fake_auto_retire)
+    monkeypatch.setattr(runner_mod, "run", _boom_run)
+
+    rc = cli.main(["--retire-only"])
+    assert rc == 0 and called["retire"] == 1 and called["run"] == 0

@@ -63,3 +63,46 @@ async def patrocinadores_vigentes(
             hoy,
         )
     return [r["agency_id"] for r in rows]
+
+
+async def zona_cubierta(
+    pool: Any, barrio_id: Any, agent_id: Any | None = None, solo_asignable: bool = False
+) -> bool:
+    """¿Algún patrocinio vigente cubre este barrio? Cubre tanto patrocinio
+    barrio-directo (zona_codigo = barrio_id) como comuna (zona_codigo = la comuna
+    del barrio, vía analytics.barrios_cd — mismo join key que _ZONAS_SQL).
+
+    - agent_id: restringe a las zonas de ESE agente → pool y `tomar` zona-locked
+      (un realtor solo ve/toma su zona).
+    - solo_asignable: exige que la agency patrocinadora tenga un agente ACTIVO
+      (asignable). Lo usa owner /publicar para decidir borrador vs en_revision:
+      si NINGÚN agente activo cubre la zona, nadie la revisaría → va a admin.
+      Sin esto, una zona patrocinada pero con agente inactivo dejaría el listing
+      atascado en borrador (nadie lo toma, admin no lo ve).
+    - sin flags: ¿la zona tiene patrocinador vigente? (contrato activo).
+    """
+    # Los joins inyectan solo cláusulas constantes (sin input de usuario) → seguro.
+    # $1 = barrio_id; $2 = agent_id (si aplica).
+    if agent_id is not None:
+        join = "JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $2"
+    elif solo_asignable:
+        # agente 'activo' = ESTADOS_ASIGNABLES (único estado asignable hoy).
+        join = ("JOIN agency_member am ON am.agency_id = s.agency_id "
+                "JOIN agent a ON a.id = am.agent_id AND a.estado = 'activo'")
+    else:
+        join = ""
+    sql = f"""
+        SELECT EXISTS (
+          SELECT 1 FROM sponsorship s
+          {join}
+          WHERE s.estado = 'activa'
+            AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+            AND ( (s.zona_nivel = 'barrio' AND s.zona_codigo = $1)
+               OR (s.zona_nivel = 'comuna' AND s.zona_codigo IN (
+                     SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc
+                     WHERE bc.barrio_id::text = $1)) )
+        )
+    """
+    args = [str(barrio_id)] + ([str(agent_id)] if agent_id is not None else [])
+    async with pool.acquire() as conn:
+        return bool(await conn.fetchval(sql, *args))

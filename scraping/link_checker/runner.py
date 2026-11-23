@@ -144,7 +144,6 @@ async def run(conn, cfg: Settings, *, sources: list[str] | None = None, limit: i
         for src, urls in ok_urls.items():
             await store.mark_seen_ok(conn, src, urls)
 
-    rep.log_counts()
     for a in rep.alerts:
         send_alert(a, cfg.alert_webhook if not dry_run else "")
     if not dry_run:
@@ -152,4 +151,5 @@ async def run(conn, cfg: Settings, *, sources: list[str] | None = None, limit: i
         rep.auto_retired = await link_review.auto_retire(conn, rep.braked_sources)     # no-op unless LINK_AUTO_RETIRE_AFTER_DAYS > 0
         rep.digest = await link_review.maybe_send_digest(conn, sender=sender, braked=rep.braked_sources, alerts=rep.alerts)
         log.info("review digest: %s", rep.digest)
+    rep.log_counts()   # AFTER auto_retire so auto_retired reflects the real count (was logged as 0 pre-retire)
     return rep

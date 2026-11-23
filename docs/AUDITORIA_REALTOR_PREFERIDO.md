@@ -20,10 +20,10 @@ flowchart LR
   WH --> SVC[realtor_preferido_service]
   ADM[Admin] -->|asignar / gratis / cobertura| API
   API --> SVC
-  SVC --> T1[(realtor_slot)]
-  SVC --> T2[(realtor_slot_pago ledger)]
-  SVC --> T3[(realtor_rotacion)]
-  SVC --> T4[(realtor_slot_precio EJEMPLO)]
+  SVC --> T1[(realtor_preferido_slot)]
+  SVC --> T2[(realtor_preferido_pago ledger)]
+  SVC --> T3[(realtor_preferido_rotacion)]
+  SVC --> T4[(realtor_preferido_precio EJEMPLO)]
   T5[(analytics.zonas_nivel_precio dbt A-D)] --> SVC
   BP[GET /comunidad/barrio-page] -->|slots comuna + rotación| SVC
   BP --> UI[barrio.$slug.tsx: Realtor destacado]
@@ -34,16 +34,16 @@ flowchart LR
 
 | # | Hallazgo | Arreglo |
 |---|---|---|
-| 1 | Idempotencia por `pago_ref` no atómica y se perdía tras una renovación (el `pago_ref` se sobrescribe) → un reenvío podía extender dos veces | Tabla `realtor_slot_pago` (PK `pago_ref`), insert atómico en la misma transacción |
+| 1 | Idempotencia por `pago_ref` no atómica y se perdía tras una renovación (el `pago_ref` se sobrescribe) → un reenvío podía extender dos veces | Tabla `realtor_preferido_pago` (PK `pago_ref`), insert atómico en la misma transacción |
 | 2 | Slot de un agente que pasa a `inactivo`/`pendiente` seguía en la rotación y el hueco quedaba vacío en la UI | `slots_activos` ahora une con `agent.estado='activo'` |
 | 3 | `/siguiente` exponía el teléfono del realtor a cualquiera (scraping) | Quitado el campo |
 | 4 | Se podía cobrar/asignar un slot en una zona inexistente (código mal escrito en GHL) | `validar_zona` en checkout, admin y webhook |
-| 5 | Barrio con `posicion` 5-8 permitido por la DB (solo el código lo impedía) | CHECK `chk_realtor_slot_cap` |
+| 5 | Barrio con `posicion` 5-8 permitido por la DB (solo el código lo impedía) | CHECK `chk_realtor_preferido_cap` |
 | 6 | Webhook: pago cobrado sin slot (zona llena) solo devolvía 409 | `logger.error` con `pago_ref` para alertar |
 
 ## Compatibilidad verificada (leyendo migraciones)
 
-- Un solo head alembic (0123 sobre 0122). `gen_random_uuid()` ya se usa en 0045/0058.
+- Un solo head alembic (0130 sobre 0129 sobre 0128). `gen_random_uuid()` ya se usa en 0045/0058.
 - `agent`: UUID, `estado` enum (se castea a texto), `email`, `usuario_id`, `bio` (0098), `foto_url`. `agency_member`, `agent_review.calificacion` existen.
 - `raw.barrios.id` SERIAL, `municipio`, `nombre` existen; `zona_codigo` barrio = `id::text` igual que sponsorship.
 - `analytics.zonas_nivel_precio` es dbt: puede no existir en DEV → hay try/except y nivel por defecto "C".
@@ -53,7 +53,7 @@ flowchart LR
 
 - Hueco 1: la página de barrio recibe `barrio_id` y mezcla slots de barrio + comuna.
 - Hueco 2: nueva landing `/planes/featured-realtor` con selector de zona y checkout.
-- Hueco 3: migración 0124 + cron `realtor_slots` (siembra 1 gratis por barrio con el realtor "casa"; falta marcar quién es con `POST /realtor-preferido/admin/casa`).
+- Hueco 3: migración 0130 + cron `realtor_slots` (siembra 1 gratis por barrio con el realtor "casa"; falta marcar quién es con `POST /realtor-preferido/admin/casa`).
 - Hueco 6: rotación por ventana de tiempo (20 s), sin escrituras por vista.
 - Hueco 8: cron diario vence slots, sincroniza `agent.tier` y avisa por email 5 días antes.
 

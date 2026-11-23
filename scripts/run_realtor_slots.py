@@ -1,5 +1,6 @@
 """Mantenimiento diario de Realtor Preferido (cron, un solo job para evitar carreras):
-vence slots → siembra 1 preferido gratis por barrio → sincroniza agent.tier → avisa por vencer.
+vence slots → siembra 1 preferido gratis por barrio → vence planes del Programa de agentes
+(cobertura de anuncios + agent.certificado) → sincroniza agent.tier → avisa por vencer.
 
 Run: python scripts/run_realtor_slots.py
 """
@@ -12,6 +13,7 @@ import asyncpg
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from api.services import realtor_preferido_service as svc  # noqa: E402
+from api.services import agent_program_service as prog  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
 log = logging.getLogger("realtor_slots")
@@ -40,10 +42,11 @@ async def main() -> int:
     try:
         vencidos = await svc.vencer_slots(conn)
         seed = await svc.seed_gratis(conn)
+        planes = await prog.vencer_planes(conn)
         tiers = await svc.sincronizar_tier(conn)
         avisos = await svc.por_vencer(conn)
         enviados = await _avisar(avisos)
-        log.info("vencidos=%s seed=%s tiers=%s avisos=%s/%s", vencidos, seed, tiers, enviados, len(avisos))
+        log.info("vencidos=%s seed=%s planes=%s tiers=%s avisos=%s/%s", vencidos, seed, planes, tiers, enviados, len(avisos))
     finally:
         await conn.close()
     return 0

@@ -35,24 +35,43 @@ type FormData = {
   // Paso 1
   tipo_operacion: string;
   tipo_inmueble: string;
+  titulo: string;
   precio_cop: string;
+  precio_negociable: boolean;
   tiene_admin: boolean;
   administracion_cop: string;
   // Paso 2
   area_m2: string;
+  area_privada_m2: string;
   area_lote_m2: string;
   habitaciones: string;
   banos: string;
   parqueaderos: string;
+  parqueadero_cubierto: boolean;
   estrato: string;
   piso: string;
+  niveles: string;
+  closets: string;
   nombre_edificio: string;
   antiguedad: string;
+  ano_construccion: string;
+  estado: string;
+  orientacion: string;
+  vista: string;
   amoblado: string;
   mascotas: string;
   permite_airbnb: string;
   amenidades_int: string[];
   amenidades_ext: string[];
+  // Condiciones (según operación)
+  deposito_meses: string;
+  estadia_minima_meses: string;
+  disponible_desde: string;
+  requisitos: string[];
+  servicios_incluidos: string[];
+  acepta_permuta: boolean;
+  acepta_credito: boolean;
+  comision_incluida: boolean;
   // Paso 3
   barrio_id: string;
   barrio_nombre: string;
@@ -87,12 +106,18 @@ type FormData = {
 };
 
 const INITIAL_FORM: FormData = {
-  tipo_operacion: "", tipo_inmueble: "", precio_cop: "",
+  tipo_operacion: "", tipo_inmueble: "", titulo: "", precio_cop: "",
+  precio_negociable: false,
   tiene_admin: false, administracion_cop: "",
-  area_m2: "", area_lote_m2: "", habitaciones: "", banos: "",
-  parqueaderos: "", estrato: "", piso: "", nombre_edificio: "", antiguedad: "",
+  area_m2: "", area_privada_m2: "", area_lote_m2: "", habitaciones: "", banos: "",
+  parqueaderos: "", parqueadero_cubierto: false, estrato: "", piso: "", niveles: "", closets: "",
+  nombre_edificio: "", antiguedad: "", ano_construccion: "", estado: "",
+  orientacion: "", vista: "",
   amoblado: "", mascotas: "", permite_airbnb: "no_se",
   amenidades_int: [], amenidades_ext: [],
+  deposito_meses: "", estadia_minima_meses: "", disponible_desde: "",
+  requisitos: [], servicios_incluidos: [],
+  acepta_permuta: false, acepta_credito: false, comision_incluida: false,
   barrio_id: "", barrio_nombre: "", municipio: "", comuna: "",
   direccion: "", matricula_inmobiliaria: "", cedula_catastral: "",
   lat: null, lon: null, descripcion: "", tour_url: "", video_url: "",
@@ -113,7 +138,10 @@ const TIPOS_OP = [
   { v: "arriendo", l: "Arriendo" },
 ];
 const TIPOS_IN = [
-  { v: "apartamento", l: "Apartamento" }, { v: "casa", l: "Casa" },
+  // "apartaestudio" es solo de UI: se envía como apartamento con 0 habitaciones
+  // (así lo modela todo el sistema — migración 0105 — y el enum intake_tipo_inmueble).
+  { v: "apartamento", l: "Apartamento" }, { v: "apartaestudio", l: "Apartaestudio" },
+  { v: "casa", l: "Casa" }, { v: "finca", l: "Finca" },
   { v: "lote", l: "Lote" },
   { v: "local", l: "Local" }, { v: "oficina", l: "Oficina" },
   { v: "bodega", l: "Bodega" }, { v: "otro", l: "Otro" },
@@ -139,6 +167,19 @@ const AMENIDADES_EXT = [
   "Vigilancia", "CCTV", "Zonas verdes", "Parque infantil",
   "BBQ", "Cancha deportiva",
 ];
+const ESTADO_OPTS = [
+  { v: "nuevo", l: "Nuevo" }, { v: "usado", l: "Usado" },
+  { v: "remodelado", l: "Remodelado" }, { v: "sobre_planos", l: "Sobre planos" },
+];
+const ORIENTACION_OPTS = [
+  { v: "norte", l: "Norte" }, { v: "sur", l: "Sur" },
+  { v: "oriente", l: "Oriente" }, { v: "occidente", l: "Occidente" },
+];
+const VISTA_OPTS = [
+  { v: "exterior", l: "Exterior" }, { v: "interior", l: "Interior" }, { v: "panoramica", l: "Panorámica" },
+];
+const REQUISITOS = ["Codeudor", "Fiador", "Seguro de arrendamiento", "Depósito", "Certificado laboral"];
+const SERVICIOS_INCL = ["Agua", "Luz", "Gas", "Internet", "Administración", "TV / Cable"];
 
 // ── Helpers ────────────────────────────────────────────────────────────────────
 
@@ -271,12 +312,111 @@ function Chips({
   );
 }
 
+// Agrupador visual: un bloque con título (y subtítulo) que organiza campos
+// relacionados → jerarquía clara en vez de una lista plana de inputs.
+function Section({
+  title, subtitle, children,
+}: {
+  title: string; subtitle?: string; children: React.ReactNode;
+}) {
+  return (
+    <section style={{ display: "grid", gap: 14 }}>
+      <div>
+        <h3 style={{ fontFamily: K.serif, fontSize: "0.98rem", color: K.ink, fontWeight: 700, margin: 0 }}>{title}</h3>
+        {subtitle && <p style={{ fontSize: 12, color: K.tertiary, margin: "3px 0 0", lineHeight: 1.5 }}>{subtitle}</p>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+// Toggle Sí/No reusable (antes inline en Step1). value boolean.
+function Toggle({
+  value, onChange, yes = "Sí", no = "No",
+}: {
+  value: boolean; onChange: (v: boolean) => void; yes?: string; no?: string;
+}) {
+  return (
+    <div style={{ display: "flex", gap: 10 }}>
+      {[{ l: no, v: false }, { l: yes, v: true }].map((o) => (
+        <button
+          key={String(o.v)}
+          type="button"
+          onClick={() => onChange(o.v)}
+          style={{
+            flex: 1, padding: "9px", borderRadius: 8,
+            border: `1.5px solid ${value === o.v ? K.teal : K.line}`,
+            background: value === o.v ? K.teal : "#fff",
+            color: value === o.v ? "#fff" : K.muted,
+            fontSize: 13, fontWeight: 600, cursor: "pointer", transition: "all 0.12s",
+          }}
+        >
+          {o.l}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// ── Geocoding (dirección → pin) ────────────────────────────────────────────────
+
+// Valle de Aburrá + alrededores: acota resultados para que "Calle 10" no caiga en otra ciudad.
+const GEO_BBOX = "-75.80,5.95,-75.25,6.55";
+const GEO_PROXIMITY = "-75.5812,6.2442";
+
+/** Quita lo que el geocoder no entiende (apto, interior, torre…) y normaliza "#". */
+function limpiarDireccion(dir: string): string {
+  return dir
+    .split(/,|\b(?:apto|apartamento|apt|int|interior|torre|bloque|piso|oficina|of|local|casa)\b\.?/i)[0]
+    .replace(/[#№]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+type GeoHit = { lat: number; lon: number; exacta: boolean; tipos?: string[] };
+
+async function geocodificar(q: string, signal: AbortSignal): Promise<GeoHit | null> {
+  const url =
+    `https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(q)}.json` +
+    `?access_token=${MAPBOX_TOKEN}&country=co&language=es&limit=1` +
+    `&bbox=${GEO_BBOX}&proximity=${GEO_PROXIMITY}`;
+  const r = await fetch(url, { signal });
+  if (!r.ok) return null;
+  const f = (await r.json())?.features?.[0];
+  if (!f?.center) return null;
+  const tipos: string[] = f.place_type ?? [];
+  return {
+    lon: f.center[0], lat: f.center[1], tipos,
+    exacta: tipos.includes("address") || tipos.includes("poi"),
+  };
+}
+
+/** Dirección exacta (Mapbox) primero; si no aparece, el punto del barrio elegido
+ *  (de nuestra base — Mapbox no conoce bien los barrios). Pin aproximado que la persona ajusta. */
+async function ubicarDireccion(
+  direccion: string, barrio: BarrioOpt | undefined, municipio: string, signal: AbortSignal,
+): Promise<GeoHit | null> {
+  const ciudad = [municipio || "Medellín", "Antioquia"].join(", ");
+  const dir = limpiarDireccion(direccion);
+  let calle: GeoHit | null = null;
+  if (dir.length >= 5) {
+    // Sin el nombre del barrio en la query: Mapbox lo confunde y empeora el match.
+    const hit = await geocodificar(`${dir}, ${ciudad}`, signal);
+    if (hit?.exacta) return hit;
+    // Calle/vía sin número: mejor que nada, pero el barrio (si lo hay) es más preciso.
+    if (hit && !hit.tipos?.some((t) => ["place", "region", "district", "country"].includes(t))) calle = hit;
+  }
+  if (barrio?.lat != null && barrio?.lon != null) return { lat: barrio.lat, lon: barrio.lon, exacta: false };
+  return calle ? { ...calle, exacta: false } : null;
+}
+
 // ── Location picker ────────────────────────────────────────────────────────────
 
 function LocationPicker({
   lat, lon, onChange,
 }: {
   lat: number | null; lon: number | null;
+  /** Solo se llama cuando la PERSONA mueve el pin (clic o arrastre). */
   onChange: (lat: number, lon: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -334,6 +474,16 @@ function LocationPicker({
       if (mapRef.current) { mapRef.current.remove(); mapRef.current = null; }
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Pin puesto desde fuera (geocoding de la dirección): mover marcador y centrar.
+  useEffect(() => {
+    const map = mapRef.current, marker = markerRef.current;
+    if (!map || !marker || lat == null || lon == null) return;
+    const cur = marker.getLngLat();
+    if (Math.abs(cur.lat - lat) < 1e-7 && Math.abs(cur.lng - lon) < 1e-7) return;
+    marker.setLngLat([lon, lat]);
+    map.flyTo({ center: [lon, lat], zoom: Math.max(map.getZoom(), 16), duration: 800 });
+  }, [lat, lon]);
 
   if (mapError) {
     return (
@@ -570,91 +720,75 @@ function Step1({
   const precioUSD = precioCOP && trm ? formatMoney(precioCOP / trm, "USD", "en", { suffix: false }) : null;
   const isArriendo = data.tipo_operacion === "arriendo";
 
+  const esVenta = data.tipo_operacion === "venta";
+
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <Field label="Tipo de operación" required info="Define si tu inmueble se busca para comprar o para arrendar — es el primer filtro que usan los interesados.">
-        <Chips
-          options={TIPOS_OP}
-          value={data.tipo_operacion}
-          onSelect={(v) => setData({ tipo_operacion: v })}
-        />
-      </Field>
-      <Field label="Tipo de inmueble" required info="Determina qué compradores lo ven y con qué propiedades se compara para estimar su precio.">
-        <Chips
-          options={TIPOS_IN}
-          value={data.tipo_inmueble}
-          onSelect={(v) => setData({ tipo_inmueble: v })}
-        />
-      </Field>
-      <Field
-        label={isArriendo ? "Precio mensual COP" : "Precio de venta COP"}
-        required
-        info="El precio correcto define cuántos interesados llegan. Lo comparamos con inmuebles similares de la zona para ubicar el tuyo en el mapa de precios."
-      >
-        <div style={{ position: "relative" }}>
-          <span
-            style={{
-              position: "absolute",
-              left: 12,
-              top: "50%",
-              transform: "translateY(-50%)",
-              color: K.muted,
-              fontSize: 13,
-              pointerEvents: "none",
-            }}
-          >
-            $
-          </span>
-          <input
-            className={inputCls}
-            style={{ ...inputStyle, paddingLeft: 24 }}
-            inputMode="numeric"
-            value={data.precio_cop}
-            onChange={(e) => setData({ precio_cop: fmtCOP(e.target.value) })}
-            placeholder="0"
+    <div style={{ display: "grid", gap: 28 }}>
+      <Section title="¿Qué vas a publicar?" subtitle="Lo primero que filtran los interesados.">
+        <Field label="Tipo de operación" required info="Define si tu inmueble se busca para comprar o para arrendar — es el primer filtro que usan los interesados.">
+          <Chips options={TIPOS_OP} value={data.tipo_operacion} onSelect={(v) => setData({ tipo_operacion: v })} />
+        </Field>
+        <Field label="Tipo de inmueble" required info="Determina qué compradores lo ven y con qué propiedades se compara para estimar su precio.">
+          <Chips options={TIPOS_IN} value={data.tipo_inmueble} onSelect={(v) => setData(v === "apartaestudio" ? { tipo_inmueble: v, habitaciones: "" } : { tipo_inmueble: v })} />
+        </Field>
+      </Section>
+
+      <Section title="Título y precio" subtitle="Un buen título vende: específico y con el gancho del inmueble.">
+        <Field label="Título del anuncio" hint="(opcional · si lo dejas vacío lo armamos solo)" info="Es lo primero que lee un interesado en la lista. Un título claro con el barrio y lo mejor del inmueble recibe más clics.">
+          <Input
+            value={data.titulo}
+            onChange={(e) => setData({ titulo: e.target.value })}
+            maxLength={80}
+            placeholder="Ej: Apartamento remodelado en Laureles, 3 hab con balcón"
           />
-        </div>
-        {precioUSD && (
-          <p style={{ fontSize: 12, color: K.teal, marginTop: 4 }}>
-            ≈ USD {precioUSD.replace(/^\$/, "")}
-          </p>
-        )}
-      </Field>
-      <Field label="¿Tiene cuota de administración mensual?" info="La administración es un costo mensual real en propiedad horizontal. El comprador la suma al precio para saber cuánto le cuesta vivir ahí; el inversionista la resta de su rentabilidad. Todos los portales la piden.">
-        <div style={{ display: "flex", gap: 10 }}>
-          {[{ l: "No", v: false }, { l: "Sí", v: true }].map((o) => (
-            <button
-              key={String(o.v)}
-              type="button"
-              onClick={() => setData({ tiene_admin: o.v })}
-              style={{
-                flex: 1, padding: "9px", borderRadius: 8,
-                border: `1.5px solid ${data.tiene_admin === o.v ? K.teal : K.line}`,
-                background: data.tiene_admin === o.v ? K.teal : "#fff",
-                color: data.tiene_admin === o.v ? "#fff" : K.muted,
-                fontSize: 13, fontWeight: 600, cursor: "pointer",
-              }}
-            >
-              {o.l}
-            </button>
-          ))}
-        </div>
-      </Field>
-      {data.tiene_admin && (
-        <Field label="Cuota de administración mensual COP">
+          {data.titulo.length > 0 && (
+            <p style={{ fontSize: 11, color: K.tertiary }}>{data.titulo.length}/80</p>
+          )}
+        </Field>
+        <Field
+          label={isArriendo ? "Precio mensual COP" : "Precio de venta COP"}
+          required
+          info="El precio correcto define cuántos interesados llegan. Lo comparamos con inmuebles similares de la zona para ubicar el tuyo en el mapa de precios."
+        >
           <div style={{ position: "relative" }}>
-            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: K.muted, fontSize: 13 }}>$</span>
+            <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: K.muted, fontSize: 13, pointerEvents: "none" }}>$</span>
             <input
               className={inputCls}
               style={{ ...inputStyle, paddingLeft: 24 }}
               inputMode="numeric"
-              value={data.administracion_cop}
-              onChange={(e) => setData({ administracion_cop: fmtCOP(e.target.value) })}
+              value={data.precio_cop}
+              onChange={(e) => setData({ precio_cop: fmtCOP(e.target.value) })}
               placeholder="0"
             />
           </div>
+          {precioUSD && (
+            <p style={{ fontSize: 12, color: K.teal, marginTop: 4 }}>≈ USD {precioUSD.replace(/^\$/, "")}</p>
+          )}
         </Field>
-      )}
+        {esVenta && (
+          <Field label="¿El precio es negociable?" info="Señala al comprador que hay margen para negociar — atrae más ofertas iniciales.">
+            <Toggle value={data.precio_negociable} onChange={(v) => setData({ precio_negociable: v })} />
+          </Field>
+        )}
+        <Field label="¿Tiene cuota de administración mensual?" info="La administración es un costo mensual real en propiedad horizontal. El comprador la suma al precio para saber cuánto le cuesta vivir ahí; el inversionista la resta de su rentabilidad. Todos los portales la piden.">
+          <Toggle value={data.tiene_admin} onChange={(v) => setData({ tiene_admin: v })} />
+        </Field>
+        {data.tiene_admin && (
+          <Field label="Cuota de administración mensual COP">
+            <div style={{ position: "relative" }}>
+              <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)", color: K.muted, fontSize: 13 }}>$</span>
+              <input
+                className={inputCls}
+                style={{ ...inputStyle, paddingLeft: 24 }}
+                inputMode="numeric"
+                value={data.administracion_cop}
+                onChange={(e) => setData({ administracion_cop: fmtCOP(e.target.value) })}
+                placeholder="0"
+              />
+            </div>
+          </Field>
+        )}
+      </Section>
     </div>
   );
 }
@@ -666,115 +800,184 @@ function Step2({
 }: {
   data: FormData; setData: (p: Partial<FormData>) => void;
 }) {
-  const showLote     = ["lote", "casa", "otro"].includes(data.tipo_inmueble);
-  const showHab      = !["lote", "local", "bodega", "oficina"].includes(data.tipo_inmueble);
-  const showPiso     = !["lote", "casa"].includes(data.tipo_inmueble);
-  const showEdificio = !["lote", "casa", "bodega"].includes(data.tipo_inmueble);
+  const showLote     = ["lote", "casa", "finca", "otro"].includes(data.tipo_inmueble);
+  const showHab      = !["lote", "local", "bodega", "oficina", "apartaestudio"].includes(data.tipo_inmueble);
+  const showPiso     = !["lote", "casa", "finca"].includes(data.tipo_inmueble);
+  const showEdificio = !["lote", "casa", "finca", "bodega"].includes(data.tipo_inmueble);
+  const showNiveles  = ["casa", "finca", "otro"].includes(data.tipo_inmueble);
+  const esResidencial = ["apartamento", "apartaestudio", "casa", "finca", "otro"].includes(data.tipo_inmueble);
   const esVenta      = data.tipo_operacion === "venta";
   const esArriendo   = data.tipo_operacion === "arriendo";
+  const tieneParq    = !!data.parqueaderos && data.parqueaderos !== "0";
 
   return (
-    <div style={{ display: "grid", gap: 20 }}>
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Área construida m²" info="Es la base del precio por m², la medida con la que comparamos tu inmueble con otros de la zona. Sin ella no se puede estimar bien su valor.">
-          <Input inputMode="decimal" value={data.area_m2} onChange={(e) => setData({ area_m2: e.target.value })} placeholder="0" />
-        </Field>
-        {showLote && (
-          <Field label="Área del lote m²" info="En casas y lotes el valor del suelo suele pesar más que lo construido. Clave para tasar bien.">
-            <Input inputMode="decimal" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value })} placeholder="0" />
-          </Field>
-        )}
-      </div>
-
-      {showHab && (
-        <Field label="Habitaciones" info="Uno de los filtros más usados en la búsqueda. Define el tipo de comprador: familia, pareja o inversión.">
-          <Chips options={HABITAR.map((v) => ({ v, l: v }))} value={data.habitaciones} onSelect={(v) => setData({ habitaciones: v })} />
-        </Field>
-      )}
-
-      <Field label="Baños" info="Afecta el precio y el filtro de búsqueda, sobre todo en familias.">
-        <Chips options={BANOS.map((v) => ({ v, l: v }))} value={data.banos} onSelect={(v) => setData({ banos: v })} />
-      </Field>
-
-      <Field label="Parqueaderos" info="En Medellín suma valor real al inmueble y es de los filtros más frecuentes.">
-        <Chips options={PARQS.map((v) => ({ v, l: v }))} value={data.parqueaderos} onSelect={(v) => setData({ parqueaderos: v })} />
-      </Field>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-        <Field label="Estrato" info="Define servicios públicos, impuestos y el perfil socioeconómico de la zona. Filtro clave para el comprador y para el banco que da el crédito.">
-          <Chips options={ESTRATOS.map((v) => ({ v, l: v }))} value={data.estrato} onSelect={(v) => setData({ estrato: v })} />
-        </Field>
-        {showPiso && (
-          <Field label="Piso" info="Un piso alto con vista o uno bajo sin ascensor cambian el valor y el interés. Dato relevante para el comprador.">
-            <Input inputMode="numeric" value={data.piso} onChange={(e) => setData({ piso: e.target.value })} placeholder="Ej: 3" />
-          </Field>
-        )}
-      </div>
-
-      {showEdificio && (
-        <Field label="Nombre del edificio / conjunto" info="Nos deja agrupar y comparar unidades del mismo edificio, y evitar que el mismo inmueble aparezca duplicado desde varias fuentes.">
-          <Input
-            value={data.nombre_edificio}
-            onChange={(e) => setData({ nombre_edificio: e.target.value })}
-            placeholder="Ej: Torres del Poblado, Conjunto Laureles"
-          />
-        </Field>
-      )}
-
-      <Field label="Antigüedad" info="El estado y los años inciden en el precio y en la aprobación del crédito hipotecario.">
-        <Select value={data.antiguedad} onChange={(e) => setData({ antiguedad: e.target.value })}>
-          <option value="">Seleccionar</option>
-          {ANTIGUEDAD_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
-        </Select>
-      </Field>
-
-      <Field label="Amoblado" info="Cambia el canon de arriendo y habilita la renta corta o amoblada, que suele valer más.">
-        <Chips
-          options={[{ v: "si", l: "Amoblado" }, { v: "semi", l: "Semi-amoblado" }, { v: "no", l: "Sin amueblar" }]}
-          value={data.amoblado}
-          onSelect={(v) => setData({ amoblado: v })}
-        />
-      </Field>
-
-      <Field label="Características interiores" info="Las amenidades justifican el precio y ayudan a destacar frente a inmuebles similares.">
-        <Chips
-          options={AMENIDADES_INT.map((v) => ({ v, l: v }))}
-          value={data.amenidades_int}
-          onSelect={(v) => setData({ amenidades_int: toggleArr(data.amenidades_int, v) })}
-          multi
-        />
-      </Field>
-
-      <Field label="Características externas / zonas comunes" info="Piscina, gimnasio o portería suben el valor percibido y filtran al comprador que busca esas comodidades.">
-        <Chips
-          options={AMENIDADES_EXT.map((v) => ({ v, l: v }))}
-          value={data.amenidades_ext}
-          onSelect={(v) => setData({ amenidades_ext: toggleArr(data.amenidades_ext, v) })}
-          multi
-        />
-      </Field>
-
-      {(esArriendo || esVenta) && (
+    <div style={{ display: "grid", gap: 28 }}>
+      <Section title="Medidas y distribución" subtitle="La base para tasar y comparar tu inmueble con la zona.">
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-          {esArriendo && (
-            <Field label="Mascotas permitidas" info="Es de los primeros filtros de quien arrienda con mascota. Decirlo amplía tu universo de interesados.">
-              <Select value={data.mascotas} onChange={(e) => setData({ mascotas: e.target.value })}>
-                <option value="">Seleccionar</option>
-                <option value="si">Sí</option>
-                <option value="no">No</option>
-              </Select>
+          <Field label="Área construida m²" info="Es la base del precio por m², la medida con la que comparamos tu inmueble con otros de la zona. Sin ella no se puede estimar bien su valor.">
+            <Input inputMode="numeric" value={data.area_m2} onChange={(e) => setData({ area_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
+          </Field>
+          {esResidencial ? (
+            <Field label="Área privada m²" hint="(opcional)" info="El área privada (sin muros ni zonas comunes) es lo que figura en la escritura. Da transparencia y evita reclamos.">
+              <Input inputMode="numeric" value={data.area_privada_m2} onChange={(e) => setData({ area_privada_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
             </Field>
-          )}
-          {esVenta && (
-            <Field label="Permite Airbnb" hint="(potencial renta corta)" info="Señal clave para el comprador-inversionista: saber si el edificio permite renta corta (Airbnb) cambia su decisión y el precio que paga.">
-              <Select value={data.permite_airbnb} onChange={(e) => setData({ permite_airbnb: e.target.value })}>
-                <option value="si">Sí</option>
-                <option value="no">No</option>
-                <option value="no_se">No sé</option>
-              </Select>
+          ) : showLote ? (
+            <Field label="Área del lote m²" info="En casas y lotes el valor del suelo suele pesar más que lo construido. Clave para tasar bien.">
+              <Input inputMode="numeric" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
+            </Field>
+          ) : <div />}
+        </div>
+        {esResidencial && showLote && (
+          <Field label="Área del lote m²" info="En casas y lotes el valor del suelo suele pesar más que lo construido. Clave para tasar bien.">
+            <Input inputMode="numeric" value={data.area_lote_m2} onChange={(e) => setData({ area_lote_m2: e.target.value.replace(/[^\d]/g, "") })} placeholder="0" />
+          </Field>
+        )}
+
+        {showHab && (
+          <Field label="Habitaciones" info="Uno de los filtros más usados en la búsqueda. Define el tipo de comprador: familia, pareja o inversión.">
+            <Chips options={HABITAR.map((v) => ({ v, l: v }))} value={data.habitaciones} onSelect={(v) => setData({ habitaciones: v })} />
+          </Field>
+        )}
+        <Field label="Baños" info="Afecta el precio y el filtro de búsqueda, sobre todo en familias.">
+          <Chips options={BANOS.map((v) => ({ v, l: v }))} value={data.banos} onSelect={(v) => setData({ banos: v })} />
+        </Field>
+        <Field label="Parqueaderos" info="En Medellín suma valor real al inmueble y es de los filtros más frecuentes.">
+          <Chips options={PARQS.map((v) => ({ v, l: v }))} value={data.parqueaderos} onSelect={(v) => setData({ parqueaderos: v })} />
+        </Field>
+        {tieneParq && (
+          <Field label="¿El parqueadero es cubierto?" info="Un parqueadero cubierto suma valor frente a uno descubierto o comunal.">
+            <Toggle value={data.parqueadero_cubierto} onChange={(v) => setData({ parqueadero_cubierto: v })} />
+          </Field>
+        )}
+        {esResidencial && (
+          <div style={{ display: "grid", gridTemplateColumns: showNiveles ? "1fr 1fr" : "1fr", gap: 12 }}>
+            <Field label="Clósets" hint="(opcional)" info="El número de clósets habla del almacenamiento real — un plus para familias.">
+              <Input inputMode="numeric" value={data.closets} onChange={(e) => setData({ closets: e.target.value })} placeholder="Ej: 3" />
+            </Field>
+            {showNiveles && (
+              <Field label="Niveles / pisos del inmueble" hint="(opcional)" info="Casas y dúplex: cuántos niveles tiene la unidad.">
+                <Input inputMode="numeric" value={data.niveles} onChange={(e) => setData({ niveles: e.target.value })} placeholder="Ej: 2" />
+              </Field>
+            )}
+          </div>
+        )}
+      </Section>
+
+      <Section title="El inmueble" subtitle="Detalles que definen su valor y a quién le sirve.">
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Estrato" info="Define servicios públicos, impuestos y el perfil socioeconómico de la zona. Filtro clave para el comprador y para el banco que da el crédito.">
+            <Chips options={ESTRATOS.map((v) => ({ v, l: v }))} value={data.estrato} onSelect={(v) => setData({ estrato: v })} />
+          </Field>
+          {showPiso && (
+            <Field label="Piso" info="Un piso alto con vista o uno bajo sin ascensor cambian el valor y el interés. Dato relevante para el comprador.">
+              <Input inputMode="numeric" value={data.piso} onChange={(e) => setData({ piso: e.target.value })} placeholder="Ej: 3" />
             </Field>
           )}
         </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+          <Field label="Antigüedad" info="El estado y los años inciden en el precio y en la aprobación del crédito hipotecario.">
+            <Select value={data.antiguedad} onChange={(e) => setData({ antiguedad: e.target.value })}>
+              <option value="">Seleccionar</option>
+              {ANTIGUEDAD_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+            </Select>
+          </Field>
+          <Field label="Año de construcción" hint="(opcional)" info="El año exacto da precisión sobre la edad real del inmueble y pesa en el avalúo.">
+            <Input inputMode="numeric" value={data.ano_construccion} onChange={(e) => setData({ ano_construccion: e.target.value })} placeholder="Ej: 2015" maxLength={4} />
+          </Field>
+        </div>
+
+        {esResidencial && (
+          <Field label="Estado del inmueble" info="El estado (nuevo, usado, remodelado, sobre planos) ajusta las expectativas del comprador y el precio.">
+            <Chips options={ESTADO_OPTS} value={data.estado} onSelect={(v) => setData({ estado: v })} />
+          </Field>
+        )}
+
+        {esResidencial && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Orientación" hint="(opcional)" info="La orientación afecta luz y temperatura — un plus que muchos compradores buscan.">
+              <Select value={data.orientacion} onChange={(e) => setData({ orientacion: e.target.value })}>
+                <option value="">Seleccionar</option>
+                {ORIENTACION_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </Select>
+            </Field>
+            <Field label="Vista" hint="(opcional)" info="Una vista exterior o panorámica sube el valor percibido del inmueble.">
+              <Select value={data.vista} onChange={(e) => setData({ vista: e.target.value })}>
+                <option value="">Seleccionar</option>
+                {VISTA_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
+              </Select>
+            </Field>
+          </div>
+        )}
+
+        {showEdificio && (
+          <Field label="Nombre del edificio / conjunto" info="Nos deja agrupar y comparar unidades del mismo edificio, y evitar que el mismo inmueble aparezca duplicado desde varias fuentes.">
+            <Input value={data.nombre_edificio} onChange={(e) => setData({ nombre_edificio: e.target.value })} placeholder="Ej: Torres del Poblado, Conjunto Laureles" />
+          </Field>
+        )}
+      </Section>
+
+      {esResidencial && (
+        <Section title="Comodidades" subtitle="Lo que tiene el inmueble y el conjunto — justifica el precio.">
+          <Field label="Amoblado" info="Cambia el canon de arriendo y habilita la renta corta o amoblada, que suele valer más.">
+            <Chips
+              options={[{ v: "si", l: "Amoblado" }, { v: "semi", l: "Semi-amoblado" }, { v: "no", l: "Sin amueblar" }]}
+              value={data.amoblado}
+              onSelect={(v) => setData({ amoblado: v })}
+            />
+          </Field>
+          <Field label="Características interiores" info="Las amenidades justifican el precio y ayudan a destacar frente a inmuebles similares.">
+            <Chips options={AMENIDADES_INT.map((v) => ({ v, l: v }))} value={data.amenidades_int} onSelect={(v) => setData({ amenidades_int: toggleArr(data.amenidades_int, v) })} multi />
+          </Field>
+          <Field label="Zonas comunes / conjunto" info="Piscina, gimnasio o portería suben el valor percibido y filtran al comprador que busca esas comodidades.">
+            <Chips options={AMENIDADES_EXT.map((v) => ({ v, l: v }))} value={data.amenidades_ext} onSelect={(v) => setData({ amenidades_ext: toggleArr(data.amenidades_ext, v) })} multi />
+          </Field>
+        </Section>
+      )}
+
+      {esArriendo && (
+        <Section title="Condiciones de arriendo" subtitle="Lo que pregunta todo el que arrienda, antes de llamar.">
+          <Field label="Mascotas permitidas" info="Es de los primeros filtros de quien arrienda con mascota. Decirlo amplía tu universo de interesados.">
+            <Chips options={[{ v: "si", l: "Sí" }, { v: "no", l: "No" }, { v: "consultar", l: "Consultar" }]} value={data.mascotas} onSelect={(v) => setData({ mascotas: v })} />
+          </Field>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+            <Field label="Depósito / garantía" hint="(meses)" info="Cuántos meses de depósito pides. Dato que el arrendatario necesita para decidir.">
+              <Input inputMode="numeric" value={data.deposito_meses} onChange={(e) => setData({ deposito_meses: e.target.value })} placeholder="Ej: 1" />
+            </Field>
+            <Field label="Estadía mínima" hint="(meses)" info="El plazo mínimo del contrato. Filtra a quien busca algo más corto o más largo.">
+              <Input inputMode="numeric" value={data.estadia_minima_meses} onChange={(e) => setData({ estadia_minima_meses: e.target.value })} placeholder="Ej: 12" />
+            </Field>
+          </div>
+          <Field label="Disponible desde" hint="(opcional)" info="La fecha a partir de la cual se puede habitar. Clave para quien necesita mudarse pronto.">
+            <input
+              type="date"
+              className={inputCls}
+              style={inputStyle}
+              value={data.disponible_desde}
+              onChange={(e) => setData({ disponible_desde: e.target.value })}
+            />
+          </Field>
+          <Field label="Requisitos para arrendar" info="Codeudor, fiador o seguro: decirlo de entrada ahorra tiempo y filtra interesados serios.">
+            <Chips options={REQUISITOS.map((v) => ({ v, l: v }))} value={data.requisitos} onSelect={(v) => setData({ requisitos: toggleArr(data.requisitos, v) })} multi />
+          </Field>
+          <Field label="Servicios incluidos en el canon" info="Qué cubre el arriendo (agua, luz, internet, administración). Define el costo real para el arrendatario.">
+            <Chips options={SERVICIOS_INCL.map((v) => ({ v, l: v }))} value={data.servicios_incluidos} onSelect={(v) => setData({ servicios_incluidos: toggleArr(data.servicios_incluidos, v) })} multi />
+          </Field>
+        </Section>
+      )}
+
+      {esVenta && (
+        <Section title="Condiciones de venta" subtitle="Señales que mueven la decisión del comprador-inversionista.">
+          <Field label="Permite Airbnb" hint="(potencial renta corta)" info="Señal clave para el comprador-inversionista: saber si el edificio permite renta corta (Airbnb) cambia su decisión y el precio que paga.">
+            <Chips options={[{ v: "si", l: "Sí" }, { v: "no", l: "No" }, { v: "no_se", l: "No sé" }]} value={data.permite_airbnb} onSelect={(v) => setData({ permite_airbnb: v })} />
+          </Field>
+          <Field label="¿Apto para crédito hipotecario?" info="Saber que el inmueble es financiable amplía el universo de compradores.">
+            <Toggle value={data.acepta_credito} onChange={(v) => setData({ acepta_credito: v })} />
+          </Field>
+          <Field label="¿Aceptas permuta?" info="Recibir otro inmueble como parte de pago abre otro tipo de negociación.">
+            <Toggle value={data.acepta_permuta} onChange={(v) => setData({ acepta_permuta: v })} />
+          </Field>
+        </Section>
       )}
     </div>
   );
@@ -782,7 +985,10 @@ function Step2({
 
 // ── Step 3 ─────────────────────────────────────────────────────────────────────
 
-type BarrioOpt = { id: number; nombre: string; municipio: string; comuna: string };
+type BarrioOpt = {
+  id: number; nombre: string; municipio: string; comuna: string;
+  lat?: number | null; lon?: number | null;
+};
 
 function Step3({
   data, setData, photos, setPhotos,
@@ -811,6 +1017,42 @@ function Step3({
   const barriosFiltrados = data.municipio && data.comuna
     ? barrios.filter((b) => b.municipio === data.municipio && b.comuna === data.comuna)
     : [];
+
+  // ── Dirección → pin automático. Si la persona mueve el pin, se respeta: ya no se
+  // auto-mueve (puede volver a ubicarlo con el botón "Ubicar por dirección").
+  const [geo, setGeo] = useState<"idle" | "buscando" | "exacta" | "aprox" | "barrio" | "no" | "manual">("idle");
+  const pinManual = useRef(false);
+  const geoQuery = [data.direccion.trim(), data.barrio_id, data.municipio].join("|");
+  // Al volver a este paso con pin ya puesto, no re-geocodificar lo mismo.
+  const lastQuery = useRef(data.lat != null ? geoQuery : "");
+  const abortRef = useRef<AbortController | null>(null);
+
+  const ubicar = (forzar: boolean) => {
+    if (!forzar && (pinManual.current || geoQuery === lastQuery.current)) return;
+    if (!data.direccion.trim() && !data.barrio_nombre) return;
+    lastQuery.current = geoQuery;
+    abortRef.current?.abort();
+    const ctrl = new AbortController();
+    abortRef.current = ctrl;
+    setGeo("buscando");
+    const barrioSel = barrios.find((b) => String(b.id) === data.barrio_id);
+    ubicarDireccion(data.direccion, barrioSel, data.municipio, ctrl.signal)
+      .then((hit) => {
+        if (ctrl.signal.aborted) return;
+        if (!hit) { setGeo("no"); return; }
+        if (forzar) pinManual.current = false;
+        setData({ lat: hit.lat, lon: hit.lon });
+        setGeo(hit.exacta ? "exacta" : data.direccion.trim() ? "aprox" : "barrio");
+      })
+      .catch(() => { if (!ctrl.signal.aborted) setGeo("no"); });
+  };
+
+  useEffect(() => {
+    const t = setTimeout(() => ubicar(false), 900);
+    return () => clearTimeout(t);
+  }, [geoQuery]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => abortRef.current?.abort(), []);
 
   return (
     <div style={{ display: "grid", gap: 20 }}>
@@ -866,7 +1108,7 @@ function Step3({
           </Field>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Matrícula inmobiliaria" hint="(obligatoria · en la escritura)" info="Es la cédula del inmueble en el registro público (ORIP). Nos deja seguir la MISMA propiedad entre portales y en el tiempo, sin confundirla con otra. Obligatoria para publicar.">
+            <Field label="Matrícula inmobiliaria" hint={data.tipo_operacion === "venta" ? "(obligatoria · en la escritura)" : "(opcional · en la escritura)"} info="Es la cédula del inmueble en el registro público (ORIP). Nos deja seguir la MISMA propiedad entre portales y en el tiempo, sin confundirla con otra. Obligatoria para ventas.">
               <Input
                 value={data.matricula_inmobiliaria}
                 onChange={(e) => setData({ matricula_inmobiliaria: e.target.value })}
@@ -889,13 +1131,38 @@ function Step3({
           <span>Ubicación en el mapa <span style={{ color: K.coral, fontSize: 12 }}>*</span></span>
           <InfoDot text="El pin fija el punto exacto para mostrar tu inmueble en el lugar correcto del mapa (al público se muestra aproximado). También ayuda a no duplicarlo con otros avisos." />
         </h3>
-        <p style={{ fontSize: 13, color: K.muted, marginBottom: 12 }}>
-          Haz clic en el mapa o arrastra el pin para marcar la ubicación exacta de la propiedad.
+        <p style={{ fontSize: 13, color: K.muted, marginBottom: 8 }}>
+          Ubicamos el pin con la dirección que escribiste. Si no quedó exacto, haz clic en el mapa o arrastra el pin.
         </p>
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 10, minHeight: 28 }}>
+          <button
+            type="button"
+            onClick={() => ubicar(true)}
+            disabled={geo === "buscando" || (!data.direccion.trim() && !data.barrio_nombre)}
+            style={{
+              fontSize: 12, fontWeight: 600, padding: "5px 12px", borderRadius: 999,
+              border: `1px solid ${K.teal}`, background: "transparent", color: K.teal,
+              cursor: "pointer", opacity: geo === "buscando" ? 0.6 : 1,
+            }}
+          >
+            {geo === "buscando" ? "Buscando…" : "Ubicar por dirección"}
+          </button>
+          <span role="status" style={{ fontSize: 12, color: geo === "no" ? K.coral : K.muted }}>
+            {geo === "exacta" && "Pin ubicado en la dirección. Revisa que esté en el lugar correcto."}
+            {geo === "aprox" && "No encontramos la dirección exacta; pusimos el pin en el barrio. Ajústalo en el mapa."}
+            {geo === "barrio" && "Pusimos el pin en el barrio. Escribe la dirección para afinarlo."}
+            {geo === "no" &&"No pudimos ubicar la dirección. Marca el punto en el mapa."}
+            {geo === "manual" && "Ubicación ajustada por ti."}
+          </span>
+        </div>
         <LocationPicker
           lat={data.lat}
           lon={data.lon}
-          onChange={(lat, lon) => setData({ lat, lon })}
+          onChange={(lat, lon) => {
+            pinManual.current = true;
+            setGeo("manual");
+            setData({ lat, lon });
+          }}
         />
       </div>
 
@@ -1459,6 +1726,57 @@ function NotLoggedIn() {
 
 // ── Stepper indicator ──────────────────────────────────────────────────────────
 
+// Vista previa en vivo (rail derecho en desktop): cómo se verá el aviso en la lista
+// del mapa, armándose mientras el usuario completa el formulario.
+function LivePreview({ data, photos }: { data: FormData; photos: PhotoEntry[] }) {
+  const { valor: trm } = useTrm();
+  const cop = parseCOP(data.precio_cop);
+  const usd = cop && trm ? formatMoney(cop / trm, "USD", "en", { suffix: false }) : null;
+  const tipoLabel = TIPOS_IN.find((t) => t.v === data.tipo_inmueble)?.l;
+  const opLabel = data.tipo_operacion === "arriendo" ? "Arriendo" : data.tipo_operacion === "venta" ? "Venta" : null;
+  const ubic = [data.barrio_nombre, data.municipio].filter(Boolean).join(", ");
+  const titulo = data.titulo.trim()
+    || (tipoLabel ? `${tipoLabel} en ${opLabel?.toLowerCase() ?? ""} · ${data.barrio_nombre || data.municipio || "Medellín"}` : "Tu inmueble");
+  const specs = [
+    data.habitaciones && `${data.habitaciones} hab`,
+    data.banos && `${data.banos} baños`,
+    data.area_m2 && `${data.area_m2} m²`,
+    data.parqueaderos && data.parqueaderos !== "0" && `${data.parqueaderos} parq`,
+  ].filter(Boolean) as string[];
+  const cover = photos[0]?.preview;
+
+  return (
+    <div style={{ background: "#fff", border: `1px solid ${K.line}`, borderRadius: 16, overflow: "hidden", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+      <div style={{ position: "relative", height: 150, background: K.surface }}>
+        {cover ? (
+          <img src={cover} alt="" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+        ) : (
+          <div style={{ width: "100%", height: "100%", display: "grid", placeItems: "center", background: `linear-gradient(135deg, ${K.teal} 0%, ${K.tealDeep} 100%)` }}>
+            <span style={{ color: "#fff", opacity: 0.6, fontSize: 12, fontWeight: 700 }}>Tu foto de portada</span>
+          </div>
+        )}
+        {opLabel && (
+          <span style={{ position: "absolute", left: 10, top: 10, borderRadius: 6, padding: "3px 8px", fontSize: 10, fontWeight: 800, background: opLabel === "Arriendo" ? "#E7F4EC" : "#FCE8EA", color: opLabel === "Arriendo" ? K.tealDeep : K.coral }}>
+            {opLabel}
+          </span>
+        )}
+      </div>
+      <div style={{ padding: 14 }}>
+        <div style={{ fontFamily: K.serif, fontSize: "1.25rem", fontWeight: 800, color: K.ink, lineHeight: 1.1 }}>
+          {cop ? `$${fmtCOP(data.precio_cop)}` : "$ —"}
+          {data.tipo_operacion === "arriendo" && cop ? <span style={{ fontSize: 12, color: K.tertiary, fontWeight: 500 }}>/mes</span> : null}
+        </div>
+        {usd && <div style={{ fontSize: 11, color: K.teal, marginTop: 1 }}>≈ USD {usd.replace(/^\$/, "")}</div>}
+        {specs.length > 0 && (
+          <div style={{ fontSize: 12, color: K.muted, marginTop: 6 }}>{specs.join(" · ")}</div>
+        )}
+        <div style={{ fontSize: 13, color: K.ink, fontWeight: 600, marginTop: 8, lineHeight: 1.35 }}>{titulo}</div>
+        {ubic && <div style={{ fontSize: 11.5, color: K.tertiary, marginTop: 3 }}>📍 {ubic}</div>}
+      </div>
+    </div>
+  );
+}
+
 function StepperBar({ step }: { step: number }) {
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 32 }}>
@@ -1521,8 +1839,9 @@ function validateStep(step: number, data: FormData): string | null {
   }
   if (step === 2) {
     if (!data.direccion.trim()) return "Ingresa la dirección exacta del inmueble";
-    // #11: matrícula obligatoria en listings nuevos (identidad de propiedad).
-    if (!data.matricula_inmobiliaria.trim()) return "Ingresa la matrícula inmobiliaria (está en la escritura)";
+    // #11: matrícula obligatoria en VENTAS (identidad de propiedad / ORIP). En arriendo no aplica.
+    if (data.tipo_operacion === "venta" && !data.matricula_inmobiliaria.trim())
+      return "Ingresa la matrícula inmobiliaria (está en la escritura)";
     if (!data.lat || !data.lon) return "Marca la ubicación en el mapa";
     if (data.descripcion.length < 50) return "La descripción debe tener al menos 50 caracteres";
   }
@@ -1605,17 +1924,26 @@ function PublicarPage() {
       const fd = new FormData();
       const cop = parseCOP(form.precio_cop);
       fd.append("tipo_operacion",    form.tipo_operacion);
-      fd.append("tipo_inmueble",     form.tipo_inmueble);
+      const esEstudio = form.tipo_inmueble === "apartaestudio";
+      fd.append("tipo_inmueble",     esEstudio ? "apartamento" : form.tipo_inmueble);
+      if (esEstudio) fd.append("habitaciones", "0");
+      if (form.titulo.trim())        fd.append("titulo_custom", form.titulo.trim());
       fd.append("precio_cop",        String(cop));
       if (form.tiene_admin && form.administracion_cop)
         fd.append("administracion_cop", String(parseCOP(form.administracion_cop)));
-      if (form.area_m2)     fd.append("area_m2",      form.area_m2);
-      if (form.area_lote_m2) fd.append("area_lote_m2", form.area_lote_m2);
-      if (form.habitaciones) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
+      // Áreas y piso son enteros (sin decimales). Los inputs ya filtran a dígitos;
+      // esto es defensa extra para que el backend nunca reciba coma/punto/letras (→422).
+      const numInt = (s: string) => s.replace(/[^\d]/g, "");
+      const areaM2 = numInt(form.area_m2);
+      const areaLote = numInt(form.area_lote_m2);
+      const pisoN = numInt(form.piso);
+      if (areaM2)     fd.append("area_m2",      areaM2);
+      if (areaLote)   fd.append("area_lote_m2", areaLote);
+      if (form.habitaciones && !esEstudio) fd.append("habitaciones", form.habitaciones === "5+" ? "5" : form.habitaciones);
       if (form.banos)        fd.append("banos",        form.banos === "4+" ? "4" : form.banos);
       if (form.parqueaderos) fd.append("parqueaderos", form.parqueaderos === "3+" ? "3" : form.parqueaderos);
       if (form.estrato)           fd.append("estrato",           form.estrato);
-      if (form.piso)              fd.append("piso",              form.piso);
+      if (pisoN)                  fd.append("piso",              pisoN);
       if (form.nombre_edificio)   fd.append("nombre_edificio",   form.nombre_edificio);
       if (form.antiguedad)        fd.append("antiguedad",        form.antiguedad);
       if (form.amoblado)     fd.append("amoblado",     form.amoblado === "si" ? "true" : "false");
@@ -1654,6 +1982,38 @@ function PublicarPage() {
         notas_owner:             form.notas_owner || null,
       };
       fd.append("declaraciones", JSON.stringify(declaraciones));
+
+      // Ficha rica → caracteristicas JSONB. Solo las llaves con valor viajan.
+      const num = (s: string) => { const n = Number(s); return s.trim() && !Number.isNaN(n) ? n : undefined; };
+      const esArr = form.tipo_operacion === "arriendo";
+      const esVta = form.tipo_operacion === "venta";
+      const caracteristicas: Record<string, unknown> = {
+        ano_construccion:   num(form.ano_construccion),
+        area_privada_m2:    num(form.area_privada_m2),
+        area_construida_m2: num(form.area_m2),
+        estado:             form.estado || undefined,
+        piso:               num(form.piso),
+        niveles:            num(form.niveles),
+        orientacion:        form.orientacion || undefined,
+        vista:              form.vista || undefined,
+        closets:            num(form.closets),
+        parqueadero_cubierto: form.parqueadero_cubierto || undefined,
+        // Arriendo
+        deposito_meses:       esArr ? num(form.deposito_meses) : undefined,
+        estadia_minima_meses: esArr ? num(form.estadia_minima_meses) : undefined,
+        disponible_desde:     esArr ? (form.disponible_desde || undefined) : undefined,
+        requisitos:           esArr && form.requisitos.length ? form.requisitos : undefined,
+        servicios_incluidos:  esArr && form.servicios_incluidos.length ? form.servicios_incluidos : undefined,
+        // Venta
+        precio_negociable:  esVta ? (form.precio_negociable || undefined) : undefined,
+        acepta_permuta:     esVta ? (form.acepta_permuta || undefined) : undefined,
+        acepta_credito:     esVta ? (form.acepta_credito || undefined) : undefined,
+        comision_incluida:  form.comision_incluida || undefined,
+      };
+      const caracsLimpias = Object.fromEntries(
+        Object.entries(caracteristicas).filter(([, v]) => v !== undefined),
+      );
+      if (Object.keys(caracsLimpias).length) fd.append("caracteristicas", JSON.stringify(caracsLimpias));
 
       for (const p of photos) {
         fd.append("fotos", p.file);
@@ -1699,7 +2059,7 @@ function PublicarPage() {
           marginBottom: 0,
         }}
       >
-        <div style={{ maxWidth: 700, margin: "0 auto" }}>
+        <div className="mx-auto" style={{ maxWidth: 1040 }}>
           <button
             onClick={() => navigate({ to: "/vender" })}
             style={{
@@ -1732,9 +2092,12 @@ function PublicarPage() {
         </div>
       </div>
 
-      {/* Form card */}
-      <div style={{ maxWidth: 700, margin: "0 auto", padding: "32px 24px" }}>
+      {/* Form + vista previa en vivo */}
+      <div className="mx-auto" style={{ maxWidth: 1040, padding: "32px 24px" }}>
         <StepperBar step={step} />
+
+        <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-7 lg:items-start">
+        <div className="min-w-0">
 
         {!esAgente && user?.plan !== "pro" && user?.plan !== "agente" && (
           <div
@@ -1807,6 +2170,14 @@ function PublicarPage() {
           >
             Paso {step + 1}: {STEPS[step]}
           </h2>
+
+          {/* Vista previa para revisar en el último paso (en desktop ya está el rail) */}
+          {step === STEPS.length - 1 && (
+            <div className="lg:hidden" style={{ marginBottom: 24 }}>
+              <p style={{ fontSize: 12, color: K.tertiary, fontWeight: 600, marginBottom: 8 }}>Así quedará tu aviso</p>
+              <LivePreview data={form} photos={photos} />
+            </div>
+          )}
 
           <AnimatePresence mode="wait">
             <motion.div
@@ -1913,6 +2284,15 @@ function PublicarPage() {
             )}
           </div>
         </div>
+        </div>{/* /columna formulario */}
+
+        <aside className="hidden lg:block lg:sticky lg:top-6">
+          <LivePreview data={form} photos={photos} />
+          <p style={{ fontSize: 11, color: K.tertiary, textAlign: "center", marginTop: 10, lineHeight: 1.5 }}>
+            Así se verá tu aviso en la lista del mapa. Se arma mientras completas el formulario.
+          </p>
+        </aside>
+        </div>{/* /grid */}
       </div>
     </div>
   );

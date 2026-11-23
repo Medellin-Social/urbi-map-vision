@@ -247,9 +247,23 @@ export type ApiListingAgente = {
   zona_nivel: string; // 'barrio' | 'comuna'
 };
 
+/** Agente registrado que representa ESTE anuncio (Programa de agentes): solo con
+ *  representación aprobada y cobertura. null → anuncio sin agente registrado. */
+export type ApiListingRepresentante = {
+  id: string;
+  slug: string | null;
+  nombre: string;
+  telefono: string;
+  foto_url?: string | null;
+  agencia_nombre?: string | null;
+  tipos: string[];
+  preferente: { nivel: string; nombre: string }[];
+};
+
 export type ApiListingAgentes = {
   comuna?: ApiListingAgente | null; // patrocinio caro → tarjeta principal
   barrio?: ApiListingAgente | null; // patrocinio barato → tarjeta secundaria
+  representante?: ApiListingRepresentante | null;
 };
 
 export type SimilarListing = {
@@ -269,6 +283,8 @@ export type ApiListing = {
   id: number;
   fuente?: string | null;
   fuente_display?: string | null;
+  /** Tipos vigentes del agente que publicó el listing (member|certified|preferred|casa). null = sin agente. */
+  agente_tipos?: string[] | null;
   tipo_operacion?: string | null;
   tipo_inmueble?: string | null;
   precio_cop?: number | null;
@@ -360,6 +376,34 @@ export type ApiListingDetail = ApiListing & {
   precio_max_cluster?: number | null;
   tiempo_estimado_venta?: string | null; // barrio intel — gated server-side
   avaluo_m2_catastro?: number | null;    // avalúo catastral/m² (comuna) — gated
+  caracteristicas?: ListingCaracteristicas | null; // ficha rica del realtor (solo propios)
+};
+
+// listing.caracteristicas (JSONB) — ficha rica que diligencia el realtor al publicar.
+// Flexible (index signature) pero con las llaves conocidas tipadas para el render.
+export type ListingCaracteristicas = {
+  ano_construccion?: number;
+  area_privada_m2?: number;
+  area_construida_m2?: number;
+  estado?: string;           // nuevo | usado | remodelado | sobre_planos
+  piso?: number;
+  niveles?: number;          // # de niveles del inmueble (casas/dúplex)
+  orientacion?: string;      // norte | sur | oriente | occidente | …
+  vista?: string;            // exterior | interior | panoramica
+  closets?: number;
+  parqueadero_cubierto?: boolean;
+  // Arriendo
+  deposito_meses?: number;
+  requisitos?: string[];        // codeudor | fiador | seguro | deposito
+  servicios_incluidos?: string[]; // agua | luz | gas | internet | administracion
+  disponible_desde?: string;    // ISO date
+  estadia_minima_meses?: number;
+  // Venta
+  precio_negociable?: boolean;
+  acepta_permuta?: boolean;
+  acepta_credito?: boolean;
+  comision_incluida?: boolean;
+  [k: string]: unknown;
 };
 
 export type ApiListingsResponse = {

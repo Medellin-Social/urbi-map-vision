@@ -161,7 +161,42 @@ async def test_amenidades_params_start_after_new_params(api):
     ac, pool = api
     await ac.get("/api/v1/listings", params={"amenidades": ["piscina"]})
     sql, args = pool.calls[0]
-    assert "$18::text[]" in sql and len(args) == 18
+    # $18 = tipo_agente, amenidades arrancan en $19
+    assert "$19::text[]" in sql and len(args) == 19 and args[17] is None
+
+
+async def test_listings_tipo_agente_param(api):
+    ac, pool = api
+    await ac.get("/api/v1/listings", params={"tipo_agente": ["Preferred", "casa", "casa"]})
+    args = pool.calls[-1][1]
+    assert args[17] == ["casa", "preferred"]          # normalizado, sin duplicados, ordenado
+    # el filtro por agente desactiva el fast path "toda la ciudad" (LIMIT 700 de candidatos)
+    assert all("LIMIT 700" not in c[0] for c in pool.calls)
+
+
+async def test_listings_tipo_agente_invalido_422(api):
+    ac, _ = api
+    r = await ac.get("/api/v1/listings", params={"tipo_agente": "vip"})
+    assert r.status_code == 422
+
+
+async def test_viewport_tipo_agente_param(api):
+    ac, pool = api
+    pool.rows = [_row(agente_tipos=["certified", "preferred"])]
+    r = await ac.get("/api/v1/listings/viewport", params={**VP, "zoom": 14, "tipo_agente": "certified"})
+    assert r.json()["listings"][0]["agente_tipos"] == ["certified", "preferred"]
+    assert pool.calls[-1][1][24] == ["certified"]     # $25
+
+
+def test_agente_tipos_sql_multi_y_en_vivo():
+    """Los 4 tipos salen de columnas/slots vivos (no de agent.tier guardado) y son multi."""
+    sql = L._agente_tipos_sql("a")
+    assert "'member'" in sql and "'certified'" in sql and "'preferred'" in sql and "'casa'" in sql
+    assert "realtor_preferido_slot" in sql and "_rps.tipo = 'pago'" in sql
+    assert "a.tier" not in sql
+    assert "array_remove" in sql   # un agente puede tener varios a la vez
+    for tmpl in (L._LISTINGS_SQL_TMPL, L._COUNT_SQL_TMPL, L._VIEWPORT_POINTS_SQL):
+        assert "agente_tipos &&" in tmpl
 
 
 # ── /listings/viewport ───────────────────────────────────────────────────────
@@ -178,8 +213,8 @@ async def test_viewport_zoom_tiers(api):
     j = r.json()
     assert j["mode"] == "points" and j["thinned"] is True and len(j["listings"]) == 1
     sql, args = pool.calls[-1]
-    assert "LIMIT 1500" in sql and "_cell_rn" in sql and len(args) == 25
-    assert args[24] == pytest.approx(L._thin_cell_deg(11))
+    assert "LIMIT 1500" in sql and "_cell_rn" in sql and len(args) == 26
+    assert args[25] == pytest.approx(L._thin_cell_deg(11))
     pool.rows = []
     r = await ac.get("/api/v1/listings/viewport", params={**VP, "zoom": 9})
     assert r.json()["mode"] == "clusters"

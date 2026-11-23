@@ -269,9 +269,13 @@ WITH todas_fuentes_raw AS (
         l.habitaciones, l.banos::numeric                         AS banos,
         l.barrio                                                  AS barrio_raw,
         -- Resolver barrio_id espacialmente desde geom (antes NULL → sin georef →
-        -- el listing propio nunca aparecía en el mapa). Fallback al más cercano.
+        -- el listing propio nunca aparecía en el mapa). Snap al barrio más cercano
+        -- dentro de 300m: cubre pin contenido (dist 0) y pin de borde (polígonos
+        -- raw.barrios imperfectos, común en Bello/Copacabana). >300m → NULL.
         (SELECT b.id FROM raw.barrios b
-          WHERE l.geom IS NOT NULL AND ST_Contains(b.geometry, l.geom)
+          WHERE l.geom IS NOT NULL
+            AND ST_DWithin(b.geometry::geography, l.geom::geography, 300)
+          ORDER BY b.geometry <-> l.geom
           LIMIT 1)                                                AS barrio_id,
         l.direccion_aprox                                         AS direccion_raw,
         ST_Y(l.geom)::double precision, ST_X(l.geom)::double precision,
@@ -673,8 +677,12 @@ SELECT
     COALESCE(l.area_m2, 0)::numeric,
     CASE WHEN COALESCE(l.area_m2, 0) > 0 THEN l.precio / l.area_m2 END,
     l.habitaciones, l.banos::numeric, l.barrio,
+    -- Snap al barrio más cercano dentro de 300m (igual que el refresh bulk):
+    -- cubre pin contenido (dist 0) y pin de borde. >300m → NULL.
     (SELECT b.id FROM raw.barrios b
-       WHERE l.geom IS NOT NULL AND ST_Contains(b.geometry, l.geom) LIMIT 1),
+       WHERE l.geom IS NOT NULL
+         AND ST_DWithin(b.geometry::geography, l.geom::geography, 300)
+       ORDER BY b.geometry <-> l.geom LIMIT 1),
     l.direccion_aprox,
     ST_Y(l.geom)::double precision, ST_X(l.geom)::double precision, l.geom,
     l.id::text,

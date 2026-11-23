@@ -31,6 +31,9 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--source", action="append", choices=list(store.SOURCES), help="repeatable; default all")
     p.add_argument("--older-than", type=parse_age, default=timedelta(hours=24))
     p.add_argument("--dry-run", action="store_true", help="fetch+classify, write NOTHING")
+    p.add_argument("--retire-only", action="store_true",
+                   help="skip all fetching; just run auto_retire over rows already in pending_review "
+                        "(cheap seconds-long drain, independent of the heavy sweep)")
     p.add_argument("--delay", type=float, help="seconds between requests per domain (default 1.0)")
     p.add_argument("-v", "--verbose", action="store_true")
     return p
@@ -44,6 +47,13 @@ async def amain(args) -> int:
         cfg.domain_delay = args.delay
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
+        if args.retire_only:
+            # auto_retire is pure SQL over pending_review rows that already meet grace+evidence; it must
+            # NOT be held hostage by a full fetch sweep completing (an OOM/kill mid-sweep used to strand it).
+            from api.services import link_review
+            n = await link_review.auto_retire(conn)
+            logging.getLogger("link_checker").info("retire-only: auto_retired=%d", n)
+            return 0
         from api.utils.email import send_email   # existing Gmail-API/SMTP mechanism; only used when LINK_REVIEW_EMAILS is set
         rep = await run(conn, cfg, sources=args.source, limit=args.limit, older_than=args.older_than,
                         dry_run=args.dry_run, sender=send_email)

@@ -203,3 +203,15 @@ def require_plan(plan_minimo: str):
             )
         return current_user
     return _check
+
+
+async def require_agente(current_user: dict = Depends(get_current_user)) -> dict:
+    """403 salvo que el usuario sea agente/agencia (is_agente). Para features e
+    inteligencia de inversor (comparador, simulador, oportunidades): solo realtors.
+    Usa is_agente (no require_plan) para cubrir filas es_agente sin plan='agente'."""
+    if not is_agente(current_user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error": "solo_agentes", "upgrade_url": "/planes"},
+        )
+    return current_user

@@ -6,7 +6,7 @@ from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
 
 from api.db import get_pool
-from api.dependencies import get_optional_user
+from api.dependencies import get_optional_user, require_agente
 
 router = APIRouter()
 
@@ -44,7 +44,7 @@ class Oportunidad(BaseModel):
 async def list_oportunidades(
     perfil: Optional[str] = Query(default=None, description="airbnb | mediano_plazo | largo_plazo"),
     limit: int = Query(default=10, ge=1, le=50),
-    current_user: Optional[dict] = Depends(get_optional_user),
+    current_user: dict = Depends(require_agente),  # oportunidades = solo realtors
 ):
     pool = get_pool()
 

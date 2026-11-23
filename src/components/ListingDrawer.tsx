@@ -29,9 +29,11 @@ import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { track } from "@/lib/tracking";
 import { auth } from "@/lib/auth";
 import { ReclamarListingModal } from "@/components/ReclamarListingModal";
+import { AgenteNoRegistradoModal } from "@/components/AgenteNoRegistradoModal";
+import { AgenteTipoBadges } from "@/components/agentes/agenteShared";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
-import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, SimilarListing } from "@/lib/adapters";
+import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, ApiListingRepresentante, SimilarListing, ListingCaracteristicas } from "@/lib/adapters";
 import { toEmbedSrc } from "@/lib/embed";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
@@ -191,6 +193,78 @@ function amenityIcon(a: string): React.ElementType {
     if (re.test(a)) return Icon;
   }
   return Check;
+}
+
+// ─── Ficha del inmueble — caracteristicas ricas que diligencia el realtor ────────
+const _CAP = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+const _ESTADO: Record<string, string> = { nuevo: "Nuevo", usado: "Usado", remodelado: "Remodelado", sobre_planos: "Sobre planos" };
+const _VISTA: Record<string, string> = { exterior: "Exterior", interior: "Interior", panoramica: "Panorámica" };
+
+function FichaCaracteristicas({ c }: { c?: ListingCaracteristicas | null }) {
+  if (!c || typeof c !== "object") return null;
+  // Campos escalares → filas etiqueta/valor
+  const rows: { label: string; value: string }[] = [];
+  const add = (label: string, value: unknown, suffix = "") => {
+    if (value === null || value === undefined || value === "" ) return;
+    rows.push({ label, value: `${value}${suffix}` });
+  };
+  add("Área privada", c.area_privada_m2, " m²");
+  add("Área construida", c.area_construida_m2, " m²");
+  add("Año de construcción", c.ano_construccion);
+  if (c.estado) rows.push({ label: "Estado", value: _ESTADO[c.estado] ?? _CAP(String(c.estado)) });
+  add("Piso", c.piso);
+  add("Niveles", c.niveles);
+  if (c.orientacion) rows.push({ label: "Orientación", value: _CAP(String(c.orientacion)) });
+  if (c.vista) rows.push({ label: "Vista", value: _VISTA[c.vista] ?? _CAP(String(c.vista)) });
+  add("Clósets", c.closets);
+  add("Depósito (arriendo)", c.deposito_meses, " meses");
+  add("Estadía mínima", c.estadia_minima_meses, " meses");
+  if (c.disponible_desde) rows.push({ label: "Disponible desde", value: String(c.disponible_desde) });
+
+  // Booleanos "sí" → chips de features
+  const flags: string[] = [];
+  if (c.parqueadero_cubierto) flags.push("Parqueadero cubierto");
+  if (c.precio_negociable) flags.push("Precio negociable");
+  if (c.acepta_permuta) flags.push("Acepta permuta");
+  if (c.acepta_credito) flags.push("Apto para crédito");
+  if (c.comision_incluida) flags.push("Comisión incluida");
+
+  const servicios = Array.isArray(c.servicios_incluidos) ? c.servicios_incluidos.filter(Boolean) : [];
+  const requisitos = Array.isArray(c.requisitos) ? c.requisitos.filter(Boolean) : [];
+
+  if (rows.length === 0 && flags.length === 0 && servicios.length === 0 && requisitos.length === 0) return null;
+
+  return (
+    <div className="space-y-2.5">
+      <h3 className="text-sm font-semibold text-[#111418]">Ficha del inmueble</h3>
+      {rows.length > 0 && (
+        <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-baseline justify-between gap-2 border-b border-dashed border-[#E5E0D5] pb-1">
+              <dt className="text-xs text-[#5B5F5C]">{r.label}</dt>
+              <dd className="text-xs font-semibold text-[#111418] text-right">{r.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+      {flags.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {flags.map((f) => (
+            <span key={f} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs"
+              style={{ background: "#E7F4EC", border: "0.5px solid #0F8A4F", color: "#0A5C36" }}>
+              ✓ {f}
+            </span>
+          ))}
+        </div>
+      )}
+      {servicios.length > 0 && (
+        <p className="text-xs text-[#5B5F5C]"><span className="font-semibold text-[#111418]">Servicios incluidos:</span> {servicios.map((s) => _CAP(String(s))).join(" · ")}</p>
+      )}
+      {requisitos.length > 0 && (
+        <p className="text-xs text-[#5B5F5C]"><span className="font-semibold text-[#111418]">Requisitos:</span> {requisitos.map((s) => _CAP(String(s))).join(" · ")}</p>
+      )}
+    </div>
+  );
 }
 
 function Amenidades({ items }: { items: string[] }) {
@@ -761,7 +835,8 @@ function GettingAround({ listingId, barrioId, parqueaderos, tipoInmueble }: { li
   const dParque = c?.dist_parque_km;
   if (dParque != null) facts.push({ icon: "🏞️", label: fl("Parque"), ...km(dParque), ratio: scaleRatio(dParque, "parque"), cat: "lugares" });
   const dMall = c?.dist_mall_km;
-  if (dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall"), cat: "lugares" });
+  // Solo residencial: para un local un mall cerca es COMPETENCIA, no amenidad → se oculta en comercial.
+  if (!esComercial && dMall != null) facts.push({ icon: "🛍️", label: fl("Centro comercial"), ...km(dMall), ratio: scaleRatio(dMall, "mall"), cat: "lugares" });
   // Zonas verdes: % de cobertura (indice_verde_pct). Mediana Medellín = 2.4%, p90 = 11.7%
   // → un 3% está sobre la mitad de los barrios (ámbar), NO rojo. Antes un tope de 35%
   // pintaba de rojo barrios realmente verdes.
@@ -1332,18 +1407,69 @@ function RealtorFallbackCard({ waUrl, onSchedule, onContactWa }: { waUrl: string
   );
 }
 
-/** Columna 2 completa: comuna (principal) + barrio (secundario), o fallback. */
+/** Agente registrado que representa el anuncio (Programa de agentes): perfil, etiquetas
+ *  de estado (enlazadas a la guía) y contacto. Reemplaza a los realtors de zona. */
+function RepresentanteCard({ listingId, rep, onSchedule, onContactWa }: {
+  listingId: number; rep: ApiListingRepresentante; onSchedule: () => void; onContactWa: () => void;
+}) {
+  const { lang } = useLang();
+  const en = lang === "en";
+  const certificado = rep.tipos.includes("certified");
+  return (
+    <div className="overflow-hidden rounded-2xl" data-testid="agente-representante" style={{ border: "1px solid #0F8A4F", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
+      <div className="flex items-center gap-3 px-4 pt-4 pb-3">
+        <div className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#E7F4EC", border: "2px solid #0F8A4F" }}>
+          {rep.foto_url ? <img src={rep.foto_url} alt={rep.nombre} className="h-full w-full object-cover" /> : <User className="h-7 w-7" style={{ color: "#0F8A4F" }} />}
+        </div>
+        <div className="min-w-0">
+          <a href={`/agentes/${rep.slug || rep.id}`} className="block truncate text-base font-bold hover:underline" style={{ color: "#111418" }}><Name>{rep.nombre}</Name></a>
+          {rep.agencia_nombre && <div className="truncate text-[11px]" style={{ color: "#5B5F5C" }}><Name>{rep.agencia_nombre}</Name></div>}
+          <div className="text-[11px] font-semibold" style={{ color: "#0A5C36" }}>
+            {certificado ? (en ? "Listed by a certified agent" : "Publicado por un agente certificado") : (en ? "Representing agent" : "Agente representante")}
+          </div>
+        </div>
+      </div>
+      <div className="px-4 pb-2"><AgenteTipoBadges tipos={rep.tipos} preferente={rep.preferente} size="xs" linked /></div>
+      <div className="space-y-2 px-4 pb-4 pt-1">
+        <a href={waLink({ nombre: rep.nombre, telefono: rep.telefono, zona_nivel: "barrio" }, listingId)} target="_blank" rel="noopener noreferrer" onClick={onContactWa}
+          className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: "#0F8A4F" }}>
+          <Phone className="h-4 w-4" /> {en ? "Contact" : "Contactar"}
+        </a>
+        <button onClick={onSchedule} className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+          style={{ border: "1px solid #0F8A4F", color: "#0A5C36", background: "#E7F4EC" }}>
+          <Calendar className="h-4 w-4" /> {en ? "Schedule a visit" : "Agendar visita"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** Columna 2 completa: agente representante del anuncio; si no hay, realtors de la zona
+ *  (comuna principal + barrio secundario) o fallback, más el aviso de "agente no
+ *  registrado" en anuncios importados. */
 function RealtorColumn({
-  listingId, agentes, waUrl, onSchedule, onContactWa,
-}: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void; onContactWa: () => void }) {
+  listingId, agentes, waUrl, onSchedule, onContactWa, importado = false, onAgenteInfo,
+}: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void; onContactWa: () => void;
+     importado?: boolean; onAgenteInfo?: () => void }) {
+  const { lang } = useLang();
+  const rep = agentes?.representante ?? null;
+  if (rep) return <RepresentanteCard listingId={listingId} rep={rep} onSchedule={onSchedule} onContactWa={onContactWa} />;
   const comuna = agentes?.comuna ?? null;
   const barrio = agentes?.barrio ?? null;
-  if (!comuna && !barrio) return <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} onContactWa={onContactWa} />;
   // Comuna = principal; barrio = botón discreto al lado. Sin comuna, barrio sube a principal.
-  const principal = comuna ?? barrio!;
-  const secundario = comuna ? barrio : null;
+  const card = !comuna && !barrio
+    ? <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} onContactWa={onContactWa} />
+    : <RealtorPrimaryCard listingId={listingId} agente={comuna ?? barrio!} secondary={comuna ? barrio : null} onSchedule={onSchedule} onContactWa={onContactWa} />;
+  if (!importado || !onAgenteInfo) return card;
   return (
-    <RealtorPrimaryCard listingId={listingId} agente={principal} secondary={secundario} onSchedule={onSchedule} onContactWa={onContactWa} />
+    <div className="space-y-2">
+      {card}
+      <button type="button" onClick={onAgenteInfo} data-testid="info-agente"
+        className="flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-semibold transition hover:opacity-80"
+        style={{ border: "1px dashed #C9C4B8", color: "#5B5F5C", background: "#FFFFFF" }}>
+        <User className="h-3.5 w-3.5" /> {lang === "en" ? "Agent information" : "Información del agente"}
+      </button>
+    </div>
   );
 }
 
@@ -1374,6 +1500,7 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
   const [showAlertModal, setShowAlertModal] = useState(false);
   const [showScheduleModal, setShowScheduleModal] = useState(false);
   const [showReclamar, setShowReclamar] = useState(false);
+  const [showAgenteInfo, setShowAgenteInfo] = useState(false);
 
   const { data: agentes } = useQuery<ApiListingAgentes>({
     queryKey: ["listing-agente", listingId],
@@ -1382,7 +1509,11 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
     staleTime: 300_000,
   });
   // Realtor para el modal de agenda: comuna (principal) o barrio si no hay comuna.
-  const agenteContacto = agentes?.comuna ?? agentes?.barrio ?? null;
+  // El agente representante del anuncio (Programa de agentes) tiene prioridad.
+  const rep = agentes?.representante ?? null;
+  const agenteContacto: ApiListingAgente | null = rep
+    ? { nombre: rep.nombre, telefono: rep.telefono, foto_url: rep.foto_url ?? null, zona_nivel: "barrio" }
+    : agentes?.comuna ?? agentes?.barrio ?? null;
 
   const { data: listing, isLoading } = useQuery<ApiListingDetail>({
     queryKey: ["listing-drawer", listingId],
@@ -1739,6 +1870,9 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
   // Analysis sections (left col + mobile)
   const analysisContent = listing ? (
     <>
+      {/* Ficha del inmueble — caracteristicas ricas (solo listings propios) */}
+      <FichaCaracteristicas c={listing.caracteristicas} />
+
       {/* Qué tiene — amenidades */}
       {listing.amenidades && listing.amenidades.length > 0 && (
         <Amenidades items={listing.amenidades} />
@@ -2073,6 +2207,8 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
                           waUrl={waUrl}
                           onSchedule={() => setShowScheduleModal(true)}
                           onContactWa={onContactWa}
+                          importado={!esPropio}
+                          onAgenteInfo={() => setShowAgenteInfo(true)}
                         />
                         {analysisContent}
                         {similaresSection}
@@ -2088,6 +2224,10 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
         {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
         {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
         {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
+        {showAgenteInfo && listing && (
+          <AgenteNoRegistradoModal listing={listing} barrio={listing.barrio_display ?? listing.barrio_nombre}
+            comuna={listing.comuna_nombre} onClose={() => setShowAgenteInfo(false)} />
+        )}
       </>
     );
   }
@@ -2103,6 +2243,8 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
         waUrl={waUrl}
         onSchedule={() => setShowScheduleModal(true)}
         onContactWa={onContactWa}
+        importado={!esPropio}
+        onAgenteInfo={() => setShowAgenteInfo(true)}
       />
     </div>
   ) : null;
@@ -2231,6 +2373,10 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
       {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
       {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} onClose={() => setShowScheduleModal(false)} />}
       {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
+        {showAgenteInfo && listing && (
+          <AgenteNoRegistradoModal listing={listing} barrio={listing.barrio_display ?? listing.barrio_nombre}
+            comuna={listing.comuna_nombre} onClose={() => setShowAgenteInfo(false)} />
+        )}
     </>
   );
 }

@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   listingEntorno: (id: number) => `${API_BASE_URL}/listings/${id}/entorno`,
   listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
   agentesDirectorio: `${API_BASE_URL}/listings/agentes`,
+  agentesBuscar: (qs: string) => `${API_BASE_URL}/listings/agentes/buscar${qs ? `?${qs}` : ""}`,
   agentePerfil: (id: string) => `${API_BASE_URL}/listings/agentes/${id}`,
   agenteResenas: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/resenas`,
   agenteContactar: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/contactar`,
@@ -140,6 +141,24 @@ export const API_ENDPOINTS = {
   suscripcionesMiPlan: `${API_BASE_URL}/suscripciones/mi-plan`,
   suscripcionesCancelar: `${API_BASE_URL}/suscripciones/cancelar`,
   agenteRegistro: `${API_BASE_URL}/suscripciones/agente/registro`,
+
+  // Programa de agentes (registro pagado, certificación, cobertura de anuncios)
+  agentProgramMiEstado: `${API_BASE_URL}/agent-program/mi-estado`,
+  agentProgramCheckout: `${API_BASE_URL}/agent-program/checkout`,
+  agentProgramConfirmarSimulado: `${API_BASE_URL}/agent-program/confirmar-simulado`,
+  agentProgramCertificacion: `${API_BASE_URL}/agent-program/certificacion`,
+  agentProgramEvidenciaExamen: `${API_BASE_URL}/agent-program/certificacion/evidencia-examen`,
+  agentProgramRepresentacion: `${API_BASE_URL}/agent-program/representacion`,
+  agentProgramRepresentacionItem: (id: string) => `${API_BASE_URL}/agent-program/representacion/${id}`,
+  adminCertificaciones: (estado: string) => `${API_BASE_URL}/agent-program/admin/certificaciones?estado=${estado}`,
+  adminCertificacionResolver: (id: string) => `${API_BASE_URL}/agent-program/admin/certificaciones/${id}/resolver`,
+  adminRepresentaciones: (estado: string) => `${API_BASE_URL}/agent-program/admin/representaciones?estado=${estado}`,
+  adminRepresentacionResolver: (id: string) => `${API_BASE_URL}/agent-program/admin/representaciones/${id}/resolver`,
+  adminReclamos: (estado: string) => `${API_BASE_URL}/agent-program/admin/reclamos?estado=${estado}`,
+  adminReclamoResolver: (id: string) => `${API_BASE_URL}/agent-program/admin/reclamos/${id}/resolver`,
+  adminLeadsServicio: `${API_BASE_URL}/agent-program/admin/leads-servicio`,
+  adminLeadServicio: (id: string) => `${API_BASE_URL}/agent-program/admin/leads-servicio/${id}`,
+  leadServicio: `${API_BASE_URL}/leads/servicio`,
 
   // Comparador
   comparadorHistorial: `${API_BASE_URL}/comparador/historial`,

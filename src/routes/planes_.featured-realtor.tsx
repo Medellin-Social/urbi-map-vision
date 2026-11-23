@@ -80,7 +80,7 @@ function RealtorPreferidoPage() {
     } catch (e) {
       const m = e instanceof Error ? e.message : "";
       if (/No eres agente/i.test(m)) {
-        setMsg({ ok: false, text: t("Necesitas un perfil de agente verificado para comprar un lugar.", "You need a verified agent profile to buy a spot.") });
+        setMsg({ ok: false, text: t("Necesitas un perfil de agente registrado y aprobado para comprar un lugar.", "You need an approved registered agent profile to buy a spot.") });
       } else {
         setMsg({ ok: false, text: m || t("No pudimos iniciar el pago.", "We couldn't start the payment.") });
       }
@@ -94,14 +94,16 @@ function RealtorPreferidoPage() {
     t("Apareces en la página de tu barrio y comuna, arriba de todo", "You appear on your neighborhood and commune page, at the very top"),
     t("Rotación justa y fija: todos los preferidos de la zona rotan por igual", "Fair, fixed rotation: every preferred realtor in the zone rotates equally"),
     t("Los contactos de compradores y vendedores de tu zona llegan a ti", "Buyer and seller contacts from your zone come to you"),
-    t("Insignia «Preferred» en tu perfil y en el directorio de agentes", "“Preferred” badge on your profile and in the agent directory"),
+    t("Distinción «Agente preferente» con tu zona en tu perfil y en el directorio", "“Preferred agent” distinction with your zone on your profile and in the directory"),
     t("Cupos limitados: 4 por barrio y 8 por comuna", "Limited spots: 4 per neighborhood and 8 per commune"),
   ];
 
+  // Programa de agentes (USD): registro y certificación se suman; preferente se paga por zona
+  // y NO exige certificación (se identifica por separado).
   const TIERS = [
-    { n: "Member", p: t("Gratis", "Free"), f: [t("Perfil en el directorio", "Directory profile"), t("Reseñas de clientes", "Client reviews")], hi: false },
-    { n: "Certified", p: t("Por verificación", "By verification"), f: [t("Todo Member", "Everything in Member"), t("Insignia de verificado", "Verified badge")], hi: false },
-    { n: "Preferred", p: t("Por zona, mensual", "Per zone, monthly"), f: [t("Todo Certified", "Everything in Certified"), t("Visibilidad destacada en tu zona", "Featured visibility in your zone"), t("Leads de tu zona", "Leads from your zone")], hi: true },
+    { n: t("Agente registrado", "Registered agent"), p: t("$25 USD único · $5 USD por anuncio", "$25 USD one-time · $5 USD per listing"), f: [t("Perfil en el directorio", "Directory profile"), t("Tu nombre en los anuncios que inscribes", "Your name on the listings you enroll")], hi: false },
+    { n: t("Agente certificado", "Certified agent"), p: t("$99 USD único + $25 USD/mes", "$99 USD one-time + $25 USD/mo"), f: [t("Examen EASE y revisión de trayectoria", "EASE exam and track-record review"), t("5 anuncios incluidos", "5 listings included"), t("Insignia de certificado", "Certified badge")], hi: false },
+    { n: t("Agente preferente", "Preferred agent"), p: t("Por zona, mensual", "Per zone, monthly"), f: [t("Requiere registro", "Requires registration"), t("Visibilidad destacada en tu zona", "Featured visibility in your zone"), t("Leads de tu zona", "Leads from your zone")], hi: true },
   ];
 
   const COMP: [string, string, string][] = [
@@ -181,7 +183,7 @@ function RealtorPreferidoPage() {
           </section>
 
           <section>
-            <h2 style={h2}>{t("Tres niveles", "Three tiers")}</h2>
+            <h2 style={h2}>{t("Estados de agente", "Agent statuses")}</h2>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(200px,1fr))", gap: 14 }}>
               {TIERS.map((x) => (
                 <div key={x.n} style={{ ...card, border: x.hi ? `2px solid ${K.teal}` : card.border }}>

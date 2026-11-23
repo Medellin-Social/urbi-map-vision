@@ -1,8 +1,8 @@
 """
 Scraper Metrocuadrado — apartamentos y casas en venta y arriendo, Valle de Aburrá.
 
-Usa la REST API interna de Metrocuadrado (no scraping de HTML).
-La API sirve JSON con size=50 obligatorio; paginación por offset `from`.
+Lee los listings del HTML server-rendered (payload RSC de Next.js). La vieja REST
+API con X-Api-Key quedó deprecada en 2026-11 (ver nota "Configuración" abajo).
 
 Uso:
     python -m scraping.metrocuadrado.scraper                       # Medellín completo
@@ -11,13 +11,12 @@ Uso:
     python -m scraping.metrocuadrado.scraper --dry-run --max-pages 2
     python -m scraping.metrocuadrado.scraper --tipos venta
 
-Reconocimiento ejecutado 2026-05-03:
-    - Sitio Next.js con RSC; listings cargados vía API REST interna
-    - Endpoint: https://www.metrocuadrado.com/rest-search/search
-    - Header requerido: X-Api-Key (extraído de config embebida en HTML)
-    - size=50 obligatorio (constante n.L=50 en bundle JS)
-    - Paginación: parámetro `from` (offset), máximo 10.000 entradas por query
-    - Sin CAPTCHA activo para requests con User-Agent realista + X-Api-Key
+Captura de atribución (2026-11): cada listing guarda contacto_phone/whatsapp,
+company_id (midempresa), anunciante_tipo (Inmobiliaria/Persona natural) y realtor_key
+del payload de resultados; company_name se resuelve con 1 fetch por agencia a la
+ficha. Dato personal → guardar, NO exponer el teléfono en el mapa público (Ley 1581).
+
+Notas del payload de resultados:
     - Listings incluyen lat/lon directamente en campo `localizacion`
     - Parámetro `city` acepta slugs de municipio (medellin, envigado, itagui, etc.)
 """
@@ -65,42 +64,105 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Configuración API
+# Configuración — fuente de datos
 # ---------------------------------------------------------------------------
+# Metrocuadrado migró (2026-11) a un SPA Next.js: la vieja REST API con X-Api-Key
+# (/rest-search/search) quedó deprecada (da 401, el frontend la abandonó, la key
+# pública desapareció del HTML). Los listings ahora llegan server-rendered dentro
+# del HTML de las páginas de resultados, embebidos en el payload RSC
+# (self.__next_f) como objetos JSON con los MISMOS campos m* de antes
+# (mvalorventa/marea/localizacion/estrato/...) → _parse_listing se reusa tal cual,
+# sin cambios. No se necesita API key.
+#
+# LÍMITE conocido: la paginación es 100% client-side (pedir ?page=N por requests —
+# incluso con curl_cffi/cookies/headers RSC — devuelve ~la misma página 1). Solo la
+# PÁGINA 1 por config es extraíble de forma confiable (~50-65 listings, pero con
+# datos COMPLETOS: precio/área/lat-lon/estrato/fotos/amenidades). Cobertura parcial
+# vs el total del portal → la pasada se registra como INCOMPLETA (ver record_run),
+# así la regla de stale (deactivate_stale_listings) NUNCA da de baja los listings
+# que esta pasada no alcanza (solo da de baja tras 2 pasadas 'complete' = ≥95%).
 API_URL = "https://www.metrocuadrado.com"
-# La X-Api-Key es una key PÚBLICA de web-client: metrocuadrado la embebe en el HTML de su
-# home (`"apiKey":"..."`), su propio frontend la usa en cada request. NO es un secreto.
-API_KEY = os.getenv("METROCUADRADO_API_KEY", "").strip()  # opcional; si falta, se auto-extrae
-_EXTRACTED_KEY: str | None = None
+
+# tipo (API/DB) -> slug plural de la URL de resultados del portal
+_TIPO_URL_SLUG = {
+    "apartamento":   "apartamentos",
+    "apartaestudio": "apartaestudios",
+    "casa":          "casas",
+    "local":         "locales",
+    "oficina":       "oficinas",
+    "bodega":        "bodegas",
+    "lote":          "lotes",
+}
 
 
-def _require_api_key() -> str:
-    """Prioridad: env var si está; si no, auto-extrae la key pública del HTML del portal.
-    Así el scraper no depende de configurar un env ni de hardcodear un valor que el portal
-    puede rotar (se auto-cura). Cache por proceso.
-    """
-    global _EXTRACTED_KEY
-    if API_KEY:
-        return API_KEY
-    if _EXTRACTED_KEY:
-        return _EXTRACTED_KEY
-    import re
+def _find_balanced(s: str, start: int) -> str | None:
+    """Primer objeto {...} balanceado desde `start`. Sirve sobre el stream RSC
+    escapado: las llaves NO van escapadas (solo las comillas: \\")."""
+    i = s.find("{", start)
+    if i < 0:
+        return None
+    depth = 0
+    for j in range(i, len(s)):
+        c = s[j]
+        if c == "{":
+            depth += 1
+        elif c == "}":
+            depth -= 1
+            if depth == 0:
+                return s[i:j + 1]
+    return None
+
+
+def _extract_initial_results(html: str) -> dict | None:
+    """Saca initialResults{totalHits, results:[...]} del HTML de resultados. Viene
+    escapado dentro del stream RSC (\\"initialResults\\":{...}): se decodifican los
+    escapes de string JS (json.loads de la cadena) y luego se parsea el JSON."""
+    key = html.find(r'\"initialResults\"')
+    if key >= 0:
+        esc = _find_balanced(html, key)
+        if not esc:
+            return None
+        try:
+            return json.loads(json.loads('"' + esc + '"'))
+        except Exception:
+            return None
+    # fallback defensivo por si algún día viene sin escapar
+    key = html.find('"initialResults"')
+    if key < 0:
+        return None
+    raw = _find_balanced(html, key)
     try:
-        html = requests.get(API_URL, headers={"User-Agent": scraper_user_agent()}, timeout=20).text
-        # el HTML trae la key en JSON escapado dentro de un string JS: \"apiKey\":\"...\".
-        # Tolerar comillas/backslashes/espacios entre 'apiKey' y el valor.
-        m = re.search(r'apiKey[\\"\':\s]+([A-Za-z0-9]{30,})', html)
+        return json.loads(raw) if raw else None
+    except Exception:
+        return None
+
+
+def _norm_phone(raw) -> str | None:
+    """Teléfono → solo dígitos, sin prefijo país 57. El payload da el whatsapp con
+    57 (573028622656) y contactPhone sin él (3028622656); la ficha ambos sin él.
+    Normalizar para que el mismo oferente no se parta en varias llaves."""
+    d = re.sub(r"\D", "", str(raw or ""))
+    if d.startswith("57") and len(d) > 10:
+        d = d[2:]
+    return d or None
+
+
+def _company_name_from_html(html: str) -> str | None:
+    """Nombre de la agencia de una ficha MC. Vive en el payload RSC como
+    "companyName":"..." (escapado o no). Solo la ficha lo trae; los resultados no."""
+    for pat in (r'\\"companyName\\":\\"((?:[^\\"]|\\.)*?)\\"',
+                r'"companyName":"((?:[^"\\]|\\.)*?)"'):
+        m = re.search(pat, html)
         if m:
-            _EXTRACTED_KEY = m.group(1)
-            log.info("[metrocuadrado] X-Api-Key auto-extraída del HTML del portal")
-            return _EXTRACTED_KEY
-    except Exception as exc:
-        log.warning("[metrocuadrado] no pude auto-extraer la api key: %s", exc)
-    raise RuntimeError(
-        "METROCUADRADO_API_KEY no está en el env y no se pudo auto-extraer del HTML del "
-        "portal (¿cambió metrocuadrado.com?). Setear el env var como fallback."
-    )
-PAGE_SIZE = 50  # n.L=50, obligatorio — otras sizes retornan 0 resultados
+            try:
+                name = json.loads('"' + m.group(1) + '"')
+            except Exception:
+                name = m.group(1)
+            return (name or "").strip() or None
+    return None
+
+
+PAGE_SIZE = 60  # tamaño natural de la página de resultados del portal (~50-65)
 
 # Municipios del Valle de Aburrá — slug URL → nombre display
 MUNICIPIOS_VALLE: dict[str, str] = {
@@ -136,9 +198,8 @@ BASE_CONFIGS = [
 
 _BASE_HEADERS = {
     "User-Agent": scraper_user_agent(),
-    "Accept": "application/json, text/plain, */*",
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
     "Accept-Language": "es-CO,es;q=0.9,en;q=0.8",
-    "Content-Type": "application/json",
     "Referer": "https://www.metrocuadrado.com/",
 }
 
@@ -191,6 +252,15 @@ ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS anunciante_tipo 
 ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS moneda            TEXT;
 ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS precio_incluye_admin BOOLEAN;
 ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS area_tipo         TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS contacto_phone    TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS contacto_whatsapp TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS company_id        TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS company_name      TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS oferente_bucket   TEXT;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS num_contactos     INTEGER;
+ALTER TABLE raw.listings_metrocuadrado ADD COLUMN IF NOT EXISTS realtor_key       TEXT;
+CREATE INDEX IF NOT EXISTS idx_mq_company   ON raw.listings_metrocuadrado(company_id);
+CREATE INDEX IF NOT EXISTS idx_mq_realtor   ON raw.listings_metrocuadrado(realtor_key);
 CREATE INDEX IF NOT EXISTS idx_mq_tipo_op  ON raw.listings_metrocuadrado(tipo_operacion);
 CREATE INDEX IF NOT EXISTS idx_mq_tipo_inm ON raw.listings_metrocuadrado(tipo_inmueble);
 CREATE INDEX IF NOT EXISTS idx_mq_barrio   ON raw.listings_metrocuadrado(barrio_id);
@@ -208,7 +278,9 @@ INSERT INTO raw.listings_metrocuadrado
      amenidades, fecha_scraping, activo, raw_data,
      fecha_publicacion, dias_en_mercado, dedup_hash, fotos,
      barrio_id, last_seen_at, destacado, anunciante_tipo, moneda,
-     precio_incluye_admin, area_tipo)
+     precio_incluye_admin, area_tipo,
+     contacto_phone, contacto_whatsapp, company_id, company_name,
+     oferente_bucket, num_contactos, realtor_key)
 VALUES
     (%(fuente)s, %(tipo_operacion)s, %(tipo_inmueble)s, %(precio)s,
      %(area_m2)s, %(habitaciones)s, %(banos)s, %(direccion_raw)s,
@@ -217,7 +289,9 @@ VALUES
      %(amenidades)s, %(fecha_scraping)s, %(activo)s, %(raw_data)s,
      %(fecha_publicacion)s, %(dias_en_mercado)s, %(dedup_hash)s, %(fotos)s,
      %(barrio_id)s, NOW(), %(destacado)s, %(anunciante_tipo)s, %(moneda)s,
-     %(precio_incluye_admin)s, %(area_tipo)s)
+     %(precio_incluye_admin)s, %(area_tipo)s,
+     %(contacto_phone)s, %(contacto_whatsapp)s, %(company_id)s, %(company_name)s,
+     %(oferente_bucket)s, %(num_contactos)s, %(realtor_key)s)
 -- Identidad = (url, tipo_operacion), estable y sin precio. Una url de MC
 -- (murldetalle keyea por midinmueble) hostea venta Y arriendo del mismo
 -- inmueble, así que url sola fusionaría ambas operaciones -> (url,op). dedup_hash
@@ -253,7 +327,14 @@ ON CONFLICT (url, tipo_operacion) DO UPDATE SET
     anunciante_tipo   = COALESCE(EXCLUDED.anunciante_tipo, raw.listings_metrocuadrado.anunciante_tipo),
     moneda            = EXCLUDED.moneda,
     precio_incluye_admin = EXCLUDED.precio_incluye_admin,
-    area_tipo         = EXCLUDED.area_tipo;
+    area_tipo         = EXCLUDED.area_tipo,
+    contacto_phone    = COALESCE(EXCLUDED.contacto_phone, raw.listings_metrocuadrado.contacto_phone),
+    contacto_whatsapp = COALESCE(EXCLUDED.contacto_whatsapp, raw.listings_metrocuadrado.contacto_whatsapp),
+    company_id        = COALESCE(EXCLUDED.company_id, raw.listings_metrocuadrado.company_id),
+    company_name      = COALESCE(EXCLUDED.company_name, raw.listings_metrocuadrado.company_name),
+    oferente_bucket   = COALESCE(EXCLUDED.oferente_bucket, raw.listings_metrocuadrado.oferente_bucket),
+    num_contactos     = COALESCE(EXCLUDED.num_contactos, raw.listings_metrocuadrado.num_contactos),
+    realtor_key       = COALESCE(EXCLUDED.realtor_key, raw.listings_metrocuadrado.realtor_key);
 """
 
 MQ_CDN = "https://multimedia.metrocuadrado.com"
@@ -422,7 +503,23 @@ def _parse_listing(item: dict, tipo_inmueble: str, tipo_operacion: str,
     # Paid placement: the search API marks promoted cards with a badge.
     badge = item.get("badge")
     destacado = bool(badge) if badge is not None else None
-    anunciante_tipo = (item.get("mtipousuario") or item.get("userType") or None)
+    # OwnerType ('Inmobiliaria'/'Persona natural') es el tipo real del anunciante;
+    # mtipousuario/userType ya no vienen en el payload SPA.
+    anunciante_tipo = (item.get("OwnerType") or item.get("mtipousuario")
+                       or item.get("userType") or None)
+
+    # --- Atribución del inmueble a su realtor/agencia (del payload de resultados) ---
+    contacto_phone    = str(item.get("contactPhone") or "").strip() or None
+    contacto_whatsapp = str(item.get("whatsapp") or "").strip() or None
+    # midempresa = id estable de la inmobiliaria; vacío cuando es persona natural.
+    company_id    = str(item.get("midempresa") or "").strip() or None
+    # tipo de oferente (Inmobiliaria/Persona natural) ya va en anunciante_tipo (OwnerType)
+    oferente_bucket = str(item.get("moferente") or "").strip() or None  # RealEstate/Seller/Builder
+    num_contactos = _parse_int(item.get("mnumero_contactos"))
+    # Llave de atribución: company_id si es agencia; si no, teléfono normalizado del
+    # particular. Prefijo para no colisionar un id con un número de teléfono.
+    _ph = _norm_phone(contacto_phone or contacto_whatsapp)
+    realtor_key = f"co:{company_id}" if company_id else (f"ph:{_ph}" if _ph else None)
 
     raw_data = {
         "midinmueble":      item.get("midinmueble"),
@@ -487,6 +584,13 @@ def _parse_listing(item: dict, tipo_inmueble: str, tipo_operacion: str,
         "moneda":             moneda,
         "precio_incluye_admin": None,  # MC lists admin separately (commonExpenses)
         "area_tipo":          area_tipo,
+        "contacto_phone":     contacto_phone,
+        "contacto_whatsapp":  contacto_whatsapp,
+        "company_id":         company_id,
+        "company_name":       None,  # resuelto por ficha en _resolve_company_names
+        "oferente_bucket":    oferente_bucket,
+        "num_contactos":      num_contactos,
+        "realtor_key":        realtor_key,
         "dedup_hash":         calcular_dedup_hash(
             barrio_raw=barrio,
             tipo_inmueble=tipo_inmueble,
@@ -521,28 +625,28 @@ class MetrocuadradoScraper:
         self.since_date = since_date
         self.stats = RunStats("metrocuadrado")
         self.coverage: list[tuple[str, int | None, int, int]] = []  # (config_key, total_hits, seen, pages_failed)
+        self._company_names: dict[str, str | None] = {}  # company_id -> nombre (cache por run; None = ya intentado sin éxito)
         self._session = requests.Session()
-        self._session.headers.update({**_BASE_HEADERS, "X-Api-Key": _require_api_key()})
+        # SPA Next.js: los listings vienen server-rendered en el HTML (RSC), sin API key.
+        self._session.headers.update(_BASE_HEADERS)
 
     def _get_page(self, tipo_inmueble: str, tipo_operacion: str,
                   from_offset: int, city: str) -> dict | None:
-        params = {
-            "realEstateTypeList":     tipo_inmueble,
-            "realEstateBusinessList": tipo_operacion,
-            "city":                   city,
-            "from":                   from_offset,
-            "size":                   PAGE_SIZE,
-        }
-        resp = http_get(self._session, f"{API_URL}/rest-search/search", params=params,
-                        timeout=30, stats=self.stats)
+        # SPA Next.js: la paginación es client-side; sólo la página 1 viene
+        # server-rendered (ver nota de cabecera). Pedir offset>0 no trae más.
+        if from_offset > 0:
+            return {"totalHits": 0, "results": []}
+        slug = _TIPO_URL_SLUG.get(tipo_inmueble, tipo_inmueble)
+        url = f"{API_URL}/{slug}/{tipo_operacion}/{city}/"
+        resp = http_get(self._session, url, timeout=30, stats=self.stats)
         if resp is None:
-            log.error(f"HTTP error [{city}/{tipo_inmueble}/{tipo_operacion}] from={from_offset} (after retries)")
+            log.error(f"HTTP error [{city}/{tipo_inmueble}/{tipo_operacion}] (after retries)")
             return None
-        try:
-            return resp.json()
-        except ValueError as e:
-            log.error(f"JSON decode error [{city}/{tipo_inmueble}/{tipo_operacion}] from={from_offset}: {e}")
+        data = _extract_initial_results(resp.text)
+        if data is None:
+            log.error(f"initialResults no encontrado en HTML [{url}]")
             return None
+        return data
 
     def _delay(self) -> None:
         delay = random.uniform(self.delay_min, self.delay_max)
@@ -635,17 +739,62 @@ class MetrocuadradoScraper:
             all_results.extend(new_items)
             log.info(f"    +{len(new_items)} listings, {old_count} old (total {len(all_results)})")
 
-            if from_offset + PAGE_SIZE >= min(total_hits, 10000):
-                log.info(f"    Alcanzado el límite de la API o fin de resultados")
-                break
+            # SPA: sólo la página 1 es extraíble (paginación client-side). Cortamos
+            # aquí; la cobertura <95% marca la pasada INCOMPLETA y la regla de stale
+            # (deactivate_stale_listings) no da de baja lo que no alcanzamos.
+            break
 
-            if page_num < self.max_pages - 1:
-                self._delay()
-
+        self._resolve_company_names(all_results)
         self.coverage.append((config_key, total_hits, len(seen_urls), pages_failed))
         if total_hits and len(seen_urls) < 0.95 * min(total_hits, 10000) and not self.since_date:
             log.warning(f"    {config_key}: cobertura {len(seen_urls)}/{total_hits} — subir --max-pages")
         return all_results
+
+    def _seed_company_names(self) -> None:
+        """Siembra el cache con los company_id→company_name YA en DB (una vez por run).
+        Así sólo se pega a la ficha por agencias NUEVAS, no por todas cada noche
+        (menos carga y menos huella de scraping). Los nombres de agencia casi no
+        cambian; si alguno cambia, se recapta cuando esa agencia salga como nueva."""
+        if getattr(self, "_names_seeded", False):
+            return
+        self._names_seeded = True
+        try:
+            with get_connection() as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT DISTINCT company_id, company_name FROM raw.listings_metrocuadrado "
+                    "WHERE company_id IS NOT NULL AND company_name IS NOT NULL"
+                )
+                for cid, name in cur.fetchall():
+                    self._company_names.setdefault(cid, name)
+            log.info(f"[metrocuadrado] {len(self._company_names)} agencias sembradas desde DB")
+        except Exception as exc:  # DB opcional: si falla, se resuelve todo por ficha
+            log.warning(f"[metrocuadrado] no pude sembrar nombres de agencia: {exc}")
+
+    def _resolve_company_names(self, listings: list[dict]) -> None:
+        """Rellena company_name por cada listing. El nombre de la agencia sólo vive
+        en la ficha del inmueble, no en los resultados → 1 fetch por company_id
+        ÚNICO (acotado por nº de agencias, no de listings). Cache por run, sembrado
+        desde DB → sólo agencias nuevas pegan a la ficha; se cachea None en fallo
+        para no reintentar. Los particulares (sin company_id) no tienen nombre de
+        agencia → se saltan. El teléfono/company_id ya quedaron guardados aunque
+        este fetch falle."""
+        self._seed_company_names()
+        for l in listings:
+            cid = l.get("company_id")
+            if not cid:
+                continue
+            if cid not in self._company_names:
+                name = None
+                url = l.get("url")
+                if url:
+                    resp = http_get(self._session, url, timeout=30, stats=self.stats)
+                    if resp is not None:
+                        name = _company_name_from_html(resp.text)
+                    self._delay()
+                self._company_names[cid] = name
+                log.info(f"    agencia {cid} → {name!r}")
+            l["company_name"] = self._company_names.get(cid)
 
     def run(self, save_func=None) -> list[dict]:
         base = BASE_CONFIGS

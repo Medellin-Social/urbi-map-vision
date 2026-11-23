@@ -16,11 +16,16 @@ async def fetch_queue(conn, sources: list[str], limit: int, older_than: timedelt
     for s in sources:
         table, has_activo, _ = SOURCES[s]
         act = "AND activo IS NOT FALSE" if has_activo else ""
+        # pending_review rows ALWAYS re-queue (ignore older_than) and sort first: auto_retire needs a 'gone'
+        # confirmation < LINK_AUTO_RETIRE_EVIDENCE_HOURS (48h) old, so these must be re-checked every run or
+        # their evidence goes stale and they never retire (they're ~hundreds; the extra fetches are cheap).
         parts.append(f"""
-            SELECT u.url, '{s}'::text AS fuente, COALESCE(h.priority, 0) AS priority, h.last_checked_at
+            SELECT u.url, '{s}'::text AS fuente, COALESCE(h.priority, 0) AS priority, h.last_checked_at,
+                   (h.url_status = 'pending_review') IS TRUE AS pending  -- NULL (never-checked) -> false, not NULLS-FIRST
             FROM (SELECT url FROM {table} WHERE url ~ '^https?://' {act} GROUP BY url) u
             LEFT JOIN public.listing_link_health h ON h.url = u.url
-            WHERE h.url IS NULL OR h.priority > 0 OR h.last_checked_at < now() - $1::interval
+            WHERE h.url IS NULL OR h.priority > 0 OR h.url_status = 'pending_review'
+                  OR h.last_checked_at < now() - $1::interval
         """)
     if not parts:
         return []
@@ -28,7 +33,7 @@ async def fetch_queue(conn, sources: list[str], limit: int, older_than: timedelt
         SELECT url, fuente, priority FROM (
             SELECT DISTINCT ON (url) * FROM ({' UNION ALL '.join(parts)}) u ORDER BY url
         ) d
-        ORDER BY priority DESC, last_checked_at NULLS FIRST, url
+        ORDER BY pending DESC, priority DESC, last_checked_at NULLS FIRST, url
         LIMIT $2
     """
     rows = await conn.fetch(sql, *args)

@@ -3,7 +3,7 @@
 Público: precios, ocupación de una zona, próximo realtor de la rotación.
 Realtor: checkout (link de pago Stripe en GHL) y confirmación simulada (solo dev).
 Admin: asignar/liberar slots (incluye los 'gratis' del arranque) y ver cobertura.
-El slot de pago se activa por webhook (ghl_webhook: object_type "realtor_slot").
+El slot de pago se activa por webhook (ghl_webhook: object_type "realtor_preferido_slot").
 """
 from __future__ import annotations
 
@@ -40,7 +40,7 @@ async def _agente_activo(user: dict, pool) -> str:
 
 @router.get("/precios")
 async def precios(pool=Depends(get_pool)):
-    rows = await pool.fetch("SELECT zona_nivel, nivel, precio_mensual, es_ejemplo FROM realtor_slot_precio ORDER BY 1, 2")
+    rows = await pool.fetch("SELECT zona_nivel, nivel, precio_mensual, es_ejemplo FROM realtor_preferido_precio ORDER BY 1, 2")
     return {"capacidad": svc.CAPACIDAD, "precios": [dict(r) for r in rows]}
 
 
@@ -148,12 +148,12 @@ async def admin_cobertura(nivel: Optional[Nivel] = None, admin: dict = Depends(r
         await svc.vencer_slots(conn)
         zonas = await conn.fetch(
             "SELECT zona_nivel, zona_codigo, COUNT(*)::int AS ocupados, "
-            "COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos FROM realtor_slot "
+            "COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos FROM realtor_preferido_slot "
             "WHERE estado='activo' AND ($1::text IS NULL OR zona_nivel=$1) GROUP BY 1,2 ORDER BY 1,2", nivel)
         try:
             sin = await conn.fetch(
                 "SELECT b.id::text AS zona_codigo, INITCAP(LOWER(b.nombre)) AS nombre FROM raw.barrios b "
-                "WHERE b.municipio ILIKE '%medellin%' AND NOT EXISTS (SELECT 1 FROM realtor_slot s "
+                "WHERE b.municipio ILIKE '%medellin%' AND NOT EXISTS (SELECT 1 FROM realtor_preferido_slot s "
                 "WHERE s.zona_nivel='barrio' AND s.zona_codigo=b.id::text AND s.estado='activo') ORDER BY b.nombre")
             total = await conn.fetchval("SELECT COUNT(*) FROM raw.barrios WHERE municipio ILIKE '%medellin%'")
         except Exception:
@@ -169,10 +169,10 @@ async def zonas(request: Request, pool=Depends(get_pool)):
     from api.routers.admin import _MUNICIPIO_A_PSEUDO_COMUNA
     async with pool.acquire() as conn:
         precios = {(r["zona_nivel"], r["nivel"]): float(r["precio_mensual"])
-                   for r in await conn.fetch("SELECT zona_nivel, nivel, precio_mensual FROM realtor_slot_precio")}
+                   for r in await conn.fetch("SELECT zona_nivel, nivel, precio_mensual FROM realtor_preferido_precio")}
         ocup = {(r["zona_nivel"], r["zona_codigo"]): r["pagos"] for r in await conn.fetch(
             "SELECT zona_nivel, zona_codigo, COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos "
-            "FROM realtor_slot WHERE estado='activo' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) GROUP BY 1,2")}
+            "FROM realtor_preferido_slot WHERE estado='activo' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) GROUP BY 1,2")}
         try:
             niv = {(r["zona_nivel"], r["zona_codigo"]): r["nivel"] for r in await conn.fetch(
                 "SELECT zona_nivel, zona_codigo::text AS zona_codigo, nivel FROM analytics.zonas_nivel_precio")}

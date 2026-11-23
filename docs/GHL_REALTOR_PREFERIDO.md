@@ -1,6 +1,6 @@
 # GHL — qué crear para Realtor Preferido
 
-> Todos los precios son **EJEMPLO** (COP/mes por slot). Cambiar en la tabla `realtor_slot_precio` sin tocar código.
+> Todos los precios son **EJEMPLO** (COP/mes por slot). Cambiar en la tabla `realtor_preferido_precio` sin tocar código.
 > Reglas: 4 slots por barrio, 8 por comuna, rotación en orden fijo, dueño sin agente no paga, cobro Stripe vía GHL.
 
 ## 1. Stripe + productos (Payments → Products)
@@ -76,6 +76,6 @@ Un pagador desplaza al gratis solo cuando la zona está llena.
 3. Workflow GHL tras el pago: POST `/api/v1/webhook/ghl` con `object_type: "realtor_slot"`, header `X-Webhook-Secret`, y `pago_ref`, email, zona, meses. Luego agregar el tag **Preferred** al contacto.
 4. Rama 409/404 del webhook: tarea + reembolso manual.
 5. Marcar el realtor de la casa: `POST /api/v1/realtor-preferido/admin/casa` `{agent_id}` (el cron siembra 1 gratis por barrio).
-6. Reemplazar los precios de ejemplo en `realtor_slot_precio` (`es_ejemplo=TRUE`).
+6. Reemplazar los precios de ejemplo en `realtor_preferido_precio` (`es_ejemplo=TRUE`).
 
 Flujo: landing → `/checkout` → GHL/Stripe → webhook → slot activo → cron diario (`realtor_slots`) vence, sincroniza tier y avisa.

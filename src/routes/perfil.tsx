@@ -35,6 +35,7 @@ import { useT } from "@/lib/i18n";
 import { useFavoritos, useToggleFavorito, useHistorial } from "@/hooks/useUser";
 import { useFavoritosListings, useFavoritosListingsFull } from "@/hooks/useFavoritosListings";
 import { formatCOP } from "@/lib/format";
+import { getSearches, removeSearch, describeSearch, type SavedSearch } from "@/lib/searchHistory";
 
 export const Route = createFileRoute("/perfil")({
   head: () => seo({ title: "Mi perfil · Medellín Social", description: "Tu cuenta en Medellín Social.", noindex: true }),
@@ -58,14 +59,19 @@ function PerfilRoute() {
 
 type Tab = "cuenta" | "inmuebles" | "busqueda" | "inversor" | "favoritos" | "historial";
 
-const TABS: { id: Tab; label: string; Icon: typeof UserIcon }[] = [
+// `consumer`: concepto de persona-normal (intención de búsqueda / perfil
+// inversionista). HOY oculto para todos (decisión usuario nov-2026). El flag
+// queda para re-habilitar sin re-cablear: borrar el filtro de VISIBLE_TABS.
+const TABS: { id: Tab; label: string; Icon: typeof UserIcon; consumer?: boolean }[] = [
   { id: "cuenta", label: "Cuenta", Icon: UserIcon },
   { id: "inmuebles", label: "Tus inmuebles", Icon: Building2 },
-  { id: "busqueda", label: "Perfil de búsqueda", Icon: Search },
-  { id: "inversor", label: "Perfil inversor", Icon: TrendingUp },
+  { id: "busqueda", label: "Perfil de búsqueda", Icon: Search, consumer: true },
+  { id: "inversor", label: "Perfil inversor", Icon: TrendingUp, consumer: true },
   { id: "favoritos", label: "Favoritos", Icon: Heart },
   { id: "historial", label: "Historial", Icon: History },
 ];
+
+const VISIBLE_TABS = TABS.filter((t) => !t.consumer);
 
 function PerfilPage() {
   const [tab, setTab] = useState<Tab>(() => {
@@ -80,6 +86,11 @@ function PerfilPage() {
     window.addEventListener("medellin-social:user", sync);
     return () => window.removeEventListener("medellin-social:user", sync);
   }, []);
+
+  // Deep-link a un tab oculto (?tab=inversor) → cae a "cuenta".
+  useEffect(() => {
+    if (!VISIBLE_TABS.some((t) => t.id === tab)) setTab("cuenta");
+  }, [tab]);
 
   if (!user) return null;
 
@@ -102,7 +113,7 @@ function PerfilPage() {
         <div className="mt-6 grid gap-6 md:grid-cols-[240px_1fr]">
           {/* Sidebar tabs */}
           <aside className="flex flex-row gap-2 overflow-x-auto md:flex-col md:overflow-visible">
-            {TABS.map((t) => {
+            {VISIBLE_TABS.map((t) => {
               const active = tab === t.id;
               return (
                 <button
@@ -165,7 +176,8 @@ function ProfileHeader({ user }: { user: UrbiUser }) {
   const { data: favs } = useFavoritos();
   const { data: hist } = useHistorial();
   const initials = user.name.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
-  const perfilInfo = user.perfilBusqueda ? BUSQUEDA_OPTIONS.find((o) => o.value === user.perfilBusqueda) : null;
+  // Badge de perfil de búsqueda oculto (tab deshabilitado para todos, nov-2026).
+  const perfilInfo = null as (typeof BUSQUEDA_OPTIONS)[number] | null;
   const footprint = zonaFootprint(favs ?? []);
   const maxCount = footprint[0]?.[1] ?? 1;
 
@@ -624,6 +636,7 @@ const TIPO_LABEL: Record<string, string> = { arriendo: "Arriendo", venta: "Venta
 
 type MisListing = {
   id: string;
+  map_id: number | null;
   tipo_operacion: string | null;
   tipo_inmueble: string | null;
   precio_cop: number | null;
@@ -705,6 +718,13 @@ function InmueblesTab() {
                     <span><strong className="text-[#111418]">{l.vistas_30d ?? 0}</strong> vistas (30d)</span>
                     <span><strong className="text-[#111418]">{l.favoritos ?? 0}</strong> guardados</span>
                   </div>
+                  {/* Solo publicados están en el mapa; abre el drawer (info) + resalta el pin. */}
+                  {l.estado === "publicado" && l.map_id != null && (
+                    <a href={`/map?listing=${l.map_id}`}
+                      className="mt-3 block rounded-lg border border-[#E5E0D5] py-2 text-center text-[11px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]">
+                      Ver en el mapa →
+                    </a>
+                  )}
                 </div>
               </div>
             );
@@ -834,12 +854,52 @@ const HISTORIAL_ICON: Record<string, string> = {
   favorito: "⭐",
 };
 
+function SavedSearches() {
+  const [searches, setSearches] = useState<SavedSearch[]>([]);
+  useEffect(() => {
+    const sync = () => setSearches(getSearches());
+    sync();
+    window.addEventListener("search-history-changed", sync);
+    return () => window.removeEventListener("search-history-changed", sync);
+  }, []);
+
+  if (searches.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <SectionTitle title="Búsquedas guardadas" hint="Los filtros que aplicaste en el mapa. Toca para retomarlos." />
+      <div className="space-y-2">
+        {searches.map((s) => (
+          <div key={s.id} className="flex items-center justify-between gap-3 rounded-xl border border-[#E5E0D5] bg-white px-3.5 py-2.5 transition hover:border-[#0F8A4F]/30">
+            <a href={`/map?restore=${s.id}`} className="flex min-w-0 flex-1 items-center gap-3">
+              <span className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[#E7F4EC] text-sm">🔍</span>
+              <span className="min-w-0">
+                <span className="block truncate text-sm font-medium text-[#111418]">{describeSearch(s.filters)}</span>
+                <span className="block text-[11px] text-[#6E726E]">{relativeTime(s.createdAt)}</span>
+              </span>
+            </a>
+            <button
+              onClick={() => removeSearch(s.id)}
+              title="Quitar búsqueda"
+              className="shrink-0 text-[#6E726E] transition hover:text-[#CE1126]"
+            >
+              <Trash2 className="h-4 w-4" />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HistorialTab({ user: _user }: { user: UrbiUser }) {
   const { data: items = [], isLoading, isError } = useHistorial();
 
   return (
-    <div className="space-y-5">
-      <SectionTitle title="Historial" hint="Tus últimas simulaciones y búsquedas (últimas 20)." />
+    <div className="space-y-8">
+      <SavedSearches />
+      <div className="space-y-5">
+      <SectionTitle title="Actividad reciente" hint="Tus últimas simulaciones y vistas (últimas 20)." />
       {isLoading ? (
         <div className="py-8 text-center text-sm text-muted-foreground">Cargando historial...</div>
       ) : isError ? (
@@ -878,6 +938,7 @@ function HistorialTab({ user: _user }: { user: UrbiUser }) {
           })}
         </div>
       )}
+      </div>
     </div>
   );
 }
