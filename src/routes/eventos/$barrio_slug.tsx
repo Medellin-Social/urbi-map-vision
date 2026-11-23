@@ -8,6 +8,7 @@ import { EventCardMini, EventCardFeatured, type EventoData } from '@/components/
 import { API_BASE_URL } from '@/config/api'
 import { CATEGORIAS_EVENTOS } from '@/lib/categorias_comunidad'
 import { FilterDropdown, FilterToggle } from '@/components/comunidad/FilterDropdown'
+import { ComunaSelect } from '@/components/comunidad/ComunaSelect'
 import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute('/eventos/$barrio_slug')({
@@ -129,9 +130,12 @@ function EventosPage() {
             <p style={{ color: K.teal, fontWeight: 700, fontSize: '.78rem', textTransform: 'uppercase', letterSpacing: '1.5px', margin: '0 0 8px' }}>
               {t('Eventos', 'Events')}
             </p>
-            <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: '0 0 6px' }}>
-              {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
-            </h1>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '0 0 6px' }}>
+              <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(1.8rem,4vw,2.8rem)', letterSpacing: '-.5px', color: K.ink, margin: 0 }}>
+                {t(`En ${barrio.nombre}`, `In ${barrio.nombre}`)}
+              </h1>
+              <ComunaSelect section="eventos" />
+            </div>
             <p style={{ color: K.muted, fontSize: '1rem', margin: 0 }}>
               {t('Todos los eventos, en un solo lugar.', 'Every event, in one place.')}
               {total > 0 && <span style={{ marginLeft: 8, fontWeight: 700, color: K.coral }}>{total} {total === 1 ? t('evento', 'event') : t('eventos', 'events')}</span>}
