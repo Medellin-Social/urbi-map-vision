@@ -1,6 +1,7 @@
 """Subscription management — Pro and Agente plans."""
 from __future__ import annotations
 
+import json
 import logging
 import os
 from datetime import datetime, timedelta, timezone
@@ -8,7 +9,7 @@ from typing import Literal, Optional
 
 from api.limiter import limiter
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.config.planes import PLANES
 from api.db import get_pool
@@ -124,12 +125,28 @@ class AgenteRegistroIn(BaseModel):
     nombre: str
     telefono: str
     # Programa de agentes (doc §Cómo inscribirte, paso 1): perfil profesional y agencia.
+    # Estos campos alimentan el perfil público /agentes/{id} (mismos que muestra la ficha).
     bio: Optional[str] = Field(default=None, max_length=2000)
+    titulo: Optional[str] = Field(default=None, max_length=160)
+    foto_url: Optional[str] = Field(default=None, max_length=1000)
     anios_experiencia: Optional[int] = Field(default=None, ge=0, le=80)
     zonas_servicio: list[str] = Field(default_factory=list, max_length=20)
+    idiomas: list[str] = Field(default_factory=list, max_length=10)
+    especialidades: list[str] = Field(default_factory=list, max_length=10)
+    licencias: list[str] = Field(default_factory=list, max_length=20)  # "Entidad · Nº", una por ítem
     agencia_tipo: Literal["independiente", "agencia"] = "independiente"
     agencia_nombre: Optional[str] = Field(default=None, max_length=160)
     agencia_nit: Optional[str] = Field(default=None, max_length=40)
+
+    @field_validator("foto_url")
+    @classmethod
+    def _foto(cls, v: Optional[str]) -> Optional[str]:
+        v = (v or "").strip()
+        if not v:
+            return None
+        if not v.startswith("https://"):
+            raise ValueError("La foto debe ser un enlace https://")
+        return v
 
 
 @router.post("/agente/registro")
@@ -173,6 +190,9 @@ async def registro_agente(
     if body.agencia_tipo == "agencia" and not (body.agencia_nombre or "").strip():
         raise HTTPException(422, "Indica el nombre de tu agencia")
     zonas = [z.strip()[:80] for z in body.zonas_servicio if z and z.strip()]
+    idiomas = [s.strip()[:40] for s in body.idiomas if s and s.strip()]
+    especialidades = [s.strip()[:40] for s in body.especialidades if s and s.strip()]
+    licencias = [s.strip()[:200] for s in body.licencias if s and s.strip()]
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Perfil: solo completa campos vacíos o mientras está pendiente (no pisa un perfil aprobado).
@@ -182,9 +202,16 @@ async def registro_agente(
                        anios_experiencia = CASE WHEN estado = 'pendiente' OR anios_experiencia IS NULL
                                                 THEN COALESCE($3, anios_experiencia) ELSE anios_experiencia END,
                        zonas_servicio = CASE WHEN cardinality($4::text[]) > 0 THEN $4::text[] ELSE zonas_servicio END,
+                       titulo = CASE WHEN estado = 'pendiente' OR titulo IS NULL THEN COALESCE($5, titulo) ELSE titulo END,
+                       foto_url = CASE WHEN estado = 'pendiente' OR foto_url IS NULL THEN COALESCE($6, foto_url) ELSE foto_url END,
+                       idiomas = CASE WHEN cardinality($7::text[]) > 0 THEN $7::text[] ELSE idiomas END,
+                       especialidades = CASE WHEN cardinality($8::text[]) > 0 THEN $8::text[] ELSE especialidades END,
+                       licencias = CASE WHEN jsonb_array_length($9::jsonb) > 0 THEN $9::jsonb ELSE licencias END,
                        updated_at = now()
                    WHERE id = $1""",
-                row["id"], (body.bio or "").strip() or None, body.anios_experiencia, zonas)
+                row["id"], (body.bio or "").strip() or None, body.anios_experiencia, zonas,
+                (body.titulo or "").strip() or None, body.foto_url,
+                idiomas, especialidades, json.dumps(licencias))
             # Agencia declarada: se crea SIN verificar (el equipo la verifica). Nunca se une a una
             # agencia existente por nombre — eso permitiría reclamar la agencia de otro.
             ya = await conn.fetchval("SELECT 1 FROM agency_member WHERE agent_id = $1", row["id"])

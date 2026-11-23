@@ -67,7 +67,7 @@ function CertificacionPage() {
               <p style={{ fontSize: 14, color: K.ink, margin: "0 0 12px" }}>
                 {t("Tu cuenta de agente debe estar aprobada antes de solicitar la certificación.", "Your agent account must be approved before applying for certification.")}
               </p>
-              <Link to="/agentes/mi-programa" style={pBtn()}>{t("Ver mi programa", "View my program")}</Link>
+              <Link to="/agentes/mi-programa" search={{ nuevo: undefined }} style={pBtn()}>{t("Ver mi programa", "View my program")}</Link>
             </div>
           ) : !e.certificacion || e.certificacion.examen_estado === "no_aprobado" || e.certificacion.revision_estado === "no_aprobado" ? (
             <>

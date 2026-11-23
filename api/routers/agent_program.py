@@ -11,7 +11,6 @@ Los cobros SOLO se aplican desde el webhook GHL (object_type "agent_program")
 o desde confirmar-simulado en DEV. Los documentos de certificación son enlaces
 privados (nunca se suben al bucket público) y no salen en endpoints públicos.
 """
-from __future__ import annotations
 
 import logging
 import os

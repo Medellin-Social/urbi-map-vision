@@ -43,6 +43,7 @@ export const API_ENDPOINTS = {
   listingEntorno: (id: number) => `${API_BASE_URL}/listings/${id}/entorno`,
   listingAgente: (id: number) => `${API_BASE_URL}/listings/${id}/agente`,
   agentesDirectorio: `${API_BASE_URL}/listings/agentes`,
+  agentesBuscar: (qs: string) => `${API_BASE_URL}/listings/agentes/buscar${qs ? `?${qs}` : ""}`,
   agentePerfil: (id: string) => `${API_BASE_URL}/listings/agentes/${id}`,
   agenteResenas: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/resenas`,
   agenteContactar: (id: string) => `${API_BASE_URL}/listings/agentes/${id}/contactar`,

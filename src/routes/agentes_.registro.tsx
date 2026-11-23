@@ -31,15 +31,27 @@ const input: React.CSSProperties = {
 };
 const label: React.CSSProperties = { display: "grid", gap: 6, fontSize: 13, fontWeight: 700, color: K.ink };
 
+// Mismos valores que filtra el directorio (/agentes) y etiqueta el perfil (/agentes/$id).
+const IDIOMAS = ["Español", "Inglés", "Portugués", "Francés"];
+const ESPECIALIDADES: [string, string][] = [
+  ["compra", "Compra"], ["venta", "Venta"], ["arriendo", "Arriendo"],
+  ["inversion", "Inversión"], ["extranjeros", "Compradores extranjeros"], ["airbnb", "Airbnb / renta corta"],
+];
+
 function AgenteRegistroPage() {
   const t = useT();
   const navigate = useNavigate();
   const [paso, setPaso] = useState(0);
   const [nombre, setNombre] = useState("");
   const [telefono, setTelefono] = useState("");
+  const [titulo, setTitulo] = useState("");
+  const [fotoUrl, setFotoUrl] = useState("");
   const [bio, setBio] = useState("");
   const [anios, setAnios] = useState("");
   const [zonas, setZonas] = useState("");
+  const [idiomas, setIdiomas] = useState<string[]>([]);
+  const [especialidades, setEspecialidades] = useState<string[]>([]);
+  const [licencias, setLicencias] = useState("");
   const [agenciaTipo, setAgenciaTipo] = useState<"independiente" | "agencia">("independiente");
   const [agenciaNombre, setAgenciaNombre] = useState("");
   const [agenciaNit, setAgenciaNit] = useState("");
@@ -48,11 +60,14 @@ function AgenteRegistroPage() {
 
   const PASOS = [t("Perfil", "Profile"), t("Agencia", "Agency"), t("Confirmar", "Confirm")];
 
+  const toggle = (arr: string[], v: string) => arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v];
+
   function siguiente() {
     setError("");
     if (paso === 0) {
       if (!nombre.trim() || !telefono.trim()) { setError(t("Nombre y teléfono son obligatorios.", "Name and phone are required.")); return; }
       if (anios && (Number(anios) < 0 || Number(anios) > 80)) { setError(t("Años de experiencia inválidos.", "Invalid years of experience.")); return; }
+      if (fotoUrl.trim() && !/^https:\/\//i.test(fotoUrl.trim())) { setError(t("La foto debe ser un enlace https://", "The photo must be an https:// link.")); return; }
     }
     if (paso === 1 && agenciaTipo === "agencia" && !agenciaNombre.trim()) {
       setError(t("Indica el nombre de tu agencia.", "Enter your agency's name.")); return;
@@ -67,8 +82,11 @@ function AgenteRegistroPage() {
         method: "POST",
         body: JSON.stringify({
           nombre: nombre.trim(), telefono: telefono.trim(), bio: bio.trim() || null,
+          titulo: titulo.trim() || null, foto_url: fotoUrl.trim() || null,
           anios_experiencia: anios ? Number(anios) : null,
           zonas_servicio: zonas.split(",").map((z) => z.trim()).filter(Boolean).slice(0, 20),
+          idiomas, especialidades,
+          licencias: licencias.split("\n").map((l) => l.trim()).filter(Boolean).slice(0, 20),
           agencia_tipo: agenciaTipo,
           agencia_nombre: agenciaTipo === "agencia" ? agenciaNombre.trim() : null,
           agencia_nit: agenciaTipo === "agencia" ? agenciaNit.trim() || null : null,
@@ -114,11 +132,50 @@ function AgenteRegistroPage() {
                 <label style={label}>{t("Teléfono (WhatsApp)", "Phone (WhatsApp)")}
                   <input style={input} type="tel" value={telefono} onChange={(e) => setTelefono(e.target.value)} autoComplete="tel" maxLength={40} />
                 </label>
+                <label style={label}>{t("Título profesional (opcional)", "Professional title (optional)")}
+                  <input style={input} value={titulo} onChange={(e) => setTitulo(e.target.value)} maxLength={160}
+                    placeholder={t("Ej. Agente senior · El Poblado", "e.g. Senior agent · El Poblado")} />
+                </label>
+                <label style={label}>{t("Foto de perfil (enlace, opcional)", "Profile photo (link, optional)")}
+                  <input style={input} type="url" value={fotoUrl} onChange={(e) => setFotoUrl(e.target.value)} maxLength={1000}
+                    placeholder="https://…" />
+                  <span style={{ fontSize: 12, fontWeight: 400, color: K.muted }}>{t("Pega el enlace a tu foto (https://). La subida de archivo llega pronto.", "Paste a link to your photo (https://). File upload coming soon.")}</span>
+                </label>
                 <label style={label}>{t("Años de experiencia (opcional)", "Years of experience (optional)")}
                   <input style={input} type="number" min={0} max={80} value={anios} onChange={(e) => setAnios(e.target.value)} />
                 </label>
                 <label style={label}>{t("Zonas donde trabajas (separadas por coma)", "Areas where you work (comma-separated)")}
                   <input style={input} value={zonas} onChange={(e) => setZonas(e.target.value)} maxLength={600} />
+                </label>
+                <fieldset style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+                  <legend style={{ ...label, marginBottom: 2 }}>{t("Idiomas", "Languages")}</legend>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {IDIOMAS.map((v) => {
+                      const on = idiomas.includes(v);
+                      return (
+                        <button key={v} type="button" onClick={() => setIdiomas((a) => toggle(a, v))}
+                          style={{ padding: "7px 13px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                            background: on ? K.teal : "#fff", color: on ? "#fff" : K.ink, border: `1px solid ${on ? K.teal : K.line}` }}>{v}</button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <fieldset style={{ border: "none", padding: 0, margin: 0, display: "grid", gap: 8 }}>
+                  <legend style={{ ...label, marginBottom: 2 }}>{t("Especialidades", "Specialties")}</legend>
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                    {ESPECIALIDADES.map(([v, lab]) => {
+                      const on = especialidades.includes(v);
+                      return (
+                        <button key={v} type="button" onClick={() => setEspecialidades((a) => toggle(a, v))}
+                          style={{ padding: "7px 13px", borderRadius: 999, fontSize: 13, fontWeight: 700, cursor: "pointer", fontFamily: "inherit",
+                            background: on ? K.teal : "#fff", color: on ? "#fff" : K.ink, border: `1px solid ${on ? K.teal : K.line}` }}>{lab}</button>
+                      );
+                    })}
+                  </div>
+                </fieldset>
+                <label style={label}>{t("Certificaciones y licencias (una por línea)", "Certifications and licenses (one per line)")}
+                  <textarea style={{ ...input, minHeight: 70, resize: "vertical" }} value={licencias} onChange={(e) => setLicencias(e.target.value)} maxLength={2000}
+                    placeholder={t("Ej. Lonja de Medellín · Matrícula 12345", "e.g. Medellín Realtors Board · License 12345")} />
                 </label>
                 <label style={label}>{t("Sobre ti (opcional)", "About you (optional)")}
                   <textarea style={{ ...input, minHeight: 90, resize: "vertical" }} value={bio} onChange={(e) => setBio(e.target.value)} maxLength={2000} />

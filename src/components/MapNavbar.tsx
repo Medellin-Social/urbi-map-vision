@@ -383,7 +383,7 @@ export function MapNavbar({ activeTab, onTabChange, mlsBarrio, mlsTotal, onBack 
                   {isAgente && (
                     <Link to="/realtor/dashboard" onClick={() => setAccountOpen(false)} style={accountItemStyle}>Panel de agente</Link>
                   )}
-                  <Link to="/agentes/mi-programa" onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mi programa de agente</Link>
+                  <Link to="/agentes/mi-programa" search={{ nuevo: undefined }} onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mi programa de agente</Link>
                   <Link to="/planes" search={{ audiencia: isAgente ? "agente" : undefined }} onClick={() => setAccountOpen(false)} style={accountItemStyle}>Mi plan</Link>
 
                   <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 14px", borderTop: `1px solid ${C.border}` }}>
