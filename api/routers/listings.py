@@ -1797,7 +1797,9 @@ _ORDEN_SQL = {
 # Agregados por agente (sin N+1): agencia, reseñas, listings activos, cierres 12m, zonas.
 _AGENTE_CARD_BASE = """
     SELECT a.id::text, COALESCE(a.ciudad_id, 1) AS ciudad_id, a.slug, a.nombre, a.foto_url, a.telefono,
-           COALESCE(a.verificado, false) AS verificado,
+           -- a.verificado no existe en ninguna migración (500 en /agentes/buscar); el
+           -- flag real es a.certificado (migr 0130), igual que _AGENTE_PERFIL_SQL.
+           COALESCE(a.certificado, false) AS verificado,
            left(a.bio, 180) AS bio_corta, a.anios_experiencia,
            COALESCE(a.idiomas, '{}') AS idiomas, COALESCE(a.especialidades, '{}') AS especialidades,
            agcy.agencia_nombre, COALESCE(agcy.agencia_verificada, false) AS agencia_verificada, agcy.agencia_logo,
