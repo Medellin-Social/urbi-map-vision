@@ -4,6 +4,7 @@ import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
+import { GraduationCap } from '@/lib/icons'
 import { auth } from '../../lib/auth'
 import { K as TOKENS } from "@/design/tokens";
 
@@ -314,6 +315,26 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               </a>
             ))}
           </div>
+
+          {/* Tutorial de la página — solo donde hay tour montado (/ y /map).
+             Botón único, siempre visible (el tour lo spotlightea en su último paso);
+             el label se oculta en móvil, el ícono queda. */}
+          {(path === '/' || path === '/map') && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
+              data-tour={path === '/' ? 'tour-replay-home' : 'tour-replay'}
+              aria-label={path === '/' ? t('Tutorial del sitio', 'Site tutorial') : t('Tutorial de la página', 'Page tutorial')}
+              title={path === '/' ? t('Tutorial del sitio', 'Site tutorial') : t('Tutorial de la página', 'Page tutorial')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
+                borderRadius: 999, padding: '5px 11px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+              }}
+            >
+              <GraduationCap size={15} style={{ color: K.amarillo }} />
+              <span className="desktop-only">{t('Tutorial', 'Tutorial')}</span>
+            </button>
+          )}
 
           {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
           <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
