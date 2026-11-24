@@ -19,6 +19,7 @@ from api.services.asignador_service import AsignadorError, sweep_asignados_venci
 from api.services.listing_service import TRANSICIONES_VALIDAS, EstadoError, datos_minimos_completos
 from api.services.moderacion_service import aprobar
 from api.utils import ghl_client
+from api.utils.email import send_email, _wrap, esc
 from api.utils.storage import read_upload_bounded, upload_file
 
 from api.services.trm_service import get_usd_rate
@@ -699,6 +700,44 @@ async def subir_fotos(
     return {"id": listing_id, "fotos": urls}
 
 
+# Gap C: avisar al propietario cuando su inmueble se publica o se verifica.
+# Email del owner: listing.owner_id → usuarios.email; fallback listing.email_contacto.
+_OWNER_EVENTO = {
+    "publicado":  ("¡Tu inmueble ya está publicado!", "fue <strong>publicado en el mapa</strong> de Medellín Social y ya es visible para compradores."),
+    "verificado": ("Tu inmueble obtuvo el sello «Verificada»", "pasó la verificación de documentos y ahora muestra el <strong>sello «Verificada»</strong>, que genera más confianza en los compradores."),
+}
+
+async def _notify_owner_listing(pool, listing_id: str, evento: str) -> None:
+    titulo_msg = _OWNER_EVENTO.get(evento)
+    if not titulo_msg:
+        return
+    titulo, detalle = titulo_msg
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(u.email, l.email_contacto) AS email,
+                       COALESCE(u.nombre, l.nombre_contacto, 'propietario') AS nombre,
+                       COALESCE(l.titulo, 'tu inmueble') AS titulo
+                FROM listing l
+                LEFT JOIN owner o ON o.id = l.owner_id
+                LEFT JOIN usuarios u ON u.id = o.usuario_id
+                WHERE l.id = $1
+                """,
+                listing_id,
+            )
+        if not row or not row["email"]:
+            return
+        html = _wrap(f"""
+          <h3 style="color:#1D9E75">{esc(titulo)}</h3>
+          <p style="font-size:14px;color:#1A1208;margin-bottom:8px">Hola <strong>{esc(row['nombre'])}</strong>,</p>
+          <p style="font-size:14px;color:#1A1208">Tu inmueble <strong>{esc(row['titulo'])}</strong> {detalle}</p>
+        """)
+        await send_email(row["email"], titulo, html)
+    except Exception:
+        log.exception("notify_owner: fallo avisando %s de listing %s", evento, listing_id)
+
+
 @router.post("/asignados/{intake_id}/publicar")
 async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     """El realtor confirma los datos y publica al mapa (borrador → publicado).
@@ -747,6 +786,8 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
         await aprobar(listing_obj, str(agent.id), pool)  # realtor = moderador
     except EstadoError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    # Gap C: avisar al owner. aprobar() publica + verifica → un solo evento al dueño.
+    await _notify_owner_listing(pool, str(row["listing_id"]), "publicado")
     return {"listing_id": str(row["listing_id"]), "estado": "publicado"}
 
 

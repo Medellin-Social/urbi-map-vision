@@ -336,12 +336,17 @@ async def verificar_item_endpoint(
     verificado = False
     if completo and await checklist_verificado(str(row["intake_id"]), pool):
         async with pool.acquire() as conn:
-            result = await conn.execute(
+            lid = await conn.fetchval(
                 "UPDATE listing l SET verificado = TRUE, updated_at = NOW() "
-                "FROM intake i WHERE i.id = $1 AND l.id = i.listing_id AND l.verificado = FALSE",
+                "FROM intake i WHERE i.id = $1 AND l.id = i.listing_id AND l.verificado = FALSE "
+                "RETURNING l.id::text",
                 str(row["intake_id"]),
             )
-        verificado = result.split()[-1] != "0"
+        verificado = lid is not None
+        if verificado:
+            # Gap C: avisar al owner que su inmueble obtuvo el sello "Verificada".
+            from api.routers.realtor import _notify_owner_listing
+            await _notify_owner_listing(pool, lid, "verificado")
 
     return {"id": item_id, "estado": req.estado, "checklist_completo": completo,
             "listing_verificado": verificado}
