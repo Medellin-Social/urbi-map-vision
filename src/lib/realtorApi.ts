@@ -267,6 +267,16 @@ export type DDChecklist = {
   completo: boolean;
 };
 
+// Cross-check de plausibilidad catastral (comuna+tipo). Señal, no identidad.
+export type Plausibilidad = {
+  estado: "consistente" | "revisar" | "sin_datos";
+  motivo?: string;
+  comuna?: string;
+  avaluo_m2_catastro?: number | null;
+  ratio_precio_catastro?: number | null;
+  problemas?: string[];
+};
+
 export type Interesado = {
   nombre: string | null;
   email: string;
@@ -333,6 +343,8 @@ export interface RealtorDashboardApi {
   putDisponibilidad(franjas: Franja[]): Promise<void>;
   /** GET /api/v1/intake/:id/due-diligence */
   getDueDiligence(intakeId: string): Promise<DDChecklist>;
+  /** GET /api/v1/intake/:id/plausibilidad (cross-check catastral) */
+  getPlausibilidad(intakeId: string): Promise<Plausibilidad>;
   /** POST /api/v1/due-diligence/:itemId/verificar */
   verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string, evidencia?: string): Promise<void>;
   /** POST /api/v1/due-diligence/:itemId/evidencia (archivo → bytea en DB) */
@@ -621,6 +633,14 @@ const mockApi: RealtorDashboardApi = {
     } satisfies DDChecklist;
   },
 
+  async getPlausibilidad(_intakeId) {
+    await _d(400);
+    return {
+      estado: "consistente", comuna: "El Poblado",
+      avaluo_m2_catastro: 895428, ratio_precio_catastro: 6.7, problemas: [],
+    } satisfies Plausibilidad;
+  },
+
   async verificarDDItem(_itemId, _estado, _nota, _evidencia) {
     await _d(300);
   },
@@ -707,6 +727,7 @@ const httpApi: RealtorDashboardApi = {
   getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
   putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),
   getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),
+  getPlausibilidad:     (id)   => apiFetch<Plausibilidad>     (`${API_BASE_URL}/intake/${id}/plausibilidad`),
   verificarDDItem:      (id, estado, nota, evidencia) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota, evidencia }) }),
   async subirEvidenciaDD(id, archivo) {
     const fd = new FormData();

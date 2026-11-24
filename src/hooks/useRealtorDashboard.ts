@@ -137,6 +137,16 @@ export function useDueDiligence(intakeId: string | null) {
   });
 }
 
+/** Cross-check de plausibilidad catastral del listing del intake (señal, no identidad). */
+export function usePlausibilidad(intakeId: string | null) {
+  return useQuery({
+    queryKey: ["realtor", "plausibilidad", intakeId],
+    queryFn: () => realtorApi.getPlausibilidad(intakeId!),
+    enabled: intakeId !== null,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 export function useVerificarDDItem(intakeId: string) {
   const qc = useQueryClient();
   return useMutation({

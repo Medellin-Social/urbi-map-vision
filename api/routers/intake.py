@@ -16,6 +16,7 @@ from api.dependencies import get_current_user
 from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
 from api.services.asignador_service import asignar_intake
+from api.services.catastro_plausibilidad import plausibilidad_catastro
 from api.services.due_diligence_service import (
     checklist_completo, checklist_verificado, generar_checklist, verificar_item,
 )
@@ -268,6 +269,23 @@ async def aceptar_intake_endpoint(
 
     return {"intake_id": intake_id, "listing_id": listing_id,
             "estado": "aceptado", "dd_items": dd_items}
+
+
+@router.get("/intake/{intake_id}/plausibilidad")
+async def plausibilidad_intake(
+    intake_id: str,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Cross-check de plausibilidad catastral del listing del intake (comuna+tipo).
+    Señal de consistencia (precio/m² vs avalúo), NO verificación de identidad."""
+    await _agent_del_usuario(user, pool)   # cualquier agente logueado del flujo
+    async with pool.acquire() as conn:
+        listing_id = await conn.fetchval("SELECT listing_id::text FROM intake WHERE id = $1", intake_id)
+    if not listing_id:
+        return {"estado": "sin_datos", "motivo": "El intake aún no tiene listing"}
+    res = await plausibilidad_catastro(pool, listing_id)
+    return res or {"estado": "sin_datos", "motivo": "Listing sin datos para contrastar"}
 
 
 @router.get("/intake/{intake_id}/due-diligence")

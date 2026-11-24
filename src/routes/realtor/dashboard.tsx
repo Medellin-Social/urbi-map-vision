@@ -53,6 +53,7 @@ import {
   useTomarDelPool,
   useVerificarDDItem,
   useSubirEvidenciaDD,
+  usePlausibilidad,
   useCerrarListing,
   useCambiarEstadoListing,
   useEliminarListing,
@@ -1178,6 +1179,22 @@ const DD_LABEL: Record<string, string> = {
   es_persona_juridica: "Persona jurídica",
 };
 
+function PlausibilidadBanner({ intakeId }: { intakeId: string }) {
+  const { data: p } = usePlausibilidad(intakeId);
+  if (!p) return null;
+  const meta = p.estado === "consistente"
+    ? { bg: "rgba(12,163,12,0.08)", fg: C.good, icon: "✓", txt: `Consistente con catastro${p.comuna ? ` (${p.comuna})` : ""} — precio/m² en el rango de la zona${p.ratio_precio_catastro ? ` (${p.ratio_precio_catastro}× avalúo)` : ""}.` }
+    : p.estado === "revisar"
+    ? { bg: "rgba(250,178,25,0.1)", fg: C.warn, icon: "⚠", txt: `Revisar: ${p.problemas?.join("; ") || "fuera del rango catastral"}.` }
+    : { bg: C.soft, fg: C.muted, icon: "·", txt: `Cross-check catastral sin datos${p.motivo ? `: ${p.motivo}` : ""}.` };
+  return (
+    <div className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: meta.bg, color: meta.fg }}>
+      <span aria-hidden className="mt-px font-bold">{meta.icon}</span>
+      <span><strong>Cross-check catastro:</strong> {meta.txt} <span style={{ opacity: 0.7 }}>Señal de plausibilidad, no verificación de identidad.</span></span>
+    </div>
+  );
+}
+
 function DDChecklistSection({ intakeId }: { intakeId: string }) {
   const { data, isLoading, isError } = useDueDiligence(intakeId);
   const verificar = useVerificarDDItem(intakeId);
@@ -1189,6 +1206,8 @@ function DDChecklistSection({ intakeId }: { intakeId: string }) {
       <p className="mt-0.5 text-xs" style={{ color: C.muted }}>
         Revisa cada punto con el propietario y adjunta la evidencia (link o archivo). Con todo verificado, el listing recibe el sello.
       </p>
+
+      <PlausibilidadBanner intakeId={intakeId} />
 
       {isLoading && <Skeleton className="mt-3 h-32 rounded-lg" />}
       {isError && <p className="mt-3 text-sm" style={{ color: C.bad }}>No se pudo cargar el checklist.</p>}
