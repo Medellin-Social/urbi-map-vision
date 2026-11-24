@@ -140,13 +140,27 @@ export function useDueDiligence(intakeId: string | null) {
 export function useVerificarDDItem(intakeId: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ itemId, estado, nota }: { itemId: string; estado: "verificado" | "rechazado"; nota?: string }) =>
-      realtorApi.verificarDDItem(itemId, estado, nota),
+    mutationFn: ({ itemId, estado, nota, evidencia }: { itemId: string; estado: "verificado" | "rechazado"; nota?: string; evidencia?: string }) =>
+      realtorApi.verificarDDItem(itemId, estado, nota, evidencia),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["realtor", "dd", intakeId] });
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
     },
     onError: () => toast.error("No se pudo guardar la verificación"),
+  });
+}
+
+/** Gap A: sube el archivo de evidencia (bytea en la DB) de un item del checklist. */
+export function useSubirEvidenciaDD(intakeId: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ itemId, archivo }: { itemId: string; archivo: File }) =>
+      realtorApi.subirEvidenciaDD(itemId, archivo),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["realtor", "dd", intakeId] });
+      toast.success("Evidencia adjuntada");
+    },
+    onError: () => toast.error("No se pudo subir la evidencia"),
   });
 }
 

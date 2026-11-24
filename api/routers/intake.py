@@ -5,8 +5,11 @@ import json
 from types import SimpleNamespace
 from typing import Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi.responses import Response
 from pydantic import BaseModel
+
+from api.utils.storage import read_upload_bounded
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -49,6 +52,7 @@ class IntakeCreateRequest(BaseModel):
 class VerificarItemRequest(BaseModel):
     estado: str              # 'verificado' | 'rechazado'
     nota: Optional[str] = None
+    evidencia: Optional[str] = None   # Gap A: link/referencia (el archivo va por /evidencia)
 
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
@@ -290,7 +294,8 @@ async def get_due_diligence(
         if not acceso:
             raise HTTPException(status_code=403)
         rows = await conn.fetch(
-            "SELECT id, clave, declarado, estado, nota, verificado_por, verificado_at "
+            "SELECT id, clave, declarado, estado, nota, verificado_por, verificado_at, "
+            "evidencia, evidencia_nombre, (evidencia_bytes IS NOT NULL) AS tiene_archivo "
             "FROM due_diligence_item WHERE intake_id = $1 ORDER BY clave",
             intake_id,
         )
@@ -325,7 +330,7 @@ async def verificar_item_endpoint(
         raise HTTPException(status_code=403, detail="Solo el realtor asignado puede verificar")
 
     try:
-        await verificar_item(item_id, str(agent.id), req.estado, req.nota, pool)
+        await verificar_item(item_id, str(agent.id), req.estado, req.nota, pool, evidencia=req.evidencia)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
@@ -350,6 +355,62 @@ async def verificar_item_endpoint(
 
     return {"id": item_id, "estado": req.estado, "checklist_completo": completo,
             "listing_verificado": verificado}
+
+
+async def _dd_item_de_agente(item_id: str, user: dict, pool) -> None:
+    """Guard: el item pertenece a un intake del realtor logueado. Lanza 404/403."""
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT i.agent_id FROM due_diligence_item d JOIN intake i ON i.id = d.intake_id "
+            "WHERE d.id = $1", item_id,
+        )
+    if not row:
+        raise HTTPException(status_code=404, detail="Item no encontrado")
+    if row["agent_id"] != agent.id:
+        raise HTTPException(status_code=403, detail="Solo el realtor asignado puede adjuntar evidencia")
+
+
+@router.post("/due-diligence/{item_id}/evidencia")
+async def subir_evidencia_dd(
+    item_id: str,
+    archivo: UploadFile = File(...),
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Gap A: sube el archivo de evidencia (PDF/foto) y lo guarda EN la DB (bytea)."""
+    await _dd_item_de_agente(item_id, user, pool)
+    data = await read_upload_bounded(archivo)   # tope de tamaño (mismo helper que listings)
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE due_diligence_item SET evidencia_bytes = $1, evidencia_nombre = $2, "
+            "evidencia_mime = $3 WHERE id = $4",
+            data, archivo.filename or "evidencia", archivo.content_type or "application/octet-stream",
+            item_id,
+        )
+    return {"id": item_id, "nombre": archivo.filename, "bytes": len(data)}
+
+
+@router.get("/due-diligence/{item_id}/evidencia")
+async def descargar_evidencia_dd(
+    item_id: str,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Descarga el archivo de evidencia guardado en la DB."""
+    await _dd_item_de_agente(item_id, user, pool)
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            "SELECT evidencia_bytes, evidencia_nombre, evidencia_mime "
+            "FROM due_diligence_item WHERE id = $1", item_id,
+        )
+    if not row or row["evidencia_bytes"] is None:
+        raise HTTPException(status_code=404, detail="Sin archivo de evidencia")
+    return Response(
+        content=bytes(row["evidencia_bytes"]),
+        media_type=row["evidencia_mime"] or "application/octet-stream",
+        headers={"Content-Disposition": f'inline; filename="{row["evidencia_nombre"] or "evidencia"}"'},
+    )
 
 
 @router.get("/cuestionario")

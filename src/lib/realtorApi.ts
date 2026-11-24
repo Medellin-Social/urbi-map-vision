@@ -255,6 +255,10 @@ export type DDItem = {
   declarado: boolean | string | null;
   estado: DDItemEstado;
   nota: string | null;
+  // Gap A: evidencia en la DB (link y/o archivo bytea).
+  evidencia?: string | null;
+  evidencia_nombre?: string | null;
+  tiene_archivo?: boolean;
 };
 
 export type DDChecklist = {
@@ -330,7 +334,9 @@ export interface RealtorDashboardApi {
   /** GET /api/v1/intake/:id/due-diligence */
   getDueDiligence(intakeId: string): Promise<DDChecklist>;
   /** POST /api/v1/due-diligence/:itemId/verificar */
-  verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string): Promise<void>;
+  verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string, evidencia?: string): Promise<void>;
+  /** POST /api/v1/due-diligence/:itemId/evidencia (archivo → bytea en DB) */
+  subirEvidenciaDD(itemId: string, archivo: File): Promise<void>;
   /** PATCH /api/v1/realtor/listings/:id */
   actualizarListing(listingId: string, campos: ListingPatch): Promise<void>;
   /** POST /api/v1/realtor/listings/:id/fotos (multipart) */
@@ -615,7 +621,10 @@ const mockApi: RealtorDashboardApi = {
     } satisfies DDChecklist;
   },
 
-  async verificarDDItem(_itemId, _estado, _nota) {
+  async verificarDDItem(_itemId, _estado, _nota, _evidencia) {
+    await _d(300);
+  },
+  async subirEvidenciaDD(_itemId, _archivo) {
     await _d(300);
   },
 
@@ -698,7 +707,12 @@ const httpApi: RealtorDashboardApi = {
   getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
   putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),
   getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),
-  verificarDDItem:      (id, estado, nota) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota }) }),
+  verificarDDItem:      (id, estado, nota, evidencia) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota, evidencia }) }),
+  async subirEvidenciaDD(id, archivo) {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    await apiFetch<void>(`${API_BASE_URL}/due-diligence/${id}/evidencia`, { method: "POST", body: fd });
+  },
   actualizarListing:    (id, campos) => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}`, { method: "PATCH", body: JSON.stringify(campos) }),
   cerrarListing:        (id, input)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/cerrar`, { method: "POST", body: JSON.stringify(input) }),
   cambiarEstadoListing: (id, estado)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/estado`, { method: "POST", body: JSON.stringify({ estado }) }),

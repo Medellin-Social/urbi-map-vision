@@ -13,7 +13,7 @@ import { ComunidadNavbar } from "@/components/comunidad/ComunidadNavbar";
 import { BarrioProvider } from "@/components/comunidad/BarrioContext";
 import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
-import { API_ENDPOINTS } from "@/config/api";
+import { API_ENDPOINTS, API_BASE_URL } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { ResumenTab } from "./ResumenTab";
@@ -52,6 +52,7 @@ import {
   useEditarListing,
   useTomarDelPool,
   useVerificarDDItem,
+  useSubirEvidenciaDD,
   useCerrarListing,
   useCambiarEstadoListing,
   useEliminarListing,
@@ -1189,12 +1190,13 @@ const DD_LABEL: Record<string, string> = {
 function DDChecklistSection({ intakeId }: { intakeId: string }) {
   const { data, isLoading, isError } = useDueDiligence(intakeId);
   const verificar = useVerificarDDItem(intakeId);
+  const subir = useSubirEvidenciaDD(intakeId);
 
   return (
     <section className="md:col-span-2">
       <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Verificación de documentos</h3>
       <p className="mt-0.5 text-xs" style={{ color: C.muted }}>
-        Revisa cada punto con el propietario. Con todo verificado, el listing recibe el sello.
+        Revisa cada punto con el propietario y adjunta la evidencia (link o archivo). Con todo verificado, el listing recibe el sello.
       </p>
 
       {isLoading && <Skeleton className="mt-3 h-32 rounded-lg" />}
@@ -1203,49 +1205,100 @@ function DDChecklistSection({ intakeId }: { intakeId: string }) {
       {data && (
         <div className="mt-3 overflow-hidden rounded-xl" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
           {data.items.map((item, i) => (
-            <div
-              key={item.id}
-              className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-              style={i > 0 ? { borderTop: `1px solid ${C.line}` } : undefined}
-            >
-              <div className="min-w-0">
-                <span className="text-sm" style={{ color: C.ink }}>{DD_LABEL[item.clave] ?? item.clave.replaceAll("_", " ")}</span>
-                <span className="ml-2 text-xs" style={{ color: C.muted }}>
-                  declaró: {item.declarado === true ? "sí" : item.declarado === false ? "no" : item.declarado ?? "sin dato"}
-                </span>
-                {item.nota && <span className="ml-2 text-xs italic" style={{ color: C.muted }}>“{item.nota}”</span>}
-              </div>
-
-              {item.estado === "pendiente" ? (
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado" })}
-                    disabled={verificar.isPending}
-                    className="rounded-xl px-3 py-1 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                    style={{ background: C.brand }}
-                  >
-                    Verificado
-                  </button>
-                  <button
-                    onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado" })}
-                    disabled={verificar.isPending}
-                    className="rounded-xl px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
-                    style={{ border: `1px solid ${C.line}`, color: C.ink }}
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs" style={{ color: item.estado === "verificado" ? C.good : C.bad }}>
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.estado === "verificado" ? C.good : C.bad }} aria-hidden />
-                  {item.estado === "verificado" ? "Verificado" : "Rechazado"}
-                </span>
-              )}
-            </div>
+            <DDItemRow key={item.id} item={item} first={i === 0} verificar={verificar} subir={subir} />
           ))}
         </div>
       )}
     </section>
+  );
+}
+
+function DDItemRow({ item, first, verificar, subir }: {
+  item: import("@/lib/realtorApi").DDItem; first: boolean;
+  verificar: ReturnType<typeof useVerificarDDItem>; subir: ReturnType<typeof useSubirEvidenciaDD>;
+}) {
+  const [link, setLink] = useState("");
+  const pend = item.estado === "pendiente";
+
+  // Descarga autenticada del archivo guardado en la DB (bytea) → blob → nueva pestaña.
+  const verArchivo = async () => {
+    try {
+      const { authHeaders } = await import("@/lib/apiClient");
+      const r = await fetch(`${API_BASE_URL}/due-diligence/${item.id}/evidencia`, { headers: await authHeaders() });
+      if (!r.ok) throw new Error();
+      window.open(URL.createObjectURL(await r.blob()), "_blank");
+    } catch { toast.error("No se pudo abrir el archivo"); }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 px-4 py-2.5" style={first ? undefined : { borderTop: `1px solid ${C.line}` }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <span className="text-sm" style={{ color: C.ink }}>{DD_LABEL[item.clave] ?? item.clave.replaceAll("_", " ")}</span>
+          <span className="ml-2 text-xs" style={{ color: C.muted }}>
+            declaró: {item.declarado === true ? "sí" : item.declarado === false ? "no" : item.declarado ?? "sin dato"}
+          </span>
+          {item.nota && <span className="ml-2 text-xs italic" style={{ color: C.muted }}>“{item.nota}”</span>}
+        </div>
+        {pend ? (
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado", evidencia: link.trim() || undefined })}
+              disabled={verificar.isPending}
+              className="rounded-xl px-3 py-1 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              style={{ background: C.brand }}
+            >
+              Verificado
+            </button>
+            <button
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado", evidencia: link.trim() || undefined })}
+              disabled={verificar.isPending}
+              className="rounded-xl px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
+              style={{ border: `1px solid ${C.line}`, color: C.ink }}
+            >
+              Rechazar
+            </button>
+          </div>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs" style={{ color: item.estado === "verificado" ? C.good : C.bad }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.estado === "verificado" ? C.good : C.bad }} aria-hidden />
+            {item.estado === "verificado" ? "Verificado" : "Rechazado"}
+          </span>
+        )}
+      </div>
+
+      {/* Evidencia: existente (link + archivo) + controles para adjuntar */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {item.evidencia && (
+          <a href={item.evidencia} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline"
+            style={{ color: C.brand }}>🔗 {item.evidencia.length > 32 ? item.evidencia.slice(0, 32) + "…" : item.evidencia}</a>
+        )}
+        {item.tiene_archivo && (
+          <button onClick={verArchivo} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline" style={{ color: C.brand }}>
+            📄 {item.evidencia_nombre ?? "archivo"}
+          </button>
+        )}
+        {pend && (
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="Pega un link de evidencia (opcional)"
+            className="min-w-0 flex-1 rounded-md border px-2 py-1 text-xs"
+            style={{ borderColor: C.line, background: C.card, color: C.ink }}
+          />
+        )}
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-medium" style={{ border: `1px solid ${C.line}`, color: C.sub }}>
+          {subir.isPending ? "Subiendo…" : "📎 Adjuntar archivo"}
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) subir.mutate({ itemId: item.id, archivo: f }); }}
+          />
+        </label>
+      </div>
+    </div>
   );
 }
 
