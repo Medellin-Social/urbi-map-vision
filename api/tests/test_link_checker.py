@@ -326,6 +326,19 @@ def test_cli_parses_age_and_flags():
     assert parse_age("7d") == timedelta(days=7)
 
 
+@pytest.mark.asyncio
+async def test_gather_drops_body_to_bound_memory():
+    """_gather_results must strip f.body after classify (retaining N HTML bodies OOM'd the run at high
+    --limit). classify already ran inside check(), so downstream never needs the body."""
+    from scraping.link_checker.classify import Fetch, Verdict, OK
+    class _StubFetcher:
+        cfg = type("C", (), {"domain_concurrency": 1})()
+        async def check(self, url):
+            return Verdict(OK, "ok"), Fetch(200, url, body="x" * 100_000)
+    out = await runner._gather_results(_StubFetcher(), [{"url": MC, "fuente": "metrocuadrado"}])
+    assert len(out) == 1 and out[0][2].body is None and out[0][2].status == 200
+
+
 def test_retire_only_runs_auto_retire_and_skips_sweep(monkeypatch):
     """--retire-only must call auto_retire and NOT fetch anything (the sweep crashing/OOM must not
     be able to strand retirement). Regression guard for the stranded-auto_retire outage."""
