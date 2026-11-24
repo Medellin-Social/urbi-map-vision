@@ -858,6 +858,13 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
             {formatCOP(d.precio_esperado)}
           </div>
           <p className="text-[12px] capitalize" style={{ color: C.muted }}>{d.operacion}</p>
+          {d.comision_pct != null && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] font-bold"
+              style={{ background: "rgba(15,138,79,0.1)", color: C.brand }}
+              title="Comisión que ofrece el propietario al realtor que cierre">
+              Comisión {d.comision_pct}% {d.operacion === "venta" ? "del precio" : "del canon"}
+            </div>
+          )}
           <p className="mt-2 flex items-center gap-1 text-[13px]" style={{ color: C.ink }}>
             <MapPin className="h-3.5 w-3.5" style={{ color: C.muted }} />
             <span><span className="capitalize">{d.tipo_inmueble}</span> en {d.barrio}, {d.municipio}</span>

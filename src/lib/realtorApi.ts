@@ -59,6 +59,7 @@ export type ItemAsignado = {
   barrio: string;
   municipio: string;
   owner_nombre: string;
+  comision_pct: number | null;   // % que el owner ofrece al realtor que cierre
   declarado: {
     area_m2: number | null;
     habitaciones: number | null;
@@ -80,6 +81,7 @@ export type ItemPool = {
   precio_esperado: number;
   barrio: string;
   municipio: string;
+  comision_pct: number | null;   // % ofrecido al realtor que cierre
   created_at: string;
 };
 
@@ -383,10 +385,10 @@ function _mockBarrio(zonaCodigo: string): ApiBarrio {
 
 // Mutable so tomarDelPool can remove rows optimistically
 let _pool: ItemPool[] = [
-  { id: "pool-1", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 280_000_000, barrio: "Sabaneta Centro",  municipio: "Sabaneta",  created_at: "2026-07-08T10:00:00Z" },
-  { id: "pool-2", tipo_inmueble: "casa",        operacion: "arriendo", precio_esperado:   3_800_000, barrio: "Belén Rincón",     municipio: "Medellín",  created_at: "2026-07-07T14:30:00Z" },
-  { id: "pool-3", tipo_inmueble: "local",       operacion: "arriendo", precio_esperado:   4_200_000, barrio: "El Centro",        municipio: "Medellín",  created_at: "2026-07-06T09:15:00Z" },
-  { id: "pool-4", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 195_000_000, barrio: "Itagüí Centro",    municipio: "Itagüí",    created_at: "2026-07-05T16:00:00Z" },
+  { id: "pool-1", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 280_000_000, barrio: "Sabaneta Centro",  municipio: "Sabaneta",  comision_pct: 3,   created_at: "2026-07-08T10:00:00Z" },
+  { id: "pool-2", tipo_inmueble: "casa",        operacion: "arriendo", precio_esperado:   3_800_000, barrio: "Belén Rincón",     municipio: "Medellín",  comision_pct: 50,  created_at: "2026-07-07T14:30:00Z" },
+  { id: "pool-3", tipo_inmueble: "local",       operacion: "arriendo", precio_esperado:   4_200_000, barrio: "El Centro",        municipio: "Medellín",  comision_pct: null, created_at: "2026-07-06T09:15:00Z" },
+  { id: "pool-4", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 195_000_000, barrio: "Itagüí Centro",    municipio: "Itagüí",    comision_pct: 3.5, created_at: "2026-07-05T16:00:00Z" },
 ];
 
 // ponytail: mock stateful solo para el journey de lifecycle (editar/pausar/
@@ -435,6 +437,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "El Poblado",
         municipio: "Medellín",
         owner_nombre: "Lucía Fernández",
+        comision_pct: 3,
         declarado: { area_m2: 95, habitaciones: 3, banos: 2, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: true, tiene_hipoteca: null },
         due_diligence: { documentos_completos: false, faltantes: [] },
         listing: null,
@@ -450,6 +453,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "El Poblado",
         municipio: "Medellín",
         owner_nombre: "Carlos Mejía",
+        comision_pct: 3.5,
         declarado: { area_m2: 78, habitaciones: 3, banos: 2, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: true, tiene_hipoteca: false },
         due_diligence: { documentos_completos: true, faltantes: [] },
         listing: {
@@ -478,6 +482,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "Laureles",
         municipio: "Medellín",
         owner_nombre: "Marcela Torres",
+        comision_pct: null,
         declarado: { area_m2: 140, habitaciones: 4, banos: 3, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: null, tiene_hipoteca: false },
         due_diligence: { documentos_completos: true, faltantes: [] },
         listing: {
@@ -506,6 +511,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "Envigado Centro",
         municipio: "Envigado",
         owner_nombre: "Juan Esteban Ríos",
+        comision_pct: 4,
         declarado: { area_m2: 62, habitaciones: 2, banos: 2, tiene_escritura: false, al_dia_predial: true, al_dia_administracion: false, tiene_hipoteca: null },
         due_diligence: { documentos_completos: false, faltantes: ["escritura", "paz y salvo administración"] },
         created_at: "2026-07-07T15:00:00Z",

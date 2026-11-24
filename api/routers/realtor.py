@@ -198,6 +198,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
                    l.precio AS l_precio, l.municipio AS l_municipio, l.barrio AS l_barrio,
                    (l.geom IS NOT NULL) AS l_geom_set, l.area_m2 AS l_area,
                    l.titulo AS l_titulo, l.habitaciones AS l_hab, l.banos AS l_banos,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct,
                    (SELECT COUNT(*) FROM listing_media m
                      WHERE m.listing_id = l.id AND m.es_portada) AS l_fotos_portada
             FROM intake i
@@ -243,6 +244,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
             "barrio": r["barrio"],
             "municipio": r["municipio"],
             "owner_nombre": r["owner_nombre"],
+            "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
             "declarado": {
                 "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
                 "habitaciones": r["habitaciones"],
@@ -285,9 +287,11 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
             SELECT i.id::text AS id, i.tipo_inmueble::text AS tipo_inmueble,
                    i.operacion::text AS operacion, i.precio_esperado,
                    COALESCE(i.barrio, b.nombre, '') AS barrio,
-                   COALESCE(i.municipio, '') AS municipio, i.created_at
+                   COALESCE(i.municipio, '') AS municipio, i.created_at,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct
             FROM intake i
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+            LEFT JOIN listing l ON l.id = i.listing_id
             WHERE i.estado = 'en_pool'
               AND EXISTS (
                 SELECT 1 FROM sponsorship s
@@ -305,6 +309,7 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
         )
     return [
         {**dict(r), "precio_esperado": float(r["precio_esperado"] or 0),
+         "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
          "created_at": r["created_at"].isoformat()}
         for r in rows
     ]

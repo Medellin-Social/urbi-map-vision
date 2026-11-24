@@ -72,6 +72,7 @@ type FormData = {
   acepta_permuta: boolean;
   acepta_credito: boolean;
   comision_incluida: boolean;
+  comision_pct: string;        // % que el owner ofrece al realtor que cierre (venta/arriendo)
   // Paso 3
   barrio_id: string;
   barrio_nombre: string;
@@ -117,7 +118,7 @@ const INITIAL_FORM: FormData = {
   amenidades_int: [], amenidades_ext: [],
   deposito_meses: "", estadia_minima_meses: "", disponible_desde: "",
   requisitos: [], servicios_incluidos: [],
-  acepta_permuta: false, acepta_credito: false, comision_incluida: false,
+  acepta_permuta: false, acepta_credito: false, comision_incluida: false, comision_pct: "3",
   barrio_id: "", barrio_nombre: "", municipio: "", comuna: "",
   direccion: "", matricula_inmobiliaria: "", cedula_catastral: "",
   lat: null, lon: null, descripcion: "", tour_url: "", video_url: "",
@@ -1108,7 +1109,7 @@ function Step3({
           </Field>
 
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <Field label="Matrícula inmobiliaria" hint={data.tipo_operacion === "venta" ? "(obligatoria · en la escritura)" : "(opcional · en la escritura)"} info="Es la cédula del inmueble en el registro público (ORIP). Nos deja seguir la MISMA propiedad entre portales y en el tiempo, sin confundirla con otra. Obligatoria para ventas.">
+            <Field label="Matrícula inmobiliaria" hint="(opcional · desbloquea sello Verificada)" info="Es la cédula del inmueble en el registro público (ORIP). Opcional: sin ella publicas normal. Si la agregas, tu aviso puede obtener el sello «Verificada» (la cruzamos con catastro) y gana confianza con los compradores.">
               <Input
                 value={data.matricula_inmobiliaria}
                 onChange={(e) => setData({ matricula_inmobiliaria: e.target.value })}
@@ -1530,6 +1531,28 @@ function Step4({
         </div>
       )}
 
+      {(data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo") && (
+        <Field
+          label="Comisión para el realtor"
+          info="El porcentaje que ofreces al agente que cierre la operación. Solo se cobra si se cierra. Un % más alto atrae a más realtors a trabajar tu inmueble."
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <div style={{ position: "relative", width: 120 }}>
+              <Input
+                inputMode="decimal"
+                value={data.comision_pct}
+                onChange={(e) => setData({ comision_pct: e.target.value.replace(/[^\d.]/g, "") })}
+                placeholder="3"
+              />
+              <span style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", color: K.muted, fontSize: 13 }}>%</span>
+            </div>
+            <span style={{ fontSize: 13, color: K.muted }}>
+              {data.tipo_operacion === "venta" ? "sobre el precio de venta" : "sobre el canon mensual"}
+            </span>
+          </div>
+        </Field>
+      )}
+
       <div style={{ display: "grid", gap: 10 }}>
         {[
           {
@@ -1540,10 +1563,10 @@ function Step4({
             key: "acepta_propietario" as const,
             label: "Confirmo que soy el propietario o tengo autorización para publicar esta propiedad",
           },
-          ...(esVenta
+          ...(data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo"
             ? [{
                 key: "acepta_comision" as const,
-                label: "Acepto el modelo de comisión del 3% sobre el precio de venta (solo aplica si se cierra la venta)",
+                label: `Acepto el modelo de comisión del ${data.comision_pct || "3"}% ${data.tipo_operacion === "venta" ? "sobre el precio de venta" : "sobre el canon"} (solo aplica si se cierra la operación)`,
               }]
             : []),
         ].map(({ key, label }) => (
@@ -1839,9 +1862,8 @@ function validateStep(step: number, data: FormData): string | null {
   }
   if (step === 2) {
     if (!data.direccion.trim()) return "Ingresa la dirección exacta del inmueble";
-    // #11: matrícula obligatoria en VENTAS (identidad de propiedad / ORIP). En arriendo no aplica.
-    if (data.tipo_operacion === "venta" && !data.matricula_inmobiliaria.trim())
-      return "Ingresa la matrícula inmobiliaria (está en la escritura)";
+    // Matrícula (ORIP) OPCIONAL: sin ella el aviso se publica normal; con ella el
+    // inmueble puede obtener el sello "Verificada" (cross-check catastro). No bloquea.
     if (!data.lat || !data.lon) return "Marca la ubicación en el mapa";
     if (data.descripcion.length < 50) return "La descripción debe tener al menos 50 caracteres";
   }
@@ -1863,8 +1885,8 @@ function validateStep(step: number, data: FormData): string | null {
     if (!data.telefono.trim()) return "Ingresa tu teléfono";
     if (!data.acepta_terminos) return "Debes aceptar los términos y condiciones";
     if (!data.acepta_propietario) return "Debes confirmar que eres propietario o tienes autorización";
-    const esVenta = data.tipo_operacion === "venta";
-    if (esVenta && !data.acepta_comision) return "Debes aceptar el modelo de comisión";
+    const tieneOperacion = data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo";
+    if (tieneOperacion && !data.acepta_comision) return "Debes aceptar el modelo de comisión";
   }
   return null;
 }
@@ -2009,6 +2031,8 @@ function PublicarPage() {
         acepta_permuta:     esVta ? (form.acepta_permuta || undefined) : undefined,
         acepta_credito:     esVta ? (form.acepta_credito || undefined) : undefined,
         comision_incluida:  form.comision_incluida || undefined,
+        // % de comisión que el owner ofrece al realtor que cierre (venta/arriendo).
+        comision_pct:       (form.tipo_operacion === "venta" || form.tipo_operacion === "arriendo") ? num(form.comision_pct) : undefined,
       };
       const caracsLimpias = Object.fromEntries(
         Object.entries(caracteristicas).filter(([, v]) => v !== undefined),
