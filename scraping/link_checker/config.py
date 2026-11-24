@@ -35,7 +35,7 @@ def _env_int(name: str, default: int) -> int:
 @dataclass
 class Settings:
     domain_delay: float = field(default_factory=lambda: _env_float("LINK_CHECK_DOMAIN_DELAY", 1.0))   # s between requests / domain
-    domain_concurrency: int = field(default_factory=lambda: _env_int("LINK_CHECK_DOMAIN_CONCURRENCY", 1))
+    domain_concurrency: int = field(default_factory=lambda: _env_int("LINK_CHECK_DOMAIN_CONCURRENCY", 4))  # 4 GETs/domain en vuelo; con conc=1 los GET se serializaban (~2 req/s). Medido: conc=4 => ~6.5 req/s, bloqueo 0.3%, 161k en ~7h
     timeout: float = field(default_factory=lambda: _env_float("LINK_CHECK_TIMEOUT", 15.0))
     retries: int = field(default_factory=lambda: _env_int("LINK_CHECK_RETRIES", 2))
     backoff_base: float = field(default_factory=lambda: _env_float("LINK_CHECK_BACKOFF", 2.0))
