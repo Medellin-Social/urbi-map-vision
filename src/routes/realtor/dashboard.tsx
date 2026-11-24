@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2,
   Globe2, ClipboardList, Trophy, Search, Info, TrendingUp, UserPlus, CalendarClock, Calendar, Users, Lock, CheckCircle, XCircle,
-  History, Flame, Clock, Phone, Mail, Check, KeyRound, Sun, ShieldCheck, TrainFront, BarChart2, Sparkles, Briefcase, User, GraduationCap,
+  History, Flame, Clock, Phone, Mail, Check, KeyRound, Sun, ShieldCheck, TrainFront, BarChart2, Sparkles, Briefcase, User,
 } from "@/lib/icons";
 import { RealtorTourModal } from "@/components/RealtorTourModal";
 import { ComunidadNavbar } from "@/components/comunidad/ComunidadNavbar";
@@ -222,15 +222,6 @@ function RealtorNav({ section, onSection }: { section: Section; onSection: (s: S
 
         {perfil && (
           <div className="flex shrink-0 items-center gap-3">
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent("replay-tour"))}
-              data-tour="realtor-tour-replay"
-              aria-label="Tutorial"
-              title="Tutorial"
-              className="grid h-8 w-8 place-items-center rounded-full border border-border text-muted-foreground transition hover:text-foreground"
-            >
-              <GraduationCap className="h-4 w-4" />
-            </button>
             <LanguageToggle />
             {perfil.estado === "pendiente" && (
               <span className="hidden text-xs text-warning sm:block">Cuenta pendiente de aprobación</span>
