@@ -2374,6 +2374,22 @@ LIMIT 1
 """.replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
+# Agente ASIGNADO de un listing propio (persona natural que lo subió → el realtor
+# que lo tomó/gestiona y cobra la comisión, o el agente que publicó directo). Este
+# gana sobre los sponsors de zona: el listing es suyo, no es vitrina rotatoria.
+_LISTING_AGENTE_PROPIO_SQL = """
+SELECT a.id::text, a.slug, a.nombre, a.telefono, a.foto_url,
+       (SELECT ag.nombre FROM agency_member am JOIN agency ag ON ag.id = am.agency_id
+        WHERE am.agent_id = a.id LIMIT 1) AS agencia_nombre,
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
+FROM staging.stg_listings_unificado l
+JOIN public.listing lp ON lp.id::text = l.url AND l.fuente = 'propio' AND lp.agent_id IS NOT NULL
+JOIN public.agent a ON a.id = lp.agent_id AND a.estado = 'activo'
+WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
+LIMIT 1
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
+
+
 _LISTING_AGENTE_SQL = """
 WITH lz AS (
     SELECT l.barrio_id, bc.cd_comuna
@@ -2405,18 +2421,27 @@ SELECT nombre, telefono, foto_url, email, zona_nivel FROM ranked WHERE rn = 1
 @limiter.limit("100/minute")
 async def get_listing_agente(request: Request, listing_id: int):
     pool = get_pool()
-    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     out = ListingAgentes()
+    # 1) Representante formal (agent-program, listing_representacion) o, si no hay,
+    #    el agente ASIGNADO del listing propio (quien lo tomó/gestiona + cobra).
+    #    Cualquiera de los dos es "el agente del inmueble" → se muestra SOLO ese,
+    #    sin la vitrina rotatoria de sponsors de zona (el listing no es vitrina).
     try:
         rep = await pool.fetchrow(_LISTING_REPRESENTANTE_SQL, listing_id)
+        if not rep:
+            rep = await pool.fetchrow(_LISTING_AGENTE_PROPIO_SQL, listing_id)
     except Exception:
-        logger.exception("representante de listing %s falló", listing_id)
+        logger.exception("representante/agente propio de listing %s falló", listing_id)
         rep = None
     if rep:
         d = dict(rep)
         d["tipos"] = list(d["tipos"] or [])
         d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
         out.representante = ListingRepresentante(**d)
+        return out  # listing con dueño/agente asignado → solo ese, sin sponsors de zona
+
+    # 2) Listing sin agente asignado (scrapeado) → vitrina de sponsors de la zona.
+    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     for r in rows:
         ag = ListingAgente(**dict(r))
         if ag.zona_nivel == "comuna":
