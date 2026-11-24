@@ -5,6 +5,7 @@ import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
 import { GraduationCap } from '@/lib/icons'
+import { useIsAgente } from '@/components/LockedField'
 import { auth } from '../../lib/auth'
 import { K as TOKENS } from "@/design/tokens";
 
@@ -80,6 +81,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [reOpen,      setReOpen]      = useState(false)
   const logged = !!auth.get()
+  const isAgente = useIsAgente()
 
   const t = useT()
 
@@ -338,6 +340,18 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
 
           {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
           <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            {isAgente && (
+              <a
+                href="/realtor/dashboard"
+                style={{
+                  background: K.teal, color: '#fff', fontSize: 13, fontWeight: 700,
+                  textDecoration: 'none', letterSpacing: '.3px',
+                  padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                }}
+              >
+                Dashboard
+              </a>
+            )}
             <a
               href={logged ? '/perfil' : '/login'}
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
@@ -466,6 +480,19 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 {link.label}
               </a>
             ))}
+
+            {isAgente && (
+              <a
+                href="/realtor/dashboard"
+                onClick={() => setMenuAbierto(false)}
+                style={{
+                  display: 'block', color: K.amarillo, fontSize: 15, fontWeight: 700,
+                  textDecoration: 'none', padding: '10px 0', borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                Dashboard
+              </a>
+            )}
 
             <a
               href={logged ? '/perfil' : '/login'}
