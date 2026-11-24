@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, GraduationCap } from "@/lib/icons";
+import { X } from "@/lib/icons";
 import { SCORE_PALETTES } from "@/config/mapColors";
 
 const LS_KEY = "map_tour_seen";
@@ -239,11 +239,12 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
     localStorage.setItem(LS_KEY, "true");
   };
 
-  const replay = () => {
-    setStep(0);
-    setRect(null);
-    setShow(true);
-  };
+  // El botón de replay ahora vive en el navbar — escucha su evento.
+  useEffect(() => {
+    const h = () => { setStep(0); setRect(null); setShow(true); };
+    window.addEventListener("replay-tour", h);
+    return () => window.removeEventListener("replay-tour", h);
+  }, []);
 
   const s = STEPS[step];
   const isLast = step === STEPS.length - 1;
@@ -321,20 +322,6 @@ export function MapTourModal({ isMobile, dataReady, activeComunaName, onSelectLa
 
   return (
     <>
-      <button
-        onClick={replay}
-        aria-label="Tutorial de la página"
-        data-tour="tour-replay"
-        className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
-        // En móvil left:16 choca con el botón "volver a comunas" (mismo lugar) — a la derecha en móvil.
-        style={isMobile
-          ? { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }
-          : { top: "calc(var(--map-header-h, 53px) + 56px)", right: 16, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
-      >
-        <GraduationCap size={14} />
-        Tutorial de la página
-      </button>
-
       <AnimatePresence>
         {show && (
           <>

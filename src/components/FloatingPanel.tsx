@@ -1800,9 +1800,9 @@ function ListingCard({ l }: { l: ApiListing }) {
               {l.match_label}
             </span>
           )}
-          {l.buena_oferta && (
-            <span style={{ borderRadius: 6, background: 'rgba(16,185,129,0.12)', border: '1px solid rgba(16,185,129,0.3)', padding: '3px 8px', fontSize: 10, fontWeight: 800, textTransform: 'uppercase', color: '#0F8A4F' }}>
-              Buena oferta
+          {l.buena_oferta && l.pct_bajo_mediana != null && (
+            <span style={{ fontSize: 10, fontWeight: 700, color: '#0F8A4F', textAlign: 'right' }}>
+              {l.pct_bajo_mediana.toFixed(0)}% bajo la mediana del barrio
             </span>
           )}
           {l.precio_m2 != null && (

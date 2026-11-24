@@ -59,6 +59,7 @@ export type ItemAsignado = {
   barrio: string;
   municipio: string;
   owner_nombre: string;
+  comision_pct: number | null;   // % que el owner ofrece al realtor que cierre
   declarado: {
     area_m2: number | null;
     habitaciones: number | null;
@@ -80,6 +81,7 @@ export type ItemPool = {
   precio_esperado: number;
   barrio: string;
   municipio: string;
+  comision_pct: number | null;   // % ofrecido al realtor que cierre
   created_at: string;
 };
 
@@ -253,12 +255,26 @@ export type DDItem = {
   declarado: boolean | string | null;
   estado: DDItemEstado;
   nota: string | null;
+  // Gap A: evidencia en la DB (link y/o archivo bytea).
+  evidencia?: string | null;
+  evidencia_nombre?: string | null;
+  tiene_archivo?: boolean;
 };
 
 export type DDChecklist = {
   intake_id: string;
   items: DDItem[];
   completo: boolean;
+};
+
+// Cross-check de plausibilidad catastral (comuna+tipo). Señal, no identidad.
+export type Plausibilidad = {
+  estado: "consistente" | "revisar" | "sin_datos";
+  motivo?: string;
+  comuna?: string;
+  avaluo_m2_catastro?: number | null;
+  ratio_precio_catastro?: number | null;
+  problemas?: string[];
 };
 
 export type Interesado = {
@@ -327,8 +343,12 @@ export interface RealtorDashboardApi {
   putDisponibilidad(franjas: Franja[]): Promise<void>;
   /** GET /api/v1/intake/:id/due-diligence */
   getDueDiligence(intakeId: string): Promise<DDChecklist>;
+  /** GET /api/v1/intake/:id/plausibilidad (cross-check catastral) */
+  getPlausibilidad(intakeId: string): Promise<Plausibilidad>;
   /** POST /api/v1/due-diligence/:itemId/verificar */
-  verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string): Promise<void>;
+  verificarDDItem(itemId: string, estado: "verificado" | "rechazado", nota?: string, evidencia?: string): Promise<void>;
+  /** POST /api/v1/due-diligence/:itemId/evidencia (archivo → bytea en DB) */
+  subirEvidenciaDD(itemId: string, archivo: File): Promise<void>;
   /** PATCH /api/v1/realtor/listings/:id */
   actualizarListing(listingId: string, campos: ListingPatch): Promise<void>;
   /** POST /api/v1/realtor/listings/:id/fotos (multipart) */
@@ -383,10 +403,10 @@ function _mockBarrio(zonaCodigo: string): ApiBarrio {
 
 // Mutable so tomarDelPool can remove rows optimistically
 let _pool: ItemPool[] = [
-  { id: "pool-1", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 280_000_000, barrio: "Sabaneta Centro",  municipio: "Sabaneta",  created_at: "2026-07-08T10:00:00Z" },
-  { id: "pool-2", tipo_inmueble: "casa",        operacion: "arriendo", precio_esperado:   3_800_000, barrio: "Belén Rincón",     municipio: "Medellín",  created_at: "2026-07-07T14:30:00Z" },
-  { id: "pool-3", tipo_inmueble: "local",       operacion: "arriendo", precio_esperado:   4_200_000, barrio: "El Centro",        municipio: "Medellín",  created_at: "2026-07-06T09:15:00Z" },
-  { id: "pool-4", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 195_000_000, barrio: "Itagüí Centro",    municipio: "Itagüí",    created_at: "2026-07-05T16:00:00Z" },
+  { id: "pool-1", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 280_000_000, barrio: "Sabaneta Centro",  municipio: "Sabaneta",  comision_pct: 3,   created_at: "2026-07-08T10:00:00Z" },
+  { id: "pool-2", tipo_inmueble: "casa",        operacion: "arriendo", precio_esperado:   3_800_000, barrio: "Belén Rincón",     municipio: "Medellín",  comision_pct: 50,  created_at: "2026-07-07T14:30:00Z" },
+  { id: "pool-3", tipo_inmueble: "local",       operacion: "arriendo", precio_esperado:   4_200_000, barrio: "El Centro",        municipio: "Medellín",  comision_pct: null, created_at: "2026-07-06T09:15:00Z" },
+  { id: "pool-4", tipo_inmueble: "apartamento", operacion: "venta",    precio_esperado: 195_000_000, barrio: "Itagüí Centro",    municipio: "Itagüí",    comision_pct: 3.5, created_at: "2026-07-05T16:00:00Z" },
 ];
 
 // ponytail: mock stateful solo para el journey de lifecycle (editar/pausar/
@@ -435,6 +455,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "El Poblado",
         municipio: "Medellín",
         owner_nombre: "Lucía Fernández",
+        comision_pct: 3,
         declarado: { area_m2: 95, habitaciones: 3, banos: 2, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: true, tiene_hipoteca: null },
         due_diligence: { documentos_completos: false, faltantes: [] },
         listing: null,
@@ -450,6 +471,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "El Poblado",
         municipio: "Medellín",
         owner_nombre: "Carlos Mejía",
+        comision_pct: 3.5,
         declarado: { area_m2: 78, habitaciones: 3, banos: 2, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: true, tiene_hipoteca: false },
         due_diligence: { documentos_completos: true, faltantes: [] },
         listing: {
@@ -478,6 +500,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "Laureles",
         municipio: "Medellín",
         owner_nombre: "Marcela Torres",
+        comision_pct: null,
         declarado: { area_m2: 140, habitaciones: 4, banos: 3, tiene_escritura: true, al_dia_predial: true, al_dia_administracion: null, tiene_hipoteca: false },
         due_diligence: { documentos_completos: true, faltantes: [] },
         listing: {
@@ -506,6 +529,7 @@ const mockApi: RealtorDashboardApi = {
         barrio: "Envigado Centro",
         municipio: "Envigado",
         owner_nombre: "Juan Esteban Ríos",
+        comision_pct: 4,
         declarado: { area_m2: 62, habitaciones: 2, banos: 2, tiene_escritura: false, al_dia_predial: true, al_dia_administracion: false, tiene_hipoteca: null },
         due_diligence: { documentos_completos: false, faltantes: ["escritura", "paz y salvo administración"] },
         created_at: "2026-07-07T15:00:00Z",
@@ -609,7 +633,18 @@ const mockApi: RealtorDashboardApi = {
     } satisfies DDChecklist;
   },
 
-  async verificarDDItem(_itemId, _estado, _nota) {
+  async getPlausibilidad(_intakeId) {
+    await _d(400);
+    return {
+      estado: "consistente", comuna: "El Poblado",
+      avaluo_m2_catastro: 895428, ratio_precio_catastro: 6.7, problemas: [],
+    } satisfies Plausibilidad;
+  },
+
+  async verificarDDItem(_itemId, _estado, _nota, _evidencia) {
+    await _d(300);
+  },
+  async subirEvidenciaDD(_itemId, _archivo) {
     await _d(300);
   },
 
@@ -692,7 +727,13 @@ const httpApi: RealtorDashboardApi = {
   getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
   putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),
   getDueDiligence:      (id)   => apiFetch<DDChecklist>        (`${API_BASE_URL}/intake/${id}/due-diligence`),
-  verificarDDItem:      (id, estado, nota) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota }) }),
+  getPlausibilidad:     (id)   => apiFetch<Plausibilidad>     (`${API_BASE_URL}/intake/${id}/plausibilidad`),
+  verificarDDItem:      (id, estado, nota, evidencia) => apiFetch<void>   (`${API_BASE_URL}/due-diligence/${id}/verificar`, { method: "POST", body: JSON.stringify({ estado, nota, evidencia }) }),
+  async subirEvidenciaDD(id, archivo) {
+    const fd = new FormData();
+    fd.append("archivo", archivo);
+    await apiFetch<void>(`${API_BASE_URL}/due-diligence/${id}/evidencia`, { method: "POST", body: fd });
+  },
   actualizarListing:    (id, campos) => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}`, { method: "PATCH", body: JSON.stringify(campos) }),
   cerrarListing:        (id, input)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/cerrar`, { method: "POST", body: JSON.stringify(input) }),
   cambiarEstadoListing: (id, estado)  => apiFetch<void>         (`${API_BASE_URL}/realtor/listings/${id}/estado`, { method: "POST", body: JSON.stringify({ estado }) }),

@@ -1,16 +1,26 @@
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { RouteError, RoutePending } from "@/components/RouteStates";
-import { useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { ArrowLeft, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2 } from "@/lib/icons";
+import {
+  ArrowLeft, ArrowRight, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2,
+  Globe2, ClipboardList, Trophy, Search, Info, TrendingUp, UserPlus, CalendarClock, Calendar, Users, Lock, CheckCircle, XCircle,
+  History, Flame, Clock, Phone, Mail, Check, KeyRound, Sun, ShieldCheck, TrainFront, BarChart2, Sparkles, Briefcase, User,
+} from "@/lib/icons";
+import { RealtorTourModal } from "@/components/RealtorTourModal";
+import { ComunidadNavbar } from "@/components/comunidad/ComunidadNavbar";
+import { BarrioProvider } from "@/components/comunidad/BarrioContext";
+import { PieChart, Pie, Cell } from "recharts";
 import { apiFetch } from "@/lib/apiClient";
-import { API_ENDPOINTS } from "@/config/api";
+import { API_ENDPOINTS, API_BASE_URL } from "@/config/api";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { ResumenTab } from "./ResumenTab";
 import { ComparadorTab } from "./ComparadorTab";
 import { SimuladorTab } from "./SimuladorTab";
 import { C } from "./_kit";
+import { Avatar, EmptyBlock, FilterTabs, IconChip, KpiCard, KpiGrid, MetricCell, MiniRing, PageHeader, Panel, Pill, Steps, TONE, type Tone } from "./-ui";
 import { formatCOP } from "@/lib/format";
 import { LanguageToggle, Name } from "@/lib/i18n";
 import {
@@ -42,6 +52,8 @@ import {
   useEditarListing,
   useTomarDelPool,
   useVerificarDDItem,
+  useSubirEvidenciaDD,
+  usePlausibilidad,
   useCerrarListing,
   useCambiarEstadoListing,
   useEliminarListing,
@@ -70,6 +82,10 @@ export const Route = createFileRoute("/realtor/dashboard")({
 const BRAND_DEEP = "#0C7A45";
 
 type Section = "inicio" | "listings" | "bandeja" | "mercado" | "herramientas";
+
+// Navegación entre secciones desde cualquier hijo (p.ej. "Reportar un cierre" en
+// Mercado lleva a Mis listings).
+const GoToSection = createContext<(s: Section) => void>(() => {});
 
 const SECTIONS: { id: Section; label: string }[] = [
   { id: "inicio",       label: "Inicio" },
@@ -133,8 +149,18 @@ function RealtorDashboardPage() {
     );
   }
 
+  const goTo = (s: Section) => {
+    setSection(s);
+    if (typeof window !== "undefined") window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   return (
+    <BarrioProvider>
+    <GoToSection.Provider value={goTo}>
     <div className="paper-theme min-h-screen bg-background">
+      <RealtorTourModal />
+      {/* Navbar global (igual que el resto del sitio); RealtorNav se stickea debajo. */}
+      <ComunidadNavbar compact hideTicker />
       <RealtorNav section={section} onSection={setSection} />
       {/* scroll-mt-28: el foco no queda tapado por el header sticky (WCAG 2.2 SC 2.4.11). */}
       <main
@@ -151,6 +177,8 @@ function RealtorDashboardPage() {
         {section === "herramientas" && <HerramientasSection />}
       </main>
     </div>
+    </GoToSection.Provider>
+    </BarrioProvider>
   );
 }
 
@@ -180,7 +208,7 @@ function RealtorNav({ section, onSection }: { section: Section; onSection: (s: S
   };
 
   return (
-    <header className="sticky top-0 z-40 border-b border-border bg-background/95 backdrop-blur">
+    <header className="sticky top-[55px] z-30 border-b border-border bg-background/95 backdrop-blur">
       <div className="mx-auto flex h-14 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
         <div className="flex min-w-0 items-center gap-4">
           <Link
@@ -219,7 +247,7 @@ function RealtorNav({ section, onSection }: { section: Section; onSection: (s: S
       </div>
 
       <nav className="mx-auto max-w-6xl overflow-x-auto px-4 sm:px-6">
-        <div role="tablist" aria-label="Secciones del dashboard" className="flex gap-6">
+        <div data-tour="realtor-sections" role="tablist" aria-label="Secciones del dashboard" className="flex gap-6">
           {SECTIONS.map(({ id, label }, idx) => {
             const active = section === id;
             const badge = id === "bandeja" ? bandejaBadge : 0;
@@ -364,27 +392,83 @@ function AlertasHoy() {
   );
 }
 
-// ── Sección: Bandeja y agenda (Inbox + Agenda) ────────────────────────────────
+// ── Sección: Bandeja y agenda ─────────────────────────────────────────────────
+// Organizada por QUIÉN te busca, no por tipo de dato:
+//   · Propietarios — quieren que vendas/arriendes su inmueble (captación).
+//   · Visitas      — compradores que pidieron ver un inmueble (agenda).
+//   · Interesados  — guardaron tus listings en favoritos (seguimiento).
+// Arriba, los pendientes de hoy como KPIs que llevan a cada pestaña.
+
+type BandejaSub = "propietarios" | "visitas" | "interesados";
+
+function horaVisita(v: VisitaSolicitud): number {
+  return v.fecha_visita ? new Date(v.fecha_visita).getTime() : Number.POSITIVE_INFINITY;
+}
+function slaVencido(v: VisitaSolicitud): boolean {
+  const limite = v.es_pro ? 4 : 24;
+  return v.horas_pendiente != null && v.horas_pendiente >= limite;
+}
 
 function BandejaSection() {
   const { data: asignados } = useRealtorAsignados();
   const { data: agenda } = useAgenda();
   const nuevos = asignados?.filter((a) => a.estado === "asignado").length ?? 0;
-  const visitasPendientes = agenda?.visitas.filter((v) => v.estado === "pendiente").length ?? 0;
-  const [sub, setSub] = useState<"bandeja" | "agenda">(() => (tabParam() === "agenda" ? "agenda" : "bandeja"));
+  const enProceso = asignados?.filter((a) => a.estado !== "asignado").length ?? 0;
+  const visitas = agenda?.visitas ?? [];
+  const pendientes = visitas.filter((v) => v.estado === "pendiente");
+  const vencidas = pendientes.filter(slaVencido).length;
+  const ahora = Date.now();
+  const confirmadas = visitas.filter((v) => v.estado === "confirmada");
+  const proximas = confirmadas
+    .filter((v) => Number.isFinite(horaVisita(v)) && horaVisita(v) >= ahora - 3_600_000)
+    .sort((a, b) => horaVisita(a) - horaVisita(b));
+  const interesados = agenda?.interesados.length ?? 0;
+
+  const [sub, setSub] = useState<BandejaSub>(() => {
+    const t = tabParam();
+    return t === "agenda" ? "visitas" : t === "interesados" ? "interesados" : "propietarios";
+  });
+
+  const siguiente = proximas[0]?.fecha_visita
+    ? new Date(proximas[0].fecha_visita).toLocaleString("es-CO", { weekday: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null;
+
   return (
     <div>
+      <PageHeader
+        title="Bandeja y agenda"
+        subtitle="Todo lo que espera tu respuesta: propietarios que quieren publicar contigo y compradores que quieren conocer tus inmuebles."
+      />
+
+      <KpiGrid>
+        <KpiCard icon={UserPlus} tone="brand" label="Propietarios nuevos" value={nuevos}
+          hint={nuevos > 0 ? "esperan que los aceptes" : `${enProceso} en proceso`}
+          active={sub === "propietarios"} onClick={() => setSub("propietarios")} />
+        <KpiCard icon={CalendarClock} tone={vencidas > 0 ? "bad" : "warn"} label="Visitas por confirmar" value={pendientes.length}
+          hint={vencidas > 0 ? `${vencidas} fuera de tiempo de respuesta` : "a tiempo"}
+          active={sub === "visitas"} onClick={() => setSub("visitas")} />
+        <KpiCard icon={Calendar} tone="info" label="Visitas confirmadas" value={confirmadas.length}
+          hint={siguiente ? `la siguiente: ${siguiente}` : confirmadas.length > 0 ? "ninguna programada a futuro" : "sin visitas confirmadas"}
+          onClick={() => setSub("visitas")} />
+        <KpiCard icon={Heart} tone="violet" label="Interesados" value={interesados}
+          hint="guardaron tus listings"
+          active={sub === "interesados"} onClick={() => setSub("interesados")} />
+      </KpiGrid>
+
       <SubNav
         label="Bandeja y agenda"
         value={sub}
         onChange={setSub}
         items={[
-          { id: "bandeja", label: "Bandeja", badge: nuevos },
-          { id: "agenda", label: "Agenda", badge: visitasPendientes },
+          { id: "propietarios", label: "Propietarios", badge: nuevos },
+          { id: "visitas", label: "Visitas", badge: pendientes.length },
+          { id: "interesados", label: "Interesados" },
         ]}
       />
       <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
-        {sub === "bandeja" ? <InboxTab /> : <AgendaTab />}
+        {sub === "propietarios" && <InboxTab />}
+        {sub === "visitas" && <AgendaTab />}
+        {sub === "interesados" && <InteresadosTab />}
       </div>
     </div>
   );
@@ -431,6 +515,11 @@ function HerramientasSection() {
           { id: "servicios", label: "Servicios" },
         ]}
       />
+      <p className="-mt-2 mb-5 text-[13px]" style={{ color: C.sub }}>
+        {sub === "simulador" && "Proyecta la rentabilidad de una inversión en cualquier barrio para mostrársela a tu cliente."}
+        {sub === "comparador" && "Pon hasta 4 barrios lado a lado: rentabilidad, precio, seguridad y ubicación."}
+        {sub === "servicios" && "Tu perfil público, el horario en que aceptas visitas y las zonas que patrocinas."}
+      </p>
       <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
         {sub === "simulador" && <SimuladorTab />}
         {sub === "comparador" && <ComparadorTab />}
@@ -440,7 +529,7 @@ function HerramientasSection() {
   );
 }
 
-// ══ TAB 1: Inbox — lista | detalle ═════════════════════════════════════════════
+// ══ Propietarios (captación) — lista | detalle ══════════════════════════════════
 
 type LeadItem =
   | { kind: "asignado"; id: string; data: ItemAsignado }
@@ -448,12 +537,18 @@ type LeadItem =
 
 type LeadFilter = "todos" | "nuevos" | "proceso" | "pool";
 
-const LEAD_FILTERS: { id: LeadFilter; label: string }[] = [
-  { id: "todos",   label: "Todos" },
-  { id: "nuevos",  label: "Nuevos" },
-  { id: "proceso", label: "En proceso" },
-  { id: "pool",    label: "Pool" },
-];
+// Etapas del flujo de captación — el stepper del detalle y la barrita de la lista.
+const LEAD_STEPS = ["Aceptar", "Documentos", "Ficha", "Publicar"];
+
+function leadEtapa(lead: LeadItem): { step: number; tone: Tone; txt: string } {
+  if (lead.kind === "pool") return { step: 0, tone: "info", txt: "Disponible en pool" };
+  const a = lead.data;
+  if (a.estado === "asignado") return { step: 0, tone: "brand", txt: "Nuevo · requiere respuesta" };
+  if (!a.due_diligence.documentos_completos) return { step: 1, tone: "warn", txt: "Verificando documentos" };
+  const c = a.listing ? datosMinimosCompletos(a.listing) : null;
+  if (c && !c.ok) return { step: 2, tone: "warn", txt: "Ficha incompleta" };
+  return { step: 3, tone: "brand", txt: "Listo para publicar" };
+}
 
 function InboxTab() {
   const { data: asignados, isLoading: loadA, isError: errA } = useRealtorAsignados();
@@ -472,6 +567,13 @@ function InboxTab() {
       rank(x) !== rank(y) ? rank(x) - rank(y) : y.data.created_at.localeCompare(x.data.created_at),
     );
   }, [asignados, pool]);
+
+  const cuenta = useMemo(() => ({
+    todos: leads.length,
+    nuevos: leads.filter((l) => l.kind === "asignado" && l.data.estado === "asignado").length,
+    proceso: leads.filter((l) => l.kind === "asignado" && l.data.estado !== "asignado").length,
+    pool: leads.filter((l) => l.kind === "pool").length,
+  }), [leads]);
 
   const visibles = useMemo(() => {
     let out = leads;
@@ -494,9 +596,9 @@ function InboxTab() {
 
   if (loading) {
     return (
-      <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <SkeletonRows n={5} />
-        <Skeleton className="hidden h-96 rounded-lg lg:block" />
+        <Skeleton className="hidden h-96 rounded-2xl lg:block" />
       </div>
     );
   }
@@ -504,67 +606,77 @@ function InboxTab() {
   if (errA) return <SectionError msg="No se pudieron cargar los inmuebles asignados." />;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[320px_1fr]">
-      {/* Lista */}
-      <div className={`${selected ? "hidden lg:block" : ""}`}>
-        <input
-          type="search"
-          value={busqueda}
-          onChange={(e) => setBusqueda(e.target.value)}
-          placeholder="Buscar por barrio u owner"
-          className={inputCls}
-          aria-label="Buscar leads"
-        />
-        <div className="mt-3 flex flex-wrap gap-1.5">
-          {LEAD_FILTERS.map((f) => (
-            <button
-              key={f.id}
-              onClick={() => setFiltro(f.id)}
-              className="rounded-full px-3 py-1 text-[12px] font-semibold transition"
-              style={filtro === f.id
-                ? { background: C.brand, color: "#FFFFFF" }
-                : { background: C.card, color: C.muted, border: `1px solid ${C.line}` }}
-            >
-              {f.label}
-            </button>
-          ))}
+    <div>
+      <p className="mb-4 text-[13px]" style={{ color: C.sub }}>
+        Propietarios de tu zona que quieren publicar su inmueble contigo. Acéptalos, verifica documentos, completa la ficha y publica.
+      </p>
+      <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
+        {/* Lista */}
+        <div className={`${selected ? "hidden lg:block" : ""}`}>
+          <div className="relative">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: C.muted }} />
+            <input
+              type="search"
+              value={busqueda}
+              onChange={(e) => setBusqueda(e.target.value)}
+              placeholder="Buscar por barrio u owner"
+              className={`${inputCls} rounded-xl pl-9`}
+              aria-label="Buscar leads"
+            />
+          </div>
+          <div className="mt-3">
+            <FilterTabs
+              label="Filtrar propietarios"
+              value={filtro}
+              onChange={setFiltro}
+              options={[
+                { v: "todos", label: "Todos", n: cuenta.todos },
+                { v: "nuevos", label: "Nuevos", n: cuenta.nuevos },
+                { v: "proceso", label: "En proceso", n: cuenta.proceso },
+                { v: "pool", label: "Pool", n: cuenta.pool },
+              ]}
+            />
+          </div>
+
+          <div className="mt-3 overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+            {visibles.length === 0 && (
+              <div className="px-4 py-12 text-center">
+                <Inbox className="mx-auto h-5 w-5" style={{ color: C.muted, opacity: 0.5 }} />
+                <p className="mx-auto mt-2 max-w-[240px] text-sm" style={{ color: C.muted }}>
+                  {filtro === "pool"
+                    ? "El pool está vacío por ahora."
+                    : "Sin propietarios en esta vista. Cuando alguien publique en tu zona, aparecerá aquí."}
+                </p>
+              </div>
+            )}
+            {visibles.map((l, i) => (
+              <LeadListRow
+                key={l.id}
+                lead={l}
+                active={l.id === selectedId}
+                first={i === 0}
+                onClick={() => setSelectedId(l.id)}
+              />
+            ))}
+          </div>
         </div>
 
-        <div className="mt-3 overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-          {visibles.length === 0 && (
-            <div className="px-4 py-12 text-center">
-              <Inbox className="mx-auto h-5 w-5" style={{ color: C.muted, opacity: 0.5 }} />
-              <p className="mx-auto mt-2 max-w-[220px] text-sm" style={{ color: C.muted }}>
-                {filtro === "pool"
-                  ? "El pool está vacío por ahora."
-                  : "Sin leads en esta vista. Cuando un propietario publique en tu zona, aparecerá aquí."}
-              </p>
+        {/* Detalle */}
+        <div className={`${selected ? "" : "hidden lg:block"}`}>
+          {selected ? (
+            <LeadDetail lead={selected} onBack={() => setSelectedId(null)} />
+          ) : (
+            <div className="grid h-full min-h-[360px] place-items-center rounded-2xl border border-dashed" style={{ borderColor: C.line, background: C.card }}>
+              <div className="max-w-xs px-6 text-center">
+                <span className="mx-auto grid h-12 w-12 place-items-center rounded-2xl" style={{ background: C.soft, color: C.muted }}>
+                  <Inbox className="h-5 w-5" />
+                </span>
+                <p className="mt-3 text-[14px] font-semibold" style={{ color: C.ink }}>Selecciona un propietario</p>
+                <p className="mt-1 text-[12.5px]" style={{ color: C.muted }}>Verás su inmueble, lo que declaró y el siguiente paso para publicarlo.</p>
+              </div>
             </div>
           )}
-          {visibles.map((l, i) => (
-            <LeadListRow
-              key={l.id}
-              lead={l}
-              active={l.id === selectedId}
-              first={i === 0}
-              onClick={() => setSelectedId(l.id)}
-            />
-          ))}
         </div>
-      </div>
-
-      {/* Detalle */}
-      <div className={`${selected ? "" : "hidden lg:block"}`}>
-        {selected ? (
-          <LeadDetail lead={selected} onBack={() => setSelectedId(null)} />
-        ) : (
-          <div className="grid h-full min-h-[320px] place-items-center rounded-2xl border border-dashed" style={{ borderColor: C.line }}>
-            <div className="text-center">
-              <Inbox className="mx-auto h-5 w-5" style={{ color: C.muted, opacity: 0.5 }} />
-              <p className="mt-2 text-sm" style={{ color: C.muted }}>Selecciona un lead para ver el detalle</p>
-            </div>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -584,57 +696,48 @@ function LeadListRow({
   const d = lead.data;
   const esNuevo = lead.kind === "asignado" && lead.data.estado === "asignado";
   const titulo = lead.kind === "asignado" ? lead.data.owner_nombre : "Pool abierto";
+  const et = leadEtapa(lead);
 
   return (
     <button
       onClick={onClick}
       aria-current={active ? "true" : undefined}
-      className={`block w-full border-l-2 px-4 py-3 text-left transition ${active ? "" : "hover:bg-black/[0.02]"}`}
+      className={`flex w-full gap-3 border-l-[3px] px-4 py-3.5 text-left transition ${active ? "" : "hover:bg-black/[0.02]"}`}
       style={{
         borderTop: first ? undefined : `1px solid ${C.line}`,
         borderLeftColor: active ? C.brand : "transparent",
-        background: active ? C.soft : undefined,
+        background: active ? TONE.brand.bg : esNuevo ? "#FBFDFB" : undefined,
       }}
     >
-      <span className="flex items-baseline justify-between gap-2">
-        <span className={`flex min-w-0 items-center gap-2 text-sm ${esNuevo ? "font-semibold" : "font-medium"}`} style={{ color: C.ink }}>
-          {esNuevo && <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ background: C.brand }} aria-label="Nuevo" />}
-          <span className="truncate">{titulo}</span>
+      {lead.kind === "asignado"
+        ? <Avatar name={lead.data.owner_nombre} size={36} />
+        : <IconChip icon={Users} tone="info" size={36} />}
+      <span className="min-w-0 flex-1">
+        <span className="flex items-baseline justify-between gap-2">
+          <span className={`truncate text-[14px] ${esNuevo ? "font-bold" : "font-semibold"}`} style={{ color: C.ink }}>{titulo}</span>
+          <span className="shrink-0 text-[11px]" style={{ color: C.muted }}>{relativeTime(d.created_at)}</span>
         </span>
-        <span className="shrink-0 text-xs" style={{ color: C.muted }}>{relativeTime(d.created_at)}</span>
-      </span>
-      <span className="mt-0.5 block truncate text-sm" style={{ color: C.sub }}>
-        <span className="capitalize">{d.tipo_inmueble}</span> en {d.barrio} · {formatCOP(d.precio_esperado)}
-      </span>
-      <span className="mt-1.5 block">
-        <LeadStatus lead={lead} />
+        <span className="mt-0.5 block truncate text-[12.5px]" style={{ color: C.sub }}>
+          <span className="capitalize">{d.tipo_inmueble}</span> en {d.barrio} · <span className="font-semibold tabular-nums" style={{ color: C.ink }}>{formatCOP(d.precio_esperado)}</span>
+        </span>
+        <span className="mt-2 flex items-center gap-2">
+          <span className="flex flex-1 gap-1" aria-hidden>
+            {LEAD_STEPS.map((s, i) => (
+              <span key={s} className="h-1 flex-1 rounded-full"
+                style={{ background: lead.kind === "pool" ? C.soft : i < et.step ? C.brand : i === et.step ? TONE[et.tone].solid : C.soft }} />
+            ))}
+          </span>
+          <span className="shrink-0 text-[11px] font-semibold" style={{ color: TONE[et.tone].fg }}>{et.txt}</span>
+        </span>
       </span>
     </button>
   );
 }
 
-// Estado como punto + texto — color solo en el punto
+// Estado como pill con tono.
 function LeadStatus({ lead }: { lead: LeadItem }) {
-  let dot = C.muted;
-  let txt = "";
-  if (lead.kind === "pool") {
-    dot = C.ramp[1]; txt = "Disponible en pool";
-  } else {
-    const a = lead.data;
-    if (a.estado === "asignado") { dot = C.brand; txt = "Nuevo · requiere respuesta"; }
-    else if (!a.due_diligence.documentos_completos) { dot = C.warn; txt = "Verificando documentos"; }
-    else {
-      const c = a.listing ? datosMinimosCompletos(a.listing) : null;
-      if (c && !c.ok) { dot = C.warn; txt = "Ficha incompleta"; }
-      else { dot = C.good; txt = "Listo para publicar"; }
-    }
-  }
-  return (
-    <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: C.muted }}>
-      <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} aria-hidden />
-      {txt}
-    </span>
-  );
+  const et = leadEtapa(lead);
+  return <Pill tone={et.tone} dot>{et.txt}</Pill>;
 }
 
 // ── Detalle del lead ───────────────────────────────────────────────────────────
@@ -650,31 +753,47 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
   const esNuevo = asignado?.estado === "asignado";
   const ddOk = asignado?.due_diligence.documentos_completos ?? false;
   const completeness = asignado?.listing ? datosMinimosCompletos(asignado.listing) : null;
+  const et = leadEtapa(lead);
 
-  let nextStep: { texto: string; accion?: { label: string; run: () => void; pending: boolean } };
+  let nextStep: { titulo: string; texto: string; accion?: { label: string; run: () => void; pending: boolean } };
   if (lead.kind === "pool") {
     nextStep = {
+      titulo: "Tómalo antes que otro agente",
       texto: "Inmueble en pool abierto: el primer agente que lo tome se lo queda.",
       accion: { label: tomar.isPending ? "Tomando…" : "Tomar inmueble", run: () => tomar.mutate(d.id), pending: tomar.isPending },
     };
   } else if (esNuevo) {
     nextStep = {
+      titulo: "Acepta al propietario",
       texto: "Acepta este inmueble para iniciar la verificación de documentos.",
       accion: { label: aceptar.isPending ? "Aceptando…" : "Aceptar inmueble", run: () => aceptar.mutate(d.id), pending: aceptar.isPending },
     };
   } else if (!ddOk) {
-    nextStep = { texto: "Verifica con el propietario los documentos pendientes." };
+    nextStep = { titulo: "Verifica los documentos", texto: "Verifica con el propietario los documentos pendientes." };
   } else if (completeness && !completeness.ok) {
-    nextStep = { texto: "Documentos al día. Completa la ficha para poder publicar." };
+    nextStep = {
+      titulo: "Completa la ficha",
+      texto: "Documentos al día. Completa la ficha para poder publicar.",
+      accion: { label: "Completar ficha", run: () => setEditandoFicha(true), pending: false },
+    };
   } else {
     nextStep = {
+      titulo: "Listo para publicar",
       texto: "Todo listo. Al publicar, aparece en el mapa al instante.",
       accion: { label: publicar.isPending ? "Publicando…" : "Publicar listing", run: () => publicar.mutate(d.id), pending: publicar.isPending },
     };
   }
 
+  const specs = asignado
+    ? [
+        asignado.declarado.area_m2 && { icon: Maximize2, txt: `${asignado.declarado.area_m2} m²` },
+        asignado.declarado.habitaciones != null && { icon: Bed, txt: `${asignado.declarado.habitaciones} hab` },
+        asignado.declarado.banos != null && { icon: Bath, txt: `${asignado.declarado.banos} baños` },
+      ].filter(Boolean) as { icon: typeof Bed; txt: string }[]
+    : [];
+
   return (
-    <div className="rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+    <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 1px 2px rgba(17,20,24,0.04)" }}>
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-5 py-4" style={{ borderBottom: `1px solid ${C.line}` }}>
         <div className="flex min-w-0 items-center gap-3">
@@ -686,11 +805,12 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
           >
             <ArrowLeft className="h-4 w-4" />
           </button>
+          {asignado ? <Avatar name={asignado.owner_nombre} size={44} /> : <IconChip icon={Users} tone="info" size={44} />}
           <div className="min-w-0">
-            <h2 className="truncate text-base font-semibold" style={{ color: C.ink }}>
+            <h2 className="truncate text-[17px] font-bold" style={{ color: C.ink }}>
               {asignado ? asignado.owner_nombre : "Inmueble del pool"}
             </h2>
-            <p className="text-xs" style={{ color: C.muted }}>
+            <p className="text-[12px]" style={{ color: C.muted }}>
               {lead.kind === "pool" ? "Zona sin patrocinador" : "Asignado por tu zona"} · recibido {relativeTime(d.created_at)}
             </p>
           </div>
@@ -698,55 +818,75 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
         <LeadStatus lead={lead} />
       </div>
 
-      {/* Siguiente paso */}
-      <div className="flex flex-col gap-3 px-5 py-4 sm:flex-row sm:items-center sm:justify-between" style={{ borderBottom: `1px solid ${C.line}` }}>
-        <p className="text-sm" style={{ color: C.ink }}>{nextStep.texto}</p>
-        {nextStep.accion && (
-          <button
-            onClick={nextStep.accion.run}
-            disabled={nextStep.accion.pending}
-            className="shrink-0 rounded-xl px-4 py-2 text-[13px] font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-            style={{ background: C.brand }}
-          >
-            {nextStep.accion.label}
-          </button>
-        )}
+      {/* Progreso + siguiente paso */}
+      <div className="space-y-4 px-5 py-4" style={{ borderBottom: `1px solid ${C.line}`, background: "#FCFBF8" }}>
+        {lead.kind === "asignado" && <Steps steps={LEAD_STEPS} current={et.step} />}
+        <div
+          className="flex flex-col gap-3 rounded-xl p-4 sm:flex-row sm:items-center sm:justify-between"
+          style={{ background: TONE[et.tone].bg, boxShadow: `inset 0 0 0 1px ${TONE[et.tone].line}` }}
+        >
+          <div className="min-w-0">
+            <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: TONE[et.tone].fg }}>Siguiente paso</div>
+            <div className="mt-0.5 text-[14px] font-semibold" style={{ color: C.ink }}>{nextStep.titulo}</div>
+            <p className="text-[12.5px]" style={{ color: C.sub }}>{nextStep.texto}</p>
+          </div>
+          {nextStep.accion && (
+            <button
+              onClick={nextStep.accion.run}
+              disabled={nextStep.accion.pending}
+              className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-4 text-[13px] font-bold text-white shadow-sm transition hover:opacity-90 disabled:opacity-50"
+              style={{ background: C.brand }}
+            >
+              {nextStep.accion.label} <ArrowRight className="h-4 w-4" />
+            </button>
+          )}
+        </div>
       </div>
 
-      <div className="grid gap-6 px-5 py-5 md:grid-cols-2">
+      <div className="grid gap-5 px-5 py-5 md:grid-cols-2">
         {/* Propiedad */}
-        <section>
-          <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Propiedad</h3>
-          <div className="mt-2 text-2xl font-semibold tabular-nums" style={{ color: C.ink }}>
+        <section className="rounded-xl p-4" style={{ background: C.soft }}>
+          <h3 className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>Propiedad</h3>
+          <div className="mt-2 text-[24px] font-bold tabular-nums tracking-tight" style={{ color: C.ink }}>
             {formatCOP(d.precio_esperado)}
-            <span className="ml-2 text-sm font-normal capitalize" style={{ color: C.muted }}>{d.operacion}</span>
           </div>
-          <p className="mt-1 text-sm" style={{ color: C.ink }}>
-            <span className="capitalize">{d.tipo_inmueble}</span> en {d.barrio}, {d.municipio}
+          <p className="text-[12px] capitalize" style={{ color: C.muted }}>{d.operacion}</p>
+          {d.comision_pct != null && (
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1 text-[12.5px] font-bold"
+              style={{ background: "rgba(15,138,79,0.1)", color: C.brand }}
+              title="Comisión que ofrece el propietario al realtor que cierre">
+              Comisión {d.comision_pct}% {d.operacion === "venta" ? "del precio" : "del canon"}
+            </div>
+          )}
+          <p className="mt-2 flex items-center gap-1 text-[13px]" style={{ color: C.ink }}>
+            <MapPin className="h-3.5 w-3.5" style={{ color: C.muted }} />
+            <span><span className="capitalize">{d.tipo_inmueble}</span> en {d.barrio}, {d.municipio}</span>
           </p>
           {asignado && (
-            <p className="mt-1 text-sm" style={{ color: C.sub }}>
-              {[
-                asignado.declarado.area_m2 && `${asignado.declarado.area_m2} m²`,
-                asignado.declarado.habitaciones != null && `${asignado.declarado.habitaciones} hab`,
-                asignado.declarado.banos != null && `${asignado.declarado.banos} baños`,
-              ].filter(Boolean).join(" · ") || "Sin características declaradas"}
-            </p>
+            <div className="mt-3 flex flex-wrap gap-1.5">
+              {specs.length === 0 && <span className="text-[12px]" style={{ color: C.muted }}>Sin características declaradas</span>}
+              {specs.map(({ icon: Icon, txt }) => (
+                <span key={txt} className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[12px] font-medium" style={{ background: C.card, color: C.ink }}>
+                  <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{txt}
+                </span>
+              ))}
+            </div>
           )}
         </section>
 
         {/* Declarado por el propietario */}
-        <section>
-          <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Declarado por el propietario</h3>
+        <section className="rounded-xl p-4" style={{ border: `1px solid ${C.line}` }}>
+          <h3 className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>Declarado por el propietario</h3>
           {asignado ? (
-            <ul className="mt-2 space-y-1.5">
+            <ul className="mt-2 divide-y" style={{ borderColor: C.line }}>
               <DeclaradoItem label="Escritura" value={asignado.declarado.tiene_escritura} />
               <DeclaradoItem label="Predial al día" value={asignado.declarado.al_dia_predial} />
               <DeclaradoItem label="Administración al día" value={asignado.declarado.al_dia_administracion} />
               <DeclaradoItem label="Sin hipoteca" value={asignado.declarado.tiene_hipoteca == null ? null : !asignado.declarado.tiene_hipoteca} />
             </ul>
           ) : (
-            <p className="mt-2 text-sm" style={{ color: C.sub }}>
+            <p className="mt-3 flex items-start gap-2 text-[13px]" style={{ color: C.sub }}>
+              <Lock className="mt-0.5 h-4 w-4 shrink-0" style={{ color: C.muted }} />
               Los datos del propietario se revelan al tomar el inmueble.
             </p>
           )}
@@ -759,21 +899,12 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
 
         {asignado && ddOk && completeness && !completeness.ok && asignado.listing && (
           <section className="md:col-span-2">
-            <div className="flex items-center justify-between gap-3">
-              <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Campos de la ficha por completar</h3>
-              <button
-                onClick={() => setEditandoFicha(true)}
-                className="shrink-0 rounded-xl px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90"
-                style={{ background: C.brand }}
-              >
-                Completar ficha
-              </button>
-            </div>
-            <ul className="mt-2 grid gap-1.5 sm:grid-cols-2">
+            <h3 className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>Campos de la ficha por completar</h3>
+            <div className="mt-2 flex flex-wrap gap-1.5">
               {completeness.faltan.map((f) => (
-                <li key={f} className="text-sm capitalize" style={{ color: C.sub }}>· {f}</li>
+                <Pill key={f} tone="warn">{f}</Pill>
               ))}
-            </ul>
+            </div>
           </section>
         )}
       </div>
@@ -906,8 +1037,8 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
           </button>
         </div>
 
-        <div className="grid gap-5 overflow-y-auto px-5 py-5">
-          <FieldGroup title="Datos del aviso">
+        <div className="grid gap-5 overflow-y-auto px-5 py-5 sm:grid-cols-2">
+          <FieldGroup title="Datos del aviso" cols={2}>
             <Field label="Título del aviso" className="sm:col-span-2">
               <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={inputCls} placeholder="Apartamento en El Poblado con balcón" />
             </Field>
@@ -948,7 +1079,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             </Field>
           </FieldGroup>
 
-          <FieldGroup title="Ubicación">
+          <FieldGroup title="Ubicación" className="sm:col-span-2">
             <Field label="Nombre del edificio / unidad">
               <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={inputCls} placeholder="Torre Alción" />
             </Field>
@@ -957,7 +1088,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             </Field>
           </FieldGroup>
 
-          <div>
+          <div className="sm:col-span-2">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amenidades</h4>
             <div className="flex flex-wrap gap-2">
               {EDITOR_AMENIDADES.map((a) => {
@@ -984,7 +1115,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} min-h-24 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
           </Field>
 
-          <div>
+          <div className="sm:col-span-2">
             <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
               Agregar fotos {fotos.length > 0 && <span className="text-foreground">({fotos.length} seleccionadas)</span>}
             </h4>
@@ -1018,11 +1149,11 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
   );
 }
 
-function FieldGroup({ title, children }: { title: string; children: React.ReactNode }) {
+function FieldGroup({ title, className = "", cols = 3, children }: { title: string; className?: string; cols?: 2 | 3; children: React.ReactNode }) {
   return (
-    <div>
+    <div className={className}>
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
-      <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">{children}</div>
+      <div className={`grid grid-cols-2 gap-3 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{children}</div>
     </div>
   );
 }
@@ -1048,16 +1179,35 @@ const DD_LABEL: Record<string, string> = {
   es_persona_juridica: "Persona jurídica",
 };
 
+function PlausibilidadBanner({ intakeId }: { intakeId: string }) {
+  const { data: p } = usePlausibilidad(intakeId);
+  if (!p) return null;
+  const meta = p.estado === "consistente"
+    ? { bg: "rgba(12,163,12,0.08)", fg: C.good, icon: "✓", txt: `Consistente con catastro${p.comuna ? ` (${p.comuna})` : ""} — precio/m² en el rango de la zona${p.ratio_precio_catastro ? ` (${p.ratio_precio_catastro}× avalúo)` : ""}.` }
+    : p.estado === "revisar"
+    ? { bg: "rgba(250,178,25,0.1)", fg: C.warn, icon: "⚠", txt: `Revisar: ${p.problemas?.join("; ") || "fuera del rango catastral"}.` }
+    : { bg: C.soft, fg: C.muted, icon: "·", txt: `Cross-check catastral sin datos${p.motivo ? `: ${p.motivo}` : ""}.` };
+  return (
+    <div className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-xs" style={{ background: meta.bg, color: meta.fg }}>
+      <span aria-hidden className="mt-px font-bold">{meta.icon}</span>
+      <span><strong>Cross-check catastro:</strong> {meta.txt} <span style={{ opacity: 0.7 }}>Señal de plausibilidad, no verificación de identidad.</span></span>
+    </div>
+  );
+}
+
 function DDChecklistSection({ intakeId }: { intakeId: string }) {
   const { data, isLoading, isError } = useDueDiligence(intakeId);
   const verificar = useVerificarDDItem(intakeId);
+  const subir = useSubirEvidenciaDD(intakeId);
 
   return (
     <section className="md:col-span-2">
       <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Verificación de documentos</h3>
       <p className="mt-0.5 text-xs" style={{ color: C.muted }}>
-        Revisa cada punto con el propietario. Con todo verificado, el listing recibe el sello.
+        Revisa cada punto con el propietario y adjunta la evidencia (link o archivo). Con todo verificado, el listing recibe el sello.
       </p>
+
+      <PlausibilidadBanner intakeId={intakeId} />
 
       {isLoading && <Skeleton className="mt-3 h-32 rounded-lg" />}
       {isError && <p className="mt-3 text-sm" style={{ color: C.bad }}>No se pudo cargar el checklist.</p>}
@@ -1065,45 +1215,7 @@ function DDChecklistSection({ intakeId }: { intakeId: string }) {
       {data && (
         <div className="mt-3 overflow-hidden rounded-xl" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
           {data.items.map((item, i) => (
-            <div
-              key={item.id}
-              className="flex flex-col gap-2 px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between"
-              style={i > 0 ? { borderTop: `1px solid ${C.line}` } : undefined}
-            >
-              <div className="min-w-0">
-                <span className="text-sm" style={{ color: C.ink }}>{DD_LABEL[item.clave] ?? item.clave.replaceAll("_", " ")}</span>
-                <span className="ml-2 text-xs" style={{ color: C.muted }}>
-                  declaró: {item.declarado === true ? "sí" : item.declarado === false ? "no" : item.declarado ?? "sin dato"}
-                </span>
-                {item.nota && <span className="ml-2 text-xs italic" style={{ color: C.muted }}>“{item.nota}”</span>}
-              </div>
-
-              {item.estado === "pendiente" ? (
-                <div className="flex shrink-0 gap-2">
-                  <button
-                    onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado" })}
-                    disabled={verificar.isPending}
-                    className="rounded-xl px-3 py-1 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                    style={{ background: C.brand }}
-                  >
-                    Verificado
-                  </button>
-                  <button
-                    onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado" })}
-                    disabled={verificar.isPending}
-                    className="rounded-xl px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
-                    style={{ border: `1px solid ${C.line}`, color: C.ink }}
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              ) : (
-                <span className="inline-flex shrink-0 items-center gap-1.5 text-xs" style={{ color: item.estado === "verificado" ? C.good : C.bad }}>
-                  <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.estado === "verificado" ? C.good : C.bad }} aria-hidden />
-                  {item.estado === "verificado" ? "Verificado" : "Rechazado"}
-                </span>
-              )}
-            </div>
+            <DDItemRow key={item.id} item={item} first={i === 0} verificar={verificar} subir={subir} />
           ))}
         </div>
       )}
@@ -1111,18 +1223,107 @@ function DDChecklistSection({ intakeId }: { intakeId: string }) {
   );
 }
 
+function DDItemRow({ item, first, verificar, subir }: {
+  item: import("@/lib/realtorApi").DDItem; first: boolean;
+  verificar: ReturnType<typeof useVerificarDDItem>; subir: ReturnType<typeof useSubirEvidenciaDD>;
+}) {
+  const [link, setLink] = useState("");
+  const pend = item.estado === "pendiente";
+
+  // Descarga autenticada del archivo guardado en la DB (bytea) → blob → nueva pestaña.
+  const verArchivo = async () => {
+    try {
+      const { authHeaders } = await import("@/lib/apiClient");
+      const r = await fetch(`${API_BASE_URL}/due-diligence/${item.id}/evidencia`, { headers: await authHeaders() });
+      if (!r.ok) throw new Error();
+      window.open(URL.createObjectURL(await r.blob()), "_blank");
+    } catch { toast.error("No se pudo abrir el archivo"); }
+  };
+
+  return (
+    <div className="flex flex-col gap-2 px-4 py-2.5" style={first ? undefined : { borderTop: `1px solid ${C.line}` }}>
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <span className="text-sm" style={{ color: C.ink }}>{DD_LABEL[item.clave] ?? item.clave.replaceAll("_", " ")}</span>
+          <span className="ml-2 text-xs" style={{ color: C.muted }}>
+            declaró: {item.declarado === true ? "sí" : item.declarado === false ? "no" : item.declarado ?? "sin dato"}
+          </span>
+          {item.nota && <span className="ml-2 text-xs italic" style={{ color: C.muted }}>“{item.nota}”</span>}
+        </div>
+        {pend ? (
+          <div className="flex shrink-0 gap-2">
+            <button
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado", evidencia: link.trim() || undefined })}
+              disabled={verificar.isPending}
+              className="rounded-xl px-3 py-1 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
+              style={{ background: C.brand }}
+            >
+              Verificado
+            </button>
+            <button
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado", evidencia: link.trim() || undefined })}
+              disabled={verificar.isPending}
+              className="rounded-xl px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
+              style={{ border: `1px solid ${C.line}`, color: C.ink }}
+            >
+              Rechazar
+            </button>
+          </div>
+        ) : (
+          <span className="inline-flex shrink-0 items-center gap-1.5 text-xs" style={{ color: item.estado === "verificado" ? C.good : C.bad }}>
+            <span className="h-1.5 w-1.5 rounded-full" style={{ background: item.estado === "verificado" ? C.good : C.bad }} aria-hidden />
+            {item.estado === "verificado" ? "Verificado" : "Rechazado"}
+          </span>
+        )}
+      </div>
+
+      {/* Evidencia: existente (link + archivo) + controles para adjuntar */}
+      <div className="flex flex-wrap items-center gap-2 text-xs">
+        {item.evidencia && (
+          <a href={item.evidencia} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline"
+            style={{ color: C.brand }}>🔗 {item.evidencia.length > 32 ? item.evidencia.slice(0, 32) + "…" : item.evidencia}</a>
+        )}
+        {item.tiene_archivo && (
+          <button onClick={verArchivo} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline" style={{ color: C.brand }}>
+            📄 {item.evidencia_nombre ?? "archivo"}
+          </button>
+        )}
+        {pend && (
+          <input
+            value={link}
+            onChange={(e) => setLink(e.target.value)}
+            placeholder="Pega un link de evidencia (opcional)"
+            className="min-w-0 flex-1 rounded-md border px-2 py-1 text-xs"
+            style={{ borderColor: C.line, background: C.card, color: C.ink }}
+          />
+        )}
+        <label className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-medium" style={{ border: `1px solid ${C.line}`, color: C.sub }}>
+          {subir.isPending ? "Subiendo…" : "📎 Adjuntar archivo"}
+          <input
+            type="file"
+            accept="image/*,application/pdf"
+            className="hidden"
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) subir.mutate({ itemId: item.id, archivo: f }); }}
+          />
+        </label>
+      </div>
+    </div>
+  );
+}
+
 function DeclaradoItem({ label, value }: { label: string; value: boolean | null }) {
   return (
-    <li className="flex items-center justify-between gap-2 text-sm">
+    <li className="flex items-center justify-between gap-2 py-2 text-[13px]" style={{ borderColor: C.line }}>
       <span style={{ color: C.ink }}>{label}</span>
-      {value === true  && <span className="font-semibold" style={{ color: C.good }}>Sí</span>}
-      {value === false && <span className="font-semibold" style={{ color: C.bad }}>No</span>}
+      {value === true  && <span className="inline-flex items-center gap-1 font-semibold" style={{ color: TONE.brand.fg }}><CheckCircle className="h-4 w-4" /> Sí</span>}
+      {value === false && <span className="inline-flex items-center gap-1 font-semibold" style={{ color: TONE.bad.fg }}><XCircle className="h-4 w-4" /> No</span>}
       {value == null   && <span style={{ color: C.muted }}>Sin dato</span>}
     </li>
   );
 }
 
-// ══ TAB 2: Agenda — solicitudes de visita + interesados ════════════════════════
+// ══ Visitas — por confirmar · próximas (por día) · historial ═══════════════════
 
 function AgendaTab() {
   const { data, isLoading, isError } = useAgenda();
@@ -1130,9 +1331,9 @@ function AgendaTab() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <SkeletonRows n={3} />
-        <Skeleton className="h-40 rounded-lg" />
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Skeleton className="h-72 rounded-2xl" />
+        <Skeleton className="h-72 rounded-2xl" />
       </div>
     );
   }
@@ -1141,123 +1342,140 @@ function AgendaTab() {
   return <AgendaBody data={data} actualizar={actualizar} />;
 }
 
-type AgFiltro = "todas" | "pendiente" | "confirmada" | "realizada" | "cancelada";
+// Etiqueta de día relativa: Hoy / Mañana / "jue 17 jul".
+function etiquetaDia(ms: number): string {
+  if (!Number.isFinite(ms)) return "Sin fecha acordada";
+  const d = new Date(ms);
+  const hoy = new Date(); hoy.setHours(0, 0, 0, 0);
+  const dia = new Date(d); dia.setHours(0, 0, 0, 0);
+  const diff = Math.round((dia.getTime() - hoy.getTime()) / 86_400_000);
+  if (diff === 0) return "Hoy";
+  if (diff === 1) return "Mañana";
+  return d.toLocaleDateString("es-CO", { weekday: "long", day: "numeric", month: "short" });
+}
 
 function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType<typeof useActualizarVisita> }) {
-  const [filtro, setFiltro] = useState<AgFiltro>("todas");
-  const [verTodas, setVerTodas] = useState(false);
-  const [verInteresados, setVerInteresados] = useState(false);
-
+  const [verHistorial, setVerHistorial] = useState(false);
   const visitas = data.visitas;
-  const nEstado = (e: VisitaSolicitud["estado"]) => visitas.filter((v) => v.estado === e).length;
-  const filtradas =
-    filtro === "todas" ? visitas
-    : filtro === "cancelada" ? visitas.filter((v) => v.estado === "cancelada" || v.estado === "no_asistio")
-    : visitas.filter((v) => v.estado === filtro);
 
-  const LIMIT = 8;
-  const visibles = verTodas ? filtradas : filtradas.slice(0, LIMIT);
-  const chips: { id: AgFiltro; label: string; n: number }[] = [
-    { id: "todas",      label: "Todas",       n: visitas.length },
-    { id: "pendiente",  label: "Pendientes",  n: nEstado("pendiente") },
-    { id: "confirmada", label: "Confirmadas", n: nEstado("confirmada") },
-    { id: "realizada",  label: "Realizadas",  n: nEstado("realizada") },
-    { id: "cancelada",  label: "Canceladas",  n: nEstado("cancelada") + nEstado("no_asistio") },
-  ];
+  // Por confirmar: primero las vencidas, luego Pro, luego las más antiguas.
+  const porConfirmar = visitas
+    .filter((v) => v.estado === "pendiente")
+    .sort((a, b) =>
+      Number(slaVencido(b)) - Number(slaVencido(a))
+      || Number(b.es_pro) - Number(a.es_pro)
+      || a.created_at.localeCompare(b.created_at));
 
-  const interesadosVis = verInteresados ? data.interesados : data.interesados.slice(0, LIMIT);
+  const confirmadas = visitas
+    .filter((v) => v.estado === "confirmada")
+    .sort((a, b) => horaVisita(a) - horaVisita(b));
+  const porDia = new Map<string, VisitaSolicitud[]>();
+  for (const v of confirmadas) {
+    const k = etiquetaDia(horaVisita(v));
+    porDia.set(k, [...(porDia.get(k) ?? []), v]);
+  }
+
+  const historial = visitas
+    .filter((v) => v.estado === "realizada" || v.estado === "cancelada" || v.estado === "no_asistio")
+    .sort((a, b) => (b.fecha_visita ?? b.created_at).localeCompare(a.fecha_visita ?? a.created_at));
+  const LIMIT = 5;
+  const histVis = verHistorial ? historial : historial.slice(0, LIMIT);
+
+  const props = (v: VisitaSolicitud) => ({
+    visita: v,
+    pending: actualizar.isPending && actualizar.variables?.id === v.id,
+    onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", resultado?: "interesado" | "oferta" | "descartado") =>
+      actualizar.mutate({ id: v.id, estado, resultado }),
+  });
+
+  if (visitas.length === 0) {
+    return (
+      <EmptyBlock
+        icon={Calendar}
+        title="Aún no tienes solicitudes de visita"
+        msg="Cuando alguien agende una visita a uno de tus inmuebles desde el mapa, aparecerá aquí para que la confirmes."
+      />
+    );
+  }
 
   return (
-    <div className="space-y-10">
-      <section>
-        <SectionHeader title="Solicitudes de visita" count={visitas.length} sub="Personas que quieren ver tus inmuebles" />
-        <div className="mb-3 flex flex-wrap gap-1.5">
-          {chips.map((c) => (
-            <button
-              key={c.id}
-              onClick={() => { setFiltro(c.id); setVerTodas(false); }}
-              className="rounded-full px-3 py-1 text-[12px] font-semibold transition"
-              style={filtro === c.id
-                ? { background: C.brand, color: "#FFFFFF" }
-                : { background: C.card, color: C.muted, border: `1px solid ${C.line}` }}
-            >
-              {c.label} <span className="opacity-60">{c.n}</span>
-            </button>
-          ))}
-        </div>
-        {filtradas.length === 0 ? (
-          <EmptyState msg="No hay solicitudes con este filtro. Cuando alguien agende una visita desde el mapa, aparecerá aquí." />
-        ) : (
-          <>
-            <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-              {visibles.map((v, i) => (
-                <VisitaRow
-                  key={v.id}
-                  visita={v}
-                  first={i === 0}
-                  pending={actualizar.isPending && actualizar.variables?.id === v.id}
-                  onEstado={(estado, resultado) => actualizar.mutate({ id: v.id, estado, resultado })}
-                />
-              ))}
-            </div>
-            {filtradas.length > LIMIT && (
-              <button
-                onClick={() => setVerTodas((v) => !v)}
-                className="mt-2 text-xs font-semibold transition hover:underline"
-                style={{ color: C.brand }}
-              >
-                {verTodas ? "Ver menos" : `Ver ${filtradas.length - LIMIT} más`}
-              </button>
-            )}
-          </>
-        )}
-      </section>
+    <div className="space-y-6">
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <Panel
+          icon={CalendarClock}
+          tone={porConfirmar.some(slaVencido) ? "bad" : "warn"}
+          title="Por confirmar"
+          count={porConfirmar.length}
+          subtitle="Responde rápido: Pro en menos de 4 h, el resto en menos de 24 h."
+          flush
+        >
+          {porConfirmar.length === 0 ? (
+            <p className="flex items-center gap-2 px-5 py-8 text-[13px]" style={{ color: C.muted }}>
+              <CheckCircle className="h-4 w-4" style={{ color: C.good }} /> Todo confirmado. No hay solicitudes esperando respuesta.
+            </p>
+          ) : (
+            porConfirmar.map((v, i) => <VisitaCard key={v.id} {...props(v)} first={i === 0} />)
+          )}
+        </Panel>
 
-      <section>
-        <SectionHeader title="Interesados" count={data.interesados.length} sub="Usuarios que guardaron tus listings en favoritos" />
-        {data.interesados.length === 0 ? (
-          <EmptyState msg="Nadie ha guardado tus listings todavía." />
-        ) : (
-          <>
-            <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-              {interesadosVis.map((p, i) => (
-                <div
-                  key={`${p.email}-${i}`}
-                  className="flex items-center justify-between gap-3 px-4 py-3"
-                  style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-medium" style={{ color: C.ink }}>{p.nombre ?? "Usuario"}</div>
-                    <div className="truncate text-xs" style={{ color: C.sub }}>
-                      {p.email} · guardó <span style={{ color: C.ink }}>{p.listing_titulo}</span>
-                    </div>
-                  </div>
-                  <span className="shrink-0 text-xs" style={{ color: C.muted }}>{relativeTime(p.created_at)}</span>
+        <Panel icon={Calendar} tone="info" title="Visitas confirmadas" count={confirmadas.length} subtitle="Tu agenda, ordenada por fecha." flush>
+          {confirmadas.length === 0 ? (
+            <p className="px-5 py-8 text-[13px]" style={{ color: C.muted }}>No tienes visitas confirmadas por ahora.</p>
+          ) : (
+            [...porDia.entries()].map(([dia, items]) => (
+              <div key={dia}>
+                <div className="px-5 py-2 text-[11px] font-bold uppercase tracking-wide" style={{ background: C.soft, color: dia === "Hoy" ? TONE.brand.fg : C.muted, borderTop: `1px solid ${C.line}` }}>
+                  {dia}
                 </div>
-              ))}
-            </div>
-            {data.interesados.length > LIMIT && (
-              <button
-                onClick={() => setVerInteresados((v) => !v)}
-                className="mt-2 text-xs font-semibold transition hover:underline"
-                style={{ color: C.brand }}
-              >
-                {verInteresados ? "Ver menos" : `Ver ${data.interesados.length - LIMIT} más`}
-              </button>
-            )}
-          </>
-        )}
-      </section>
+                {items.map((v, i) => <VisitaCard key={v.id} {...props(v)} first={i === 0} />)}
+              </div>
+            ))
+          )}
+        </Panel>
+      </div>
+
+      {historial.length > 0 && (
+        <Panel
+          icon={History}
+          title="Historial"
+          count={historial.length}
+          subtitle="Visitas realizadas, canceladas o a las que no asistieron."
+          flush
+          actions={historial.length > LIMIT ? (
+            <button onClick={() => setVerHistorial((x) => !x)} className="text-[12px] font-semibold hover:underline" style={{ color: TONE.brand.fg }}>
+              {verHistorial ? "Ver menos" : `Ver ${historial.length - LIMIT} más`}
+            </button>
+          ) : undefined}
+        >
+          {histVis.map((v, i) => {
+            const e = VISITA_ESTADO[v.estado];
+            return (
+              <div key={v.id} className="flex flex-wrap items-center gap-3 px-5 py-3" style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}>
+                <Avatar name={v.nombre} size={30} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[13px] font-semibold" style={{ color: C.ink }}><Name>{v.nombre}</Name></div>
+                  <div className="truncate text-[12px]" style={{ color: C.muted }}>{v.listing_titulo}</div>
+                </div>
+                <span className="text-[12px] tabular-nums" style={{ color: C.sub }}>
+                  {v.fecha_visita ? new Date(v.fecha_visita).toLocaleDateString("es-CO", { day: "numeric", month: "short" }) : "—"}
+                </span>
+                {v.resultado && <Pill tone={v.resultado === "oferta" ? "brand" : v.resultado === "interesado" ? "info" : "neutral"}>{RESULTADO_LABEL[v.resultado]}</Pill>}
+                <Pill tone={e.tone} dot>{e.label}</Pill>
+              </div>
+            );
+          })}
+        </Panel>
+      )}
     </div>
   );
 }
 
-const VISITA_ESTADO: Record<VisitaSolicitud["estado"], { label: string; dot: string }> = {
-  pendiente:  { label: "Pendiente",  dot: C.warn },
-  confirmada: { label: "Confirmada", dot: C.good },
-  realizada:  { label: "Realizada",  dot: C.muted },
-  cancelada:  { label: "Cancelada",  dot: C.muted },
-  no_asistio: { label: "No asistió", dot: C.bad },
+const VISITA_ESTADO: Record<VisitaSolicitud["estado"], { label: string; tone: Tone }> = {
+  pendiente:  { label: "Pendiente",  tone: "warn" },
+  confirmada: { label: "Confirmada", tone: "brand" },
+  realizada:  { label: "Realizada",  tone: "neutral" },
+  cancelada:  { label: "Cancelada",  tone: "neutral" },
+  no_asistio: { label: "No asistió", tone: "bad" },
 };
 
 const RESULTADO_LABEL: Record<NonNullable<VisitaSolicitud["resultado"]>, string> = {
@@ -1283,7 +1501,7 @@ function leadPills(v: VisitaSolicitud): string[] {
   return out;
 }
 
-function VisitaRow({
+function VisitaCard({
   visita: v,
   first,
   pending,
@@ -1295,176 +1513,245 @@ function VisitaRow({
   onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", resultado?: "interesado" | "oferta" | "descartado") => void;
 }) {
   const [pidiendoResultado, setPidiendoResultado] = useState(false);
-  const { label, dot } = VISITA_ESTADO[v.estado];
+  const vencido = slaVencido(v);
   const fecha = v.fecha_visita
     ? new Date(v.fecha_visita).toLocaleString("es-CO", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
     : "Sin fecha propuesta";
+  const hora = v.fecha_visita
+    ? new Date(v.fecha_visita).toLocaleTimeString("es-CO", { hour: "numeric", minute: "2-digit" })
+    : null;
+
+  const btn = "inline-flex min-h-[34px] items-center rounded-lg px-3 text-[12px] font-semibold transition hover:opacity-85 disabled:opacity-50";
+  const ghost = { border: `1px solid ${C.line}`, color: C.ink, background: C.card };
 
   return (
-    <div className="flex flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between" style={first ? undefined : { borderTop: `1px solid ${C.line}` }}>
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
-          <span className="font-medium" style={{ color: C.ink }}><Name>{v.nombre}</Name></span>
-          {v.es_pro && (
-            <span
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: "#FCD116", color: "#111418" }}
-              title="Lead de listing destacado — priorízalo"
-            >
-              🔥 Pro
-            </span>
-          )}
-          {v.calificado && (
-            <span
-              className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-              style={{ background: "#E7F4EC", color: "#0A5C36" }}
-              title="Lead calificado — dio presupuesto / plazo / crédito"
-            >
-              ✓ Calificado
-            </span>
-          )}
-          {(() => {
-            // SLA: Pro debe responderse en ≤4h; normal en ≤24h. horas_pendiente
-            // es null cuando ya se atendió (estado != pendiente).
-            const limite = v.es_pro ? 4 : 24;
-            const vencido = v.horas_pendiente != null && v.horas_pendiente >= limite;
-            if (!vencido) return null;
-            return (
-              <span
-                className="inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white"
-                style={{ background: "#CE1126" }}
-                title={`Sin responder hace ${v.horas_pendiente}h (SLA ${limite}h)`}
-              >
-                ⏰ Vencido
-              </span>
-            );
-          })()}
-          <span className="inline-flex items-center gap-1.5 text-xs" style={{ color: C.muted }}>
-            <span className="h-1.5 w-1.5 rounded-full" style={{ background: dot }} aria-hidden />
-            {label}
-          </span>
-        </div>
-        <div className="mt-0.5 text-sm" style={{ color: C.sub }}>
-          {v.listing_titulo} · <span style={{ color: C.ink }}>{fecha}</span>
-        </div>
-        <div className="mt-0.5 text-xs" style={{ color: C.muted }}>
-          {[v.telefono, v.email].filter(Boolean).join(" · ") || "Sin datos de contacto"}
-          {v.mensaje && ` · "${v.mensaje}"`}
-          {v.resultado && (
-            <span className="ml-1 font-medium" style={{ color: C.ink }}>· {RESULTADO_LABEL[v.resultado]}</span>
-          )}
-        </div>
-        {v.calificado && (
-          <div className="mt-1.5 flex flex-wrap gap-1.5">
-            {leadPills(v).map((p) => (
-              <span key={p} className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ background: C.soft, color: C.ink }}>
-                {p}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {(v.estado === "pendiente" || v.estado === "confirmada") && (
-        pidiendoResultado ? (
-          <div className="flex shrink-0 flex-wrap items-center gap-2">
-            <span className="text-xs" style={{ color: C.muted }}>¿Cómo terminó?</span>
-            {(Object.keys(RESULTADO_LABEL) as (keyof typeof RESULTADO_LABEL)[]).map((r) => (
-              <button
-                key={r}
-                onClick={() => { onEstado("realizada", r); setPidiendoResultado(false); }}
-                disabled={pending}
-                className="rounded-xl px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
-                style={{ border: `1px solid ${C.line}`, color: C.ink }}
-              >
-                {RESULTADO_LABEL[r]}
-              </button>
-            ))}
-            <button
-              onClick={() => setPidiendoResultado(false)}
-              className="text-xs transition hover:opacity-70"
-              style={{ color: C.muted }}
-            >
-              Volver
-            </button>
+    <div
+      className="px-5 py-4"
+      style={{
+        borderTop: first ? undefined : `1px solid ${C.line}`,
+        boxShadow: vencido ? `inset 3px 0 0 ${TONE.bad.solid}` : v.es_pro ? `inset 3px 0 0 #FCD116` : undefined,
+      }}
+    >
+      <div className="flex items-start gap-3">
+        {v.estado === "confirmada" && hora ? (
+          <div className="w-[72px] shrink-0 rounded-lg px-1 py-2 text-center" style={{ background: TONE.info.bg }}>
+            <div className="whitespace-nowrap text-[12px] font-bold tabular-nums leading-tight" style={{ color: TONE.info.fg }}>{hora}</div>
           </div>
         ) : (
-          <div className="flex shrink-0 gap-2">
-            {v.estado === "pendiente" && (
-              <button
-                onClick={() => onEstado("confirmada")}
-                disabled={pending}
-                className="rounded-xl px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                style={{ background: C.brand }}
-              >
-                Confirmar
-              </button>
+          <Avatar name={v.nombre} size={36} />
+        )}
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[14px] font-semibold" style={{ color: C.ink }}><Name>{v.nombre}</Name></span>
+            {v.es_pro && (
+              <span className="inline-flex items-center gap-0.5 rounded-md px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider"
+                style={{ background: "#FCD116", color: "#111418" }} title="Lead de listing destacado — priorízalo">
+                <Flame className="h-3 w-3" /> Pro
+              </span>
             )}
-            {v.estado === "confirmada" && (
-              <>
-                <button
-                  onClick={() => setPidiendoResultado(true)}
-                  disabled={pending}
-                  className="rounded-xl px-3 py-1.5 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
-                  style={{ background: C.brand }}
-                >
-                  Marcar realizada
-                </button>
-                <button
-                  onClick={() => onEstado("no_asistio")}
-                  disabled={pending}
-                  className="rounded-xl px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
-                  style={{ border: `1px solid ${C.line}`, color: C.ink }}
-                >
-                  No asistió
-                </button>
-              </>
+            {v.calificado && <Pill tone="brand">✓ Calificado</Pill>}
+            {vencido && (
+              <Pill tone="bad" title={`Sin responder hace ${v.horas_pendiente}h (SLA ${v.es_pro ? 4 : 24}h)`}>
+                <Clock className="h-3 w-3" /> {v.horas_pendiente}h sin responder
+              </Pill>
             )}
-            <button
-              onClick={() => onEstado("cancelada")}
-              disabled={pending}
-              className="rounded-xl px-3 py-1.5 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
-              style={{ border: `1px solid ${C.line}`, color: C.ink }}
-            >
-              Cancelar
-            </button>
           </div>
-        )
-      )}
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px]" style={{ color: C.sub }}>
+            <span className="inline-flex min-w-0 items-center gap-1"><Home className="h-3.5 w-3.5 shrink-0" style={{ color: C.muted }} /><span className="truncate">{v.listing_titulo}</span></span>
+            {v.estado !== "confirmada" && (
+              <span className="inline-flex items-center gap-1" style={{ color: C.ink }}><Calendar className="h-3.5 w-3.5" style={{ color: C.muted }} />{fecha}</span>
+            )}
+          </div>
+          {(v.telefono || v.email) && (
+            <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
+              {v.telefono && (
+                <a href={`tel:${v.telefono}`} className="inline-flex items-center gap-1 font-medium hover:underline" style={{ color: TONE.brand.fg }}>
+                  <Phone className="h-3.5 w-3.5" />{v.telefono}
+                </a>
+              )}
+              {v.email && (
+                <a href={`mailto:${v.email}`} className="inline-flex items-center gap-1 font-medium hover:underline" style={{ color: TONE.brand.fg }}>
+                  <Mail className="h-3.5 w-3.5" />{v.email}
+                </a>
+              )}
+            </div>
+          )}
+          {v.mensaje && (
+            <p className="mt-2 rounded-lg px-3 py-2 text-[12.5px] italic leading-snug" style={{ background: C.soft, color: C.sub }}>
+              “{v.mensaje}”
+            </p>
+          )}
+          {v.calificado && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {leadPills(v).map((p) => (
+                <span key={p} className="inline-flex items-center rounded-md px-2 py-0.5 text-[11px] font-medium" style={{ background: C.card, color: C.ink, border: `1px solid ${C.line}` }}>
+                  {p}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {(v.estado === "pendiente" || v.estado === "confirmada") && (
+            pidiendoResultado ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <span className="text-[12px] font-medium" style={{ color: C.sub }}>¿Cómo terminó?</span>
+                {(Object.keys(RESULTADO_LABEL) as (keyof typeof RESULTADO_LABEL)[]).map((r) => (
+                  <button key={r} onClick={() => { onEstado("realizada", r); setPidiendoResultado(false); }}
+                    disabled={pending} className={btn} style={ghost}>
+                    {RESULTADO_LABEL[r]}
+                  </button>
+                ))}
+                <button onClick={() => setPidiendoResultado(false)} className="text-[12px] transition hover:opacity-70" style={{ color: C.muted }}>
+                  Volver
+                </button>
+              </div>
+            ) : (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {v.estado === "pendiente" && (
+                  <button onClick={() => onEstado("confirmada")} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }}>
+                    <Check className="mr-1 h-3.5 w-3.5" /> Confirmar
+                  </button>
+                )}
+                {v.estado === "confirmada" && (
+                  <>
+                    <button onClick={() => setPidiendoResultado(true)} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }}>
+                      Marcar realizada
+                    </button>
+                    <button onClick={() => onEstado("no_asistio")} disabled={pending} className={btn} style={ghost}>
+                      No asistió
+                    </button>
+                  </>
+                )}
+                <button onClick={() => onEstado("cancelada")} disabled={pending} className={btn} style={ghost}>
+                  Cancelar
+                </button>
+              </div>
+            )
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ══ Interesados — agrupados por listing ═══════════════════════════════════════
+
+function InteresadosTab() {
+  const { data, isLoading, isError } = useAgenda();
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
+
+  if (isLoading) return <SkeletonRows n={4} />;
+  if (isError || !data) return <SectionError msg="No se pudo cargar tu agenda." />;
+
+  const grupos = new Map<string, Agenda["interesados"]>();
+  for (const p of data.interesados) grupos.set(p.listing_titulo, [...(grupos.get(p.listing_titulo) ?? []), p]);
+  const ordenados = [...grupos.entries()].sort((a, b) => b[1].length - a[1].length);
+
+  if (ordenados.length === 0) {
+    return (
+      <EmptyBlock icon={Heart} title="Nadie ha guardado tus listings todavía"
+        msg="Cuando un usuario guarde uno de tus inmuebles en favoritos, lo verás aquí para hacerle seguimiento." />
+    );
+  }
+
+  const LIMIT = 5;
+  return (
+    <div>
+      <p className="mb-4 text-[13px]" style={{ color: C.sub }}>
+        Usuarios que guardaron tus inmuebles en favoritos. Son compradores tibios: escríbeles para ofrecer una visita.
+      </p>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        {ordenados.map(([titulo, personas]) => {
+          const open = abiertos[titulo];
+          const vis = open ? personas : personas.slice(0, LIMIT);
+          return (
+            <Panel key={titulo} icon={Heart} tone="violet" title={<span className="truncate">{titulo}</span>} count={personas.length} flush>
+              {vis.map((p, i) => (
+                <div key={`${p.email}-${i}`} className="flex items-center gap-3 px-5 py-3" style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}>
+                  <Avatar name={p.nombre ?? p.email} size={32} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-[13px] font-semibold" style={{ color: C.ink }}>{p.nombre ?? "Usuario"}</div>
+                    <div className="truncate text-[12px]" style={{ color: C.muted }}>{p.email} · {relativeTime(p.created_at)}</div>
+                  </div>
+                  <a
+                    href={`mailto:${p.email}?subject=${encodeURIComponent(titulo)}`}
+                    className="inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-lg px-2.5 text-[12px] font-semibold transition hover:opacity-85"
+                    style={{ border: `1px solid ${C.line}`, color: C.ink }}
+                  >
+                    <Mail className="h-3.5 w-3.5" /> Escribir
+                  </a>
+                </div>
+              ))}
+              {personas.length > LIMIT && (
+                <button
+                  onClick={() => setAbiertos((s) => ({ ...s, [titulo]: !open }))}
+                  className="w-full px-5 py-2.5 text-left text-[12px] font-semibold hover:underline"
+                  style={{ color: TONE.brand.fg, borderTop: `1px solid ${C.line}` }}
+                >
+                  {open ? "Ver menos" : `Ver ${personas.length - LIMIT} más`}
+                </button>
+              )}
+            </Panel>
+          );
+        })}
+      </div>
     </div>
   );
 }
 
 // ══ TAB 3: Mis listings ════════════════════════════════════════════════════════
+// Organizado por ciclo de vida: Activos (en el mapa o pausados) → En preparación
+// (borrador / revisión / rechazado) → Cerrados. Arriba los KPIs del portafolio
+// (son también atajos de filtro); cada tarjeta dice su "próximo paso".
 
-const ESTADO_FILTER_OPTIONS: { value: EstadoListing | "todos"; label: string }[] = [
-  { value: "todos",       label: "Todos" },
-  { value: "publicado",   label: "Publicado" },
-  { value: "en_revision", label: "En revisión" },
-  { value: "borrador",    label: "Borrador" },
-  { value: "rechazado",   label: "Rechazado" },
-  { value: "pausado",     label: "Pausado" },
-  { value: "cerrado",     label: "Cerrado" },
-];
+type ListingGrupo = "todos" | "activos" | "preparacion" | "cerrados";
+type ListingOrden = "recientes" | "vistas" | "precio_desc" | "precio_asc";
+
+const GRUPO_DE: Record<EstadoListing, Exclude<ListingGrupo, "todos">> = {
+  publicado: "activos", pausado: "activos",
+  borrador: "preparacion", en_revision: "preparacion", rechazado: "preparacion",
+  cerrado: "cerrados",
+};
+// Los íconos se resuelven en render (no en una constante de módulo): el code-splitting
+// de TanStack Router pierde imports referenciados solo desde constantes top-level.
+const GRUPO_META: Record<Exclude<ListingGrupo, "todos">, { titulo: string; sub: string; tone: Tone }> = {
+  activos:     { titulo: "Activos", sub: "Publicados en el mapa o pausados temporalmente", tone: "brand" },
+  preparacion: { titulo: "En preparación", sub: "Borradores, en revisión o por corregir", tone: "warn" },
+  cerrados:    { titulo: "Cerrados", sub: "Ventas y arriendos reportados", tone: "neutral" },
+};
+function grupoIcon(g: Exclude<ListingGrupo, "todos">) {
+  return g === "activos" ? Globe2 : g === "preparacion" ? ClipboardList : Trophy;
+}
 
 function ListingsTab() {
   const { data, isLoading, isError } = useMisListings();
-  const [filtro, setFiltro] = useState<EstadoListing | "todos">("todos");
+  const [grupo, setGrupo] = useState<ListingGrupo>("todos");
+  const [busqueda, setBusqueda] = useState("");
+  const [orden, setOrden] = useState<ListingOrden>("recientes");
   const [editando, setEditando] = useState<MiListing | null>(null);
   const [cerrando, setCerrando] = useState<MiListing | null>(null);
   const cambiarEstado = useCambiarEstadoListing();
   const eliminar = useEliminarListing();
 
-  const visible = useMemo(
-    () => (filtro === "todos" ? data ?? [] : (data ?? []).filter((l) => l.estado === filtro)),
-    [data, filtro],
-  );
-  // Conteo por estado para las chips de filtro (solo los estados con al menos uno).
-  const counts = useMemo(() => {
-    const c: Record<string, number> = {};
-    for (const l of data ?? []) c[l.estado] = (c[l.estado] ?? 0) + 1;
-    return c;
-  }, [data]);
+  const all = data ?? [];
+  const n = (g: Exclude<ListingGrupo, "todos">) => all.filter((l) => GRUPO_DE[l.estado] === g).length;
+  const publicados = all.filter((l) => l.estado === "publicado").length;
+  const rechazados = all.filter((l) => l.estado === "rechazado").length;
+  const vistas30 = all.reduce((s, l) => s + (l.vistas_30d ?? 0), 0);
+  const vistasTot = all.reduce((s, l) => s + (l.vistas_total ?? 0), 0);
+  const favs = all.reduce((s, l) => s + (l.favoritos ?? 0), 0);
+
+  const visible = useMemo(() => {
+    let out = grupo === "todos" ? all : all.filter((l) => GRUPO_DE[l.estado] === grupo);
+    const q = busqueda.trim().toLowerCase();
+    if (q) out = out.filter((l) => `${l.titulo} ${l.barrio} ${l.tipo_inmueble}`.toLowerCase().includes(q));
+    const sorted = [...out];
+    if (orden === "recientes") sorted.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+    if (orden === "vistas") sorted.sort((a, b) => b.vistas_30d - a.vistas_30d);
+    if (orden === "precio_desc") sorted.sort((a, b) => b.precio - a.precio);
+    if (orden === "precio_asc") sorted.sort((a, b) => a.precio - b.precio);
+    return sorted;
+  }, [all, grupo, busqueda, orden]);
 
   const onEliminar = (l: MiListing) => {
     // ponytail: confirm nativo — accesible y sin modal extra; subir a modal si se pide.
@@ -1479,78 +1766,146 @@ function ListingsTab() {
   };
 
   const busy = cambiarEstado.isPending || eliminar.isPending;
+  const toggleGrupo = (g: ListingGrupo) => setGrupo((cur) => (cur === g ? "todos" : g));
+
+  const renderCards = (items: MiListing[]) => (
+    <div className="grid gap-4 md:grid-cols-2">
+      {items.map((l) => (
+        <ListingCard
+          key={l.id}
+          listing={l}
+          busy={busy}
+          onEditar={() => setEditando(l)}
+          onMarcarVendido={() => setCerrando(l)}
+          onPausar={() => cambiarEstado.mutate({ listingId: l.id, estado: "pausado" })}
+          onReactivar={() => cambiarEstado.mutate({ listingId: l.id, estado: "publicado" })}
+          onEliminar={() => onEliminar(l)}
+        />
+      ))}
+    </div>
+  );
 
   return (
     <section>
-      <div className="mb-5 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-semibold tracking-tight" style={{ color: C.ink }}>Mis listings</h2>
-          <p className="text-[13px]" style={{ color: C.sub }}>
-            Tus inmuebles publicados y en proceso. Edita la ficha completa de cualquiera.
-          </p>
-        </div>
-        <Link
-          to="/publicar"
-          className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white transition hover:opacity-90"
-          style={{ background: C.brand }}
-        >
-          <Plus className="h-4 w-4" /> Crear listing
-        </Link>
-      </div>
+      <PageHeader
+        title="Mis listings"
+        subtitle="Tu portafolio de inmuebles: lo que está en el mapa, lo que estás preparando y lo que ya cerraste."
+        actions={
+          <Link
+            to="/publicar"
+            className="inline-flex min-h-[44px] items-center gap-1.5 rounded-xl px-4 text-sm font-semibold text-white shadow-sm transition hover:opacity-90"
+            style={{ background: C.brand }}
+          >
+            <Plus className="h-4 w-4" /> Crear listing
+          </Link>
+        }
+      />
 
-      {!isLoading && data && data.length > 0 && (
-        <div className="mb-5 flex flex-wrap gap-2">
-          {ESTADO_FILTER_OPTIONS.map((opt) => {
-            const n = opt.value === "todos" ? data.length : counts[opt.value] ?? 0;
-            if (opt.value !== "todos" && n === 0) return null;
-            const active = filtro === opt.value;
-            return (
-              <button
-                key={opt.value}
-                onClick={() => setFiltro(opt.value)}
-                aria-pressed={active}
-                className="inline-flex min-h-[34px] items-center gap-1.5 rounded-full border px-3.5 text-[13px] font-semibold transition"
-                style={active
-                  ? { background: C.ink, borderColor: C.ink, color: "#fff" }
-                  : { background: C.card, borderColor: C.line, color: C.sub }}
-              >
-                {opt.label}
-                <span className="tabular-nums" style={{ opacity: 0.7 }}>{n}</span>
-              </button>
-            );
-          })}
+      {isLoading && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+            {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-2xl" />)}
+          </div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {Array.from({ length: 2 }).map((_, i) => <Skeleton key={i} className="h-80 rounded-2xl" />)}
+          </div>
         </div>
       )}
 
-      {isLoading && <SkeletonRows n={3} />}
-
       {isError && <SectionError msg="No se pudieron cargar tus listings." />}
 
-      {!isLoading && !isError && visible.length === 0 && (
-        <EmptyState
-          msg={
-            filtro === "todos"
-              ? "Aún no tienes listings. Publica tu primer inmueble desde el inbox."
-              : `No tienes listings con estado "${filtro}".`
+      {!isLoading && !isError && all.length === 0 && (
+        <EmptyBlock
+          icon={Building2}
+          title="Aún no tienes listings"
+          msg="Crea tu primer inmueble o acepta un propietario desde la bandeja para empezar a publicar."
+          action={
+            <Link to="/publicar" className="inline-flex items-center gap-1.5 rounded-xl px-4 py-2 text-sm font-semibold text-white" style={{ background: C.brand }}>
+              <Plus className="h-4 w-4" /> Crear listing
+            </Link>
           }
         />
       )}
 
-      {!isLoading && !isError && visible.length > 0 && (
-        <div className="grid gap-3">
-          {visible.map((l) => (
-            <ListingCard
-              key={l.id}
-              listing={l}
-              busy={busy}
-              onEditar={() => setEditando(l)}
-              onMarcarVendido={() => setCerrando(l)}
-              onPausar={() => cambiarEstado.mutate({ listingId: l.id, estado: "pausado" })}
-              onReactivar={() => cambiarEstado.mutate({ listingId: l.id, estado: "publicado" })}
-              onEliminar={() => onEliminar(l)}
+      {!isLoading && !isError && all.length > 0 && (
+        <>
+          <KpiGrid>
+            <KpiCard icon={Globe2} tone="brand" label="Publicados" value={publicados}
+              hint={`${n("activos") - publicados} pausados`}
+              active={grupo === "activos"} onClick={() => toggleGrupo("activos")} />
+            <KpiCard icon={ClipboardList} tone={rechazados > 0 ? "bad" : "warn"} label="En preparación" value={n("preparacion")}
+              hint={rechazados > 0 ? `${rechazados} por corregir` : "borradores y en revisión"}
+              active={grupo === "preparacion"} onClick={() => toggleGrupo("preparacion")} />
+            <KpiCard icon={Eye} tone="info" label="Aperturas · 30 días" value={vistas30.toLocaleString("es-CO")}
+              hint={`${vistasTot.toLocaleString("es-CO")} en total`} />
+            <KpiCard icon={Heart} tone="violet" label="Favoritos" value={favs.toLocaleString("es-CO")}
+              hint="veces que guardaron tus inmuebles" />
+          </KpiGrid>
+
+          {/* Barra de herramientas */}
+          <div className="mb-5 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <FilterTabs
+              label="Filtrar por etapa"
+              value={grupo}
+              onChange={setGrupo}
+              options={[
+                { v: "todos", label: "Todos", n: all.length },
+                { v: "activos", label: "Activos", n: n("activos") },
+                { v: "preparacion", label: "En preparación", n: n("preparacion") },
+                { v: "cerrados", label: "Cerrados", n: n("cerrados") },
+              ]}
             />
-          ))}
-        </div>
+            <div className="flex gap-2">
+              <div className="relative min-w-0 flex-1 lg:w-64 lg:flex-none">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: C.muted }} />
+                <input
+                  type="search"
+                  value={busqueda}
+                  onChange={(e) => setBusqueda(e.target.value)}
+                  placeholder="Buscar por título o barrio"
+                  aria-label="Buscar listings"
+                  className={`${inputCls} rounded-xl pl-9`}
+                />
+              </div>
+              <select
+                value={orden}
+                onChange={(e) => setOrden(e.target.value as ListingOrden)}
+                aria-label="Ordenar listings"
+                className={`${inputCls} w-auto rounded-xl`}
+              >
+                <option value="recientes">Más recientes</option>
+                <option value="vistas">Más vistos (30d)</option>
+                <option value="precio_desc">Mayor precio</option>
+                <option value="precio_asc">Menor precio</option>
+              </select>
+            </div>
+          </div>
+
+          {visible.length === 0 ? (
+            <EmptyBlock icon={Search} msg="Ningún listing coincide con este filtro o búsqueda." />
+          ) : grupo === "todos" ? (
+            <div className="space-y-8">
+              {(["preparacion", "activos", "cerrados"] as const).map((g) => {
+                const items = visible.filter((l) => GRUPO_DE[l.estado] === g);
+                if (items.length === 0) return null;
+                const m = GRUPO_META[g];
+                return (
+                  <div key={g}>
+                    <div className="mb-3 flex items-center gap-2.5">
+                      <IconChip icon={grupoIcon(g)} tone={m.tone} size={28} />
+                      <h2 className="text-[15px] font-semibold" style={{ color: C.ink }}>{m.titulo}</h2>
+                      <span className="text-[12px] tabular-nums" style={{ color: C.muted }}>{items.length}</span>
+                      <span className="hidden text-[12px] sm:inline" style={{ color: C.muted }}>· {m.sub}</span>
+                    </div>
+                    {renderCards(items)}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            renderCards(visible)
+          )}
+        </>
       )}
 
       {editando && (
@@ -1670,20 +2025,21 @@ function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose:
   );
 }
 
-// Botón de acción de fila: target ≥24px (WCAG 2.2 SC 2.5.8), min-h-[32px] real.
+// Botón de acción de fila: target ≥24px (WCAG 2.2 SC 2.5.8), min-h-[34px] real.
 function RowAction({ onClick, disabled, variant = "ghost", title, children }: {
   onClick: () => void; disabled?: boolean; variant?: "ghost" | "primary" | "danger"; title?: string; children: React.ReactNode;
 }) {
-  const styles =
-    variant === "primary" ? "border-primary text-primary hover:bg-primary hover:text-white"
-    : variant === "danger" ? "border-danger/40 text-danger hover:bg-danger hover:text-white"
-    : "border-border text-muted-foreground hover:text-foreground";
+  const style =
+    variant === "primary" ? { background: C.brand, color: "#fff", border: `1px solid ${C.brand}` }
+    : variant === "danger" ? { background: "transparent", color: TONE.bad.fg, border: `1px solid ${TONE.bad.line}` }
+    : { background: C.card, color: C.ink, border: `1px solid ${C.line}` };
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className={`inline-flex min-h-[32px] shrink-0 items-center rounded-md border px-3 text-xs font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:opacity-50 ${styles}`}
+      className="inline-flex min-h-[34px] shrink-0 items-center rounded-lg px-3 text-[12px] font-semibold transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:opacity-50"
+      style={style}
     >
       {children}
     </button>
@@ -1698,6 +2054,17 @@ function tipoIcon(tipo: string) {
   return Building2;
 }
 
+// Próximo paso sugerido para un listing según su estado y su ficha.
+function proximoPasoListing(l: MiListing): { tone: Tone; texto: string } | null {
+  if (l.estado === "rechazado") return { tone: "bad", texto: "Rechazado en revisión: corrige la ficha y vuelve a enviarla." };
+  if (l.estado === "borrador") return { tone: "warn", texto: "Borrador: completa la ficha para enviarla a revisión." };
+  if (l.estado === "en_revision") return { tone: "info", texto: "En revisión por el equipo. Te avisamos cuando se apruebe." };
+  if (l.estado === "pausado") return { tone: "neutral", texto: "Pausado: no aparece en el mapa hasta que lo reactives." };
+  if (l.estado === "publicado" && !l.cover_url) return { tone: "warn", texto: "Sin foto de portada: agrégala para destacar en el mapa." };
+  if (l.estado === "publicado" && !l.descripcion) return { tone: "info", texto: "Agrega una descripción para que los interesados entiendan el inmueble." };
+  return null;
+}
+
 function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, onReactivar, onEliminar }: {
   listing: MiListing; busy?: boolean;
   onEditar: () => void; onMarcarVendido: () => void; onPausar: () => void; onReactivar: () => void; onEliminar: () => void;
@@ -1705,130 +2072,138 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
   const estado = ESTADO_META[l.estado];
   const puedeCerrar = l.estado === "publicado" || l.estado === "pausado";
   const PlaceIcon = tipoIcon(l.tipo_inmueble);
+  const paso = proximoPasoListing(l);
+  const conv = l.vistas_total > 0 ? Math.round(((l.favoritos ?? 0) / l.vistas_total) * 100) : null;
 
   const spec = (val: number | null, suffix: string, Icon: typeof Bed) =>
     val == null ? null : (
-      <span className="inline-flex items-center gap-1 text-xs" style={{ color: C.sub }}>
+      <span className="inline-flex items-center gap-1 text-[12px]" style={{ color: C.sub }}>
         <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{val}{suffix}
       </span>
     );
-  const metrica = (Icon: typeof Eye, val: number, title: string) => (
-    <span className="inline-flex items-center gap-1 text-xs tabular-nums" style={{ color: C.sub }} title={title}>
-      <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{val.toLocaleString("es-CO")}
-    </span>
-  );
 
   return (
-    <div
+    <article
       data-testid="listing-row"
       data-estado={l.estado}
-      className="flex flex-col gap-3 rounded-2xl p-3 transition hover:shadow-sm sm:p-4"
-      style={{ background: C.card, border: `1px solid ${C.line}` }}
+      className="flex flex-col overflow-hidden rounded-2xl transition hover:shadow-md"
+      style={{ background: C.card, border: `1px solid ${C.line}`, opacity: l.estado === "cerrado" ? 0.85 : 1 }}
     >
-      <div className="flex gap-3 sm:gap-4">
-        {/* Portada */}
-        <div
-          className="relative grid h-20 w-28 shrink-0 place-items-center overflow-hidden rounded-xl sm:h-24 sm:w-36"
-          style={{ background: C.soft }}
-        >
-          {l.cover_url ? (
-            <img src={l.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
-          ) : (
-            <PlaceIcon className="h-7 w-7" style={{ color: C.muted }} />
-          )}
-          {!l.cover_url && (
-            <span className="absolute bottom-1 right-1 inline-flex items-center gap-0.5 rounded-md px-1 py-0.5 text-[10px]"
-              style={{ background: "rgba(0,0,0,0.5)", color: "#fff" }}>
-              <Camera className="h-2.5 w-2.5" /> Sin foto
-            </span>
-          )}
+      {/* Portada */}
+      <div className={`relative shrink-0 overflow-hidden ${l.cover_url ? "h-44" : "h-28"}`} style={{ background: `linear-gradient(135deg, ${C.soft}, #ECE7DA)` }}>
+        {l.cover_url ? (
+          <img src={l.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
+        ) : (
+          <div className="grid h-full w-full place-items-center">
+            <div className="flex flex-col items-center gap-1.5" style={{ color: C.muted }}>
+              <PlaceIcon className="h-9 w-9 opacity-60" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Camera className="h-3 w-3" /> Sin foto</span>
+            </div>
+          </div>
+        )}
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3">
+          <Pill tone={estado.tone} dot testId="listing-estado">{estado.label}</Pill>
+          <span
+            className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-5 backdrop-blur"
+            style={{ background: "rgba(255,255,255,0.88)", color: l.es_propio ? TONE.brand.fg : C.sub }}
+            title={l.es_propio ? "Creado por ti" : "Asignado de un lead — representas al propietario"}
+          >
+            {l.es_propio ? "Propio" : "Asignado"}
+          </span>
+        </div>
+      </div>
+
+      {/* Info */}
+      <div className="flex flex-1 flex-col p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug" style={{ color: C.ink }}>{l.titulo}</h3>
+            <p className="mt-1 flex items-center gap-1 truncate text-[12px] capitalize" style={{ color: C.muted }}>
+              <MapPin className="h-3.5 w-3.5 shrink-0" />
+              {l.tipo_inmueble} · {l.operacion}{l.barrio ? ` · ${l.barrio}` : ""}
+            </p>
+          </div>
+        </div>
+        <div className="mt-2 text-[20px] font-bold tabular-nums tracking-tight" style={{ color: C.ink }}>
+          {formatCOP(l.precio)}
+        </div>
+        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          {spec(l.area_m2, " m²", Maximize2)}
+          {spec(l.habitaciones, " hab", Bed)}
+          {spec(l.banos, " baños", Bath)}
+          {spec(l.parqueaderos, " parq", Car)}
         </div>
 
-        {/* Info */}
-        <div className="min-w-0 flex-1">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <span data-testid="listing-estado"
-              className={`inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium ${estado.badge}`}>
-              {estado.label}
-            </span>
-            <span className="inline-flex shrink-0 items-center rounded-full border px-2 py-0.5 text-[11px] font-medium"
-              style={l.es_propio
-                ? { borderColor: C.brand, background: "rgba(15,138,79,0.08)", color: C.brand }
-                : { borderColor: C.line, background: C.soft, color: C.muted }}
-              title={l.es_propio ? "Creado por ti" : "Asignado de un lead — representas al propietario"}>
-              {l.es_propio ? "Propio" : "Asignado"}
-            </span>
-          </div>
-          <h3 className="mt-1 truncate text-sm font-semibold" style={{ color: C.ink }}>{l.titulo}</h3>
-          <p className="mt-0.5 truncate text-xs capitalize" style={{ color: C.sub }}>
-            {l.tipo_inmueble} · {l.operacion}{l.barrio ? ` · ${l.barrio}` : ""}
+        {/* Rendimiento */}
+        <dl className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl" style={{ background: C.soft }}>
+          {[
+            { k: "aperturas", v: l.vistas_total.toLocaleString("es-CO"), icon: Eye },
+            { k: "últimos 30d", v: l.vistas_30d.toLocaleString("es-CO"), icon: TrendingUp },
+            { k: "favoritos", v: (l.favoritos ?? 0).toLocaleString("es-CO"), icon: Heart },
+          ].map(({ k, v, icon: Icon }, i) => (
+            <div key={k} className="px-3 py-2.5" style={i > 0 ? { borderLeft: `1px solid ${C.line}` } : undefined}>
+              <dd className="flex items-center gap-1 text-[15px] font-bold tabular-nums" style={{ color: C.ink }}>
+                <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{v}
+              </dd>
+              <dt className="text-[11px]" style={{ color: C.muted }}>{k}</dt>
+            </div>
+          ))}
+        </dl>
+        {conv != null && conv > 0 && (
+          <p className="mt-1.5 text-[11px]" style={{ color: C.muted }}>
+            {conv}% de quienes lo abren lo guardan en favoritos.
           </p>
-          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
-            {spec(l.area_m2, " m²", Maximize2)}
-            {spec(l.habitaciones, " hab", Bed)}
-            {spec(l.banos, " baños", Bath)}
-            {spec(l.parqueaderos, " parq", Car)}
+        )}
+
+        {paso && (
+          <div
+            className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-[12px] leading-snug"
+            style={{ background: TONE[paso.tone].bg, color: TONE[paso.tone].fg }}
+          >
+            <Info className="mt-px h-3.5 w-3.5 shrink-0" />
+            <span>{paso.texto}</span>
           </div>
+        )}
+
+        {/* Acciones */}
+        <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+          <span className="mr-auto text-[11px]" style={{ color: C.muted }}>Actualizado {relativeTime(l.updated_at)}</span>
+          {l.estado !== "cerrado" && (
+            <RowAction onClick={onEditar} disabled={busy} variant="primary" title="Editar la ficha completa">Editar</RowAction>
+          )}
+          {l.estado === "publicado" && (
+            <RowAction onClick={onPausar} disabled={busy} title="Ocultar temporalmente este listing">Pausar</RowAction>
+          )}
+          {l.estado === "pausado" && (
+            <RowAction onClick={onReactivar} disabled={busy} title="Volver a publicar">Reactivar</RowAction>
+          )}
+          {puedeCerrar && (
+            <RowAction onClick={onMarcarVendido} disabled={busy}
+              title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje">
+              Marcar vendido
+            </RowAction>
+          )}
+          <RowAction onClick={onEliminar} disabled={busy} variant="danger" title="Eliminar este listing">Eliminar</RowAction>
         </div>
-
-        {/* Precio + métricas */}
-        <div className="flex shrink-0 flex-col items-end justify-between text-right">
-          <div className="text-base font-bold tabular-nums sm:text-lg" style={{ color: C.ink }}>
-            {formatCOP(l.precio)}
-          </div>
-          <div className="mt-2 hidden flex-col items-end gap-1 sm:flex">
-            {metrica(Eye, l.vistas_total, "Aperturas de detalle (total)")}
-            {metrica(Heart, l.favoritos ?? 0, "Veces guardado en favoritos")}
-            <span className="text-[11px]" style={{ color: C.muted }}>{l.vistas_30d.toLocaleString("es-CO")} en 30d</span>
-          </div>
-        </div>
       </div>
-
-      {/* Métricas en móvil (bajo la info) */}
-      <div className="flex items-center gap-3 sm:hidden">
-        {metrica(Eye, l.vistas_total, "Aperturas de detalle (total)")}
-        {metrica(Heart, l.favoritos ?? 0, "Veces guardado en favoritos")}
-        <span className="text-[11px]" style={{ color: C.muted }}>{l.vistas_30d.toLocaleString("es-CO")} en 30d</span>
-      </div>
-
-      {/* Acciones */}
-      <div className="flex flex-wrap items-center gap-2 border-t pt-3" style={{ borderColor: C.line }}>
-        <span className="mr-auto text-[11px]" style={{ color: C.muted }}>Actualizado {relativeTime(l.updated_at)}</span>
-        {l.estado !== "cerrado" && (
-          <RowAction onClick={onEditar} disabled={busy} variant="primary" title="Editar la ficha completa">Editar</RowAction>
-        )}
-        {l.estado === "publicado" && (
-          <RowAction onClick={onPausar} disabled={busy} title="Ocultar temporalmente este listing">Pausar</RowAction>
-        )}
-        {l.estado === "pausado" && (
-          <RowAction onClick={onReactivar} disabled={busy} title="Volver a publicar">Reactivar</RowAction>
-        )}
-        {puedeCerrar && (
-          <RowAction onClick={onMarcarVendido} disabled={busy}
-            title="Reportar la venta: desbloquea comparables de cierre y sube tu puntaje">
-            Marcar vendido
-          </RowAction>
-        )}
-        <RowAction onClick={onEliminar} disabled={busy} variant="danger" title="Eliminar este listing">Eliminar</RowAction>
-      </div>
-    </div>
+    </article>
   );
 }
 
-const ESTADO_META: Record<EstadoListing, { label: string; badge: string }> = {
-  publicado:   { label: "Publicado",   badge: "border-success/30 bg-success/10 text-success" },
-  en_revision: { label: "En revisión", badge: "border-warning/30 bg-warning/10 text-warning" },
-  borrador:    { label: "Borrador",    badge: "border-border bg-muted text-muted-foreground" },
-  pausado:     { label: "Pausado",     badge: "border-border bg-muted text-muted-foreground" },
-  rechazado:   { label: "Rechazado",   badge: "border-danger/30 bg-danger/10 text-danger" },
-  cerrado:     { label: "Cerrado",     badge: "border-border bg-muted text-muted-foreground" },
+const ESTADO_META: Record<EstadoListing, { label: string; tone: Tone }> = {
+  publicado:   { label: "Publicado",   tone: "brand" },
+  en_revision: { label: "En revisión", tone: "info" },
+  borrador:    { label: "Borrador",    tone: "warn" },
+  pausado:     { label: "Pausado",     tone: "neutral" },
+  rechazado:   { label: "Rechazado",   tone: "bad" },
+  cerrado:     { label: "Cerrado",     tone: "neutral" },
 };
 
-// ══ TAB: Resultados ════════════════════════════════════════════════════════════
-// Panel client-facing (PDF panel-resultados-realtor.pdf, luz verde de Kathy).
-// NO trae datos nuevos: reúne los MISMOS endpoints que Desempeño (/desempeno) e
-// Inteligencia (/inteligencia/{zona}) en lenguaje llano para el realtor. La zona
-// pagada manda: §2 y §3 hablan de la misma zona (la de mayor patrocinio).
+// ══ Mercado › Zonas de interés ═════════════════════════════════════════════════
+// Panel client-facing (PDF panel-resultados-realtor.pdf). Reúne /desempeno e
+// /inteligencia/{zona} en lenguaje llano. La zona pagada manda: el resumen y el
+// mercado hablan de la misma zona (la de mayor patrocinio). El embudo completo de
+// la zona vive en Inicio — aquí solo el resumen para no duplicarlo.
 
 const TIER_LABEL: Record<string, string> = {
   agente_premium: "Plan Agente Premium",
@@ -1850,60 +2225,83 @@ function etiquetaCaminable(score: number | null | undefined): string {
   return "Poco caminable";
 }
 
+const signo = (v: number, dec = 1) => `${v > 0 ? "+" : ""}${v.toFixed(dec)}%`;
+
 // Comparables de cierre — incentivo de reciprocidad: gated si no has reportado cierres.
 function ComparablesSection() {
   const { data, isLoading } = useComparables();
+  const goTo = useContext(GoToSection);
+  const necesarios = data?.cierres_necesarios ?? 1;
+  const hechos = data?.cierres_reportados ?? 0;
+
   return (
-    <section>
-      <BloqueHeader
-        titulo="Comparables de cierre"
-        estado={data?.acceso ? "disponible" : "pendiente"}
-        sub="Precios reales de venta (no de aviso)"
-      />
-      {isLoading && <SkeletonRows n={2} />}
+    <Panel
+      icon={data?.acceso ? Trophy : Lock}
+      tone={data?.acceso ? "brand" : "neutral"}
+      title="Comparables de cierre"
+      subtitle="Precios reales de venta, no de aviso"
+      count={data?.acceso ? data.comparables.length : undefined}
+      flush
+      actions={data?.acceso ? <Pill tone="brand" dot>Ya disponible</Pill> : <Pill tone="neutral">Bloqueado</Pill>}
+    >
+      {isLoading && <div className="p-5"><SkeletonRows n={2} /></div>}
+
       {!isLoading && data && !data.acceso && (
-        <div className="rounded-2xl border border-dashed p-5 text-sm" style={{ background: C.soft, borderColor: C.line }}>
-          <p className="font-semibold" style={{ color: C.ink }}>🔒 Desbloquea los comparables de cierre</p>
-          <p className="mt-1" style={{ color: C.sub }}>{data.motivo}</p>
-          <p className="mt-2 text-xs" style={{ color: C.muted }}>
-            Has reportado {data.cierres_reportados} de {data.cierres_necesarios ?? 1} cierres necesarios.
-            Marca vendido un listing en “Mis listings”.
-          </p>
+        <div className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="min-w-0">
+            <p className="text-[14px] font-semibold" style={{ color: C.ink }}>Desbloquea los comparables de cierre</p>
+            <p className="mt-1 text-[13px]" style={{ color: C.sub }}>{data.motivo}</p>
+            <div className="mt-3 flex items-center gap-3">
+              <div className="h-2 w-40 overflow-hidden rounded-full" style={{ background: C.soft }}>
+                <div className="h-full rounded-full" style={{ width: `${Math.min(100, (hechos / Math.max(necesarios, 1)) * 100)}%`, background: C.brand }} />
+              </div>
+              <span className="text-[12px] tabular-nums" style={{ color: C.muted }}>{hechos} de {necesarios} cierres reportados</span>
+            </div>
+          </div>
+          <button
+            onClick={() => goTo("listings")}
+            className="inline-flex min-h-[40px] shrink-0 items-center gap-1.5 rounded-xl px-4 text-[13px] font-semibold text-white transition hover:opacity-90"
+            style={{ background: C.brand }}
+          >
+            Reportar un cierre <ArrowRight className="h-4 w-4" />
+          </button>
         </div>
       )}
+
       {!isLoading && data?.acceso && data.comparables.length === 0 && (
-        <EmptyState msg="Aún no hay cierres reportados para comparar. A medida que los agentes reporten, aparecerán aquí." />
+        <p className="px-5 py-8 text-center text-[13px]" style={{ color: C.muted }}>
+          Aún no hay cierres reportados para comparar. A medida que los agentes reporten, aparecerán aquí.
+        </p>
       )}
+
       {!isLoading && data?.acceso && data.comparables.length > 0 && (
         <>
-        <p className="mb-3 text-xs" style={{ color: C.muted }}>
-          {data.verificados ?? 0} verificados · {data.autoreportados ?? 0} autoreportados.
-          “Sin verificar” = reportado por un agente, aún sin cruzar con el registro (SNR) — tómalo con cautela.
-        </p>
-        <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+          <div className="hidden grid-cols-[1fr_90px_90px_140px_120px] gap-3 px-5 py-2 text-[11px] font-bold uppercase tracking-wide sm:grid"
+            style={{ background: C.soft, color: C.muted }}>
+            <span>Inmueble</span><span>Área</span><span>Fecha</span><span className="text-right">Precio de cierre</span><span className="text-right">Precio / m²</span>
+          </div>
           {data.comparables.map((c, i) => (
-            <div key={i} className="flex items-center justify-between px-4 py-3" style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}>
-              <div className="min-w-0">
-                <div className="text-sm font-medium capitalize" style={{ color: C.ink }}>
-                  {c.tipo_inmueble} · {c.barrio ?? "—"}
-                  {c.verificado
-                    ? <span className="ml-2 text-[11px] font-semibold" style={{ color: C.good }}>✓ verificado</span>
-                    : <span className="ml-2 text-[11px] font-medium" style={{ color: C.muted }}>· sin verificar</span>}
-                </div>
-                <div className="text-xs" style={{ color: C.sub }}>
-                  {c.area_m2 ? `${c.area_m2} m²` : "área —"} · {new Date(c.fecha).toLocaleDateString("es-CO", { month: "short", year: "numeric" })}
-                </div>
+            <div key={i} className="grid grid-cols-2 items-center gap-x-3 gap-y-1 px-5 py-3 sm:grid-cols-[1fr_90px_90px_140px_120px]"
+              style={{ borderTop: `1px solid ${C.line}` }}>
+              <div className="col-span-2 min-w-0 sm:col-span-1">
+                <div className="truncate text-[13px] font-semibold capitalize" style={{ color: C.ink }}>{c.tipo_inmueble} · {c.barrio ?? "—"}</div>
+                {c.verificado
+                  ? <span className="text-[11px] font-semibold" style={{ color: TONE.brand.fg }}>✓ verificado</span>
+                  : <span className="text-[11px]" style={{ color: C.muted }}>sin verificar</span>}
               </div>
-              <div className="text-right">
-                <div className="text-sm font-semibold tabular-nums" style={{ color: C.ink }}>{c.precio != null ? formatCOP(c.precio) : "—"}</div>
-                <div className="text-xs" style={{ color: C.muted }}>{c.precio_m2 != null ? `${formatCOP(c.precio_m2)}/m²` : ""}</div>
-              </div>
+              <span className="text-[12.5px] tabular-nums" style={{ color: C.sub }}>{c.area_m2 ? `${c.area_m2} m²` : "—"}</span>
+              <span className="text-[12.5px]" style={{ color: C.sub }}>{new Date(c.fecha).toLocaleDateString("es-CO", { month: "short", year: "numeric" })}</span>
+              <span className="text-right text-[13px] font-bold tabular-nums" style={{ color: C.ink }}>{c.precio != null ? formatCOP(c.precio) : "—"}</span>
+              <span className="text-right text-[12.5px] tabular-nums" style={{ color: C.sub }}>{c.precio_m2 != null ? formatCOP(c.precio_m2) : "—"}</span>
             </div>
           ))}
-        </div>
+          <p className="px-5 py-3 text-[11.5px]" style={{ color: C.muted, borderTop: `1px solid ${C.line}` }}>
+            {data.verificados ?? 0} verificados · {data.autoreportados ?? 0} autoreportados.
+            “Sin verificar” = reportado por un agente, aún sin cruzar con el registro (SNR) — tómalo con cautela.
+          </p>
         </>
       )}
-    </section>
+    </Panel>
   );
 }
 
@@ -1918,178 +2316,121 @@ function ResultadosTab() {
 
   if (isLoading) {
     return (
-      <div className="space-y-6">
-        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3">
-          {Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
-        </div>
-        <Skeleton className="h-64 rounded-xl" />
+      <div className="space-y-5">
+        <Skeleton className="h-40 rounded-2xl" />
+        <Skeleton className="h-64 rounded-2xl" />
       </div>
     );
   }
   if (isError || !data) return <SectionError msg="No se pudo cargar tu panel de resultados." />;
 
+  const yieldTxt = intel?.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—";
+
   return (
-    <div className="space-y-12">
-      <header>
-        <h1 className="text-xl font-semibold" style={{ color: C.ink }}>Zonas de interés</h1>
-        <p className="mt-1 max-w-2xl text-sm" style={{ color: C.sub }}>
-          Cómo rinde tu zona pagada, los comparables de cierre y qué dice el mercado.
-          {/* El resumen de desempeño (aceptación, respuesta, asistencia) vive ahora en Inicio. */}
-        </p>
-      </header>
+    <div className="space-y-6">
+      <PageHeader
+        title="Zonas de interés"
+        subtitle="Cómo rinde tu zona pagada, los precios reales de cierre y qué dice el mercado para tus clientes."
+      />
 
-      {/* ── Comparables de cierre (incentivo de reciprocidad) ── */}
-      <ComparablesSection />
-
-      {/* ── §2 Resultados en tu zona pagada ── */}
-      <section>
-        <BloqueHeader titulo="Resultados en tu zona pagada" estado="disponible" />
-        {!zonaPagada ? (
-          <EmptyState msg="Cuando actives una zona pagada, aquí verás cuánto te cuesta cada cliente y cómo avanzan tus inmuebles en esa zona." />
-        ) : (
-          <div className="rounded-2xl p-5 sm:p-6" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-            <div>
-              <h3 className="text-base font-semibold capitalize" style={{ color: C.ink }}>
-                {zonaPagada.zona_nombre}
-                <span className="ml-2 text-sm font-normal capitalize" style={{ color: C.muted }}>{zonaPagada.nivel}</span>
-              </h3>
-              <p className="mt-0.5 text-xs" style={{ color: C.muted }}>{planZona(zonaPagada)}</p>
-            </div>
-
-            <div className="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-3">
-              <BigNumber
-                value={zonaPagada.costo_por_intake != null ? formatCOP(zonaPagada.costo_por_intake) : "—"}
-                sub="Costo por cada cliente conseguido"
-              />
-              <BigNumber
-                value={zonaPagada.vistas_30d.toLocaleString("es-CO")}
-                sub="Visitas a tus inmuebles este mes"
-              />
-              <BigNumber
-                value={zonaPagada.intakes_mes}
-                sub="Inmuebles nuevos este mes"
-              />
-            </div>
-
-            <div className="mt-6 space-y-2">
-              {[
-                { label: "Llegaron",  value: zonaPagada.intakes_mes },
-                { label: "Tomados",   value: zonaPagada.tomados_mes },
-                { label: "Publicados", value: zonaPagada.publicados_total },
-                { label: "Cerrados",  value: zonaPagada.cerrados_total },
-              ].map(({ label, value }) => {
-                const max = Math.max(zonaPagada.intakes_mes, 1);
-                return (
-                  <div key={label} className="flex items-center gap-3">
-                    <span className="w-24 shrink-0 text-sm" style={{ color: C.sub }}>{label}</span>
-                    <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: C.soft }}>
-                      <div className="h-full rounded-full" style={{ width: `${Math.min(100, (value / max) * 100)}%`, background: C.brand }} />
-                    </div>
-                    <span className="w-8 shrink-0 text-right text-sm font-semibold tabular-nums" style={{ color: C.ink }}>{value}</span>
-                  </div>
-                );
-              })}
+      {/* Zona pagada: tarjeta destacada */}
+      {!zonaPagada ? (
+        <EmptyBlock icon={MapPinned} title="Aún no tienes una zona pagada"
+          msg="Cuando actives una zona pagada, aquí verás cuánto te cuesta cada cliente y la información de mercado de esa zona." />
+      ) : (
+        <section
+          className="overflow-hidden rounded-2xl"
+          style={{ background: `linear-gradient(135deg, ${TONE.brand.fg} 0%, #0F8A4F 60%, #1baf7a 100%)`, color: "#fff" }}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-4 p-5 sm:p-6">
+            <div className="min-w-0">
+              <div className="text-[11px] font-bold uppercase tracking-wider opacity-80">Tu zona pagada</div>
+              <h2 className="mt-1 flex items-center gap-2 text-[22px] font-bold capitalize">
+                <MapPinned className="h-5 w-5 opacity-90" /> {zonaPagada.zona_nombre}
+              </h2>
+              <p className="mt-0.5 text-[12.5px] opacity-85"><span className="capitalize">{zonaPagada.nivel}</span> · {planZona(zonaPagada)}</p>
             </div>
           </div>
-        )}
-      </section>
+          <div className="grid grid-cols-1 gap-px sm:grid-cols-3" style={{ background: "rgba(255,255,255,0.18)" }}>
+            {[
+              { v: zonaPagada.costo_por_intake != null ? formatCOP(zonaPagada.costo_por_intake) : "—", l: "Costo por cada cliente conseguido" },
+              { v: zonaPagada.vistas_30d.toLocaleString("es-CO"), l: "Visitas a tus inmuebles este mes" },
+              { v: zonaPagada.intakes_mes, l: "Inmuebles nuevos este mes" },
+            ].map((k) => (
+              <div key={k.l} className="px-5 py-4 sm:px-6" style={{ background: "rgba(8,60,35,0.28)" }}>
+                <div className="text-[24px] font-bold tabular-nums leading-tight">{k.v}</div>
+                <div className="mt-0.5 text-[12px] opacity-85">{k.l}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
-      {/* ── §3 Información del mercado ── */}
-      <section>
-        <BloqueHeader titulo="Información del mercado" estado="disponible" />
-        {!zonaPagada ? (
-          <EmptyState msg="La información de mercado aparece según tu zona pagada." />
-        ) : intelError || !intel ? (
-          <EmptyState msg="Aún no tenemos datos de mercado para esta zona." />
-        ) : (
-          <div className="space-y-6">
-            <h3 className="text-sm font-semibold uppercase tracking-wide" style={{ color: C.muted }}>
-              {intel.nombre ?? zonaPagada.zona_nombre}
-            </h3>
+      <ComparablesSection />
 
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <MercadoCol titulo="Venta" filas={[
+      {/* Información del mercado */}
+      {zonaPagada && (
+        <div>
+          <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+            <h2 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>
+              Información del mercado <span className="font-normal" style={{ color: C.muted }}>· {intel?.nombre ?? zonaPagada.zona_nombre}</span>
+            </h2>
+            <span className="text-[11.5px]" style={{ color: C.muted }}>Se actualiza cada semana o cada mes, no al instante.</span>
+          </div>
+          {intelError || !intel ? (
+            <EmptyBlock icon={BarChart2} msg="Aún no tenemos datos de mercado para esta zona." />
+          ) : (
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
+              <MercadoCol icon={Home} tone="brand" titulo="Venta" filas={[
                 ["Precio por metro cuadrado", intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"],
-                ["Ganancia anual", intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"],
+                ["Ganancia anual", yieldTxt],
                 ["Facilidad de venta", intel.liquidez.categoria ?? "—"],
                 ["Tiempo estimado para vender", intel.liquidez.tiempo_estimado_venta ?? "—"],
               ]} />
-              <MercadoCol titulo="Arriendo de largo plazo" filas={[
+              <MercadoCol icon={KeyRound} tone="info" titulo="Arriendo de largo plazo" filas={[
                 ["Arriendo típico", intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"],
-                ["Ganancia anual", intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"],
+                ["Ganancia anual", yieldTxt],
                 ["Años para recuperar la inversión", intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"],
               ]} />
-              <MercadoCol titulo="Alquiler por días (tipo Airbnb)" filas={[
+              <MercadoCol icon={Sun} tone="warn" titulo="Alquiler por días (tipo Airbnb)" filas={[
                 ["Días ocupado", intel.airbnb.ocupacion_pct != null ? `${Math.round(intel.airbnb.ocupacion_pct)}%` : "—"],
                 ["Precio promedio por noche", intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"],
                 ["Ganancia anual", intel.airbnb.yield_airbnb_pct != null ? `${intel.airbnb.yield_airbnb_pct.toFixed(1)}%` : "—"],
               ]} />
-            </div>
-
-            <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-              <MercadoCol titulo="Seguridad" filas={[
+              <MercadoCol icon={ShieldCheck} tone="violet" titulo="Seguridad" filas={[
                 ["Qué tan segura es", intel.seguridad.score != null ? `${intel.seguridad.score} de 100` : "—"],
                 ["Cómo va cambiando", intel.seguridad.tendencia ?? "—"],
               ]} />
-              <MercadoCol titulo="Ubicación" filas={[
+              <MercadoCol icon={TrainFront} tone="info" titulo="Ubicación" filas={[
                 ["Distancia al metro", intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"],
                 ["Qué tan caminable es", etiquetaCaminable(intel.conectividad.walk_score)],
                 ["Colegios cerca", intel.conectividad.n_colegios_1km ?? "—"],
               ]} />
-              <MercadoCol titulo="Valorización" filas={[
-                ["Cuánto subió de precio este año", intel.valorizacion.var_anual_pct != null ? `${intel.valorizacion.var_anual_pct > 0 ? "+" : ""}${intel.valorizacion.var_anual_pct.toFixed(1)}%` : "—"],
-                ["Lo que se espera que suba en 5 años", intel.valorizacion.proyeccion_5anos_pct != null ? `${intel.valorizacion.proyeccion_5anos_pct > 0 ? "+" : ""}${intel.valorizacion.proyeccion_5anos_pct.toFixed(0)}%` : "—"],
+              <MercadoCol icon={TrendingUp} tone="brand" titulo="Valorización" filas={[
+                ["Cuánto subió de precio este año", intel.valorizacion.var_anual_pct != null ? signo(intel.valorizacion.var_anual_pct) : "—"],
+                ["Lo que se espera que suba en 5 años", intel.valorizacion.proyeccion_5anos_pct != null ? signo(intel.valorizacion.proyeccion_5anos_pct, 0) : "—"],
               ]} />
             </div>
-
-            <p className="text-xs" style={{ color: C.muted }}>
-              Esta información se actualiza cada semana o cada mes, no al instante.
-            </p>
-          </div>
-        )}
-      </section>
-    </div>
-  );
-}
-
-// Encabezado de bloque con sello "YA DISPONIBLE" / "AÚN NO EXISTEN"
-function BloqueHeader({ titulo, estado, sub }: { titulo: string; estado: "disponible" | "pendiente"; sub?: string }) {
-  return (
-    <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1">
-      <h2 className="text-lg font-semibold" style={{ color: C.ink }}>{titulo}</h2>
-      {estado === "disponible" ? (
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider" style={{ background: "rgba(15,138,79,0.12)", color: C.brand }}>
-          Ya disponible
-        </span>
-      ) : (
-        <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider" style={{ background: C.soft, color: C.muted }}>
-          Aún no existen
-        </span>
+          )}
+        </div>
       )}
-      {sub && <span className="w-full text-xs sm:w-auto" style={{ color: C.muted }}>{sub}</span>}
     </div>
   );
 }
 
-function BigNumber({ value, sub }: { value: string | number; sub: string }) {
+// Tarjeta de mercado: encabezado con ícono + filas [etiqueta, valor] con divisores.
+function MercadoCol({ icon, tone, titulo, filas }: { icon: typeof Eye; tone: Tone; titulo: string; filas: [string, string | number][] }) {
   return (
-    <div>
-      <div className="text-3xl font-semibold tabular-nums" style={{ color: C.ink }}>{value}</div>
-      <div className="mt-1 text-xs leading-relaxed" style={{ color: C.sub }}>{sub}</div>
-    </div>
-  );
-}
-
-// Columna de mercado: título + filas [etiqueta, valor]
-function MercadoCol({ titulo, filas }: { titulo: string; filas: [string, string | number][] }) {
-  return (
-    <div className="rounded-2xl p-5" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <h4 className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.brand }}>{titulo}</h4>
-      <dl className="mt-3 space-y-3">
+    <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}`, boxShadow: "0 1px 2px rgba(17,20,24,0.04)" }}>
+      <div className="flex items-center gap-2.5 px-4 py-3" style={{ borderBottom: `1px solid ${C.line}`, background: TONE[tone].bg }}>
+        <IconChip icon={icon} tone={tone} size={28} />
+        <h3 className="text-[13px] font-bold" style={{ color: TONE[tone].fg }}>{titulo}</h3>
+      </div>
+      <dl className="divide-y px-4" style={{ borderColor: C.line }}>
         {filas.map(([label, value]) => (
-          <div key={label} className="flex items-baseline justify-between gap-3">
-            <dt className="text-xs" style={{ color: C.sub }}>{label}</dt>
-            <dd className="shrink-0 text-sm font-semibold tabular-nums" style={{ color: C.ink }}>{value}</dd>
+          <div key={label} className="flex items-baseline justify-between gap-3 py-2.5" style={{ borderColor: C.line }}>
+            <dt className="text-[12.5px]" style={{ color: C.sub }}>{label}</dt>
+            <dd className="shrink-0 text-[14px] font-bold tabular-nums first-letter:uppercase" style={{ color: C.ink }}>{value}</dd>
           </div>
         ))}
       </dl>
@@ -2097,69 +2438,28 @@ function MercadoCol({ titulo, filas }: { titulo: string; filas: [string, string 
   );
 }
 
-// Primitivos alineados al _kit (mismo look que Resumen/Simulador/Comparador) para
-// que TODO el dashboard sea congruente: tarjetas rounded-2xl, paleta C, tipografía.
-function StatTile({ label, value, sub }: { label: string; value: string | number; sub: string }) {
-  return (
-    <div className="flex flex-col justify-center rounded-2xl px-4 py-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <div className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>{label}</div>
-      <div className="mt-1 text-[26px] font-bold leading-none tabular-nums" style={{ color: C.ink }}>{value}</div>
-      <div className="mt-1 text-[11px] leading-snug" style={{ color: C.sub }}>{sub}</div>
-    </div>
-  );
-}
-
-// unit: "%" para tasas reales 0–100; "/100" para scores. Gauge de arco (igual que _kit).
-function RingStat({ label, percent, sub, unit = "%" }: { label: string; percent: number | null; sub: string; unit?: "%" | "/100" }) {
-  const v = percent ?? 0;
-  const R = 22, CIRC = 2 * Math.PI * R;
-  const col = v >= 66 ? C.brand : v >= 33 ? C.warn : C.bad;
-  return (
-    <div className="flex items-center gap-3 rounded-2xl px-4 py-4" style={{ background: C.card, border: `1px solid ${C.line}` }}>
-      <div className="relative shrink-0" style={{ width: 56, height: 56 }}>
-        <svg width={56} height={56} viewBox="0 0 56 56">
-          <circle cx={28} cy={28} r={R} fill="none" stroke={C.soft} strokeWidth={6} />
-          {percent != null && (
-            <circle cx={28} cy={28} r={R} fill="none" stroke={col} strokeWidth={6} strokeLinecap="round"
-              strokeDasharray={`${CIRC * (v / 100)} ${CIRC}`} transform="rotate(-90 28 28)" />
-          )}
-        </svg>
-        <div className="absolute inset-0 flex items-center justify-center font-bold tabular-nums"
-          style={{ color: C.ink, fontSize: unit === "/100" ? 10 : 12 }}>
-          {percent != null ? `${percent}${unit}` : "—"}
-        </div>
-      </div>
-      <div>
-        <div className="text-[12px] font-semibold" style={{ color: C.ink }}>{label}</div>
-        <div className="mt-0.5 text-[11px]" style={{ color: C.muted }}>{sub}</div>
-      </div>
-    </div>
-  );
-}
-
-// ══ TAB 4: Inteligencia ════════════════════════════════════════════════════════
-// Regla de visualización (consistente con Desempeño): scores y tasas acotados
-// 0–100 (score de inversión, liquidez, seguridad, ocupación, walk/transit score)
-// van en RingStat. Dinero, conteos, distancias y % no acotados (yields,
-// valorización) van en StatTile — un ring casi vacío para un yield del 6%
-// sería más confuso que informativo.
+// ══ Mercado › Inteligencia ═════════════════════════════════════════════════════
+// Regla de visualización: scores y tasas acotados 0–100 (inversión, liquidez,
+// seguridad, ocupación, walk/transit) llevan anillo. Dinero, conteos, distancias y
+// % no acotados (yields, valorización) van como número — un anillo casi vacío para
+// un yield del 6% confundiría más de lo que informa.
 
 function InteligenciaTab() {
   const { data: perfil } = useRealtorPerfil();
   const { data: listings } = useMisListings();
 
   const zonas = useMemo(() => {
-    const map = new Map<string, { nombre: string; nivel: ZonaNivel }>();
+    const map = new Map<string, { nombre: string; nivel: ZonaNivel; patrocinada: boolean }>();
     // zonas patrocinadas primero: son las que sí tienen datos resolubles
     // (comuna/barrio con cd_comuna/id real), vs. el barrio-texto libre del listing.
-    for (const z of perfil?.zonas_patrocinadas ?? []) map.set(z.codigo, { nombre: z.nombre, nivel: z.nivel });
+    for (const z of perfil?.zonas_patrocinadas ?? []) map.set(z.codigo, { nombre: z.nombre, nivel: z.nivel, patrocinada: true });
     for (const l of listings ?? []) {
       if (l.barrio) {
         const code = l.barrio.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
-        if (!map.has(code)) map.set(code, { nombre: l.barrio, nivel: "barrio" });
+        if (!map.has(code)) map.set(code, { nombre: l.barrio, nivel: "barrio", patrocinada: false });
       }
     }
-    return Array.from(map.entries()).map(([codigo, v]) => ({ codigo, nombre: v.nombre, nivel: v.nivel }));
+    return Array.from(map.entries()).map(([codigo, v]) => ({ codigo, ...v }));
   }, [perfil, listings]);
 
   const [selectedZona, setSelectedZona] = useState<string | null>(null);
@@ -2167,96 +2467,123 @@ function InteligenciaTab() {
   const activeNivel = zonas.find((z) => z.codigo === activeZona)?.nivel ?? "barrio";
 
   const { data: intel, isLoading, isError } = useInteligenciaBarrio(activeZona, activeNivel);
+  const pctTxt = (v: number | null | undefined, dec = 1) => (v != null ? `${v.toFixed(dec)}%` : "—");
 
   return (
     <section>
-      <SectionHeader title="Inteligencia de barrio" />
+      <PageHeader
+        title="Inteligencia de barrio"
+        subtitle="Todo lo que necesitas para asesorar a un inversionista: rentabilidad por modalidad, liquidez, seguridad y valorización."
+      />
 
       {zonas.length === 0 ? (
-        <EmptyState msg="Agrega listings o patrocina una zona para ver métricas de mercado." />
+        <EmptyBlock icon={BarChart2} msg="Agrega listings o patrocina una zona para ver métricas de mercado." />
       ) : (
         <>
-          <div className="mb-4">
-            <select
-              value={activeZona ?? ""}
-              onChange={(e) => setSelectedZona(e.target.value || null)}
-              className={inputCls}
-              style={{ maxWidth: 260 }}
-              aria-label="Seleccionar zona de análisis"
-            >
-              {zonas.map((z) => (
-                <option data-i18n-skip key={z.codigo} value={z.codigo}>{z.nombre}</option>
-              ))}
-            </select>
+          <div className="mb-5 flex flex-wrap gap-2" role="group" aria-label="Seleccionar zona de análisis">
+            {zonas.map((z) => {
+              const on = z.codigo === activeZona;
+              return (
+                <button
+                  key={z.codigo}
+                  data-i18n-skip
+                  onClick={() => setSelectedZona(z.codigo)}
+                  aria-pressed={on}
+                  className="inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3.5 text-[13px] font-semibold transition"
+                  style={on
+                    ? { background: C.ink, color: "#fff" }
+                    : { background: C.card, color: C.sub, border: `1px solid ${C.line}` }}
+                >
+                  {z.patrocinada && <MapPinned className="h-3.5 w-3.5" style={{ color: on ? "#7EE2AE" : C.brand }} />}
+                  {z.nombre}
+                </button>
+              );
+            })}
           </div>
 
           {isLoading && (
-            <div className="grid grid-cols-2 gap-4 sm:grid-cols-4">
-              {Array.from({ length: 4 }).map((_, i) => (
-                <Skeleton key={i} className="h-24 rounded-lg" />
-              ))}
+            <div className="grid gap-4 md:grid-cols-2">
+              {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-40 rounded-2xl" />)}
             </div>
           )}
 
           {isError && <SectionError msg="No se pudo cargar la inteligencia del barrio." />}
 
           {!isLoading && !isError && intel && (
-            <div className="space-y-6">
-              <div className="rounded-lg border-l-4 pl-4" style={{ borderColor: intel.color_hex ?? "#888780" }}>
-                <IntelGroup title="Score de inversión por horizonte">
-                  <RingStat label="Corto plazo" percent={intel.scores.corto} sub={intel.scores.cat_corto ?? "Airbnb"} unit="/100" />
-                  <RingStat label="Mediano plazo" percent={intel.scores.mediano} sub={intel.scores.cat_mediano ?? "renta media"} unit="/100" />
-                  <RingStat label="Largo plazo" percent={intel.scores.largo} sub={intel.scores.cat_largo ?? "renta larga"} unit="/100" />
-                  <StatTile label="Perfil recomendado" value={intel.scores.perfil_recomendado ?? "—"} sub="mejor uso de la zona" />
+            <div className="space-y-4">
+              {/* Hero: score de inversión por horizonte */}
+              <section className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+                <div className="h-1.5" style={{ background: intel.color_hex ?? C.brand }} />
+                <div className="grid gap-5 p-5 lg:grid-cols-[1fr_auto] lg:items-center">
+                  <div>
+                    <div className="text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>Score de inversión por horizonte</div>
+                    <div className="mt-3 grid grid-cols-1 gap-4 sm:grid-cols-3">
+                      <MetricCell label="Corto plazo" ring={intel.scores.corto} value={`${intel.scores.corto ?? "—"}/100`} hint={intel.scores.cat_corto ?? "Airbnb"} />
+                      <MetricCell label="Mediano plazo" ring={intel.scores.mediano} value={`${intel.scores.mediano ?? "—"}/100`} hint={intel.scores.cat_mediano ?? "renta media"} />
+                      <MetricCell label="Largo plazo" ring={intel.scores.largo} value={`${intel.scores.largo ?? "—"}/100`} hint={intel.scores.cat_largo ?? "renta larga"} />
+                    </div>
+                  </div>
+                  <div className="rounded-xl px-5 py-4 lg:min-w-[220px]" style={{ background: TONE.brand.bg }}>
+                    <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wide" style={{ color: TONE.brand.fg }}>
+                      <Sparkles className="h-3.5 w-3.5" /> Perfil recomendado
+                    </div>
+                    <div className="mt-1 text-[18px] font-bold first-letter:uppercase" style={{ color: C.ink }}>{intel.scores.perfil_recomendado ?? "—"}</div>
+                    <div className="text-[11.5px]" style={{ color: C.sub }}>mejor uso de la zona</div>
+                  </div>
+                </div>
+              </section>
+
+              <div className="grid items-start gap-4 md:grid-cols-2">
+                <IntelGroup icon={Home} tone="brand" title="Venta">
+                  <MetricCell label="Liquidez" ring={intel.liquidez.score} value={`${intel.liquidez.score ?? "—"}/100`} hint={intel.liquidez.categoria ?? "facilidad de venta"} />
+                  <MetricCell label="Mediana m² venta" value={intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"} hint="precio por m²" />
+                  <MetricCell label="Tiempo estimado de venta" value={intel.liquidez.tiempo_estimado_venta ?? "—"} hint="en el mercado" />
+                </IntelGroup>
+
+                <IntelGroup icon={KeyRound} tone="info" title="Renta larga">
+                  <MetricCell label="Canon mediano" value={intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"} hint="COP / mes" />
+                  <MetricCell label="Yield bruto" value={pctTxt(intel.mercado.yield_bruto_pct)} hint="anual sobre precio" accent={TONE.brand.fg} />
+                  <MetricCell label="Años de recupero" value={intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"} hint="capital vía arriendo" />
+                </IntelGroup>
+
+                <IntelGroup icon={Briefcase} tone="violet" title="Renta media (nómadas 1-3 meses)">
+                  <MetricCell label="Precio mediano" value={intel.mercado.precio_renta_media_p50 ? formatCOP(intel.mercado.precio_renta_media_p50) : "—"} hint="COP / mes" />
+                  <MetricCell label="Yield renta media" value={pctTxt(intel.mercado.yield_renta_media_pct)} hint="anual" accent={TONE.brand.fg} />
+                  <MetricCell label="Listings activos" value={intel.mercado.n_listings_renta_media ?? "—"} hint="oferta actual" />
+                  <MetricCell label="Premium vs renta larga" value={intel.mercado.premium_vs_largo_pct != null ? `+${intel.mercado.premium_vs_largo_pct.toFixed(0)}%` : "—"} hint="sobre canon tradicional" />
+                </IntelGroup>
+
+                <IntelGroup icon={Sun} tone="warn" title="Renta corta (Airbnb)">
+                  <MetricCell label="Ocupación" ring={intel.airbnb.ocupacion_pct != null ? Math.round(intel.airbnb.ocupacion_pct) : null}
+                    value={intel.airbnb.ocupacion_pct != null ? `${Math.round(intel.airbnb.ocupacion_pct)}%` : "—"} hint="promedio zona" />
+                  <MetricCell label="Tarifa noche" value={intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"} hint="ADR promedio" />
+                  <MetricCell label="Yield Airbnb" value={pctTxt(intel.airbnb.yield_airbnb_pct)} hint="anual" accent={TONE.brand.fg} />
+                  <MetricCell label="Listings activos" value={intel.airbnb.n_listings ?? "—"} hint="oferta actual" />
+                </IntelGroup>
+
+                <IntelGroup icon={ShieldCheck} tone="violet" title="Seguridad">
+                  <MetricCell label="Score seguridad" ring={intel.seguridad.score} value={`${intel.seguridad.score ?? "—"}/100`} hint={intel.seguridad.categoria ?? "percepción residente"} />
+                  <MetricCell label="Tendencia" value={intel.seguridad.tendencia ?? "—"} hint="últimos periodos" />
+                  {intel.seguridad.nota && (
+                    <p className="col-span-full rounded-lg px-3 py-2 text-[12px]" style={{ background: C.soft, color: C.sub }}>{intel.seguridad.nota}</p>
+                  )}
+                </IntelGroup>
+
+                <IntelGroup icon={TrainFront} tone="info" title="Conectividad">
+                  <MetricCell label="Al metro" value={intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"} hint="distancia" />
+                  <MetricCell label="Colegios a 1km" value={intel.conectividad.n_colegios_1km ?? "—"} hint="cercanos" />
+                  <MetricCell label="Caminabilidad" ring={intel.conectividad.walk_score} value={`${intel.conectividad.walk_score ?? "—"}/100`} hint="walk score" />
+                  <MetricCell label="Transporte público" ring={intel.conectividad.transit_score} value={`${intel.conectividad.transit_score ?? "—"}/100`} hint="transit score" />
                 </IntelGroup>
               </div>
 
-              <IntelGroup title="Venta">
-                <RingStat label="Liquidez" percent={intel.liquidez.score} sub={intel.liquidez.categoria ?? "facilidad de venta"} unit="/100" />
-                <StatTile label="Mediana m² venta" value={intel.mercado.precio_m2_cop ? formatCOP(intel.mercado.precio_m2_cop) : "—"} sub="precio por m²" />
-                <StatTile label="Tiempo estimado de venta" value={intel.liquidez.tiempo_estimado_venta ?? "—"} sub="en el mercado" />
+              <IntelGroup icon={TrendingUp} tone="brand" title="Valorización" wide>
+                <MetricCell label="Variación anual" value={intel.valorizacion.var_anual_pct != null ? signo(intel.valorizacion.var_anual_pct) : "—"} hint={intel.valorizacion.tendencia ?? "histórico"} accent={TONE.brand.fg} />
+                <MetricCell label="Proyección 3 años" value={intel.valorizacion.proyeccion_3anos_pct != null ? signo(intel.valorizacion.proyeccion_3anos_pct, 0) : "—"} hint="estimado" />
+                <MetricCell label="Proyección 5 años" value={intel.valorizacion.proyeccion_5anos_pct != null ? signo(intel.valorizacion.proyeccion_5anos_pct, 0) : "—"} hint="estimado" />
               </IntelGroup>
 
-              <IntelGroup title="Renta larga" dense>
-                <StatTile label="Canon mediano" value={intel.mercado.arriendo_p50_cop ? formatCOP(intel.mercado.arriendo_p50_cop) : "—"} sub="COP / mes" />
-                <StatTile label="Yield bruto" value={intel.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—"} sub="anual sobre precio" />
-                <StatTile label="Años de recupero" value={intel.mercado.anos_recupero != null ? intel.mercado.anos_recupero.toFixed(1) : "—"} sub="capital vía arriendo" />
-              </IntelGroup>
-
-              <IntelGroup title="Renta media (nómadas 1-3 meses)" dense>
-                <StatTile label="Precio mediano" value={intel.mercado.precio_renta_media_p50 ? formatCOP(intel.mercado.precio_renta_media_p50) : "—"} sub="COP / mes" />
-                <StatTile label="Yield renta media" value={intel.mercado.yield_renta_media_pct != null ? `${intel.mercado.yield_renta_media_pct.toFixed(1)}%` : "—"} sub="anual" />
-                <StatTile label="Listings activos" value={intel.mercado.n_listings_renta_media ?? "—"} sub="oferta actual" />
-                <StatTile label="Premium vs renta larga" value={intel.mercado.premium_vs_largo_pct != null ? `+${intel.mercado.premium_vs_largo_pct.toFixed(0)}%` : "—"} sub="sobre canon tradicional" />
-              </IntelGroup>
-
-              <IntelGroup title="Renta corta (Airbnb)">
-                <RingStat label="Ocupación" percent={intel.airbnb.ocupacion_pct != null ? Math.round(intel.airbnb.ocupacion_pct) : null} sub="promedio zona" />
-                <StatTile label="Tarifa noche" value={intel.airbnb.adr_cop ? formatCOP(intel.airbnb.adr_cop) : "—"} sub="ADR promedio" />
-                <StatTile label="Yield Airbnb" value={intel.airbnb.yield_airbnb_pct != null ? `${intel.airbnb.yield_airbnb_pct.toFixed(1)}%` : "—"} sub="anual" />
-                <StatTile label="Listings activos" value={intel.airbnb.n_listings ?? "—"} sub="oferta actual" />
-              </IntelGroup>
-
-              <IntelGroup title="Seguridad">
-                <RingStat label="Score seguridad" percent={intel.seguridad.score} sub={intel.seguridad.categoria ?? "percepción residente"} unit="/100" />
-                <StatTile label="Tendencia" value={intel.seguridad.tendencia ?? "—"} sub="últimos periodos" />
-                {intel.seguridad.nota && <StatTile label="Nota" value="" sub={intel.seguridad.nota} />}
-              </IntelGroup>
-
-              <IntelGroup title="Conectividad">
-                <StatTile label="Al metro" value={intel.conectividad.dist_metro_km != null ? `${intel.conectividad.dist_metro_km.toFixed(1)} km` : "—"} sub="distancia" />
-                <RingStat label="Caminabilidad" percent={intel.conectividad.walk_score} sub="walk score" unit="/100" />
-                <RingStat label="Transporte público" percent={intel.conectividad.transit_score} sub="transit score" unit="/100" />
-                <StatTile label="Colegios a 1km" value={intel.conectividad.n_colegios_1km ?? "—"} sub="cercanos" />
-              </IntelGroup>
-
-              <IntelGroup title="Valorización" dense>
-                <StatTile label="Variación anual" value={intel.valorizacion.var_anual_pct != null ? `${intel.valorizacion.var_anual_pct.toFixed(1)}%` : "—"} sub={intel.valorizacion.tendencia ?? "histórico"} />
-                <StatTile label="Proyección 3 años" value={intel.valorizacion.proyeccion_3anos_pct != null ? `${intel.valorizacion.proyeccion_3anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
-                <StatTile label="Proyección 5 años" value={intel.valorizacion.proyeccion_5anos_pct != null ? `${intel.valorizacion.proyeccion_5anos_pct.toFixed(0)}%` : "—"} sub="estimado" />
-              </IntelGroup>
-
-              <p className="text-xs text-muted-foreground">
+              <p className="text-[11.5px]" style={{ color: C.muted }}>
                 Las medianas son nominales; deflactar con IPC (DANE) antes de comparar períodos.
               </p>
             </div>
@@ -2267,47 +2594,18 @@ function InteligenciaTab() {
   );
 }
 
-// ── Atoms ──────────────────────────────────────────────────────────────────────
-
-function SectionHeader({ title, count, sub }: { title: string; count?: number; sub?: string }) {
-  return (
-    <div className="mb-4">
-      <h2 className="text-base font-semibold text-foreground">
-        {title}
-        {count != null && <span className="ml-2 font-normal text-muted-foreground">({count})</span>}
-      </h2>
-      {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
-    </div>
-  );
-}
-
-// dense=false (default) para grupos con algún RingStat: la tarjeta horizontal
-// (donut + texto) necesita más ancho que un StatTile — 3 columnas es la misma
-// densidad ya probada en Desempeño. dense=true para grupos solo de StatTile.
-function IntelGroup({
-  title,
-  dense = false,
-  children,
-}: {
-  title: string;
-  dense?: boolean;
-  children: React.ReactNode;
+// Grupo de métricas: un solo panel con encabezado y grid interno (sin cajitas anidadas).
+function IntelGroup({ icon, tone, title, wide, children }: {
+  icon: typeof Eye; tone: Tone; title: string; wide?: boolean; children: React.ReactNode;
 }) {
   return (
-    <div>
-      <h3 className="mb-2 text-sm font-semibold text-foreground">{title}</h3>
-      <div className={`grid grid-cols-2 gap-4 ${dense ? "sm:grid-cols-4" : "sm:grid-cols-3"}`}>{children}</div>
-    </div>
+    <Panel icon={icon} tone={tone} title={title}>
+      <div className={`grid grid-cols-1 gap-x-6 gap-y-5 sm:grid-cols-2 ${wide ? "lg:grid-cols-3" : ""}`}>{children}</div>
+    </Panel>
   );
 }
 
-function EmptyState({ msg }: { msg: string }) {
-  return (
-    <div className="rounded-lg border border-dashed border-border px-6 py-10 text-center">
-      <p className="mx-auto max-w-sm text-sm text-muted-foreground">{msg}</p>
-    </div>
-  );
-}
+// ── Atoms ──────────────────────────────────────────────────────────────────────
 
 function SectionError({ msg }: { msg: string }) {
   return (
@@ -2350,30 +2648,20 @@ type ConfigSub = "perfil" | "horario" | "zonas";
 
 function ConfiguracionTab() {
   const [sub, setSub] = useState<ConfigSub>("perfil");
-  const subTabs: { id: ConfigSub; label: string }[] = [
-    { id: "perfil",  label: "Perfil público" },
-    { id: "horario", label: "Horario de visitas" },
-    { id: "zonas",   label: "Zonas patrocinadas" },
-  ];
 
   return (
     <section>
-      <SectionHeader title="Configuración" />
-      <div className="mb-6 flex gap-2 border-b border-border">
-        {subTabs.map(({ id, label }) => (
-          <button
-            key={id}
-            onClick={() => setSub(id)}
-            aria-current={sub === id ? "page" : undefined}
-            className={`shrink-0 border-b-2 px-1 pb-2.5 text-sm transition ${
-              sub === id
-                ? "border-primary font-semibold text-foreground"
-                : "border-transparent font-medium text-muted-foreground hover:text-foreground"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-5">
+        <FilterTabs
+          label="Configuración"
+          value={sub}
+          onChange={setSub}
+          options={[
+            { v: "perfil", label: "Perfil público" },
+            { v: "horario", label: "Horario de visitas" },
+            { v: "zonas", label: "Zonas patrocinadas" },
+          ]}
+        />
       </div>
       {sub === "perfil" && <PerfilTab />}
       {sub === "horario" && <DisponibilidadTab />}
@@ -2428,42 +2716,66 @@ function PerfilTab() {
   const initials = perfil?.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
   return (
-    <div className="max-w-xl">
-      <p className="mb-5 text-sm text-muted-foreground">
-        Así te ven los visitantes en tu perfil público del directorio. Tus propiedades y cierres se muestran solos.
-      </p>
-
-      {/* Foto */}
-      <div className="mb-6 flex items-center gap-4">
-        <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl border border-border bg-surface text-lg font-semibold text-foreground">
-          {perfil?.avatar
-            ? <img src={perfil.avatar} alt={perfil.nombre} className="h-full w-full object-cover" />
-            : initials}
+    <div className="grid items-start gap-5 lg:grid-cols-[1fr_320px]">
+      <Panel icon={User} tone="brand" title="Perfil público" subtitle="Así te ven los visitantes en el directorio de agentes.">
+        <div className="mb-6 flex items-center gap-4">
+          <div className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl text-lg font-semibold" style={{ background: C.soft, color: C.ink, border: `1px solid ${C.line}` }}>
+            {perfil?.avatar
+              ? <img src={perfil.avatar} alt={perfil.nombre} className="h-full w-full object-cover" />
+              : initials}
+          </div>
+          <div>
+            <label className="inline-flex cursor-pointer items-center gap-1.5 rounded-xl px-4 py-2 text-[13px] font-semibold transition hover:opacity-85" style={{ border: `1px solid ${C.line}`, color: C.ink }}>
+              <Camera className="h-4 w-4" /> {subiendo ? "Subiendo…" : "Cambiar foto"}
+              <input type="file" accept="image/*" onChange={subirFoto} disabled={subiendo} className="hidden" />
+            </label>
+            <p className="mt-1.5 text-[11.5px]" style={{ color: C.muted }}>Una foto clara de tu rostro genera más confianza.</p>
+          </div>
         </div>
-        <label className="cursor-pointer rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface">
-          {subiendo ? "Subiendo…" : "Cambiar foto"}
-          <input type="file" accept="image/*" onChange={subirFoto} disabled={subiendo} className="hidden" />
-        </label>
-      </div>
 
-      {/* Bio */}
-      <label className="mb-1.5 block text-sm font-medium text-foreground">Descripción</label>
-      <textarea
-        value={bio}
-        onChange={(e) => setBio(e.target.value)}
-        maxLength={2000}
-        rows={6}
-        placeholder="Cuéntales a los clientes sobre ti: tu experiencia, las zonas que conoces, tu estilo de trabajo."
-        className="w-full resize-none rounded-lg border border-border bg-background p-3 text-sm text-foreground outline-none focus:border-primary"
-      />
-      <div className="mt-1 text-right text-xs text-muted-foreground">{bio.length}/2000</div>
-      <button
-        onClick={guardarBio}
-        disabled={saving}
-        className="mt-2 rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60"
-      >
-        {saving ? "Guardando…" : "Guardar"}
-      </button>
+        <label className="mb-1.5 block text-[13px] font-semibold" style={{ color: C.ink }}>Descripción</label>
+        <textarea
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
+          maxLength={2000}
+          rows={7}
+          placeholder="Cuéntales a los clientes sobre ti: tu experiencia, las zonas que conoces, tu estilo de trabajo."
+          className="w-full resize-none rounded-xl border border-border bg-background p-3 text-sm text-foreground outline-none focus:border-primary"
+        />
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-[11.5px] tabular-nums" style={{ color: C.muted }}>{bio.length}/2000</span>
+          <button
+            onClick={guardarBio}
+            disabled={saving}
+            className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            style={{ background: C.brand }}
+          >
+            {saving ? "Guardando…" : "Guardar"}
+          </button>
+        </div>
+      </Panel>
+
+      {/* Vista previa */}
+      <div className="lg:sticky lg:top-32">
+        <div className="mb-2 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>Vista previa</div>
+        <div className="overflow-hidden rounded-2xl" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+          <div className="h-16" style={{ background: `linear-gradient(135deg, ${TONE.brand.fg}, #1baf7a)` }} />
+          <div className="-mt-8 px-4 pb-4">
+            <div className="grid h-16 w-16 place-items-center overflow-hidden rounded-2xl text-base font-bold" style={{ background: C.soft, color: C.ink, border: "3px solid #fff" }}>
+              {perfil?.avatar ? <img src={perfil.avatar} alt="" className="h-full w-full object-cover" /> : initials}
+            </div>
+            <div className="mt-2 text-[15px] font-bold" style={{ color: C.ink }}>{perfil ? <Name>{perfil.nombre}</Name> : "—"}</div>
+            {perfil && perfil.zonas_patrocinadas.length > 0 && (
+              <div className="mt-0.5 flex items-center gap-1 text-[12px]" style={{ color: C.muted }}>
+                <MapPinned className="h-3.5 w-3.5" />{perfil.zonas_patrocinadas.map((z) => z.nombre).join(" · ")}
+              </div>
+            )}
+            <p className="mt-3 line-clamp-6 whitespace-pre-line text-[12.5px] leading-relaxed" style={{ color: bio ? C.sub : C.muted }}>
+              {bio || "Tu descripción aparecerá aquí."}
+            </p>
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2475,6 +2787,13 @@ const HORAS_OPC: string[] = (() => {
   return out;
 })();
 type DiaState = { enabled: boolean; inicio: string; fin: string };
+
+function horasDe(d: DiaState): number {
+  if (!d.enabled) return 0;
+  const [h1, m1] = d.inicio.split(":").map(Number);
+  const [h2, m2] = d.fin.split(":").map(Number);
+  return Math.max(0, (h2 * 60 + m2 - (h1 * 60 + m1)) / 60);
+}
 
 function DisponibilidadTab() {
   const [dias, setDias] = useState<DiaState[]>(() =>
@@ -2520,45 +2839,52 @@ function DisponibilidadTab() {
     }
   };
 
-  if (loading) return <Skeleton className="h-64 w-full" />;
+  if (loading) return <Skeleton className="h-64 w-full rounded-2xl" />;
+
+  const diasOn = dias.filter((d) => d.enabled).length;
+  const horas = dias.reduce((s, d) => s + horasDe(d), 0);
+  const sel = "rounded-lg border px-2 py-1.5 text-[13px] tabular-nums";
 
   return (
-    <div className="mx-auto max-w-lg space-y-4">
-      <div>
-        <h2 className="text-lg font-semibold text-foreground">Mi horario de visitas</h2>
-        <p className="text-sm text-muted-foreground">
-          Los interesados solo podrán agendar visitas en estas horas. Se restan automáticamente las visitas ya reservadas.
-        </p>
-      </div>
-      <div className="divide-y divide-border rounded-xl border border-border">
+    <div className="max-w-2xl">
+      <Panel
+        icon={Clock}
+        tone="info"
+        title="Mi horario de visitas"
+        subtitle="Los interesados solo podrán agendar visitas en estas horas. Se restan automáticamente las visitas ya reservadas."
+        flush
+        actions={<Pill tone={diasOn > 0 ? "brand" : "neutral"}>{diasOn} días · {horas.toLocaleString("es-CO")} h/semana</Pill>}
+      >
         {DIAS_LABEL.map((lbl, i) => (
-          <div key={i} className="flex items-center gap-3 px-4 py-3">
-            <label className="flex w-32 items-center gap-2">
-              <input type="checkbox" checked={dias[i].enabled} onChange={(e) => set(i, { enabled: e.target.checked })} />
-              <span className="text-sm font-medium text-foreground">{lbl}</span>
+          <div key={i} className="flex flex-wrap items-center gap-3 px-5 py-3" style={{ borderTop: i === 0 ? undefined : `1px solid ${C.line}`, background: dias[i].enabled ? undefined : "#FCFBF8" }}>
+            <label className="flex w-36 cursor-pointer items-center gap-3">
+              <Switch checked={dias[i].enabled} onCheckedChange={(v) => set(i, { enabled: v })} aria-label={lbl}
+                className="data-[state=unchecked]:bg-[#CFC9BB]" />
+              <span className="text-[13.5px] font-semibold" style={{ color: dias[i].enabled ? C.ink : C.muted }}>{lbl}</span>
             </label>
             {dias[i].enabled ? (
               <div className="flex items-center gap-2 text-sm">
-                <select value={dias[i].inicio} onChange={(e) => set(i, { inicio: e.target.value })}
-                  className="rounded border border-border bg-surface px-2 py-1 text-foreground">
+                <select value={dias[i].inicio} onChange={(e) => set(i, { inicio: e.target.value })} className={sel} style={{ borderColor: C.line, color: C.ink, background: C.card }}>
                   {HORAS_OPC.map((h) => <option key={h} value={h}>{h}</option>)}
                 </select>
-                <span className="text-muted-foreground">a</span>
-                <select value={dias[i].fin} onChange={(e) => set(i, { fin: e.target.value })}
-                  className="rounded border border-border bg-surface px-2 py-1 text-foreground">
+                <span style={{ color: C.muted }}>a</span>
+                <select value={dias[i].fin} onChange={(e) => set(i, { fin: e.target.value })} className={sel} style={{ borderColor: C.line, color: C.ink, background: C.card }}>
                   {HORAS_OPC.map((h) => <option key={h} value={h}>{h}</option>)}
                 </select>
               </div>
             ) : (
-              <span className="text-sm text-muted-foreground">Cerrado</span>
+              <span className="text-[13px]" style={{ color: C.muted }}>Cerrado</span>
             )}
           </div>
         ))}
-      </div>
-      <button onClick={guardar} disabled={saving}
-        className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">
-        {saving ? "Guardando…" : "Guardar horario"}
-      </button>
+        <div className="flex justify-end px-5 py-4" style={{ borderTop: `1px solid ${C.line}` }}>
+          <button onClick={guardar} disabled={saving}
+            className="rounded-xl px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60"
+            style={{ background: C.brand }}>
+            {saving ? "Guardando…" : "Guardar horario"}
+          </button>
+        </div>
+      </Panel>
     </div>
   );
 }
@@ -2618,104 +2944,124 @@ function ZonasCompraTab() {
   const onConfirmar = () => comprar.mutate({ zona_nivel: nivel, zona_codigo: zonaCodigo, meses });
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <section>
-        <h2 className="text-lg font-semibold text-foreground">Mis zonas patrocinadas</h2>
-        <p className="mb-3 text-sm text-muted-foreground">Los listings de estas zonas te llegan como leads. Solo tú las patrocinas.</p>
-        {(perfil?.zonas_patrocinadas?.length ?? 0) === 0 ? (
-          <p className="text-sm text-muted-foreground">Aún no patrocinas ninguna zona. Compra una abajo.</p>
-        ) : (
-          <div className="flex flex-wrap gap-2">
-            {perfil!.zonas_patrocinadas.map((z) => (
-              <span key={z.codigo} className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-sm text-foreground">
-                <MapPinned className={`h-3.5 w-3.5 ${z.nivel === "comuna" ? "text-primary" : "text-warning"}`} />
-                <Name>{z.nombre}</Name> <span className="text-xs text-muted-foreground">({z.nivel})</span>
-              </span>
-            ))}
-          </div>
-        )}
-      </section>
-
-      <section className="rounded-xl border border-border bg-surface p-4">
-        <h2 className="mb-3 text-lg font-semibold text-foreground">Comprar nueva zona</h2>
-
-        <div className="mb-4 inline-flex rounded-lg border border-border p-0.5">
-          {(["comuna", "barrio"] as const).map((n) => (
-            <button
-              key={n}
-              onClick={() => { setNivel(n); setComunaSel(""); setBarrioSel(""); }}
-              className={`rounded-md px-3 py-1.5 text-sm font-medium transition ${
-                nivel === n ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"
-              }`}
-            >
-              {n === "comuna" ? "Comuna" : "Barrio"}
-              <span className="ml-1.5 text-xs opacity-80">
-                {formatCOP(n === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0))}/mes
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {nivel === "barrio" && (
-          <label className="mb-3 block text-sm">
-            <span className="mb-1 block text-xs text-muted-foreground">Filtrar por comuna</span>
-            <select
-              value={comunaFiltro}
-              onChange={(e) => { setComunaFiltro(e.target.value); setBarrioSel(""); }}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground"
-            >
-              <option value="">Elegir comuna…</option>
-              {(disp.data?.comunas ?? []).map((c) => (
-                <option data-i18n-skip key={c.cd_comuna} value={String(c.cd_comuna)}>{c.nombre}</option>
+    <div className="grid items-start gap-5 lg:grid-cols-[1fr_300px]">
+      <div className="space-y-5">
+        <Panel icon={MapPinned} tone="brand" title="Mis zonas patrocinadas" count={perfil?.zonas_patrocinadas?.length ?? 0}
+          subtitle="Los inmuebles que se publiquen en estas zonas te llegan como propietarios nuevos. Solo tú las patrocinas.">
+          {(perfil?.zonas_patrocinadas?.length ?? 0) === 0 ? (
+            <p className="text-[13px]" style={{ color: C.muted }}>Aún no patrocinas ninguna zona. Elige una abajo.</p>
+          ) : (
+            <div className="grid gap-2 sm:grid-cols-2">
+              {perfil!.zonas_patrocinadas.map((z) => (
+                <div key={z.codigo} className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ background: C.soft }}>
+                  <IconChip icon={MapPinned} tone={z.nivel === "comuna" ? "brand" : "warn"} size={32} />
+                  <div className="min-w-0">
+                    <div className="truncate text-[13.5px] font-semibold" style={{ color: C.ink }}><Name>{z.nombre}</Name></div>
+                    <div className="text-[11.5px] capitalize" style={{ color: C.muted }}>{z.nivel} · activa</div>
+                  </div>
+                </div>
               ))}
-            </select>
-          </label>
-        )}
-
-        <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto sm:grid-cols-3">
-          {nivel === "comuna"
-            ? (disp.data?.comunas ?? []).map((c) => {
-                const codigo = String(c.cd_comuna);
-                const ocupada = ocupComuna.has(codigo);
-                const selected = comunaSel === codigo;
-                return (
-                  <ZonaCard key={codigo} nombre={c.nombre} ocupada={ocupada} selected={selected}
-                    onClick={() => setComunaSel(codigo)} />
-                );
-              })
-            : barriosDeComuna.map((b) => {
-                const codigo = String(b.id);
-                const ocupada = ocupBarrio.has(codigo);
-                const selected = barrioSel === codigo;
-                return (
-                  <ZonaCard key={codigo} nombre={b.nombre} ocupada={ocupada} selected={selected}
-                    onClick={() => setBarrioSel(codigo)} />
-                );
-              })}
-          {nivel === "barrio" && !comunaFiltro && (
-            <p className="col-span-full text-sm text-muted-foreground">Elige una comuna arriba para ver sus barrios.</p>
+            </div>
           )}
-        </div>
+        </Panel>
 
-        <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-          <label className="text-sm">
-            <span className="mb-1 block text-xs text-muted-foreground">Meses</span>
-            <select value={meses} onChange={(e) => setMeses(Number(e.target.value))}
-              className="rounded-md border border-border bg-background px-2 py-1.5 text-sm text-foreground">
-              {[1, 3, 6, 12].map((m) => <option key={m} value={m}>{m}</option>)}
-            </select>
-          </label>
-          <div className="text-sm text-muted-foreground">
-            Total: <span className="text-base font-bold text-foreground">{formatCOP(total)}</span>
-            <span className="text-xs"> ({formatCOP(precioMes)}/mes × {meses})</span>
+        <Panel icon={Plus} tone="info" title="Comprar nueva zona" subtitle="Una zona = un solo patrocinador (exclusiva). Pago mensual recurrente.">
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>1 · Nivel</div>
+          <div className="mb-5 grid grid-cols-2 gap-2 sm:max-w-md">
+            {(["comuna", "barrio"] as const).map((n) => {
+              const on = nivel === n;
+              return (
+                <button
+                  key={n}
+                  onClick={() => { setNivel(n); setComunaSel(""); setBarrioSel(""); }}
+                  aria-pressed={on}
+                  className="rounded-xl p-3 text-left transition"
+                  style={on
+                    ? { background: TONE.brand.bg, boxShadow: `inset 0 0 0 2px ${C.brand}` }
+                    : { background: C.card, boxShadow: `inset 0 0 0 1px ${C.line}` }}
+                >
+                  <div className="text-[14px] font-bold" style={{ color: C.ink }}>{n === "comuna" ? "Comuna" : "Barrio"}</div>
+                  <div className="text-[12px] tabular-nums" style={{ color: on ? TONE.brand.fg : C.muted }}>
+                    {formatCOP(n === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0))}/mes
+                  </div>
+                </button>
+              );
+            })}
           </div>
+
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>2 · Zona</div>
+          {nivel === "barrio" && (
+            <label className="mb-3 block text-sm">
+              <span className="sr-only">Filtrar por comuna</span>
+              <select
+                value={comunaFiltro}
+                onChange={(e) => { setComunaFiltro(e.target.value); setBarrioSel(""); }}
+                className={`${inputCls} w-auto rounded-xl`}
+              >
+                <option value="">Elegir comuna…</option>
+                {(disp.data?.comunas ?? []).map((c) => (
+                  <option data-i18n-skip key={c.cd_comuna} value={String(c.cd_comuna)}>{c.nombre}</option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          <div className="grid max-h-72 grid-cols-2 gap-2 overflow-y-auto pr-1 sm:grid-cols-3">
+            {nivel === "comuna"
+              ? (disp.data?.comunas ?? []).map((c) => {
+                  const codigo = String(c.cd_comuna);
+                  return (
+                    <ZonaCard key={codigo} nombre={c.nombre} ocupada={ocupComuna.has(codigo)} selected={comunaSel === codigo}
+                      onClick={() => setComunaSel(codigo)} />
+                  );
+                })
+              : barriosDeComuna.map((b) => {
+                  const codigo = String(b.id);
+                  return (
+                    <ZonaCard key={codigo} nombre={b.nombre} ocupada={ocupBarrio.has(codigo)} selected={barrioSel === codigo}
+                      onClick={() => setBarrioSel(codigo)} />
+                  );
+                })}
+            {nivel === "barrio" && !comunaFiltro && (
+              <p className="col-span-full text-[13px]" style={{ color: C.muted }}>Elige una comuna arriba para ver sus barrios.</p>
+            )}
+          </div>
+        </Panel>
+      </div>
+
+      {/* Resumen de compra */}
+      <div className="lg:sticky lg:top-32">
+        <Panel title="Resumen">
+          <div className="mb-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: C.muted }}>3 · Duración</div>
+          <div className="grid grid-cols-2 gap-2" role="group" aria-label="Meses">
+            {[1, 3, 6, 12].map((m) => {
+              const on = meses === m;
+              return (
+                <button key={m} type="button" aria-pressed={on} onClick={() => setMeses(m)}
+                  className="min-h-[36px] rounded-lg text-[12.5px] font-semibold transition"
+                  style={on
+                    ? { background: TONE.brand.bg, color: TONE.brand.fg, boxShadow: `inset 0 0 0 2px ${C.brand}` }
+                    : { background: C.card, color: C.sub, boxShadow: `inset 0 0 0 1px ${C.line}` }}>
+                  {m} {m === 1 ? "mes" : "meses"}
+                </button>
+              );
+            })}
+          </div>
+          <dl className="mt-4 space-y-2 text-[13px]">
+            <div className="flex justify-between gap-2"><dt style={{ color: C.muted }}>Zona</dt><dd className="truncate font-semibold" style={{ color: C.ink }}>{zonaNombre ?? "—"}</dd></div>
+            <div className="flex justify-between gap-2"><dt style={{ color: C.muted }}>Precio</dt><dd className="tabular-nums" style={{ color: C.ink }}>{formatCOP(precioMes)}/mes</dd></div>
+            <div className="flex items-baseline justify-between gap-2 pt-2" style={{ borderTop: `1px solid ${C.line}` }}>
+              <dt style={{ color: C.muted }}>Total</dt><dd className="text-[20px] font-bold tabular-nums" style={{ color: C.ink }}>{formatCOP(total)}</dd>
+            </div>
+          </dl>
           <button onClick={() => setConfirmando(true)} disabled={!puede}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50">
+            className="mt-4 inline-flex w-full items-center justify-center gap-1.5 rounded-xl py-2.5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+            style={{ background: C.brand }}>
             <Plus className="h-4 w-4" /> Comprar zona
           </button>
-        </div>
-        <p className="mt-2 text-[11px] text-muted-foreground">Una zona = un solo patrocinador (exclusiva). Pago mensual recurrente. (Pasarela en conexión — modo demo por ahora.)</p>
-      </section>
+          <p className="mt-2 text-[11px]" style={{ color: C.muted }}>(Pasarela en conexión — modo demo por ahora.)</p>
+        </Panel>
+      </div>
 
       {confirmando && zonaNombre && (
         <ConfirmarCompraModal
@@ -2737,16 +3083,15 @@ function ZonaCard({ nombre, ocupada, selected, onClick }: { nombre: string; ocup
     <button
       onClick={onClick}
       disabled={ocupada}
-      className={`rounded-lg border p-3 text-left text-sm transition ${
-        ocupada
-          ? "cursor-not-allowed border-border bg-background opacity-50"
-          : selected
-            ? "border-primary bg-primary/10 font-semibold text-foreground"
-            : "border-border bg-background text-foreground hover:border-primary/50"
-      }`}
+      aria-pressed={selected}
+      className="rounded-xl p-3 text-left text-[13px] transition disabled:cursor-not-allowed disabled:opacity-50"
+      style={selected
+        ? { background: TONE.brand.bg, boxShadow: `inset 0 0 0 2px ${C.brand}` }
+        : { background: C.card, boxShadow: `inset 0 0 0 1px ${C.line}` }}
     >
-      <div className="truncate">{nombre}</div>
-      <div className={`mt-0.5 text-[11px] ${ocupada ? "text-muted-foreground" : selected ? "text-primary" : "text-success"}`}>
+      <div className="truncate font-semibold" style={{ color: C.ink }}>{nombre}</div>
+      <div className="mt-0.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: ocupada ? C.muted : TONE.brand.fg }}>
+        {ocupada ? <Lock className="h-3 w-3" /> : selected ? <Check className="h-3 w-3" /> : null}
         {ocupada ? "Ocupada" : selected ? "Seleccionada" : "Disponible"}
       </div>
     </button>

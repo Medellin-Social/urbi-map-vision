@@ -25,6 +25,7 @@ from api.schemas.intake_cuestionario import DECLARACIONES_KEYS, cuestionario_par
 from api.services.asignador_service import asignar_intake
 from api.services.intake_service import _aplica, get_or_create_owner
 from api.services.listing_service import datos_minimos_completos
+from api.services.sponsorship_service import zona_cubierta
 from api.utils import ghl_client
 from api.utils.email import ADMIN_EMAIL, _wrap, esc, send_email
 from api.utils.storage import read_upload_bounded, upload_file
@@ -48,6 +49,34 @@ def _to_bool(v: Optional[str]) -> Optional[bool]:
         return True
     if v in ("no", "false", "False", "0"):
         return False
+    return None
+
+
+# El form manda `antiguedad` como BUCKET ('0-5'/'5-10'/'10-20'/'+20'/'remodelado')
+# más un `ano_construccion` exacto opcional. La columna antiguedad_anios es SMALLINT
+# (edad en años) → pasar el bucket string reventaba el INSERT ("str no es integer" /
+# "valor numérico fuera de rango"). Convierte a int: prefiere el año exacto; si no,
+# punto medio del bucket; 'remodelado'/vacío/no-numérico → None.
+_ANTIGUEDAD_BUCKET_ANIOS = {"0-5": 3, "5-10": 7, "10-20": 15, "+20": 25}
+
+
+def _antiguedad_anios(antiguedad: Optional[str], ano_construccion=None) -> Optional[int]:
+    from datetime import date
+    try:
+        if ano_construccion is not None:
+            y = int(float(ano_construccion))
+            if 1850 < y <= date.today().year:
+                return date.today().year - y
+    except (ValueError, TypeError):
+        pass
+    if antiguedad:
+        a = antiguedad.strip()
+        if a in _ANTIGUEDAD_BUCKET_ANIOS:
+            return _ANTIGUEDAD_BUCKET_ANIOS[a]
+        try:
+            return int(float(a))  # tolera un número directo
+        except (ValueError, TypeError):
+            return None
     return None
 
 
@@ -118,7 +147,11 @@ async def barrios_form():
             id,
             nombre,
             municipio,
-            COALESCE(NULLIF(TRIM(comuna), ''), municipio) AS comuna
+            COALESCE(NULLIF(TRIM(comuna), ''), municipio) AS comuna,
+            -- Punto dentro del polígono (no centroide: cae fuera en barrios cóncavos).
+            -- El form lo usa como pin inicial cuando la dirección no se geocodifica.
+            ROUND(ST_Y(ST_PointOnSurface(geometry))::numeric, 6)::float AS lat,
+            ROUND(ST_X(ST_PointOnSurface(geometry))::numeric, 6)::float AS lon
         FROM raw.barrios
         WHERE nombre IS NOT NULL
           AND municipio IS NOT NULL
@@ -353,6 +386,16 @@ async def crear_listing(
     listing_id = str(uuid.uuid4())
     slug = f"{(municipio_nom or 'med')[:6]}-{listing_id[:8]}".lower().replace(" ", "-")
 
+    # Estado inicial. Agente publica directo. Owner: si su zona tiene patrocinador
+    # (barrio o comuna) → 'borrador', lo revisa y publica el realtor de la zona.
+    # Sin patrocinador (zona huérfana) → 'en_revision', cae a la cola admin.
+    if es_agente:
+        estado_inicial = "publicado"
+    elif barrio_id is not None and await zona_cubierta(pool, barrio_id, solo_asignable=True):
+        estado_inicial = "borrador"
+    else:
+        estado_inicial = "en_revision"
+
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Realtor (sistema nuevo `agent`): el listing queda a su nombre.
@@ -380,7 +423,7 @@ async def crear_listing(
                     published_at, created_at, updated_at
                 ) VALUES (
                     $1, $2, $3, $39, $40,
-                    CASE WHEN $34 THEN 'publicado'::listing_estado ELSE 'en_revision'::listing_estado END,
+                    $41::listing_estado,
                     $34,
                     ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, FALSE,
                     $9, $10, 'COP', $11,
@@ -396,7 +439,8 @@ async def crear_listing(
                 lon, lat, municipio_nom, barrio_nom, direccion,
                 operacion, precio_cop, administracion_cop,
                 tipo_inmueble, area_m2, area_lote_m2, habitaciones, banos,
-                parqueaderos, estrato, antiguedad,
+                parqueaderos, estrato,
+                _antiguedad_anios(antiguedad, caracteristicas_obj.get("ano_construccion")),  # $19
                 amoblado, amenidades_arr,
                 _to_bool(mascotas), _to_bool(permite_airbnb),
                 titulo, descripcion,
@@ -409,6 +453,7 @@ async def crear_listing(
                 (cedula_catastral or "").strip() or None,        # $37
                 json.dumps(caracteristicas_obj) if caracteristicas_obj else None,  # $38
                 nuevo_agent_id, nuevo_agency_id,  # $39, $40
+                estado_inicial,  # $41
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
@@ -473,12 +518,16 @@ async def crear_listing(
             "es_agente": True,
             "mensaje": "Tu propiedad ya está en el mapa.",
         }
+    _MSG = {
+        "borrador": "Tu propiedad la revisa el realtor de tu zona; aparece en el mapa cuando él confirme los datos.",
+        "en_revision": "Tu propiedad está en revisión. La publicaremos en el mapa una vez verificada.",
+    }
     return {
         "id": listing_id,
-        "estado": "en_revision",
+        "estado": estado_inicial,
         "verificado": False,
         "es_agente": False,
-        "mensaje": "Tu propiedad está en revisión. La publicaremos en el mapa una vez verificada.",
+        "mensaje": _MSG.get(estado_inicial, _MSG["en_revision"]),
     }
 
 
@@ -494,7 +543,11 @@ async def mis_listings(current_user: dict = Depends(get_current_user)):
         return []
     rows = await pool.fetch(
         """
-        SELECT l.id::text AS id, l.operacion AS tipo_operacion, l.tipo_inmueble,
+        SELECT l.id::text AS id,
+               -- id numérico del mapa (hash md5 del url=id, igual que /listings) →
+               -- el front enlaza /map?listing=<map_id> para abrir el drawer.
+               ('x'||substr(md5(l.id::text),1,8))::bit(32)::int AS map_id,
+               l.operacion AS tipo_operacion, l.tipo_inmueble,
                l.precio AS precio_cop, l.area_m2, l.habitaciones, l.estado,
                l.verificado, l.destacado, l.created_at, l.descripcion,
                l.direccion_aprox AS direccion, l.barrio, l.municipio,

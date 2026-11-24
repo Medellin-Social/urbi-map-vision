@@ -14,6 +14,11 @@ const FILES = [
   "components/listing-popup/PopupPriceHistory.tsx",
   // LNG-22: pages outside the map
   "routes/realtor/dashboard.tsx",
+  "routes/realtor/-ui.tsx",
+  "routes/realtor/_kit.tsx",
+  "routes/realtor/ResumenTab.tsx",
+  "routes/realtor/ComparadorTab.tsx",
+  "routes/realtor/SimuladorTab.tsx",
   "routes/publicar.tsx",
   "routes/panel-x9k2/index.tsx",
   "routes/index.tsx",
@@ -37,7 +42,8 @@ const KNOWN_GAPS = new Set<string>([]);
 // Place names and brand strings: correct as-is in both languages.
 const NAMES = new Set<string>([
   "Doce de Octubre", "La Candelaria", "Itagüí", "La Estrella", "LA ESTRELLA", "Valle de Aburrá",
-  "VALLE DE ABURRÁ", "Medellín — Comunas", "El Colombiano", "Español", "Admin · Medellín Social", "Café", "Torre Alción",
+  "VALLE DE ABURRÁ", "Medellín — Comunas", "El Colombiano", "Español", "Admin · Medellín Social", "Café",
+  "Torre Alción",
 ]);
 
 function literals(src: string): string[] {
@@ -55,6 +61,6 @@ describe("UI component literals are translatable", () => {
         .filter((s) => SPANISH_HINT.test(s) && !IGNORE.some((r) => r.test(s)))
         .filter((s) => translateString(s) === s && !KNOWN_GAPS.has(s) && !NAMES.has(s) && !__i18nInternals.PROTECT.has(s));
       expect(missing).toEqual([]);
-    });
+    }, 30_000); // dashboard.tsx tiene cientos de literales × ~3k frases → >5s en frío
   }
 });

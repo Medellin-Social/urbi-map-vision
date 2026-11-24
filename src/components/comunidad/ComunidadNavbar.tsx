@@ -4,6 +4,8 @@ import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
+import { GraduationCap } from '@/lib/icons'
+import { useIsAgente } from '@/components/LockedField'
 import { auth } from '../../lib/auth'
 import { K as TOKENS } from "@/design/tokens";
 
@@ -72,13 +74,14 @@ const FALLBACK_ITEMS_EN = [
 ]
 
 export function ComunidadNavbar({ compact = false, hideTicker = false }: { compact?: boolean; hideTicker?: boolean }) {
-  const { barrio, barrios, setBarrioSlug } = useBarrio()
+  const { barrio } = useBarrio()
   const { lang, setLang } = useLang()
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [reOpen,      setReOpen]      = useState(false)
   const logged = !!auth.get()
+  const isAgente = useIsAgente()
 
   const t = useT()
 
@@ -131,21 +134,8 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     return path.split('/')[1] === href.split('/')[1]
   }
 
-  function handleBarrioChange(newSlug: string) {
-    const parts    = window.location.pathname.split('/').filter(Boolean)
-    const sections = ['eventos', 'local-business']
-    if (sections.includes(parts[0])) {
-      window.location.href = `/${parts[0]}/${newSlug}`
-    } else if (parts.length === 0 || parts[0] === 'barrio') {
-      // Home no cambia según el barrio (Ken, 23-oct): elegir uno lleva a su página.
-      window.location.href = newSlug === 'todos' ? '/' : `/barrio/${newSlug}`
-    } else {
-      setBarrioSlug(newSlug)
-    }
-  }
-
-  const medellin   = barrios.filter(b => b.grupo === 'Medellín')
-  const valleAbura = barrios.filter(b => b.grupo === 'Valle de Aburrá')
+  // El selector de comuna salió del navbar → ahora vive en la barra de filtros de
+  // cada sección (ComunaSelect en /eventos y /local-business).
 
   const links: { href: string; label: string; re?: boolean }[] = [
     { href: '/',                              label: t('HOME', 'HOME') },
@@ -161,9 +151,12 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     { href: '/map',         label: t('Mapa', 'Map') },
     { href: '/vender',      label: t('Vender o arrendar tu inmueble', 'Sell or rent your property') },
     { href: '/agentes',     label: t('Encuentra un agente', 'Find an agent') },
+    { href: '/agentes/estados', label: t('Guía de estados de agentes', 'Agent status guide') },
+    { href: '/mas-informacion', label: t('¿Necesitas realtor, manager o administración?', 'Need a realtor, manager or administration?') },
+    { href: '/agentes/programa', label: t('Registrarme como agente', 'Register as an agent') },
   ]
   // Simulador/Comparador/Calculadora salieron del navbar → solo en el dashboard del realtor.
-  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes']
+  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes', '/mas-informacion']
     .some(h => path === h || path.startsWith(h + '/'))
   const reItemStyle: CSSProperties = {
     display: 'block', padding: '9px 12px', borderRadius: 7,
@@ -265,50 +258,40 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
         }}>
 
           {/* LEFT: logo (compact always) or date+barrio (desktop only — masthead has logo on mobile) */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flex: 1, minWidth: 0 }}>
             {compact ? (
               <a data-i18n-skip href="/" style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.25rem', color: '#fff', textDecoration: 'none', letterSpacing: -0.5, lineHeight: 1 }}>
                 <Wordmark coral={K.coral} />
               </a>
             ) : (
-              <>
-                <span className="desktop-only" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
-                  {today}
-                </span>
-                <select
-                  data-tour="barrio-select"
-                  value={barrio.slug}
-                  onChange={e => handleBarrioChange(e.target.value)}
-                  style={{
-                    background: 'transparent', color: '#fff',
-                    border: '1px solid rgba(255,255,255,0.25)',
-                    borderRadius: 6, padding: '4px 8px',
-                    fontSize: 13, fontFamily: 'inherit', cursor: 'pointer',
-                    flex: 1, minWidth: 0, maxWidth: 220,
-                    WebkitAppearance: 'none', appearance: 'none',
-                  }}
-                >
-                  <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
-                    {medellin.map(b => (
-                      <option key={b.slug} value={b.slug} data-i18n-skip style={{ color: K.ink, background: '#fff' }}>
-                        {b.nombre}
-                      </option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="── Valle de Aburrá ──" style={{ color: K.ink, background: '#fff' }}>
-                    {valleAbura.map(b => (
-                      <option key={b.slug} value={b.slug} data-i18n-skip style={{ color: K.ink, background: '#fff' }}>
-                        {b.nombre}
-                      </option>
-                    ))}
-                  </optgroup>
-                </select>
-              </>
+              <span className="desktop-only" style={{ fontSize: 12, color: 'rgba(255,255,255,0.5)', fontVariantCaps: 'all-small-caps', letterSpacing: '.5px' }}>
+                {today}
+              </span>
             )}
           </div>
 
+          {/* Tutorial — junto a HOME; solo donde hay tour montado (/, /map, dashboard).
+             Botón único, siempre visible (el tour lo spotlightea en su último paso);
+             el label se oculta en móvil, el ícono queda. */}
+          {(path === '/' || path === '/map' || path === '/realtor/dashboard') && (
+            <button
+              onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
+              data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : 'realtor-tour-replay'}
+              aria-label={t('Ver tutorial', 'View tutorial')}
+              title={t('Ver tutorial', 'View tutorial')}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
+                background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
+                borderRadius: 999, padding: '5px 11px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+              }}
+            >
+              <GraduationCap size={15} style={{ color: K.amarillo }} />
+              <span className="desktop-only">{t('Tutorial', 'Tutorial')}</span>
+            </button>
+          )}
+
           {/* CENTER: nav links — desktop only */}
-          <div className="desktop-nav-links" data-tour="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <div className="desktop-nav-links" data-tour="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
             {links.map((lnk) => lnk.re ? (
               <div key="re" data-re-dropdown style={{ position: 'relative' }}>
                 <button
@@ -356,7 +339,19 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           </div>
 
           {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
-          <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flexShrink: 0 }}>
+          <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
+            {isAgente && (
+              <a
+                href="/realtor/dashboard"
+                style={{
+                  background: K.teal, color: '#fff', fontSize: 13, fontWeight: 700,
+                  textDecoration: 'none', letterSpacing: '.3px',
+                  padding: '6px 14px', borderRadius: 999, whiteSpace: 'nowrap',
+                }}
+              >
+                Dashboard
+              </a>
+            )}
             <a
               href={logged ? '/perfil' : '/login'}
               style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
@@ -449,40 +444,6 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             padding: '12px 16px 16px',
             borderTop: '0.5px solid rgba(255,255,255,0.1)',
           }}>
-            {!compact && (
-              <select
-                value={barrio.slug}
-                onChange={e => { handleBarrioChange(e.target.value); setMenuAbierto(false) }}
-                style={{
-                  width: '100%',
-                  background: 'rgba(255,255,255,0.1)',
-                  color: '#fff',
-                  border: '0.5px solid rgba(255,255,255,0.2)',
-                  borderRadius: 6,
-                  padding: 8,
-                  marginBottom: 12,
-                  fontSize: 14,
-                  fontFamily: 'inherit',
-                  WebkitAppearance: 'none', appearance: 'none',
-                }}
-              >
-                <optgroup label="── Medellín ──" style={{ color: K.ink, background: '#fff' }}>
-                  {medellin.map(b => (
-                    <option key={b.slug} value={b.slug} data-i18n-skip style={{ color: K.ink, background: '#fff' }}>
-                      {b.nombre}
-                    </option>
-                  ))}
-                </optgroup>
-                <optgroup label="── Valle de Aburrá ──" style={{ color: K.ink, background: '#fff' }}>
-                  {valleAbura.map(b => (
-                    <option key={b.slug} value={b.slug} data-i18n-skip style={{ color: K.ink, background: '#fff' }}>
-                      {b.nombre}
-                    </option>
-                  ))}
-                </optgroup>
-              </select>
-            )}
-
             {links.map(link => link.re ? (
               <div key="re-m">
                 <div style={{ color: 'rgba(255,255,255,0.85)', padding: '10px 0 4px', fontSize: 15, fontWeight: 700, borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
@@ -519,6 +480,19 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 {link.label}
               </a>
             ))}
+
+            {isAgente && (
+              <a
+                href="/realtor/dashboard"
+                onClick={() => setMenuAbierto(false)}
+                style={{
+                  display: 'block', color: K.amarillo, fontSize: 15, fontWeight: 700,
+                  textDecoration: 'none', padding: '10px 0', borderBottom: '0.5px solid rgba(255,255,255,0.08)',
+                }}
+              >
+                Dashboard
+              </a>
+            )}
 
             <a
               href={logged ? '/perfil' : '/login'}

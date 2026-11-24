@@ -21,6 +21,7 @@ import { Route as EmbajadorRouteImport } from './routes/embajador'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as MapRouteImport } from './routes/map'
+import { Route as MasInformacionRouteImport } from './routes/mas-informacion'
 import { Route as MisPropiedadesRouteImport } from './routes/mis-propiedades'
 import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PasantiasRouteImport } from './routes/pasantias'
@@ -38,6 +39,10 @@ import { Route as SuscribirseRouteImport } from './routes/suscribirse'
 import { Route as VenderRouteImport } from './routes/vender'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AgentesIdRouteImport } from './routes/agentes_.$id'
+import { Route as AgentesCertificacionRouteImport } from './routes/agentes_.certificacion'
+import { Route as AgentesEstadosRouteImport } from './routes/agentes_.estados'
+import { Route as AgentesMiProgramaRouteImport } from './routes/agentes_.mi-programa'
+import { Route as AgentesProgramaRouteImport } from './routes/agentes_.programa'
 import { Route as AgentesRegistroRouteImport } from './routes/agentes_.registro'
 import { Route as BarrioSlugRouteImport } from './routes/barrio.$slug'
 import { Route as EventosBarrio_slugRouteImport } from './routes/eventos/$barrio_slug'
@@ -116,6 +121,11 @@ const LoginRoute = LoginRouteImport.update({
 const MapRoute = MapRouteImport.update({
   id: '/map',
   path: '/map',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MasInformacionRoute = MasInformacionRouteImport.update({
+  id: '/mas-informacion',
+  path: '/mas-informacion',
   getParentRoute: () => rootRouteImport,
 } as any)
 const MisPropiedadesRoute = MisPropiedadesRouteImport.update({
@@ -201,6 +211,26 @@ const VerifyEmailRoute = VerifyEmailRouteImport.update({
 const AgentesIdRoute = AgentesIdRouteImport.update({
   id: '/agentes_/$id',
   path: '/agentes/$id',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesCertificacionRoute = AgentesCertificacionRouteImport.update({
+  id: '/agentes_/certificacion',
+  path: '/agentes/certificacion',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesEstadosRoute = AgentesEstadosRouteImport.update({
+  id: '/agentes_/estados',
+  path: '/agentes/estados',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesMiProgramaRoute = AgentesMiProgramaRouteImport.update({
+  id: '/agentes_/mi-programa',
+  path: '/agentes/mi-programa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentesProgramaRoute = AgentesProgramaRouteImport.update({
+  id: '/agentes_/programa',
+  path: '/agentes/programa',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AgentesRegistroRoute = AgentesRegistroRouteImport.update({
@@ -313,6 +343,7 @@ export interface FileRoutesByFullPath {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mas-informacion': typeof MasInformacionRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/pasantias': typeof PasantiasRoute
@@ -330,6 +361,10 @@ export interface FileRoutesByFullPath {
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes/$id': typeof AgentesIdRoute
+  '/agentes/certificacion': typeof AgentesCertificacionRoute
+  '/agentes/estados': typeof AgentesEstadosRoute
+  '/agentes/mi-programa': typeof AgentesMiProgramaRoute
+  '/agentes/programa': typeof AgentesProgramaRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -363,6 +398,7 @@ export interface FileRoutesByTo {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mas-informacion': typeof MasInformacionRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/pasantias': typeof PasantiasRoute
@@ -380,6 +416,10 @@ export interface FileRoutesByTo {
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes/$id': typeof AgentesIdRoute
+  '/agentes/certificacion': typeof AgentesCertificacionRoute
+  '/agentes/estados': typeof AgentesEstadosRoute
+  '/agentes/mi-programa': typeof AgentesMiProgramaRoute
+  '/agentes/programa': typeof AgentesProgramaRoute
   '/agentes/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -414,6 +454,7 @@ export interface FileRoutesById {
   '/forgot-password': typeof ForgotPasswordRoute
   '/login': typeof LoginRoute
   '/map': typeof MapRoute
+  '/mas-informacion': typeof MasInformacionRoute
   '/mis-propiedades': typeof MisPropiedadesRoute
   '/onboarding': typeof OnboardingRoute
   '/pasantias': typeof PasantiasRoute
@@ -431,6 +472,10 @@ export interface FileRoutesById {
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes_/$id': typeof AgentesIdRoute
+  '/agentes_/certificacion': typeof AgentesCertificacionRoute
+  '/agentes_/estados': typeof AgentesEstadosRoute
+  '/agentes_/mi-programa': typeof AgentesMiProgramaRoute
+  '/agentes_/programa': typeof AgentesProgramaRoute
   '/agentes_/registro': typeof AgentesRegistroRoute
   '/barrio/$slug': typeof BarrioSlugRoute
   '/eventos/$barrio_slug': typeof EventosBarrio_slugRoute
@@ -466,6 +511,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mas-informacion'
     | '/mis-propiedades'
     | '/onboarding'
     | '/pasantias'
@@ -483,6 +529,10 @@ export interface FileRouteTypes {
     | '/vender'
     | '/verify-email'
     | '/agentes/$id'
+    | '/agentes/certificacion'
+    | '/agentes/estados'
+    | '/agentes/mi-programa'
+    | '/agentes/programa'
     | '/agentes/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -516,6 +566,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mas-informacion'
     | '/mis-propiedades'
     | '/onboarding'
     | '/pasantias'
@@ -533,6 +584,10 @@ export interface FileRouteTypes {
     | '/vender'
     | '/verify-email'
     | '/agentes/$id'
+    | '/agentes/certificacion'
+    | '/agentes/estados'
+    | '/agentes/mi-programa'
+    | '/agentes/programa'
     | '/agentes/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -566,6 +621,7 @@ export interface FileRouteTypes {
     | '/forgot-password'
     | '/login'
     | '/map'
+    | '/mas-informacion'
     | '/mis-propiedades'
     | '/onboarding'
     | '/pasantias'
@@ -583,6 +639,10 @@ export interface FileRouteTypes {
     | '/vender'
     | '/verify-email'
     | '/agentes_/$id'
+    | '/agentes_/certificacion'
+    | '/agentes_/estados'
+    | '/agentes_/mi-programa'
+    | '/agentes_/programa'
     | '/agentes_/registro'
     | '/barrio/$slug'
     | '/eventos/$barrio_slug'
@@ -617,6 +677,7 @@ export interface RootRouteChildren {
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   LoginRoute: typeof LoginRoute
   MapRoute: typeof MapRoute
+  MasInformacionRoute: typeof MasInformacionRoute
   MisPropiedadesRoute: typeof MisPropiedadesRoute
   OnboardingRoute: typeof OnboardingRoute
   PasantiasRoute: typeof PasantiasRoute
@@ -634,6 +695,10 @@ export interface RootRouteChildren {
   VenderRoute: typeof VenderRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AgentesIdRoute: typeof AgentesIdRoute
+  AgentesCertificacionRoute: typeof AgentesCertificacionRoute
+  AgentesEstadosRoute: typeof AgentesEstadosRoute
+  AgentesMiProgramaRoute: typeof AgentesMiProgramaRoute
+  AgentesProgramaRoute: typeof AgentesProgramaRoute
   AgentesRegistroRoute: typeof AgentesRegistroRoute
   BarrioSlugRoute: typeof BarrioSlugRoute
   EventosBarrio_slugRoute: typeof EventosBarrio_slugRoute
@@ -739,6 +804,13 @@ declare module '@tanstack/react-router' {
       path: '/map'
       fullPath: '/map'
       preLoaderRoute: typeof MapRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/mas-informacion': {
+      id: '/mas-informacion'
+      path: '/mas-informacion'
+      fullPath: '/mas-informacion'
+      preLoaderRoute: typeof MasInformacionRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/mis-propiedades': {
@@ -858,6 +930,34 @@ declare module '@tanstack/react-router' {
       path: '/agentes/$id'
       fullPath: '/agentes/$id'
       preLoaderRoute: typeof AgentesIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes_/certificacion': {
+      id: '/agentes_/certificacion'
+      path: '/agentes/certificacion'
+      fullPath: '/agentes/certificacion'
+      preLoaderRoute: typeof AgentesCertificacionRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes_/estados': {
+      id: '/agentes_/estados'
+      path: '/agentes/estados'
+      fullPath: '/agentes/estados'
+      preLoaderRoute: typeof AgentesEstadosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes_/mi-programa': {
+      id: '/agentes_/mi-programa'
+      path: '/agentes/mi-programa'
+      fullPath: '/agentes/mi-programa'
+      preLoaderRoute: typeof AgentesMiProgramaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agentes_/programa': {
+      id: '/agentes_/programa'
+      path: '/agentes/programa'
+      fullPath: '/agentes/programa'
+      preLoaderRoute: typeof AgentesProgramaRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/agentes_/registro': {
@@ -1009,6 +1109,7 @@ const rootRouteChildren: RootRouteChildren = {
   ForgotPasswordRoute: ForgotPasswordRoute,
   LoginRoute: LoginRoute,
   MapRoute: MapRoute,
+  MasInformacionRoute: MasInformacionRoute,
   MisPropiedadesRoute: MisPropiedadesRoute,
   OnboardingRoute: OnboardingRoute,
   PasantiasRoute: PasantiasRoute,
@@ -1026,6 +1127,10 @@ const rootRouteChildren: RootRouteChildren = {
   VenderRoute: VenderRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AgentesIdRoute: AgentesIdRoute,
+  AgentesCertificacionRoute: AgentesCertificacionRoute,
+  AgentesEstadosRoute: AgentesEstadosRoute,
+  AgentesMiProgramaRoute: AgentesMiProgramaRoute,
+  AgentesProgramaRoute: AgentesProgramaRoute,
   AgentesRegistroRoute: AgentesRegistroRoute,
   BarrioSlugRoute: BarrioSlugRoute,
   EventosBarrio_slugRoute: EventosBarrio_slugRoute,

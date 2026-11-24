@@ -354,7 +354,45 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
         raise HTTPException(status_code=409, detail=str(e))
     from api.utils import ghl_client
     ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
+
+
+async def _pago_agent_program(payload: dict) -> None:
+    """Pago aprobado (GHL → Stripe) de un producto del Programa de agentes.
+
+    Payload (workflow GHL "Pago aprobado"): {object_type:"agent_program", producto:
+    registro|cert_cuota|cert_mensual|cert_ilimitado|anuncio, agent_email | agent_id,
+    pago_ref (id de la orden/factura — distinto en cada cobro recurrente), listing_url?}.
+    Idempotente por pago_ref."""
+    from api.services.agent_program_service import ProgramError, procesar_pago
+
+    props = payload.get("properties") or payload
+    pool = get_pool()
+    agent_id = props.get("agent_id")
+    email = (props.get("agent_email") or "").strip().lower()
+    producto = (props.get("producto") or "").strip()
+    pago_ref = (props.get("pago_ref") or "").strip()
+    listing_url = (props.get("listing_url") or "").strip() or None
+    if not producto or not pago_ref or (not agent_id and not email):
+        raise HTTPException(status_code=400, detail="falta producto, pago_ref o agent_id/agent_email")
+    async with pool.acquire() as conn:
+        if not agent_id:
+            # registro se paga antes de la aprobación: aceptar pendiente/activo
+            agent_id = await conn.fetchval(
+                "SELECT id::text FROM agent WHERE lower(email) = $1 AND estado::text IN ('pendiente','activo')",
+                email)
+        if not agent_id:
+            raise HTTPException(status_code=404, detail="agente no encontrado")
+    try:
+        r = await procesar_pago(pool, str(agent_id), producto, pago_ref, listing_url, props)
+        logger.info("agent_program pago %s %s → %s", producto, pago_ref, r.get("accion"))
+    except ProgramError as e:
+        logger.error("agent_program PAGO NO APLICADO pago_ref=%s agent=%s producto=%s: %s",
+                     pago_ref, agent_id, producto, e)
+        raise HTTPException(status_code=422, detail=str(e))
+
+
 _HANDLERS = {
+    "agent_program": _pago_agent_program,
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
     "evento": _upsert_evento_from_ghl,

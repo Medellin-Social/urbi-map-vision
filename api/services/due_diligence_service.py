@@ -43,16 +43,22 @@ async def generar_checklist(intake: Any, pool: Any) -> int:
 
 
 async def verificar_item(
-    item_id: str, agent_id: str, estado: str, nota: str | None, pool: Any
+    item_id: str, agent_id: str, estado: str, nota: str | None, pool: Any,
+    evidencia: str | None = None,
 ) -> None:
-    """Marca un item como verificado|rechazado con quién y cuándo."""
+    """Marca un item como verificado|rechazado con quién y cuándo.
+
+    evidencia (Gap A): link/referencia de la prueba. Si es None NO pisa la que ya
+    hubiera (COALESCE) — el archivo bytea se sube aparte por /evidencia.
+    """
     if estado not in _ESTADOS_ITEM:
         raise ValueError(f"Estado inválido: {estado!r} (usa verificado|rechazado)")
     async with pool.acquire() as conn:
         await conn.execute(
             "UPDATE due_diligence_item SET estado = $1, nota = $2, "
-            "verificado_por = $3, verificado_at = NOW() WHERE id = $4",
-            estado, nota, agent_id, item_id,
+            "verificado_por = $3, verificado_at = NOW(), "
+            "evidencia = COALESCE($5, evidencia) WHERE id = $4",
+            estado, nota, agent_id, item_id, evidencia,
         )
 
 

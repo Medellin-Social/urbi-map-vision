@@ -9,9 +9,9 @@ from pydantic import BaseModel
 
 from api.config import USD_TO_COP
 from api.db import get_pool
-from api.dependencies import get_optional_user
+from api.dependencies import get_optional_user, is_agente
 from api.utils.ttl_cache import TTLCache
-from api.routers.listings import ListingFull, ListingsAllResponse, _finalize_row
+from api.routers.listings import ListingFull, ListingsAllResponse, _finalize_row, _gate_market_fields
 from api.services.trm_service import get_usd_rate
 from api.services.personalizacion import PRESUPUESTO_MAX
 import logging
@@ -640,7 +640,7 @@ def _i(row: dict, key: str) -> Optional[int]:
     return int(v) if v is not None else None
 
 
-def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None, use_max_score: bool = False, usd_rate: Optional[float] = None) -> BarrioResponse:
+def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[str] = None, perfil_dict: Optional[dict] = None, use_max_score: bool = False, usd_rate: Optional[float] = None, es_agente: bool = False) -> BarrioResponse:
     # Shared TRM (same rate the listings use); env USD_TO_COP only as last resort.
     _usd = usd_rate or _USD
     raw_geo = row.get("geometry_raw")
@@ -785,10 +785,12 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             tiempo_estimado_venta=row.get("tiempo_estimado_venta"),
             nota_metodologia=row.get("nota_metodologia"),
         ),
+        # Oportunidad detectada = KPI perfil inversor → solo realtors. No se puede
+        # 403 /barrios (mapa público) → se nullea el campo para no-agentes.
         oportunidad=Oportunidad(
-            detectada=row.get("oportunidad_detectada"),
-            tipo=row.get("tipo_oportunidad"),
-            descripcion=row.get("descripcion_oportunidad"),
+            detectada=row.get("oportunidad_detectada") if es_agente else None,
+            tipo=row.get("tipo_oportunidad") if es_agente else None,
+            descripcion=row.get("descripcion_oportunidad") if es_agente else None,
         ),
         valorizacion=Valorizacion(
             var_anual_pct=_f(row, "var_anual_pct"),
@@ -942,7 +944,8 @@ async def list_barrios(
     # the shared CDN/proxy can serve anonymous map loads.
     response.headers["Cache-Control"] = "private, max-age=120" if current_user else "public, max-age=300"
     rate = await get_usd_rate()
-    return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max, usd_rate=rate) for r in rows]
+    _es_agente = is_agente(current_user)
+    return [_build_response(dict(r), score_col, effective_perfil, perfil_full, use_max_score=use_max, usd_rate=rate, es_agente=_es_agente) for r in rows]
 
 
 # ── Barrio aliases (sectors people search that are not official barrios) ────
@@ -1193,7 +1196,7 @@ async def get_barrio(
         raise HTTPException(status_code=503, detail="Datos temporalmente no disponibles")
     if row is None:
         raise HTTPException(status_code=404, detail=f"Barrio {barrio_id} no encontrado")
-    resp = _build_response(dict(row), score_col, perfil, usd_rate=await get_usd_rate())
+    resp = _build_response(dict(row), score_col, perfil, usd_rate=await get_usd_rate(), es_agente=is_agente(current_user))
     # Temperatura del mercado = nivel registrado (inversionista); anónimo no la ve.
     if current_user is None:
         resp.mercado_real = None
@@ -1330,11 +1333,11 @@ async def get_barrio_listings(
         *args,
     )
 
-    # buena_oferta / pct_bajo_mediana son públicos (#2: el usuario ve si está
-    # cara/barata). Los scores de inversión siguen gated en listings.py.
+    # buena_oferta / pct_bajo_mediana son realtor-only (KPI perfil inversor) → gate
+    # server-side como en listings.py (revierte el #2 que los hacía públicos).
     rate = await get_usd_rate()
     items: list[ListingFull] = []
     for r in rows:
-        items.append(ListingFull(**_finalize_row(dict(r), rate)))
+        items.append(ListingFull(**_finalize_row(_gate_market_fields(dict(r), current_user), rate)))
 
     return ListingsAllResponse(total=total or 0, listings=items)

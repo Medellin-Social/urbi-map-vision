@@ -9,13 +9,13 @@ Solo se cargan los niveles que dio la reunión; los demás (barrio B/D, comuna D
 quedan como estaban (ejemplo, COP). Los precios de la reunión están en USD
 (confirmado por Israel: "Ken habló en dólares") y se marcan es_ejemplo = FALSE.
 
-Revision ID: 0135
-Revises: 0134
+Revision ID: 0138
+Revises: 0137
 """
 from alembic import op
 
-revision = "0135"
-down_revision = "0134"
+revision = "0138"
+down_revision = "0137"
 branch_labels = None
 depends_on = None
 

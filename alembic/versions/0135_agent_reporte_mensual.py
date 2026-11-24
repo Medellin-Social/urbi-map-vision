@@ -1,12 +1,12 @@
 """agent_reporte_mensual: ledger de reportes mensuales enviados (idempotencia por agente+periodo).
 
-Revision ID: 0132
-Revises: 0131
+Revision ID: 0135
+Revises: 0134
 """
 from alembic import op
 
-revision = "0132"
-down_revision = "0131"
+revision = "0135"
+down_revision = "0134"
 branch_labels = None
 depends_on = None
 

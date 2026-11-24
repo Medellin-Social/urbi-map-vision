@@ -10,6 +10,7 @@ import { useTiendas, useGrupoCounts } from '@/hooks/useTiendas'
 import { useBarriosRaw } from '@/hooks/useBarrios'
 import { GRUPOS_TIENDAS } from '@/lib/categorias_comunidad'
 import { FilterDropdown, FilterToggle } from '@/components/comunidad/FilterDropdown'
+import { ComunaSelect } from '@/components/comunidad/ComunaSelect'
 import { MAPBOX_TOKEN } from '@/lib/mapboxToken'
 import { buildNegocioPopupContent } from '@/lib/negocioPopup'
 import { API_ENDPOINTS } from '@/config/api'
@@ -555,9 +556,12 @@ function LocalBusinessPage() {
           </p>
           <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
             <div>
-              <h1 style={{ fontFamily: K.serif, fontSize: 28, fontWeight: 700, color: '#111418', margin: '0 0 4px' }}>
-                {t('Negocios locales', 'Local Businesses')}
-              </h1>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', margin: '0 0 4px' }}>
+                <h1 style={{ fontFamily: K.serif, fontSize: 28, fontWeight: 700, color: '#111418', margin: 0 }}>
+                  {t('Negocios locales', 'Local Businesses')}
+                </h1>
+                <ComunaSelect section="local-business" />
+              </div>
               <p style={{ fontSize: 13, color: '#5B5F5C', margin: 0 }}>
                 {isLoading ? '…' : `${total} ${t('negocios en', 'businesses in')} ${barrio.nombre}`}
               </p>

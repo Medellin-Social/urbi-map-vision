@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 
 from api import parametros
 from api.db import get_pool
-from api.dependencies import get_optional_user, get_current_user
+from api.dependencies import get_optional_user, get_current_user, require_agente
 
 router = APIRouter()
 
@@ -344,7 +344,7 @@ def calcular(
 
 @router.post("/simular", response_model=SimulacionResponse)
 @limiter.limit("60/minute")
-async def simular(request: Request, req: SimulacionRequest, current_user: Optional[dict] = Depends(get_optional_user)):
+async def simular(request: Request, req: SimulacionRequest, current_user: dict = Depends(require_agente)):
     pool = get_pool()
     row = await pool.fetchrow(_SQL, req.barrio_id)
     if row is None:
@@ -686,7 +686,7 @@ _ALTERNATIVAS_SQL = """
 @router.get("/listing-simulador-data")
 async def listing_simulador_data(
     listing_id: int = Query(...),
-    current_user: Optional[dict] = Depends(get_optional_user),
+    current_user: dict = Depends(require_agente),
 ):
     lid = listing_id
     pool = get_pool()
@@ -716,7 +716,7 @@ async def simulador_alternativas(
     presupuesto_max: float = Query(..., gt=0),
     tipo_inversion: Literal["airbnb", "renta_larga", "renta_media"] = Query(...),
     listing_id: Optional[int] = Query(None),
-    current_user: Optional[dict] = Depends(get_optional_user),
+    current_user: dict = Depends(require_agente),
 ):
     pool = get_pool()
     exclude_id = listing_id if listing_id is not None else -999999

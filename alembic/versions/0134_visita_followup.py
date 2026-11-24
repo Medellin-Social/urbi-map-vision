@@ -1,12 +1,12 @@
 """visita_solicitud: marcas de seguimiento (recordatorio 12 h, reasignación 24 h, escalada).
 
-Revision ID: 0131
-Revises: 0130
+Revision ID: 0134
+Revises: 0133
 """
 from alembic import op
 
-revision = "0131"
-down_revision = "0130"
+revision = "0134"
+down_revision = "0133"
 branch_labels = None
 depends_on = None
 

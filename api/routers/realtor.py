@@ -16,8 +16,10 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
-from api.services.listing_service import TRANSICIONES_VALIDAS, datos_minimos_completos
+from api.services.listing_service import TRANSICIONES_VALIDAS, EstadoError, datos_minimos_completos
+from api.services.moderacion_service import aprobar
 from api.utils import ghl_client
+from api.utils.email import send_email, _wrap, esc
 from api.utils.storage import read_upload_bounded, upload_file
 
 from api.services.trm_service import get_usd_rate
@@ -197,6 +199,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
                    l.precio AS l_precio, l.municipio AS l_municipio, l.barrio AS l_barrio,
                    (l.geom IS NOT NULL) AS l_geom_set, l.area_m2 AS l_area,
                    l.titulo AS l_titulo, l.habitaciones AS l_hab, l.banos AS l_banos,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct,
                    (SELECT COUNT(*) FROM listing_media m
                      WHERE m.listing_id = l.id AND m.es_portada) AS l_fotos_portada
             FROM intake i
@@ -242,6 +245,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
             "barrio": r["barrio"],
             "municipio": r["municipio"],
             "owner_nombre": r["owner_nombre"],
+            "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
             "declarado": {
                 "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
                 "habitaciones": r["habitaciones"],
@@ -273,23 +277,40 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
 
 @router.get("/pool")
 async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    await _agent_del_usuario(user, pool)
+    agent = await _agent_del_usuario(user, pool)
     await sweep_asignados_vencidos(pool)
     async with pool.acquire() as conn:
+        # Zona-lock: el realtor solo ve los intakes del pool de SUS zonas
+        # (patrocinio barrio-directo o comuna). Huérfanos (sin patrocinador) no
+        # aparecen aquí — los revisa el admin.
         rows = await conn.fetch(
             """
             SELECT i.id::text AS id, i.tipo_inmueble::text AS tipo_inmueble,
                    i.operacion::text AS operacion, i.precio_esperado,
                    COALESCE(i.barrio, b.nombre, '') AS barrio,
-                   COALESCE(i.municipio, '') AS municipio, i.created_at
+                   COALESCE(i.municipio, '') AS municipio, i.created_at,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct
             FROM intake i
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+            LEFT JOIN listing l ON l.id = i.listing_id
             WHERE i.estado = 'en_pool'
+              AND EXISTS (
+                SELECT 1 FROM sponsorship s
+                JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+                WHERE s.estado = 'activa'
+                  AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+                  AND ( (s.zona_nivel = 'barrio' AND s.zona_codigo = i.zona_codigo)
+                     OR (s.zona_nivel = 'comuna' AND s.zona_codigo IN (
+                           SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc
+                           WHERE bc.barrio_id::text = i.zona_codigo)) )
+              )
             ORDER BY i.created_at ASC
-            """
+            """,
+            agent.id,
         )
     return [
         {**dict(r), "precio_esperado": float(r["precio_esperado"] or 0),
+         "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
          "created_at": r["created_at"].isoformat()}
         for r in rows
     ]
@@ -693,9 +714,51 @@ async def subir_fotos(
     return {"id": listing_id, "fotos": urls}
 
 
+# Gap C: avisar al propietario cuando su inmueble se publica o se verifica.
+# Email del owner: listing.owner_id → usuarios.email; fallback listing.email_contacto.
+_OWNER_EVENTO = {
+    "publicado":  ("¡Tu inmueble ya está publicado!", "fue <strong>publicado en el mapa</strong> de Medellín Social y ya es visible para compradores."),
+    "verificado": ("Tu inmueble obtuvo el sello «Verificada»", "pasó la verificación de documentos y ahora muestra el <strong>sello «Verificada»</strong>, que genera más confianza en los compradores."),
+}
+
+async def _notify_owner_listing(pool, listing_id: str, evento: str) -> None:
+    titulo_msg = _OWNER_EVENTO.get(evento)
+    if not titulo_msg:
+        return
+    titulo, detalle = titulo_msg
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(u.email, l.email_contacto) AS email,
+                       COALESCE(u.nombre, l.nombre_contacto, 'propietario') AS nombre,
+                       COALESCE(l.titulo, 'tu inmueble') AS titulo
+                FROM listing l
+                LEFT JOIN owner o ON o.id = l.owner_id
+                LEFT JOIN usuarios u ON u.id = o.usuario_id
+                WHERE l.id = $1
+                """,
+                listing_id,
+            )
+        if not row or not row["email"]:
+            return
+        html = _wrap(f"""
+          <h3 style="color:#1D9E75">{esc(titulo)}</h3>
+          <p style="font-size:14px;color:#1A1208;margin-bottom:8px">Hola <strong>{esc(row['nombre'])}</strong>,</p>
+          <p style="font-size:14px;color:#1A1208">Tu inmueble <strong>{esc(row['titulo'])}</strong> {detalle}</p>
+        """)
+        await send_email(row["email"], titulo, html)
+    except Exception:
+        log.exception("notify_owner: fallo avisando %s de listing %s", evento, listing_id)
+
+
 @router.post("/asignados/{intake_id}/publicar")
 async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
-    """Manda el borrador del listing asignado a revisión (borrador → en_revision)."""
+    """El realtor confirma los datos y publica al mapa (borrador → publicado).
+
+    El realtor de la zona ES el revisor: no pasa por admin. aprobar() setea
+    publicado+verificado+published_at e inserta en el cache (al mapa al instante).
+    """
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
@@ -723,12 +786,23 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
         chk = datos_minimos_completos(SimpleNamespace(**dict(row)))
         if not chk["ok"]:
             raise HTTPException(status_code=409, detail="Faltan datos mínimos: " + ", ".join(chk["faltan"]))
-        await conn.execute(
-            "UPDATE listing SET estado = 'en_revision', updated_at = NOW() WHERE id = $1",
-            row["listing_id"],
-        )
-    ghl_client.spawn(ghl_client.sync_listing(str(row["listing_id"])))
-    return {"listing_id": str(row["listing_id"]), "estado": "en_revision"}
+    # 'rechazado' (admin lo devolvió) se re-finaliza igual que 'borrador': el
+    # realtor ya corrigió → publica. transition valida borrador→publicado + mínimos.
+    listing_obj = SimpleNamespace(
+        id=row["listing_id"], estado="borrador", published_at=None,
+        tipo_inmueble=row["tipo_inmueble"], operacion=row["operacion"], precio=row["precio"],
+        geom=row["geom"], barrio=row["barrio"], municipio=row["municipio"],
+        area_m2=row["area_m2"], titulo=row["titulo"],
+        habitaciones=row["habitaciones"], banos=row["banos"],
+        fotos_portada=row["fotos_portada"],
+    )
+    try:
+        await aprobar(listing_obj, str(agent.id), pool)  # realtor = moderador
+    except EstadoError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    # Gap C: avisar al owner. aprobar() publica + verifica → un solo evento al dueño.
+    await _notify_owner_listing(pool, str(row["listing_id"]), "publicado")
+    return {"listing_id": str(row["listing_id"]), "estado": "publicado"}
 
 
 def _grado_servicio(med_horas: float | None) -> tuple[str, str]:

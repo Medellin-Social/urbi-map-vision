@@ -76,6 +76,8 @@ Caddyfile.bak
 
 # QC diario (Playwright)
 qc-report/
+qc-report-realtor/
+link_review_digests/
 test-results/
 exports/
 .venv/

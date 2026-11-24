@@ -8,11 +8,12 @@ import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { getToken } from "@/lib/apiClient";
-import { useTarget } from "@/contexts/TargetContext";
-import { type SharedFilters, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
+import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
+import { type SharedFilters, type SortKey, EMPTY_SHARED_FILTERS } from "@/components/MapFilterBar";
+import { AgenteTipoBadges } from "@/components/agentes/agenteShared";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { usePriceFormat } from "@/hooks/usePriceFormat";
-import { useIsPro, useIsAgente } from "@/components/LockedField";
+import { useIsAgente } from "@/components/LockedField";
 import { useLang } from "@/lib/i18n";
 import { useUnit, formatArea } from "@/hooks/useUnit";
 import { toast } from "sonner";
@@ -97,25 +98,20 @@ function esDestacado(l: ApiListing): boolean {
   return l.fuente_display === "propio_pro" || l.fuente_display === "agente_verificado";
 }
 
-// Orden que elige el usuario. "destacados" = orden del server (pro-first); el resto
+// Orden que elige el usuario (selector "Ordenar por" dentro del panel de filtros,
+// SharedFilters.orden). "destacados" = orden del server (pro-first); el resto
 // reordena por el campo elegido. Los destacados siguen fijos arriba (ver split).
-type SortKey = "destacados" | "precio_asc" | "precio_desc" | "nuevo" | "area_desc";
-const SORT_OPTIONS: { key: SortKey; es: string; en: string }[] = [
-  { key: "destacados",  es: "Destacados",     en: "Featured" },
-  { key: "precio_desc", es: "Precio ↑",       en: "Price ↑" },
-  { key: "precio_asc",  es: "Precio ↓",       en: "Price ↓" },
-  { key: "nuevo",       es: "Más nuevo",      en: "Newest" },
-  { key: "area_desc",   es: "Área ↓",         en: "Area ↓" },
-];
 export function sortListings(list: ApiListing[], key: SortKey): ApiListing[] {
   if (key === "destacados") return list;  // conserva orden del server
   const arr = [...list];
   const num = (v: number | null | undefined, fallback: number) => (v == null ? fallback : v);
   switch (key) {
-    case "precio_asc":  return arr.sort((a, b) => num(a.precio_cop, Infinity) - num(b.precio_cop, Infinity));
-    case "precio_desc": return arr.sort((a, b) => num(b.precio_cop, -Infinity) - num(a.precio_cop, -Infinity));
-    case "nuevo":       return arr.sort((a, b) => num(a.dias_en_mercado, Infinity) - num(b.dias_en_mercado, Infinity));
-    case "area_desc":   return arr.sort((a, b) => num(b.area_m2, -Infinity) - num(a.area_m2, -Infinity));
+    case "precio_asc":       return arr.sort((a, b) => num(a.precio_cop, Infinity) - num(b.precio_cop, Infinity));
+    case "precio_desc":      return arr.sort((a, b) => num(b.precio_cop, -Infinity) - num(a.precio_cop, -Infinity));
+    case "precio_m2_asc":    return arr.sort((a, b) => num(a.precio_m2, Infinity) - num(b.precio_m2, Infinity));
+    case "precio_m2_desc":   return arr.sort((a, b) => num(b.precio_m2, -Infinity) - num(a.precio_m2, -Infinity));
+    case "area_asc":         return arr.sort((a, b) => num(a.area_m2, Infinity) - num(b.area_m2, Infinity));
+    case "area_desc":        return arr.sort((a, b) => num(b.area_m2, -Infinity) - num(a.area_m2, -Infinity));
   }
 }
 
@@ -153,7 +149,6 @@ function ListingCard({
   // Entrada escalonada: cascada continua en ciclos de 8 (acotado, sin delays que
   // crezcan sin fin en el infinite scroll). Reduced-motion lo anula vía la clase.
   const enterDelay = `${(index % 8) * 0.04}s`;
-  const isPro = useIsPro();
   const isRealtor = useIsAgente();
   const isMobile = useIsMobile();
   // Alcance (capa 1): impresión de la tarjeta de listing. Merge con cardRef
@@ -340,17 +335,11 @@ function ListingCard({
             ★ Destacado
           </span>
         )}
+        {/* Tipo(s) del agente que publica — en vivo, varios a la vez; nada en scrapeados */}
+        <AgenteTipoBadges tipos={listing.agente_tipos} size="xs" />
         {listing.disponible_actualmente === false && (
           <span className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-muted-foreground bg-muted/60 border border-border">
             YA NO DISPONIBLE
-          </span>
-        )}
-        {isPro && listing.buena_oferta && listing.disponible_actualmente !== false && (
-          <span
-            className="rounded px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider"
-            style={{ background: '#E7F4EC', color: '#0A5C36', border: '0.5px solid #0F8A4F' }}
-          >
-            BUENA OFERTA
           </span>
         )}
         {listing.amoblado && (
@@ -463,7 +452,7 @@ export function MLSPanel({
   const { isFav, toggle: toggleFav } = useFavoritosListings();
   const { target } = useTarget();
   const { lang } = useLang();
-  const [sortBy, setSortBy] = useState<SortKey>("destacados");
+  const sortBy: SortKey = ef.orden ?? "destacados";
 
   // Reset internal filters when target or barrio changes
   useEffect(() => {
@@ -665,7 +654,7 @@ export function MLSPanel({
           </div>
         )}
 
-        {/* Contador de resultados + orden */}
+        {/* Contador de resultados (el orden se elige en "Ordenar por & filtros") */}
         {!isLoading && (
           <div className={`flex items-center justify-between gap-2 px-4 py-2 ${embedded ? "" : "border-b border-border"}`}>
             <span className="text-xs font-medium text-muted-foreground">
@@ -676,17 +665,6 @@ export function MLSPanel({
                 return `${count} ${lang === "en" ? (count === 1 ? "property" : "properties") : (count === 1 ? "propiedad" : "propiedades")}`;
               })()}
             </span>
-            <label className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value as SortKey)}
-                className="cursor-pointer rounded-md border border-border bg-surface-elevated px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-              >
-                {SORT_OPTIONS.map((o) => (
-                  <option key={o.key} value={o.key}>{lang === "en" ? o.en : o.es}</option>
-                ))}
-              </select>
-            </label>
           </div>
         )}
 

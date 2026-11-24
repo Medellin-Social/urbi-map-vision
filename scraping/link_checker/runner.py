@@ -126,20 +126,24 @@ async def run(conn, cfg: Settings, *, sources: list[str] | None = None, limit: i
             if st["confirmed_gone_now"]:
                 rep.candidates.append((src, url))      # would-be review candidate
             continue
-        # fresh row under lock: never overwrite a Keep/Retire that landed while this run was fetching
-        st = await store.locked_update(conn, url, src, compute)
-        if st["confirmed_gone_now"]:
-            rep.candidates.append((src, url))          # link hidden via status; listing stays ACTIVE until a human approves
-        elif st["recovered"]:
-            if await store.reactivate_listing(conn, src, url):
-                rep.reactivated.append((src, url))
+        # fresh row under lock: never overwrite a Keep/Retire that landed while this run was fetching.
+        # one bad URL must never abort the whole batch (it would skip auto_retire below) — log and move on.
+        try:
+            st = await store.locked_update(conn, url, src, compute)
+            if st["confirmed_gone_now"]:
+                rep.candidates.append((src, url))      # link hidden via status; listing stays ACTIVE until a human approves
+            elif st["recovered"]:
+                if await store.reactivate_listing(conn, src, url):
+                    rep.reactivated.append((src, url))
+        except Exception:
+            log.exception("link-health: persist failed for %s %s (skipped)", src, url)
+            continue
         if result in (OK, REDIRECTED):
             ok_urls[src].append(url)
     if not dry_run:
         for src, urls in ok_urls.items():
             await store.mark_seen_ok(conn, src, urls)
 
-    rep.log_counts()
     for a in rep.alerts:
         send_alert(a, cfg.alert_webhook if not dry_run else "")
     if not dry_run:
@@ -147,4 +151,5 @@ async def run(conn, cfg: Settings, *, sources: list[str] | None = None, limit: i
         rep.auto_retired = await link_review.auto_retire(conn, rep.braked_sources)     # no-op unless LINK_AUTO_RETIRE_AFTER_DAYS > 0
         rep.digest = await link_review.maybe_send_digest(conn, sender=sender, braked=rep.braked_sources, alerts=rep.alerts)
         log.info("review digest: %s", rep.digest)
+    rep.log_counts()   # AFTER auto_retire so auto_retired reflects the real count (was logged as 0 pre-retire)
     return rep

@@ -246,9 +246,23 @@ export type ApiListingAgente = {
   zona_nivel: string; // 'barrio' | 'comuna'
 };
 
+/** Agente registrado que representa ESTE anuncio (Programa de agentes): solo con
+ *  representación aprobada y cobertura. null → anuncio sin agente registrado. */
+export type ApiListingRepresentante = {
+  id: string;
+  slug: string | null;
+  nombre: string;
+  telefono: string;
+  foto_url?: string | null;
+  agencia_nombre?: string | null;
+  tipos: string[];
+  preferente: { nivel: string; nombre: string }[];
+};
+
 export type ApiListingAgentes = {
   comuna?: ApiListingAgente | null; // patrocinio caro → tarjeta principal
   barrio?: ApiListingAgente | null; // patrocinio barato → tarjeta secundaria
+  representante?: ApiListingRepresentante | null;
 };
 
 export type SimilarListing = {
@@ -268,6 +282,8 @@ export type ApiListing = {
   id: number;
   fuente?: string | null;
   fuente_display?: string | null;
+  /** Tipos vigentes del agente que publicó el listing (member|certified|preferred|casa). null = sin agente. */
+  agente_tipos?: string[] | null;
   tipo_operacion?: string | null;
   tipo_inmueble?: string | null;
   precio_cop?: number | null;

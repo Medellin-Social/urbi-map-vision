@@ -1,324 +1,240 @@
-import { Name } from "@/lib/i18n";
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
-import { MapPin, MessageCircle, Users, ArrowRight, Search, ShieldCheck, HelpCircle } from "@/lib/icons";
+import { useQuery, keepPreviousData } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Search, Users, ArrowRight, X, HelpCircle, ChevronRight, MapPin } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
-import { K as TOKENS } from "@/design/tokens";
-import { type Agente, Stars, waFromTel, iniciales, perfilHref } from "@/components/agentes/agenteShared";
+import { K } from "@/design/tokens";
+import { type AgenteCard as AgenteCardT, AgentCard, buildBuscarQS } from "@/components/agentes/agenteShared";
+
+type Intencion = "comprar" | "vender" | "arrendar";
+type DirSearch = {
+  ciudad?: string; zona?: string; comuna?: string; nombre?: string; intencion?: Intencion;
+  tipo?: string; idiomas?: string; especialidad?: string; orden?: string;
+  rating_min?: number; pg?: number;
+};
+
+const str = (s: unknown) => (typeof s === "string" && s.trim() ? s.trim() : undefined);
+const CIUDAD_DEFAULT = "medellin";
+const CIUDAD_LABEL: Record<string, string> = { medellin: "Medellín", barranquilla: "Barranquilla", cali: "Cali", panama: "Ciudad de Panamá" };
 
 export const Route = createFileRoute("/agentes")({
-  head: () => seo({ title: "Agentes inmobiliarios · Medellín Social", description: "Encuentra agentes inmobiliarios verificados por zona en Medellín y el Valle de Aburrá.", path: "/agentes" }),
-  component: AgentesPage,
+  head: () => seo({ title: "Agentes inmobiliarios en Medellín · Medellín Social", description: "Directorio de agentes inmobiliarios verificados por zona en Medellín y el Valle de Aburrá. Filtra por barrio, idioma y especialidad.", path: "/agentes" }),
+  validateSearch: (s: Record<string, unknown>): DirSearch => ({
+    ciudad: str(s.ciudad), zona: str(s.zona), comuna: str(s.comuna), nombre: str(s.nombre),
+    intencion: (["comprar", "vender", "arrendar"] as const).includes(s.intencion as Intencion) ? (s.intencion as Intencion) : undefined,
+    tipo: str(s.tipo), idiomas: str(s.idiomas), especialidad: str(s.especialidad),
+    orden: str(s.orden), rating_min: typeof s.rating_min === "number" ? s.rating_min : undefined,
+    pg: typeof s.pg === "number" && s.pg > 1 ? s.pg : undefined,
+  }),
+  component: DirectorioPage,
 });
 
-const K = TOKENS;
+type BuscarResp = { items: AgenteCardT[]; total: number; page: number; page_size: number };
 
-type SortKey = "nombre" | "rating" | "verificado";
-
-// Mismo número de WhatsApp del equipo que ya usan ListingDrawer/MapView como
-// contacto genérico cuando no hay un agente puntual asignado.
-const WA_EQUIPO = "https://wa.me/+573122502394?text=" + encodeURIComponent("Hola, quiero ayuda para encontrar un agente en Medellín.");
-
-const FAQ: { q: string; a: string }[] = [
-  {
-    q: "¿Cuánto cuesta contactar a un agente?",
-    a: "Nada. Hablar con cualquier agente del directorio es gratis y directo por WhatsApp, sin intermediarios ni formularios.",
-  },
-  {
-    q: "¿Los agentes están verificados?",
-    a: "Cada agente pasa por una revisión antes de aparecer en el directorio. Cuando trabaja con una agencia que además tiene el sello ✓ verificada, esa agencia fue revisada aparte.",
-  },
-  {
-    q: "¿Las reseñas son reales?",
-    a: "Sí. Solo usuarios con cuenta pueden dejar una reseña, y cada uno puede dejar una sola por agente — no hay reseñas anónimas ni repetidas.",
-  },
-  {
-    q: "¿Cómo elijo el agente correcto?",
-    a: "Filtra por sector para encontrar a quien conoce tu zona, revisa sus reseñas y no dudes en contactar a más de uno para comparar.",
-  },
-  {
-    q: "¿Qué pasa si no encuentro un agente en mi zona?",
-    a: "Escríbenos y te ayudamos a conseguir uno — ver sección de arriba.",
-  },
+const INTENCIONES: { v: Intencion; label: string }[] = [
+  { v: "comprar", label: "Comprar" }, { v: "vender", label: "Vender" }, { v: "arrendar", label: "Arrendar" },
 ];
+const ORDENES = [
+  { v: "relevantes", label: "Relevantes" }, { v: "mas-vendidos", label: "Más vendidos" },
+  { v: "mejor-calificados", label: "Mejor calificados" }, { v: "mas-propiedades", label: "Más propiedades" },
+];
+const TIPOS = [
+  { v: "", label: "Todos los tipos" }, { v: "compra-venta", label: "Compra y venta" },
+  { v: "arrendamiento", label: "Arrendamiento" }, { v: "inversion", label: "Inversión" },
+];
+const IDIOMAS = [{ v: "", label: "Cualquier idioma" }, { v: "Inglés", label: "Inglés" }, { v: "Portugués", label: "Portugués" }, { v: "Español", label: "Español" }];
+const ESPECIALIDADES = [
+  { v: "", label: "Toda especialidad" }, { v: "inversion", label: "Inversión" }, { v: "extranjeros", label: "Extranjeros" },
+  { v: "airbnb", label: "Airbnb / renta corta" }, { v: "compra", label: "Compra" }, { v: "venta", label: "Venta" }, { v: "arriendo", label: "Arriendo" },
+];
+const ZONAS_POPULARES = ["El Poblado", "Laureles", "Envigado", "Belén", "Sabaneta", "La América"];
 
-function waLink(a: Agente): string {
-  return waFromTel(a.telefono, a.nombre);
-}
+const PAGE_SIZE = 20;
 
-// Tarjeta densa estilo realtor.com: foto | nombre+rating+agencia+zonas | contacto.
-// La tarjeta completa NO es un <Link> (rompería los <a> internos de WhatsApp);
-// foto, nombre y "Ver perfil" navegan al perfil, WhatsApp va aparte.
-function AgenteRow({ a }: { a: Agente }) {
-  const [zonaPrincipal, ...zonasExtra] = a.zonas;
-  const perfilLink = { to: "/agentes/$id", params: { id: perfilHref(a) } } as const;
-
-  return (
-    <div
-      className="rounded-2xl border-l-4 p-4 transition hover:shadow-sm sm:p-5"
-      style={{ borderLeftColor: K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}
-    >
-      <div className="grid grid-cols-[auto_1fr] gap-4 sm:grid-cols-[auto_1fr_auto]">
-        <Link {...perfilLink} aria-label={`Ver perfil de ${a.nombre}`} className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl transition hover:opacity-90 sm:h-24 sm:w-24" style={{ background: K.tealLight }}>
-          {a.foto_url
-            ? <img src={a.foto_url} alt={a.nombre} className="h-full w-full object-cover" />
-            : iniciales(a.nombre)
-            ? <span className="text-xl font-bold sm:text-2xl" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>
-            : <Users className="h-9 w-9" style={{ color: K.teal }} />}
-        </Link>
-
-        <div className="min-w-0">
-          <Link {...perfilLink} className="max-w-full break-words text-left text-xl font-bold leading-tight tracking-tight transition hover:opacity-70 sm:text-2xl" style={{ color: K.ink, fontFamily: K.serif }}>
-            <Name>{a.nombre}</Name>
-          </Link>
-
-          {a.rating_promedio != null ? (
-            <div className="mt-0.5 flex items-center gap-1.5">
-              <Stars value={a.rating_promedio} />
-              <span className="text-xs font-semibold" style={{ color: K.ink }}>{a.rating_promedio.toFixed(1)}</span>
-              <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>({a.n_resenas} reseña{a.n_resenas === 1 ? "" : "s"})</span>
-            </div>
-          ) : (
-            <div className="mt-0.5 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>
-          )}
-
-          {zonaPrincipal ? (
-            <div className="mt-1.5 flex items-center gap-1 text-[13px] font-semibold" style={{ color: K.tealDeep }}>
-              <MapPin className="h-3.5 w-3.5" /> Especialista en {zonaPrincipal}
-            </div>
-          ) : (
-            <div className="mt-1.5 text-xs font-medium uppercase tracking-wide" style={{ color: K.muted }}>Agente inmobiliario</div>
-          )}
-
-          {(zonasExtra.length > 0 || a.agencia_nombre) && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {a.agencia_nombre && (
-                <span
-                  className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold"
-                  style={a.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: K.surface, color: K.muted }}
-                >
-                  {a.agencia_verificada && <ShieldCheck className="h-3 w-3" />} {a.agencia_nombre}
-                </span>
-              )}
-              {zonasExtra.map((z) => (
-                <span key={z} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}>
-                  <MapPin className="h-3 w-3" /> {z}
-                </span>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Contacto — abajo full-width en móvil, columna derecha en desktop */}
-        <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-44 sm:justify-center">
-          <a
-            href={waLink(a)}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: K.tealDeep }}
-          >
-            <MessageCircle className="h-4 w-4" /> WhatsApp
-          </a>
-          <Link {...perfilLink} className="text-center text-xs font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
-            Ver perfil completo →
-          </Link>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function AgenteRowSkeleton() {
+function CardSkeleton() {
   return (
     <div className="flex animate-pulse items-center gap-4 rounded-2xl border-l-4 p-5" style={{ borderLeftColor: K.line, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}>
       <div className="h-24 w-24 shrink-0 rounded-2xl" style={{ background: K.tealLight }} />
-      <div className="flex-1 space-y-2">
-        <div className="h-4 w-40 rounded" style={{ background: K.line }} />
-        <div className="h-3 w-24 rounded" style={{ background: K.line }} />
-      </div>
-      <div className="hidden h-11 w-40 rounded-xl sm:block" style={{ background: K.line }} />
+      <div className="flex-1 space-y-2"><div className="h-4 w-44 rounded" style={{ background: K.line }} /><div className="h-3 w-28 rounded" style={{ background: K.line }} /><div className="h-3 w-56 rounded" style={{ background: K.line }} /></div>
+      <div className="hidden h-11 w-36 rounded-xl sm:block" style={{ background: K.line }} />
     </div>
   );
 }
 
-function AgentesPage() {
-  const { data, isLoading } = useQuery<Agente[]>({
-    queryKey: ["agentes-directorio"],
-    queryFn: () => apiFetch<Agente[]>(API_ENDPOINTS.agentesDirectorio),
+function DirectorioPage() {
+  const sp = Route.useSearch();
+  const navigate = Route.useNavigate();
+  const ciudad = sp.ciudad ?? CIUDAD_DEFAULT;
+  const ciudadLabel = CIUDAD_LABEL[ciudad] ?? ciudad;
+  const pg = sp.pg ?? 1;
+
+  // Actualiza un filtro en la URL (resetea pg salvo que se cambie pg).
+  const setFilter = (patch: Partial<DirSearch>) =>
+    navigate({ search: (prev) => ({ ...prev, ...patch, ...(("pg" in patch) ? {} : { pg: undefined }) }) });
+
+  const qs = useMemo(() => buildBuscarQS(sp, { ciudad, pg, pageSize: PAGE_SIZE }), [sp, ciudad, pg]);
+
+  const { data, isLoading, isError, refetch, isFetching } = useQuery<BuscarResp>({
+    queryKey: ["agentes-buscar", qs],
+    queryFn: () => apiFetch<BuscarResp>(API_ENDPOINTS.agentesBuscar(qs)),
+    placeholderData: keepPreviousData,
   });
-  const agentes = data ?? [];
 
-  const [busqueda, setBusqueda] = useState("");
-  const [zonaFiltro, setZonaFiltro] = useState("");
-  const [orden, setOrden] = useState<SortKey>("nombre");
+  const items = data?.items ?? [];
+  const total = data?.total ?? 0;
+  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const desde = total === 0 ? 0 : (pg - 1) * PAGE_SIZE + 1;
+  const hasta = Math.min(pg * PAGE_SIZE, total);
 
-  const zonasDisponibles = useMemo(
-    () => Array.from(new Set(agentes.flatMap((a) => a.zonas))).sort(),
-    [agentes],
-  );
+  const chips = [
+    sp.zona && { k: "zona", label: sp.zona },
+    sp.intencion && { k: "intencion", label: INTENCIONES.find((i) => i.v === sp.intencion)?.label },
+    sp.tipo && { k: "tipo", label: TIPOS.find((t) => t.v === sp.tipo)?.label },
+    sp.idiomas && { k: "idiomas", label: sp.idiomas },
+    sp.especialidad && { k: "especialidad", label: ESPECIALIDADES.find((e) => e.v === sp.especialidad)?.label },
+    sp.rating_min && { k: "rating_min", label: `${sp.rating_min}★ o más` },
+  ].filter(Boolean) as { k: keyof DirSearch; label: string }[];
 
-  const visibles = useMemo(() => {
-    let lista = agentes;
-    if (busqueda.trim()) {
-      const q = busqueda.trim().toLowerCase();
-      lista = lista.filter((a) => a.nombre.toLowerCase().includes(q));
-    }
-    if (zonaFiltro) {
-      lista = lista.filter((a) => a.zonas.includes(zonaFiltro));
-    }
-    const orden_ = [...lista];
-    if (orden === "rating") {
-      orden_.sort((a, b) => {
-        if (a.rating_promedio == null && b.rating_promedio == null) return a.nombre.localeCompare(b.nombre);
-        if (a.rating_promedio == null) return 1; // sin reseñas va al final, no arriba ni abajo por sesgo
-        if (b.rating_promedio == null) return -1;
-        return b.rating_promedio - a.rating_promedio || a.nombre.localeCompare(b.nombre);
-      });
-    } else if (orden === "verificado") {
-      orden_.sort((a, b) => Number(b.agencia_verificada) - Number(a.agencia_verificada) || a.nombre.localeCompare(b.nombre));
-    } else {
-      orden_.sort((a, b) => a.nombre.localeCompare(b.nombre));
-    }
-    return orden_;
-  }, [agentes, busqueda, zonaFiltro, orden]);
-
-  const inputStyle: React.CSSProperties = { border: `1px solid ${K.line}`, background: "#FFFFFF", color: K.ink };
+  const selStyle: React.CSSProperties = { border: `1px solid ${K.line}`, background: "#FFFFFF", color: K.ink };
+  const titulo = sp.zona ? `Agentes inmobiliarios en ${sp.zona}` : `Agentes inmobiliarios en ${ciudadLabel}`;
 
   return (
     <ComunidadLayout>
-      <div className="mx-auto max-w-6xl px-4 pb-16 pt-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold tracking-tight" style={{ fontFamily: K.serif, color: K.ink }}>
-            Encuentra un agente
-          </h1>
-          <p className="mt-2 max-w-lg text-[15px] leading-relaxed" style={{ color: K.muted }}>
-            Contacta directamente a un agente que trabaja en Medellín. Sin formularios, sin esperar una llamada.
-          </p>
-        </div>
+      <div className="mx-auto max-w-5xl px-4 pb-20 pt-6">
+        {/* Breadcrumb */}
+        <nav aria-label="Ruta" className="flex flex-wrap items-center gap-1 text-xs" style={{ color: K.muted }}>
+          <Link to="/" className="hover:opacity-70">Inicio</Link> <ChevronRight className="h-3 w-3" />
+          <span style={{ color: K.ink }}>Agentes</span> <ChevronRight className="h-3 w-3" />
+          <span style={{ color: K.ink }}>{ciudadLabel}</span>
+          {sp.zona && <><ChevronRight className="h-3 w-3" /> <span style={{ color: K.ink }}>{sp.zona}</span></>}
+        </nav>
 
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-[240px_1fr]">
-          {/* Columna 1: buscar + filtrar */}
-          <aside className="flex flex-col gap-5 lg:sticky lg:top-24 lg:self-start">
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>Buscar por nombre</label>
-              <div className="relative">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2" style={{ color: K.muted }} />
-                <input
-                  value={busqueda}
-                  onChange={(e) => setBusqueda(e.target.value)}
-                  placeholder="Nombre del agente"
-                  className="w-full rounded-lg py-2 pl-8 pr-3 text-sm outline-none"
-                  style={inputStyle}
-                />
-              </div>
-            </div>
+        {/* H1 + conteo */}
+        <h1 className="mt-3 text-3xl font-bold tracking-tight" style={{ fontFamily: K.serif, color: K.ink }}>{titulo}</h1>
+        <p className="mt-1 text-sm" style={{ color: K.muted }}>
+          {isLoading ? "Buscando…" : <span data-i18n-skip="true">{total} agente{total === 1 ? "" : "s"} {sp.zona || sp.intencion || sp.especialidad ? "con tus filtros" : "verificados"}</span>}
+        </p>
 
-            <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>Sector</label>
-              <select value={zonaFiltro} onChange={(e) => setZonaFiltro(e.target.value)} className="w-full rounded-lg px-3 py-2 text-sm outline-none" style={inputStyle}>
-                <option value="">Todos los sectores</option>
-                {zonasDisponibles.map((z) => <option key={z} value={z}>{z}</option>)}
-              </select>
-            </div>
-          </aside>
-
-          {/* Columna 2: barra de orden + resultados */}
-          <div>
-            <div className="mb-4 flex items-center justify-between gap-3">
-              {!isLoading && (
-                visibles.length === 0 ? (
-                  <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.teal }}>Sin resultados</span>
-                ) : (
-                  <span data-i18n-skip="true" className="text-sm font-semibold" style={{ color: K.ink }}>
-                    {visibles.length} agente{visibles.length === 1 ? "" : "s"}
-                  </span>
-                )
-              )}
-              <div className="ml-auto flex items-center gap-2">
-                <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>Ordenar</label>
-                <select value={orden} onChange={(e) => setOrden(e.target.value as SortKey)} className="rounded-lg px-3 py-1.5 text-sm outline-none" style={inputStyle}>
-                  <option value="nombre">Nombre</option>
-                  <option value="rating">Mejor calificados</option>
-                  <option value="verificado">Agencias verificadas</option>
-                </select>
-              </div>
-            </div>
-
-            {isLoading && (
-              <div className="flex flex-col gap-3">
-                {[0, 1, 2].map((i) => <AgenteRowSkeleton key={i} />)}
-              </div>
-            )}
-
-            {!isLoading && agentes.length === 0 && (
-              <div className="rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
-                <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full" style={{ background: K.tealLight }}>
-                  <Users className="h-6 w-6" style={{ color: K.teal }} />
-                </div>
-                <p className="text-sm font-semibold" style={{ color: K.ink }}>Aún no tenemos agentes disponibles</p>
-                <p className="mx-auto mt-1 max-w-xs text-xs" style={{ color: K.muted }}>Estamos construyendo la red de agentes en Medellín. Vuelve pronto.</p>
-                <Link to="/map" className="mt-5 inline-flex items-center gap-1.5 text-sm font-semibold transition hover:gap-2.5" style={{ color: K.tealDeep }}>
-                  Explora propiedades en el mapa <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            )}
-
-            {!isLoading && agentes.length > 0 && visibles.length === 0 && (
-              <div className="rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
-                <p className="text-sm font-semibold" style={{ color: K.ink }}>Ningún agente coincide con tu búsqueda</p>
-                <p className="mt-1 text-xs" style={{ color: K.muted }}>Prueba con otro nombre o sector.</p>
-              </div>
-            )}
-
-            {visibles.length > 0 && (
-              <div className="flex flex-col gap-3">
-                {visibles.map((a) => <AgenteRow key={a.id} a={a} />)}
-              </div>
-            )}
+        {/* Buscador + intención */}
+        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative flex-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: K.muted }} />
+            <input defaultValue={sp.nombre ?? ""} onKeyDown={(e) => { if (e.key === "Enter") setFilter({ nombre: str((e.target as HTMLInputElement).value) }); }}
+              onBlur={(e) => setFilter({ nombre: str(e.target.value) })}
+              placeholder="Buscar por agente, inmobiliaria o zona" aria-label="Buscar agente"
+              className="w-full rounded-xl py-2.5 pl-10 pr-3 text-sm outline-none focus:ring-2" style={selStyle} />
+          </div>
+          <div role="tablist" aria-label="Intención" className="inline-flex rounded-xl p-1" style={{ background: K.surface }}>
+            {INTENCIONES.map((i) => {
+              const on = sp.intencion === i.v;
+              return (
+                <button key={i.v} role="tab" aria-selected={on} onClick={() => setFilter({ intencion: on ? undefined : i.v })}
+                  className="rounded-lg px-3 py-1.5 text-sm font-semibold transition"
+                  style={on ? { background: K.tealDeep, color: "#FFFFFF" } : { color: K.muted }}>{i.label}</button>
+              );
+            })}
           </div>
         </div>
 
-        {/* Ayuda para quien no quiere elegir por su cuenta — mismo contacto genérico
-            que ya usan ListingDrawer/MapView cuando no hay agente puntual asignado. */}
-        <div className="mx-auto mt-16 max-w-xl rounded-2xl px-6 py-10 text-center" style={{ background: K.tealLight, border: `1px solid ${K.teal}` }}>
-          <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full" style={{ background: "#FFFFFF" }}>
-            <HelpCircle className="h-6 w-6" style={{ color: K.teal }} />
+        {/* Barra de filtros */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <select aria-label="Tipo de agente" value={sp.tipo ?? ""} onChange={(e) => setFilter({ tipo: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{TIPOS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
+          <select aria-label="Idioma" value={sp.idiomas ?? ""} onChange={(e) => setFilter({ idiomas: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{IDIOMAS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
+          <select aria-label="Especialidad" value={sp.especialidad ?? ""} onChange={(e) => setFilter({ especialidad: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{ESPECIALIDADES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
+          <select aria-label="Calificación mínima" value={sp.rating_min ?? ""} onChange={(e) => setFilter({ rating_min: e.target.value ? Number(e.target.value) : undefined })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>
+            <option value="">Cualquier calificación</option><option value="4">4★ o más</option><option value="4.5">4.5★ o más</option>
+          </select>
+          <div className="ml-auto flex items-center gap-2">
+            <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>Ordenar</label>
+            <select aria-label="Ordenar por" value={sp.orden ?? "relevantes"} onChange={(e) => setFilter({ orden: e.target.value })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{ORDENES.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
           </div>
-          <h2 className="text-xl font-bold" style={{ fontFamily: K.serif, color: K.ink }}>¿No sabes por dónde empezar?</h2>
-          <p className="mx-auto mt-1.5 max-w-sm text-sm leading-relaxed" style={{ color: K.muted }}>
-            Cuéntanos qué buscas y en qué zona, y te ayudamos a encontrar el agente correcto.
-          </p>
-          <a
-            href={WA_EQUIPO}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mt-5 inline-flex items-center justify-center gap-2 rounded-xl px-6 py-3 text-sm font-semibold text-white transition hover:opacity-90"
-            style={{ background: K.tealDeep }}
-          >
-            <MessageCircle className="h-4 w-4" /> Pide ayuda por WhatsApp
-          </a>
         </div>
 
-        {/* FAQ */}
-        <div className="mx-auto mt-16 max-w-xl">
-          <h2 className="mb-5 text-center text-xl font-bold" style={{ fontFamily: K.serif, color: K.ink }}>
-            Preguntas frecuentes
-          </h2>
-          {FAQ.map((item) => (
-            <div key={item.q} className="py-4" style={{ borderBottom: `1px solid ${K.line}` }}>
-              <p className="mb-1 text-sm font-bold" style={{ color: K.ink }}>{item.q}</p>
-              <p className="text-[13px] leading-relaxed" style={{ color: K.muted }}>{item.a}</p>
+        {/* Chips activos */}
+        {chips.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {chips.map((c) => (
+              <button key={c.k} onClick={() => setFilter({ [c.k]: undefined } as Partial<DirSearch>)} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}>
+                {c.label} <X className="h-3 w-3" />
+              </button>
+            ))}
+            <button onClick={() => navigate({ search: { ciudad: sp.ciudad } })} className="text-[11px] font-semibold underline" style={{ color: K.muted }}>Limpiar todo</button>
+          </div>
+        )}
+
+        {/* Resultados */}
+        <div className="mt-6 flex flex-col gap-3" aria-busy={isFetching}>
+          {isLoading && [0, 1, 2, 3].map((i) => <CardSkeleton key={i} />)}
+
+          {isError && !isLoading && (
+            <div className="rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+              <p className="text-sm font-semibold" style={{ color: K.ink }}>No pudimos cargar los agentes</p>
+              <button onClick={() => refetch()} className="mt-4 rounded-xl px-5 py-2.5 text-sm font-semibold text-white" style={{ background: K.tealDeep }}>Reintentar</button>
             </div>
-          ))}
-          <p className="mt-5 text-center text-[13px]" style={{ color: K.muted }}>
-            ¿Más preguntas?{" "}
-            <a href="mailto:hola@medellin.social" style={{ color: K.teal }}>hola@medellin.social</a>
-          </p>
+          )}
+
+          {!isLoading && !isError && items.length === 0 && (
+            <div className="rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
+              <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-full" style={{ background: K.tealLight }}><Users className="h-6 w-6" style={{ color: K.teal }} /></div>
+              <p className="text-sm font-semibold" style={{ color: K.ink }}>No hay agentes con estos filtros</p>
+              <p className="mx-auto mt-1 max-w-xs text-xs" style={{ color: K.muted }}>Prueba limpiar filtros o ampliar la zona.</p>
+              <button onClick={() => navigate({ search: { ciudad: sp.ciudad } })} className="mt-4 rounded-xl px-5 py-2.5 text-sm font-semibold text-white" style={{ background: K.tealDeep }}>Limpiar filtros</button>
+            </div>
+          )}
+
+          {items.map((a) => <AgentCard key={a.id} a={a} />)}
+        </div>
+
+        {/* Paginación */}
+        {total > PAGE_SIZE && (
+          <div className="mt-6 flex items-center justify-between gap-3">
+            <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>Mostrando {desde}–{hasta} de {total}</span>
+            <div className="flex items-center gap-1">
+              <button disabled={pg <= 1} onClick={() => setFilter({ pg: pg - 1 })} className="rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40" style={{ border: `1px solid ${K.line}`, color: K.ink }}>Anterior</button>
+              {Array.from({ length: totalPages }, (_, i) => i + 1).filter((n) => Math.abs(n - pg) <= 2 || n === 1 || n === totalPages).map((n, idx, arr) => (
+                <span key={n} className="flex items-center">
+                  {idx > 0 && arr[idx - 1] !== n - 1 && <span className="px-1 text-xs" style={{ color: K.muted }}>…</span>}
+                  <button onClick={() => setFilter({ pg: n })} className="min-w-[32px] rounded-lg px-2 py-1.5 text-sm font-semibold" style={n === pg ? { background: K.tealDeep, color: "#FFFFFF" } : { border: `1px solid ${K.line}`, color: K.ink }}>{n}</button>
+                </span>
+              ))}
+              <button disabled={pg >= totalPages} onClick={() => setFilter({ pg: pg + 1 })} className="rounded-lg px-3 py-1.5 text-sm font-semibold disabled:opacity-40" style={{ border: `1px solid ${K.line}`, color: K.ink }}>Siguiente</button>
+            </div>
+          </div>
+        )}
+
+        {/* Bloque inferior (sin sidebar) */}
+        <div className="mt-16 border-t pt-10" style={{ borderColor: K.line }}>
+          <h2 className="text-lg font-bold" style={{ fontFamily: K.serif, color: K.ink }}>Zonas populares en {ciudadLabel}</h2>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {ZONAS_POPULARES.map((z) => (
+              <Link key={z} to="/agentes" search={{ ciudad: sp.ciudad, zona: z }} className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-sm font-semibold transition hover:opacity-80" style={{ background: K.tealLight, color: K.tealDeep }}>
+                <MapPin className="h-3.5 w-3.5" /> {z}
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-10 grid gap-6 sm:grid-cols-2">
+            <div>
+              <h2 className="text-lg font-bold" style={{ fontFamily: K.serif, color: K.ink }}>Cómo elegir un buen agente</h2>
+              <ul className="mt-2 space-y-1.5 text-[13px] leading-relaxed" style={{ color: K.muted }}>
+                <li>• Revisa reseñas reales de otros usuarios, no solo la calificación.</li>
+                <li>• Prioriza a quien conoce tu zona — un agente con exclusividad en el barrio suele tener mejor lectura del mercado.</li>
+                <li>• Compara al menos dos o tres antes de decidir; contactarlos es gratis.</li>
+                <li>• Si eres extranjero, filtra por idioma para evitar fricción en el proceso.</li>
+              </ul>
+            </div>
+            <div className="flex flex-col justify-center rounded-2xl p-6" style={{ background: K.tealLight, border: `1px solid ${K.teal}` }}>
+              <div className="mx-auto mb-2 grid h-11 w-11 place-items-center rounded-full" style={{ background: "#FFFFFF" }}><HelpCircle className="h-6 w-6" style={{ color: K.teal }} /></div>
+              <h2 className="text-center text-lg font-bold" style={{ fontFamily: K.serif, color: K.ink }}>¿Eres agente?</h2>
+              <p className="mx-auto mt-1 max-w-xs text-center text-sm" style={{ color: K.muted }}>Reclama la exclusividad de tu zona y aparece primero ante compradores de tu barrio.</p>
+              <Link to="/planes" className="mx-auto mt-4 inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}>
+                Reclama tu zona <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
         </div>
       </div>
     </ComunidadLayout>

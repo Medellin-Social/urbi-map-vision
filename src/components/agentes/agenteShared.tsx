@@ -2,12 +2,68 @@
 // (/agentes/$id). Tipos + helpers + estrellas — una sola fuente, sin duplicar.
 import { useState } from "react";
 import { z } from "zod";
-import { Star } from "@/lib/icons";
+import { Star, MapPin, ShieldCheck, MessageCircle, Phone, Globe2 } from "@/lib/icons";
 import { formatMoney } from "@/lib/format";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { useQueryClient } from "@tanstack/react-query";
+import { Link } from "@tanstack/react-router";
+import { Name } from "@/lib/i18n";
 import { K } from "@/design/tokens";
+import { useLang } from "@/lib/i18n";
+import {
+  AGENTE_TIPO_ANCLA, AGENTE_TIPO_DESC, AGENTE_TIPO_STYLE, agenteTipoLabel, normalizarTipos, preferenteLabel,
+  type AgenteTipo, type ZonaPreferente,
+} from "@/lib/agenteTipos";
+
+/** Insignias de tipo de agente (varias a la vez). No pinta nada si no hay tipos.
+ *  `preferente` (zonas de cupos pagados) reemplaza la insignia genérica por una por
+ *  zona: "Preferente de barrio · Laureles". `linked` hace que cada insignia abra su
+ *  sección en la guía pública /agentes/estados (no usar dentro de otro <a>). */
+export function AgenteTipoBadges({ tipos, preferente, size = "sm", className = "", linked = false }: {
+  tipos: readonly string[] | null | undefined;
+  preferente?: readonly ZonaPreferente[] | null;
+  size?: "xs" | "sm";
+  className?: string;
+  linked?: boolean;
+}) {
+  const { lang } = useLang();
+  const lista = normalizarTipos(tipos);
+  if (lista.length === 0) return null;
+  const pad = size === "xs" ? "px-1.5 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]";
+  const zonas = preferente?.filter((z) => z.nombre) ?? [];
+  const items: { key: string; tipo: AgenteTipo; label: string; ancla: string }[] = [];
+  for (const t of lista) {
+    if (t === "preferred" && zonas.length > 0) {
+      for (const z of zonas) {
+        items.push({ key: `pref-${z.nivel}-${z.nombre}`, tipo: t, label: preferenteLabel(z, lang),
+          ancla: z.nivel === "comuna" ? "preferente-comuna" : "preferente-barrio" });
+      }
+    } else {
+      items.push({ key: t, tipo: t, label: agenteTipoLabel(t, lang), ancla: AGENTE_TIPO_ANCLA[t] });
+    }
+  }
+  const verGuia = lang === "en" ? "What does this status mean?" : "¿Qué significa este estado?";
+  return (
+    <span className={`inline-flex flex-wrap gap-1 ${className}`} data-testid="agente-tipos" data-i18n-skip>
+      {items.map((it) => {
+        const s = AGENTE_TIPO_STYLE[it.tipo];
+        const cls = `inline-flex items-center rounded-full font-bold uppercase tracking-wide ${pad}`;
+        const style = { background: s.bg, color: s.fg, border: `1px solid ${s.border}` };
+        return linked ? (
+          <a key={it.key} data-tipo={it.tipo} href={`/agentes/estados#${it.ancla}`} className={`${cls} hover:opacity-80`}
+            style={style} title={verGuia}>
+            {it.label}
+          </a>
+        ) : (
+          <span key={it.key} data-tipo={it.tipo} className={cls} style={style} title={AGENTE_TIPO_DESC[it.tipo][lang === "en" ? "en" : "es"]}>
+            {it.label}
+          </span>
+        );
+      })}
+    </span>
+  );
+}
 
 // ── Tipos ────────────────────────────────────────────────────────────────────
 export type Agente = {
@@ -22,6 +78,8 @@ export type Agente = {
   agencia_verificada: boolean;
   rating_promedio: number | null; // null = sin reseñas — nunca un 0 inventado
   n_resenas: number;
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
+  preferente?: ZonaPreferente[]; // cupos pagados de Realtor Preferido (zona precisa)
 };
 
 // Ruta del perfil: usa slug si existe, si no el UUID (el endpoint resuelve ambos).
@@ -49,6 +107,9 @@ export type AgentePerfil = {
   n_activos: number; n_cierres: number; vendidas_12m: number;
   precio_min: number | null; precio_max: number | null;
   resenas: PerfilResena[];
+  tipos?: string[]; // member|certified|preferred|casa — varios a la vez, en vivo
+  preferente?: ZonaPreferente[];
+  representados?: { map_id: number; url: string; precio: number | null; operacion: string | null; tipo_inmueble: string | null; area_m2: number | null; habitaciones: number | null; barrio: string | null; foto_portada: string | null }[];
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -298,6 +359,146 @@ export function ResenaForm({ agentId, onDone }: { agentId: string; onDone: () =>
         <button onClick={onDone} className="rounded-lg px-3 py-1.5 text-xs font-semibold" style={{ color: K.muted }}>
           Cancelar
         </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Tarjeta de agente (directorio + 'agentes similares' del perfil) ───────────
+export type AgenteCard = {
+  id: string; slug: string | null; nombre: string; foto_url: string | null; telefono: string | null;
+  agencia_nombre: string | null; agencia_verificada: boolean; agencia_logo: string | null;
+  verificado: boolean; rating_promedio: number | null; n_resenas: number;
+  zonas: string[]; exclusivo: boolean; destacado: boolean;
+  bio_corta: string | null; idiomas: string[]; especialidades: string[];
+  anios_experiencia: number | null; n_activos: number; cerradas_12m: number;
+  precio_min: number | null; precio_max: number | null;
+  // Programa de agentes: insignias de tipo + zonas preferentes pagadas.
+  tipos: string[]; preferente: { nivel: string; nombre: string }[];
+};
+
+const ESP_LABEL: Record<string, string> = {
+  compra: "Compra", venta: "Venta", arriendo: "Arriendo",
+  inversion: "Inversión", extranjeros: "Extranjeros", airbnb: "Airbnb",
+};
+
+// Construye el querystring de /listings/agentes/buscar desde los filtros de la URL.
+// Pura (testeable): el directorio la usa y los tests fijan el contrato filtros→API.
+export type AgentesFiltros = {
+  zona?: string; comuna?: string; nombre?: string; intencion?: string; tipo?: string;
+  idiomas?: string; especialidad?: string; orden?: string; rating_min?: number;
+};
+export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: number; pageSize: number }): string {
+  const p = new URLSearchParams();
+  p.set("ciudad", opts.ciudad);
+  if (f.zona) p.set("zona", f.zona);
+  if (f.comuna) p.set("comuna", f.comuna);
+  if (f.nombre) p.set("nombre", f.nombre);
+  if (f.intencion) p.set("intencion", f.intencion);
+  if (f.tipo) p.set("tipo", f.tipo);
+  if (f.idiomas) p.set("idiomas", f.idiomas);
+  if (f.especialidad) p.set("especialidad", f.especialidad);
+  if (f.rating_min) p.set("rating_min", String(f.rating_min));
+  p.set("orden", f.orden ?? "relevantes");
+  p.set("pg", String(opts.pg));
+  p.set("page_size", String(opts.pageSize));
+  return p.toString();
+}
+
+function MetricInline({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col">
+      <span className="text-sm font-bold leading-tight" style={{ color: K.tealDeep, fontFamily: K.serif }}>{value}</span>
+      <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: K.muted }}>{label}</span>
+    </div>
+  );
+}
+
+// Tarjeta horizontal: foto | info | acciones. `compact` la usa 'agentes similares'.
+export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) {
+  const zonasTop = a.zonas.slice(0, 3);
+  const zonasResto = a.zonas.length - zonasTop.length;
+  const rango = a.precio_min != null && a.precio_max != null ? rangoPrecio(a.precio_min, a.precio_max) : null;
+  const metrics = [
+    a.n_activos > 0 ? { label: "Activas", value: String(a.n_activos) } : null,
+    a.cerradas_12m > 0 ? { label: "Vendidas 12m", value: String(a.cerradas_12m) } : null,
+    a.anios_experiencia != null ? { label: "Experiencia", value: `${a.anios_experiencia} a` } : null,
+    rango ? { label: "Rango", value: rango } : null,
+  ].filter(Boolean) as { label: string; value: string }[];
+
+  return (
+    <div className="rounded-2xl border-l-4 p-4 transition hover:shadow-sm sm:p-5"
+      style={{ borderLeftColor: a.destacado ? K.tealDeep : K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}>
+      {a.destacado && (
+        <div className="mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: K.tealDeep, color: "#FFFFFF" }}>
+          <Star width={10} height={10} fill="#FFFFFF" stroke="#FFFFFF" /> Destacado
+        </div>
+      )}
+      <div className="grid grid-cols-[auto_1fr] gap-4 sm:grid-cols-[auto_1fr_auto]">
+        <Link to="/agentes/$id" params={{ id: perfilHref(a) }} aria-label={`Ver perfil de ${a.nombre}`}
+          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl transition hover:opacity-90 sm:h-24 sm:w-24" style={{ background: K.tealLight }}>
+          {a.foto_url ? <img src={a.foto_url} alt={a.nombre} loading="lazy" className="h-full w-full object-cover" />
+            : <span className="text-xl font-bold sm:text-2xl" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>}
+        </Link>
+
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="text-lg font-bold leading-tight tracking-tight transition hover:opacity-70 sm:text-xl" style={{ color: K.ink, fontFamily: K.serif }}>
+              <Name>{a.nombre}</Name>
+            </Link>
+            {a.verificado && <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: K.tealLight, color: K.tealDeep }}><ShieldCheck className="h-3 w-3" /> Verificado</span>}
+          </div>
+
+          {(a.tipos.length > 0 || a.preferente.length > 0) && (
+            <AgenteTipoBadges tipos={a.tipos} preferente={a.preferente} className="mt-1" linked />
+          )}
+
+          {a.rating_promedio != null ? (
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <Stars value={a.rating_promedio} /><span className="text-xs font-semibold" style={{ color: K.ink }}>{a.rating_promedio.toFixed(1)}</span>
+              <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>({a.n_resenas})</span>
+            </div>
+          ) : <div className="mt-0.5 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>}
+
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]" style={{ color: K.muted }}>
+            {a.agencia_nombre && (
+              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: a.agencia_verificada ? K.tealDeep : K.muted }}>
+                {a.agencia_logo ? <img src={a.agencia_logo} alt="" className="h-3.5 w-3.5 rounded object-contain" /> : a.agencia_verificada ? <ShieldCheck className="h-3 w-3" /> : null}
+                {a.agencia_nombre}
+              </span>
+            )}
+            {a.idiomas.length > 0 && <span className="inline-flex items-center gap-1"><Globe2 className="h-3 w-3" /> {a.idiomas.join(", ")}</span>}
+          </div>
+
+          {!compact && a.bio_corta && <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug" style={{ color: K.muted }}>{a.bio_corta}</p>}
+
+          {(zonasTop.length > 0 || a.especialidades.length > 0) && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {a.exclusivo && zonasTop[0] && (
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: K.tealDeep }}>
+                  <Star width={10} height={10} fill="#FFFFFF" stroke="#FFFFFF" /> Exclusivo en {zonasTop[0]}
+                </span>
+              )}
+              {zonasTop.map((z) => <span key={z} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}><MapPin className="h-3 w-3" />{z}</span>)}
+              {zonasResto > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.muted }}>+{zonasResto}</span>}
+              {!compact && a.especialidades.slice(0, 3).map((e) => <span key={e} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.tertiary }}>{ESP_LABEL[e] ?? e}</span>)}
+            </div>
+          )}
+
+          {!compact && metrics.length > 0 && (
+            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">{metrics.map((m) => <MetricInline key={m.label} {...m} />)}</div>
+          )}
+        </div>
+
+        <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-40 sm:justify-center">
+          <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="rounded-xl px-5 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}>Ver perfil</Link>
+          {a.telefono && (
+            <div className="grid grid-cols-2 gap-2">
+              <a href={waFromTel(a.telefono, a.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><MessageCircle className="h-3.5 w-3.5" /> WA</a>
+              <a href={`tel:${a.telefono}`} className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-3.5 w-3.5" /> Llamar</a>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
