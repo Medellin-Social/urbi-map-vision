@@ -15,7 +15,6 @@ import argparse
 import json
 import os
 import re
-from datetime import datetime, timezone
 from hashlib import md5
 from pathlib import Path
 

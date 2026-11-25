@@ -13,7 +13,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
 
 from api.db import get_pool
-from api.dependencies import get_current_user, get_optional_user
+from api.dependencies import get_current_user
 from api.utils import ghl_client
 from api.utils.pii import mask_email
 
@@ -390,7 +390,7 @@ async def aceptar_invite(
     # hasta que el realtor complete su perfil; aceptable para el esqueleto.
     if agent_nuevo:
         try:
-            await ghl_client.sync_agent(agent_id)
+            ghl_client.spawn(ghl_client.sync_agent(agent_id))
         except Exception:
             log.exception("sync_agent(%s) falló", agent_id)  # best-effort, no bloquea la aceptación
 

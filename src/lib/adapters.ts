@@ -92,7 +92,6 @@ export type Neighborhood = {
 };
 import {
   OPP_COLORS,
-  getScoreColor,
   getScoreLabel,
 } from "@/config/mapColors";
 

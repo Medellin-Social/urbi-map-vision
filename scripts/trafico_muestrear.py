@@ -31,7 +31,7 @@ import psycopg2.extras
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from scripts.load_traffic_here import (  # reusa el core
-    DB_URL, HERE_API_KEY, RADIUS_M, REQUEST_PAUSE, aggregate, fetch_flow,
+    DB_URL, HERE_API_KEY, REQUEST_PAUSE, aggregate, fetch_flow,
 )
 
 # Guarda de presupuesto: aborta si un set excede esto (evita quemar cuota free)

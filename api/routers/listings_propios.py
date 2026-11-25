@@ -14,7 +14,7 @@ import uuid
 from types import SimpleNamespace
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from api.limiter import limiter
 from pydantic import BaseModel, Field
 
@@ -32,6 +32,8 @@ from api.utils.storage import read_upload_bounded, upload_file
 from api.utils.pii import mask_email
 
 logger = logging.getLogger(__name__)
+
+from api.services.zona_sponsor_service import get_or_create_agency
 
 router = APIRouter()
 
@@ -347,6 +349,7 @@ async def crear_listing(
         try:
             amenidades_arr = json.loads(amenidades)
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Ficha rica (JSONB catch-all). Solo se persiste si parsea a objeto.
@@ -357,6 +360,7 @@ async def crear_listing(
             if isinstance(parsed, dict):
                 caracteristicas_obj = {k: v for k, v in parsed.items() if v not in (None, "", [], {})}
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Título: el realtor puede escribir el suyo (mejor SEO/UX); si no, se arma solo.
@@ -394,6 +398,15 @@ async def crear_listing(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # Realtor (sistema nuevo `agent`): el listing queda a su nombre.
+            nuevo_agent_id = nuevo_agency_id = None
+            if es_agente:
+                nuevo_agent_id = await conn.fetchval(
+                    "SELECT id FROM agent WHERE usuario_id = $1 AND estado = 'activo' LIMIT 1",
+                    current_user["id"],
+                )
+                if nuevo_agent_id:
+                    nuevo_agency_id = await get_or_create_agency(conn, nuevo_agent_id)
             await conn.execute(
                 """
                 INSERT INTO listing (
@@ -409,8 +422,8 @@ async def crear_listing(
                     matricula_inmobiliaria, cedula_catastral, caracteristicas,
                     published_at, created_at, updated_at
                 ) VALUES (
-                    $1, $2, $3, NULL, NULL,
-                    $39::listing_estado,
+                    $1, $2, $3, $39, $40,
+                    $41::listing_estado,
                     $34,
                     ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, FALSE,
                     $9, $10, 'COP', $11,
@@ -439,7 +452,8 @@ async def crear_listing(
                 (matricula_inmobiliaria or "").strip() or None,  # $36
                 (cedula_catastral or "").strip() or None,        # $37
                 json.dumps(caracteristicas_obj) if caracteristicas_obj else None,  # $38
-                estado_inicial,  # $39
+                nuevo_agent_id, nuevo_agency_id,  # $39, $40
+                estado_inicial,  # $41
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
@@ -448,8 +462,7 @@ async def crear_listing(
                     listing_id, url, i, i == 0,
                 )
 
-    await ghl_client.sync_listing(listing_id)
-
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     # Puente al inbox del realtor: la publicación del owner crea un intake y el
     # asignador lo entrega (zona patrocinada → realtor; sin patrocinador → pool).
     if not es_agente:
@@ -632,7 +645,7 @@ async def actualizar_listing(
         f"UPDATE listing SET {', '.join(updates)} WHERE id = ${idx}",
         *params,
     )
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"ok": True}
 
 
@@ -649,9 +662,7 @@ async def desactivar_listing(
         "UPDATE listing SET estado = 'cerrado', updated_at = NOW() WHERE id = $1",
         listing_id,
     )
-    await ghl_client.sync_listing(listing_id)
-
-
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
 # ── Email ──────────────────────────────────────────────────────────────────────
 
 async def _notify_admin_new_listing(

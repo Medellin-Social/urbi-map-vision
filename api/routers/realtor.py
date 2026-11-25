@@ -10,7 +10,7 @@ from datetime import date, time as _time
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -320,7 +320,10 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
 async def tomar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     agent = await _agent_del_usuario(user, pool)
     try:
-        return await tomar_del_pool(intake_id, agent, pool)
+        res = await tomar_del_pool(intake_id, agent, pool)
+        from api.utils import ghl_client
+        ghl_client.spawn(ghl_client.sync_owner_intake(intake_id))
+        return res
     except AsignadorError as e:
         raise HTTPException(status_code=403, detail=str(e))
 
@@ -378,23 +381,23 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
 
 
 class ListingPatchRequest(BaseModel):
-    titulo: str | None = None
-    descripcion: str | None = None
-    precio: float | None = None
-    area_m2: float | None = None
-    habitaciones: int | None = None
-    banos: int | None = None
-    direccion_aprox: str | None = None
+    titulo: str | None = Field(None, max_length=200)
+    descripcion: str | None = Field(None, max_length=5000)
+    precio: float | None = Field(None, le=1e13, allow_inf_nan=False)
+    area_m2: float | None = Field(None, gt=0, le=1e6, allow_inf_nan=False)
+    habitaciones: int | None = Field(None, ge=0, le=100)
+    banos: int | None = Field(None, ge=0, le=100)
+    direccion_aprox: str | None = Field(None, max_length=200)
     # Ficha completa (reclamar/editar todo): ubicación + resto de campos
-    lat: float | None = None
-    lon: float | None = None
-    tipo_inmueble: str | None = None
-    estrato: int | None = None
-    parqueaderos: int | None = None
-    antiguedad_anios: int | None = None
-    nombre_edificio: str | None = None
-    administracion: float | None = None
-    amenidades: list[str] | None = None
+    lat: float | None = Field(None, ge=-90, le=90, allow_inf_nan=False)
+    lon: float | None = Field(None, ge=-180, le=180, allow_inf_nan=False)
+    tipo_inmueble: str | None = Field(None, max_length=40)
+    estrato: int | None = Field(None, ge=0, le=6)
+    parqueaderos: int | None = Field(None, ge=0, le=100)
+    antiguedad_anios: int | None = Field(None, ge=0, le=300)
+    nombre_edificio: str | None = Field(None, max_length=200)
+    administracion: float | None = Field(None, ge=0, le=1e10, allow_inf_nan=False)
+    amenidades: list[str] | None = Field(None, max_length=60)
 
 
 @router.patch("/listings/{listing_id}")
@@ -426,21 +429,28 @@ async def editar_listing(
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             f"UPDATE listing SET {', '.join(set_parts)}, updated_at = NOW() "
-            "WHERE id = $1 AND agent_id = $2 RETURNING id",
+            "WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL RETURNING id",
             listing_id, agent.id, *valores,
         )
     if not row:
         raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     actualizado = sorted(campos) + (["ubicacion"] if lat is not None and lon is not None else [])
     return {"id": listing_id, "actualizado": actualizado}
 
 
 class CerrarListingRequest(BaseModel):
-    precio_cierre: float = Field(..., gt=0)
+    precio_cierre: float = Field(..., gt=0, le=1e13, allow_inf_nan=False)
     fecha_cierre: date | None = None            # default: hoy (CURRENT_DATE)
-    matricula_inmobiliaria: str | None = None   # llave ORIP — si no vino al publicar
-    cedula_catastral: str | None = None         # llave catastro
+    matricula_inmobiliaria: str | None = Field(None, max_length=30, pattern=r"^[0-9A-Za-z\-\s]+$")
+    cedula_catastral: str | None = Field(None, max_length=40, pattern=r"^[0-9A-Za-z\-\s]+$")
+
+    @field_validator("fecha_cierre")
+    @classmethod
+    def _no_futura(cls, v):
+        if v is not None and v > date.today():
+            raise ValueError("fecha_cierre no puede ser futura")
+        return v
 
 
 @router.post("/listings/{listing_id}/cerrar")
@@ -518,7 +528,7 @@ async def cerrar_listing(
         )
     except Exception:
         log.warning("conversion event insert falló (listing=%s)", listing_id, exc_info=True)
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
 
 
@@ -555,7 +565,7 @@ async def cambiar_estado_listing(
                 "UPDATE listing SET estado = $2::listing_estado, updated_at = NOW() WHERE id = $1",
                 listing_id, nuevo,
             )
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": nuevo}
 
 
@@ -675,15 +685,19 @@ async def subir_fotos(
 ):
     """Sube fotos del listing a R2. La primera foto del listing queda de portada."""
     agent = await _agent_del_usuario(user, pool)
+    if len(fotos) > 20:
+        raise HTTPException(status_code=400, detail="Máximo 20 fotos por envío")
     async with pool.acquire() as conn:
         own = await conn.fetchval(
-            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2", listing_id, agent.id
+            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL", listing_id, agent.id
         )
         if not own:
             raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
         existentes = await conn.fetchval(
             "SELECT COUNT(*) FROM listing_media WHERE listing_id = $1", listing_id
         )
+        if existentes + len(fotos) > 60:
+            raise HTTPException(status_code=400, detail="Máximo 60 fotos por listing")
         urls = []
         for i, f in enumerate(fotos):
             if not (f.filename and f.size):

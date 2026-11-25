@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel
 
 from api.db import get_pool
 from api.dependencies import get_current_user

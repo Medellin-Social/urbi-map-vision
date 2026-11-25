@@ -1,4 +1,4 @@
-import { Name, useT } from "@/lib/i18n";
+import { useT } from "@/lib/i18n";
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'

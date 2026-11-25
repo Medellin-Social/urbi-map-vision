@@ -1,5 +1,4 @@
 """Tests para el email fallback de visitas sin agente (punto 3)."""
-import os
 from datetime import datetime
 
 import api.routers.visitas as v

@@ -573,7 +573,7 @@ function PhotoUpload({
   function handleAdd(e: React.ChangeEvent<HTMLInputElement>) {
     const files = Array.from(e.target.files ?? []);
     const toAdd = files
-      .filter((f) => photos.length < 20)
+      .filter((_f) => photos.length < 20)
       .map((f) => ({ file: f, preview: URL.createObjectURL(f) }));
     onChange([...photos, ...toAdd].slice(0, 20));
     e.target.value = "";
@@ -1599,7 +1599,7 @@ function Step4({
 
 // ── Success screens ────────────────────────────────────────────────────────────
 
-function SuccessAgente({ listingId }: { listingId: string }) {
+function SuccessAgente({ listingId: _listingId }: { listingId: string }) {
   return (
     <div style={{ textAlign: "center", padding: "48px 24px", maxWidth: 480, margin: "0 auto" }}>
       <div style={{ fontSize: 52, marginBottom: 16 }}>✅</div>

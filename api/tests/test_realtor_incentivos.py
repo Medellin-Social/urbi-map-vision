@@ -12,7 +12,6 @@ en vivo y con cleanup. Correr: `pytest api/tests/test_realtor_incentivos.py -v`.
 import datetime as dt
 from decimal import Decimal
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 

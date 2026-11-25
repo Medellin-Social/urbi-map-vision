@@ -54,6 +54,8 @@ GROUP BY ds_comuna
 ORDER BY predios DESC;
 """
 
+# Se ejecuta en UNA transacción (DELETE + INSERT, rollback si falla) — antes era
+# TRUNCATE y un fallo a medias dejaba la tabla vacía.
 # Reconstruye analytics.catastro_comunas_stats (lo lee barrios.py para el ratio
 # mercado/catastro). Filtro clave: SOLO viviendas reales. Antes el agregado tomaba
 # todo lo '%residencial%' — metía 70k PARQUEADEROS y matrices de edificio entero
@@ -62,7 +64,7 @@ ORDER BY predios DESC;
 # mediana (no promedio) por robustez. Ver docs To-do §1. [NOTA: mismo filtro vive
 # en dbt/models/analytics/listings_vs_catastro.sql — mantener ambos en sync.]
 REBUILD_STATS_SQL = """
-TRUNCATE analytics.catastro_comunas_stats;
+DELETE FROM analytics.catastro_comunas_stats;
 INSERT INTO analytics.catastro_comunas_stats
     (comuna, total_predios, pct_apartamento, area_mediana_apto_m2, avaluo_m2)
 SELECT
@@ -164,6 +166,9 @@ def main():
     print("── Paso 2: Cargando CSV ─────────────────────────────────────────")
     total = 0
     try:
+        # Idempotente: re-ejecutar no duplica. El DELETE de los vigentes previos y
+        # todos los INSERT van en UNA transacción (commit único al final).
+        cur.execute("DELETE FROM raw.catastro_medellin WHERE cd_vig_pred = 'S'")
         for i, chunk in enumerate(
             pd.read_csv(
                 CSV_PATH,
@@ -193,11 +198,11 @@ def main():
             ]
 
             psycopg2.extras.execute_values(cur, INSERT_SQL, rows_iter, page_size=1000)
-            conn.commit()
 
             total += len(chunk)
             print(f"  Chunk {i + 1:>3}: +{len(chunk):>6} filas → Total: {total:>9,}")
 
+        conn.commit()
     except Exception:
         conn.rollback()
         raise

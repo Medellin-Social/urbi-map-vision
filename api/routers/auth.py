@@ -5,8 +5,9 @@ from typing import Optional
 
 import bcrypt
 import httpx
-from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, Body, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
+import hashlib
 import jwt
 from pydantic import BaseModel, EmailStr, Field, field_validator
 
@@ -14,6 +15,9 @@ from api.db import get_pool
 from api.dependencies import JWT_ALGORITHM, JWT_SECRET, REQUIRE_EMAIL_VERIFICATION, current_token, get_current_user, token_key
 from api.legal import HABEAS_DATA_VERSION
 from api.limiter import email_throttle, limiter, login_fail_throttle
+import logging
+
+log = logging.getLogger(__name__)
 
 _APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
@@ -104,12 +108,28 @@ class AuthResponse(BaseModel):
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
-def _make_token(user_id: int, token_version: int = 0) -> str:
+def _session_max_days() -> int:
+    """Tope ABSOLUTO de una sesión encadenada vía /refresh (env SESSION_MAX_DAYS, default 30)."""
+    try:
+        return max(1, int(os.getenv("SESSION_MAX_DAYS", "30")))
+    except ValueError:
+        return 30
+
+
+def _hash_token(token: str) -> str:
+    """sha256 hex de un token de un solo uso (verify/reset/magic-link): en DB solo se guarda
+    el hash, así un volcado de la tabla no entrega links válidos."""
+    return hashlib.sha256((token or "").encode()).hexdigest()
+
+
+def _make_token(user_id: int, token_version: int = 0, session_start: Optional[datetime] = None) -> str:
     now = datetime.now(timezone.utc)
     expire = now + timedelta(hours=_jwt_expiry_hours())
     return jwt.encode(
         {"sub": str(user_id), "exp": expire, "iat": now, "tv": int(token_version or 0),
-         "jti": secrets.token_urlsafe(16)},
+         "jti": secrets.token_urlsafe(16),
+         # inicio de la sesión original: /refresh lo hereda y no puede pasar de SESSION_MAX_DAYS
+         "oiat": int((session_start or now).timestamp())},
         JWT_SECRET,
         algorithm=JWT_ALGORITHM,
     )
@@ -131,6 +151,7 @@ async def _send_quietly(coro_fn, **kwargs) -> None:
     try:
         await coro_fn(**kwargs)
     except Exception:
+        log.warning("_send_quietly: excepción suprimida (best-effort)", exc_info=True)
         pass  # ponytail: silent — user can request resend later
 
 
@@ -144,7 +165,7 @@ async def _issue_verification(pool, user_id: int, to: str, nombre: str) -> None:
            VALUES ($1, $2, $3)
            ON CONFLICT (usuario_id) DO UPDATE
                SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
-        user_id, verify_token, expires,
+        user_id, _hash_token(verify_token), expires,
     )
     verify_url = f"{_APP_URL}/verify-email?token={verify_token}"
     await _send_quietly(send_verify_email, to=to, nombre=nombre, verify_url=verify_url)
@@ -253,6 +274,11 @@ async def register(request: Request, background: BackgroundTasks, req: RegisterR
         req.email, password_hash, req.nombre, req.apellido, req.telefono, req.origen,
         HABEAS_DATA_VERSION, req.consent_whatsapp,
     )
+    if user_id is not None:
+        from api.utils import ghl_client
+        background.add_task(ghl_client.sync_contact_safe, req.email,
+                            f"{req.nombre or ''} {req.apellido or ''}".strip() or None,
+                            req.telefono, ["buyer"], "registro")
     if user_id is not None and await email_throttle.allow_shared(pool, f"verify:{req.email}"):
         background.add_task(_issue_verification, pool, user_id, req.email, req.nombre or "")
     return RegisterResponse()
@@ -370,7 +396,7 @@ async def _issue_magic_link(pool, background: BackgroundTasks, email: str) -> No
            VALUES ($1, $2, $3)
            ON CONFLICT (email) DO UPDATE
                SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
-        email, token, expires,
+        email, _hash_token(token), expires,
     )
     login_url = f"{_APP_URL}/login/verificar?token={token}"
     background.add_task(_send_quietly, send_magic_link, to=email, login_url=login_url)
@@ -559,6 +585,15 @@ async def refresh_token(
 ):
     """Exchange a valid token for a fresh 30-day token. Old token is blacklisted."""
     pool = get_pool()
+    # Tope absoluto: la sesión no se puede extender por /refresh más allá de SESSION_MAX_DAYS
+    # desde el login original (sin esto, un token robado se renueva para siempre).
+    try:
+        claims = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
+    except Exception:
+        raise HTTPException(status_code=401, detail="Token inválido")
+    inicio = datetime.fromtimestamp(int(claims.get("oiat") or claims.get("iat") or 0), timezone.utc)
+    if datetime.now(timezone.utc) - inicio > timedelta(days=_session_max_days()):
+        raise HTTPException(status_code=401, detail="Sesión expirada, inicia sesión de nuevo")
     # Atomic: only the request that actually revokes the old token may mint its successor.
     revoked = await pool.fetchval(
         "INSERT INTO token_blacklist (token, usuario_id) VALUES ($1, $2) "
@@ -567,7 +602,7 @@ async def refresh_token(
     )
     if revoked is None:
         raise HTTPException(status_code=401, detail="Token revocado")
-    new_token = _make_token(current_user["id"], current_user.get("token_version", 0))
+    new_token = _make_token(current_user["id"], current_user.get("token_version", 0), session_start=inicio)
     perfil = await _get_perfil(pool, current_user["id"])
     return AuthResponse(
         token=new_token,
@@ -591,7 +626,7 @@ async def verify_email(request: Request, token: str):
             uid = await conn.fetchval(
                 "UPDATE email_verification_tokens SET used = TRUE "
                 "WHERE token = $1 AND used = FALSE AND expires_at > NOW() RETURNING usuario_id",
-                token,
+                _hash_token(token),
             )
             if uid is None:
                 raise HTTPException(status_code=400, detail="Token inválido, expirado o ya utilizado")
@@ -633,7 +668,7 @@ async def forgot_password(
            VALUES ($1, $2, $3)
            ON CONFLICT (usuario_id) DO UPDATE
                SET token = EXCLUDED.token, expires_at = EXCLUDED.expires_at, used = FALSE""",
-        user["id"], token, expires,
+        user["id"], _hash_token(token), expires,
     )
     reset_url = f"{_APP_URL}/reset-password?token={token}"
     background.add_task(
@@ -655,7 +690,7 @@ async def reset_password(request: Request, req: ResetPasswordRequest = Body(...)
             uid = await conn.fetchval(
                 "UPDATE password_reset_tokens SET used = TRUE "
                 "WHERE token = $1 AND used = FALSE AND expires_at > NOW() RETURNING usuario_id",
-                req.token,
+                _hash_token(req.token),
             )
             if uid is None:
                 raise HTTPException(status_code=400, detail="Token inválido, expirado o ya utilizado")
@@ -706,7 +741,7 @@ async def verify_magic_link(request: Request, req: MagicLinkVerifyRequest = Body
             email = await conn.fetchval(
                 "UPDATE magic_link_tokens SET used = TRUE "
                 "WHERE token = $1 AND used = FALSE AND expires_at > NOW() RETURNING email",
-                req.token,
+                _hash_token(req.token),
             )
             if email is None:
                 raise HTTPException(status_code=400, detail="Link inválido, expirado o ya utilizado")

@@ -485,6 +485,10 @@ UPDATE {table}
 _LISTING_FILTER_INDEXES = (
     "CREATE INDEX ON {t} (tipo_operacion, lower(tipo_inmueble), precio_cop)",
     "CREATE INDEX ON {t} (lat, lon)",
+    # id público del listing = hash de url (mismo cálculo que SELECT ... AS id en los
+    # routers). Sin este índice cada /listings/{id}, /similares, /favoritos... hace
+    # seq-scan + md5 por fila. La expresión DEBE coincidir literal con la del WHERE.
+    "CREATE INDEX ON {t} ((('x'||substr(md5(url),1,8))::bit(32)::int))",
 )
 
 
@@ -498,7 +502,33 @@ async def _create_listing_filter_indexes(conn: Any, table: str) -> None:
         await conn.execute(f"CREATE INDEX ON {table} USING gin (direccion_raw gin_trgm_ops)")
 
 
+# Clave del advisory lock de sesión: un solo refresh a la vez en todo el cluster.
+_REFRESH_LOCK_KEY = 7_406_201
+
+
 async def refresh_listings_cache(pool: Any) -> None:
+    """Refresca el cache con exclusión entre workers/instancias.
+
+    Cada worker uvicorn (y cada réplica) arranca su propio refresh y su loop horario;
+    sin lock, N rebuilds pesados corrían a la vez sobre las mismas tablas `_new`
+    (DROP/CREATE pisándose). `pg_try_advisory_lock` es no bloqueante: quien no lo
+    consigue se salta este ciclo (otro ya está refrescando) en vez de esperar. El
+    lock es de sesión → si el proceso muere, Postgres lo libera solo.
+    """
+    async with pool.acquire() as lock_conn:
+        if not await lock_conn.fetchval("SELECT pg_try_advisory_lock($1)", _REFRESH_LOCK_KEY):
+            logger.info("[cache] refresh ya en curso en otro worker — se omite este ciclo")
+            return
+        try:
+            await _refresh_listings_cache_impl(pool)
+        finally:
+            try:
+                await lock_conn.execute("SELECT pg_advisory_unlock($1)", _REFRESH_LOCK_KEY)
+            except Exception:
+                logger.warning("[cache] no se pudo liberar el advisory lock", exc_info=True)
+
+
+async def _refresh_listings_cache_impl(pool: Any) -> None:
     """Refresh all dynamic cache tables. barrios_cd is static — not refreshed here."""
     try:
         async with pool.acquire() as conn:

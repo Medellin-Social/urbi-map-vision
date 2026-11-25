@@ -80,7 +80,10 @@ CREATE INDEX IF NOT EXISTS idx_pois_geometry ON raw.pois USING GIST (geometry);
 CREATE INDEX IF NOT EXISTS idx_pois_tipo     ON raw.pois (tipo);
 """
 
-TRUNCATE_RAW_SQL = "TRUNCATE TABLE raw.pois RESTART IDENTITY;"
+# DELETE (no TRUNCATE): corre dentro de la MISMA transacción que los INSERT, así un
+# fallo a medias hace rollback y la tabla vieja queda intacta; además DELETE no
+# toma ACCESS EXCLUSIVE, la API sigue leyendo raw.pois durante la recarga.
+TRUNCATE_RAW_SQL = "DELETE FROM raw.pois;"
 
 CREATE_ANALYTICS_SQL = """
 CREATE TABLE IF NOT EXISTS analytics.barrios_pois_distancia (
@@ -112,7 +115,7 @@ ALTER TABLE analytics.barrios_pois_distancia ADD COLUMN IF NOT EXISTS dist_yoga_
 ALTER TABLE analytics.barrios_pois_distancia ADD COLUMN IF NOT EXISTS indice_nomada       NUMERIC(10,2);
 """
 
-TRUNCATE_ANALYTICS_SQL = "TRUNCATE TABLE analytics.barrios_pois_distancia RESTART IDENTITY;"
+TRUNCATE_ANALYTICS_SQL = "DELETE FROM analytics.barrios_pois_distancia;"  # misma transacción que el INSERT
 
 INSERT_ANALYTICS_SQL = """
 INSERT INTO analytics.barrios_pois_distancia
@@ -297,6 +300,9 @@ def parse_pois(elements: list[dict]) -> list[dict]:
 
 
 def load_raw_pois(conn, rows: list[dict]) -> int:
+    if not rows:
+        # Overpass devolvió vacío/parcial: NO borrar la tabla buena.
+        raise RuntimeError("0 POIs parseados de Overpass: se aborta sin tocar raw.pois")
     with conn:
         with conn.cursor() as cur:
             cur.execute(CREATE_RAW_SQL)

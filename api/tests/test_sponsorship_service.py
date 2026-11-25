@@ -3,7 +3,6 @@ from datetime import date
 from types import SimpleNamespace
 from uuid import UUID
 
-import pytest
 
 from api.services.sponsorship_service import _vigentes
 

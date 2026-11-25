@@ -2,7 +2,7 @@ import logging
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -57,13 +57,13 @@ async def get_planes(pool=Depends(get_pool)):
 # ── Aplicar (lead form) ───────────────────────────────────────────────────────
 
 class AplicarIn(BaseModel):
-    nombre_negocio: str
-    email: str
-    telefono: Optional[str] = None
-    categoria: Optional[str] = None
+    nombre_negocio: str = Field(min_length=1, max_length=160)
+    email: EmailStr = Field(max_length=254)
+    telefono: Optional[str] = Field(None, max_length=30)
+    categoria: Optional[str] = Field(None, max_length=80)
     barrio_id: Optional[int] = None
-    plan_tipo: Optional[str] = None
-    mensaje: Optional[str] = None
+    plan_tipo: Optional[str] = Field(None, max_length=40)
+    mensaje: Optional[str] = Field(None, max_length=1000)
 
 
 class AplicarOut(BaseModel):
@@ -75,6 +75,13 @@ class AplicarOut(BaseModel):
 @router.post("/aplicar", response_model=AplicarOut)
 @limiter.limit("5/minute")
 async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=Depends(get_pool)):
+    # Dedup: mismo correo en las últimas 24 h → devolvemos la misma solicitud (sin duplicar fila ni push a GHL).
+    previa = await pool.fetchval(
+        "SELECT id FROM public.leads_negocio WHERE lower(email) = $1 AND created_at > NOW() - INTERVAL '24 hours' LIMIT 1",
+        body.email.lower(),
+    )
+    if previa:
+        return AplicarOut(ok=True, lead_id=previa, mensaje="Gracias por tu interés. Te contactaremos en las próximas 24 horas.")
     try:
         row = await pool.fetchrow(
             """
@@ -90,9 +97,13 @@ async def aplicar_negocio(request: Request, body: AplicarIn = Body(...), pool=De
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
     try:
-        await ghl_client.push_negocio_lead_to_ghl(row["id"], body.model_dump())
+        ghl_client.spawn(ghl_client.push_negocio_lead_to_ghl(row["id"], body.model_dump()))
     except Exception:
         logger.exception("push_negocio_lead_to_ghl(%s) falló", row["id"])
+    from api.utils.email import notify_admin_negocio, notify_negocio_recibido
+    ghl_client.spawn(notify_admin_negocio("Nuevo lead de negocio", body.nombre_negocio, body.email,
+                                          body.telefono or "", f"{body.categoria or ''} · plan {body.plan_tipo or ''}"))
+    ghl_client.spawn(notify_negocio_recibido(body.email, body.nombre_negocio))
     return AplicarOut(
         ok=True,
         lead_id=row["id"],
@@ -393,7 +404,9 @@ class MiNegocioOut(BaseModel):
 
 
 @router.post("/mi-negocio", response_model=MiNegocioOut, status_code=201)
+@limiter.limit("5/minute")
 async def submit_negocio(
+    request: Request,
     body: MiNegocioIn = Body(...),
     current_user: dict = Depends(get_current_user),
     pool=Depends(get_pool),
@@ -418,4 +431,12 @@ async def submit_negocio(
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    from api.utils import ghl_client
+    ghl_client.spawn(ghl_client.sync_contact_safe(
+        current_user.get("email"), body.nombre, body.telefono or body.whatsapp,
+        ["negocio-local", "negocio-pendiente"], "mi-negocio"))
+    from api.utils.email import notify_admin_negocio
+    ghl_client.spawn(notify_admin_negocio("Negocio nuevo pendiente de aprobar", body.nombre,
+                                          current_user.get("email") or "", body.telefono or body.whatsapp or "",
+                                          "Aprobar en /admin → tiendas pendientes"))
     return MiNegocioOut(id=row["id"], estado="pendiente")

@@ -126,7 +126,17 @@ def main():
     year, quarter = (args.year, args.quarter) if args.year and args.quarter else _latest_quarter()
     print(f"Trimestre: {year}-Q{quarter}")
 
-    rows = download_and_filter(year, quarter)
+    try:
+        rows = download_and_filter(year, quarter)
+    except requests.HTTPError as exc:
+        # Ookla aún no publicó el trimestre (rezago variable): reintenta con el anterior.
+        if args.year or exc.response is None or exc.response.status_code not in (403, 404):
+            raise
+        year, quarter = (year - 1, 4) if quarter == 1 else (year, quarter - 1)
+        print(f"Trimestre no publicado, reintentando {year}-Q{quarter}")
+        rows = download_and_filter(year, quarter)
+    if not rows:
+        raise SystemExit("ERROR: 0 tiles del Valle de Aburrá en el parquet de Ookla")
     for r in rows:
         r["anio"] = year
         r["trimestre"] = quarter

@@ -1,6 +1,6 @@
 import { seo } from "@/lib/seo";
 import { createFileRoute, redirect, useNavigate, useSearch } from "@tanstack/react-router";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { motion, AnimatePresence } from "framer-motion";
 import {
@@ -30,7 +30,6 @@ import {
 import { z } from "zod";
 import { MapNavbar } from "@/components/MapNavbar";
 import { formatCOP, formatPct, formatUSD } from "@/lib/format";
-import { auth } from "@/lib/auth";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { toast } from "sonner";
@@ -823,7 +822,7 @@ function SimuladorPage() {
 // ── Results panel ─────────────────────────────────────────────────────────────
 
 function ResultsPanel({
-  r, horizonte, presupuestoMill, tipo, shareSearch,
+  r, horizonte, presupuestoMill, shareSearch,
 }: {
   r: SimulacionResponse;
   horizonte: Horizonte;
@@ -1073,8 +1072,8 @@ function FlujRow({ label, value, positive }: { label: string; value: number; pos
 
 // ── Bloque D: Proyección dual-line ────────────────────────────────────────────
 
-function ProyeccionChart({ r, horizonte, presupuestoMill }: { r: SimulacionResponse; horizonte: Horizonte; presupuestoMill: number }) {
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
+function ProyeccionChart({ r, horizonte, presupuestoMill: _presupuestoMill }: { r: SimulacionResponse; horizonte: Horizonte; presupuestoMill: number }) {
+  const [, setActiveIdx] = useState<number | null>(null);
   const presupuesto = r.presupuesto_cop;
   const tasa = r.valorizacion.tasa_anual_pct / 100;
 

@@ -118,21 +118,6 @@ function formatPrecio(precio: number, moneda?: string | null): string {
   return `$${(precio / 1000).toFixed(0)}k COP`
 }
 
-function PrecioLabel({ gratuito, precio, moneda }: { gratuito: boolean; precio: number; moneda?: string | null }) {
-  const label = gratuito ? 'Gratis' : precio > 0 ? formatPrecio(precio, moneda) : null
-  if (!label) return null
-  return (
-    <span style={{
-      display: 'inline-block',
-      background: gratuito ? K.teal + '22' : K.amarillo + '44',
-      color: gratuito ? K.tealDeep : '#6b5200',
-      fontWeight: 700, fontSize: '.66rem', padding: '2px 8px', borderRadius: 6,
-    }}>
-      {gratuito ? '🎟️ ' : '💵 '}{label}
-    </span>
-  )
-}
-
 export function EventCardFeatured({ evento }: { evento: EventoData }) {
   const f = parseFecha(evento.fecha_inicio)
   const cat = catMeta(evento.categoria)

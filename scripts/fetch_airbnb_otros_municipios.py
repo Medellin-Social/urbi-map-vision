@@ -28,7 +28,7 @@ from scraping.utils.cost_ledger import charge  # noqa: E402  (raises BudgetExcee
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 DB_URL  = os.environ["DATABASE_URL"]
-API_KEY = os.getenv("AIRROI_API_KEY", "RXInlmmQ5G3RqmaajGD325HfuvPagkKB10VrwCZi")
+API_KEY = os.environ["AIRROI_API_KEY"]  # sin default: no embeber credenciales en el repo
 BASE    = "https://api.airroi.com"
 DELAY   = 1.2  # segundos entre llamadas
 

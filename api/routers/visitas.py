@@ -105,6 +105,8 @@ class VisitaRequest(BaseModel):
     mensaje: Optional[str] = Field(None, max_length=1000)
     # True cuando el inmueble no tiene agente patrocinador de zona → va al buzón interno.
     sin_agente: bool = False
+    # Realtor Preferido que el comprador aceptó (id mostrado por la rotación).
+    agent_id: Optional[str] = Field(None, pattern=r"^[0-9a-fA-F-]{36}$")
     # Calificación del lead (modelo Zillow paso 2) — todos opcionales: el form los
     # pide sin obligar para no frenar la conversión. Literal valida en el boundary.
     intencion: Optional[Literal["vivir", "invertir"]] = None
@@ -153,6 +155,26 @@ async def crear_visita(
         except ValueError:
             raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
     async with pool.acquire() as conn:
+        # La URL debe ser un inmueble real (listing propio o scrapeado): evita visitas
+        # fantasma y que el cliente dispare emails/pushes con URLs inventadas.
+        existe = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM listing WHERE id::text = $1) "
+            "OR EXISTS (SELECT 1 FROM staging.stg_listings_unificado WHERE url = $1)",
+            req.listing_url,
+        )
+        if not existe:
+            raise HTTPException(status_code=404, detail="Inmueble no encontrado")
+        # Dedup: mismo inmueble + mismo contacto en la última hora → misma solicitud.
+        contacto = (req.telefono or "").strip() or (str(user["id"]) if user else "")
+        if contacto:
+            previa = await conn.fetchrow(
+                "SELECT id FROM visita_solicitud WHERE listing_url = $1 "
+                "AND COALESCE(telefono, usuario_id::text, '') = $2 "
+                "AND created_at > NOW() - INTERVAL '1 hour' LIMIT 1",
+                req.listing_url, contacto,
+            )
+            if previa:
+                return {"id": str(previa["id"]), "estado": "pendiente"}
         # Auto-populate agent_id if listing.id::text matches the url (new listing model)
         agent_id = await conn.fetchval(
             "SELECT agent_id FROM listing WHERE id::text = $1",
@@ -164,6 +186,16 @@ async def crear_visita(
         # — sin esto el agent_id quedaba NULL y la visita no le llegaba a nadie.
         if agent_id is None:
             agent_id = await conn.fetchval(_VISITA_ZONA_AGENT_SQL, req.listing_url)
+        # Realtor Preferido: el comprador aceptó que el realtor mostrado en la página
+        # (rotación de /realtor-preferido/siguiente) lo contacte → el lead va a ese
+        # agente. Solo se honra si tiene un slot activo vigente (no se confía en el cliente).
+        if agent_id is None and req.agent_id:
+            agent_id = await conn.fetchval(
+                "SELECT a.id FROM agent a WHERE a.id = $1::uuid AND a.estado::text = 'activo' "
+                "AND EXISTS (SELECT 1 FROM realtor_preferido_slot s WHERE s.agent_id = a.id "
+                "AND s.estado = 'activo' AND (s.fecha_fin IS NULL OR s.fecha_fin >= CURRENT_DATE))",
+                req.agent_id,
+            )
         row = await conn.fetchrow(
             """
             INSERT INTO visita_solicitud
@@ -203,15 +235,13 @@ async def crear_visita(
     # (best-effort, fuera de la transacción). Antes el lead solo aparecía en su
     # dashboard si refrescaba; ahora recibe el aviso.
     if agent_id:
-        await notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool)
-    # Sin agente de zona → notificar al buzón interno (fuera del event loop; best-effort).
-    if req.sin_agente:
-        await asyncio.to_thread(_send_visita_email, req, fecha)
+        ghl_client.spawn(notificar_visita_al_realtor(str(agent_id), str(row["id"]), pool))
+    # Sin agente de zona → notificar al buzón interno (hilo aparte; best-effort).
+    # sin_agente lo decide el servidor: solo si no hay agente resuelto (no se confía en el cliente).
+    if req.sin_agente and agent_id is None:
+        ghl_client.spawn(asyncio.to_thread(_send_visita_email, req, fecha))
     # Push best-effort a GHL como Contact (+ nota). Las visitas también salen por
     # PULL (/api/v1/ghl/leads); un fallo aquí queda en ghl_push_failures y no
     # rompe la solicitud.
-    try:
-        await ghl_client.sync_visita(row["id"])
-    except Exception:
-        log.exception("sync_visita(%s) falló", row["id"])
+    ghl_client.spawn(ghl_client.sync_visita(row["id"]))
     return {"id": str(row["id"]), "estado": "pendiente"}

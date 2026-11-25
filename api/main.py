@@ -24,6 +24,9 @@ from api.utils.anti_scrape import AntiScrapeMiddleware
 from api.utils.session_cookie import SessionCookieMiddleware
 from api.dependencies import auth_cookie_mode
 from api.routers import admin, admin_agentes, afiliados, agent_program, agency, alertas, asignador, auth, barrio_page, barrios, business, calculadora, comparador, comunidad, comunidad_posts, comunas, embajadores, favoritos, ghl_leads, ghl_webhook, historial, intake, link_review, listings, listings_propios, moderacion, oportunidades, pasantias, realtor, realtor_preferido, stats, suscripciones, tracking, trm, usuario, visitas, zonas
+import logging
+
+log = logging.getLogger(__name__)
 
 # Sentry — only active when SENTRY_DSN is set (optional in local/test)
 _SENTRY_DSN = os.getenv("SENTRY_DSN", "")
@@ -108,6 +111,8 @@ async def lifespan(app: FastAPI):
     _refresh_task = asyncio.create_task(run_periodic_cache_refresh(pool))
     yield
     _refresh_task.cancel()
+    from api.utils import ghl_client as _ghl
+    await _ghl.aclose()
     await close_pool()
 
 
@@ -128,6 +133,7 @@ def _retry_after_seconds(exc: RateLimitExceeded) -> int:
     try:
         return max(1, int(exc.limit.limit.get_expiry()))
     except Exception:
+        log.warning("_retry_after_seconds: excepción suprimida (best-effort)", exc_info=True)
         return 60
 
 
@@ -273,11 +279,3 @@ if _ADMIN_DIST.exists():
         return FileResponse(str(_ADMIN_DIST / "index.html"))
 
 
-@app.get("/health", tags=["meta"])
-async def health():
-    try:
-        pool = get_pool()
-        db_ok = pool is not None
-    except RuntimeError:
-        db_ok = False
-    return {"status": "ok", "version": "1.0.0", "db": db_ok}
