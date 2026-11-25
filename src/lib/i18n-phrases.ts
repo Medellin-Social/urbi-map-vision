@@ -1,6 +1,18 @@
 /* Spanish -> English dictionary. Loaded lazily (dynamic import) only when the UI language is EN.
  * Order matters: longer phrases first to avoid partial replacements. */
 export const PHRASES: Array<[string, string]> = [
+  // ── Estados de error de sección (realtor dashboard) ──
+  ["Parece un corte momentáneo de conexión — tus propietarios y leads están a salvo. Vuelve a intentar en un segundo.", "Looks like a brief connection hiccup — your owners and leads are safe. Try again in a second."],
+  ["Tus visitas y solicitudes están guardadas. Suele ser un corte momentáneo; reintenta en un segundo.", "Your visits and requests are saved. It's usually a brief hiccup; try again in a second."],
+  ["Tu portafolio está a salvo — casi siempre es la conexión. Vuelve a intentar.", "Your portfolio is safe — it's almost always the connection. Try again."],
+  ["Tus métricas están guardadas; esto es temporal. Reintenta para volver a verlas.", "Your metrics are saved; this is temporary. Retry to see them again."],
+  ["Es un corte momentáneo de datos. Reintenta en un momento.", "It's a brief data hiccup. Retry in a moment."],
+  ["No pudimos cargar esta sección", "We couldn't load this section"],
+  ["No pudimos cargar tus asignados", "We couldn't load your assignments"],
+  ["No pudimos cargar tu agenda", "We couldn't load your schedule"],
+  ["No pudimos cargar tus listings", "We couldn't load your listings"],
+  ["No pudimos cargar tu panel", "We couldn't load your panel"],
+  ["No pudimos cargar la inteligencia del barrio", "We couldn't load the neighborhood insights"],
   // ── Visitas (resultado, nota, registro manual) ──
   ["El comprador hará una oferta", "The buyer will make an offer"],
   ["Hizo la visita pero no le interesó", "Visited but wasn't interested"],

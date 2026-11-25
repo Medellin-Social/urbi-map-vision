@@ -6,7 +6,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2,
   Globe2, ClipboardList, Trophy, Search, Info, TrendingUp, UserPlus, CalendarClock, Calendar, Users, Lock, CheckCircle, XCircle,
-  History, Flame, Clock, Phone, Mail, Check, KeyRound, Sun, ShieldCheck, TrainFront, BarChart2, Sparkles, Briefcase, User,
+  History, Flame, Clock, Phone, Mail, Check, KeyRound, Sun, ShieldCheck, TrainFront, BarChart2, Sparkles, Briefcase, User, AlertTriangle,
 } from "@/lib/icons";
 import { RealtorTourModal } from "@/components/RealtorTourModal";
 import { ComunidadNavbar } from "@/components/comunidad/ComunidadNavbar";
@@ -599,7 +599,7 @@ function InboxTab() {
     );
   }
 
-  if (errA) return <SectionError msg="No se pudieron cargar los inmuebles asignados." />;
+  if (errA) return <SectionError title="No pudimos cargar tus asignados" msg="Parece un corte momentáneo de conexión — tus propietarios y leads están a salvo. Vuelve a intentar en un segundo." onRetry={() => location.reload()} />;
 
   return (
     <div>
@@ -1626,7 +1626,7 @@ function AgendaTab() {
       </div>
     );
   }
-  if (isError || !data) return <SectionError msg="No se pudo cargar tu agenda." />;
+  if (isError || !data) return <SectionError title="No pudimos cargar tu agenda" msg="Tus visitas y solicitudes están guardadas. Suele ser un corte momentáneo; reintenta en un segundo." onRetry={() => location.reload()} />;
 
   return <AgendaBody data={data} actualizar={actualizar} />;
 }
@@ -2137,7 +2137,7 @@ function InteresadosTab() {
   const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
 
   if (isLoading) return <SkeletonRows n={4} />;
-  if (isError || !data) return <SectionError msg="No se pudo cargar tu agenda." />;
+  if (isError || !data) return <SectionError title="No pudimos cargar tu agenda" msg="Tus visitas y solicitudes están guardadas. Suele ser un corte momentáneo; reintenta en un segundo." onRetry={() => location.reload()} />;
 
   const grupos = new Map<string, Agenda["interesados"]>();
   for (const p of data.interesados) grupos.set(p.listing_titulo, [...(grupos.get(p.listing_titulo) ?? []), p]);
@@ -2318,7 +2318,7 @@ function ListingsTab() {
         </div>
       )}
 
-      {isError && <SectionError msg="No se pudieron cargar tus listings." />}
+      {isError && <SectionError title="No pudimos cargar tus listings" msg="Tu portafolio está a salvo — casi siempre es la conexión. Vuelve a intentar." onRetry={() => location.reload()} />}
 
       {!isLoading && !isError && all.length === 0 && (
         <EmptyBlock
@@ -2894,7 +2894,7 @@ function ResultadosTab() {
       </div>
     );
   }
-  if (isError || !data) return <SectionError msg="No se pudo cargar tu panel de resultados." />;
+  if (isError || !data) return <SectionError title="No pudimos cargar tu panel" msg="Tus métricas están guardadas; esto es temporal. Reintenta para volver a verlas." onRetry={() => location.reload()} />;
 
   const yieldTxt = intel?.mercado.yield_bruto_pct != null ? `${intel.mercado.yield_bruto_pct.toFixed(1)}%` : "—";
 
@@ -3079,7 +3079,7 @@ function InteligenciaTab() {
             </div>
           )}
 
-          {isError && <SectionError msg="No se pudo cargar la inteligencia del barrio." />}
+          {isError && <SectionError title="No pudimos cargar la inteligencia del barrio" msg="Es un corte momentáneo de datos. Reintenta en un momento." onRetry={() => location.reload()} />}
 
           {!isLoading && !isError && intel && (
             <div className="space-y-4">
@@ -3179,10 +3179,21 @@ function IntelGroup({ icon, tone, title, wide, children }: {
 
 // ── Atoms ──────────────────────────────────────────────────────────────────────
 
-function SectionError({ msg }: { msg: string }) {
+// Estado de error de sección: card con icono + título + mensaje útil + reintentar.
+// Pro y tranquilizador (no "Could not load X" a secas); onRetry si hay refetch.
+function SectionError({ title = "No pudimos cargar esta sección", msg, onRetry }: { title?: string; msg: string; onRetry?: () => void }) {
   return (
-    <div className="rounded-lg border border-danger/30 bg-danger/10 px-4 py-3 text-sm text-danger">
-      {msg}
+    <div className="flex flex-col items-center rounded-2xl border px-6 py-10 text-center" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+      <span className="grid h-12 w-12 place-items-center rounded-2xl" style={{ background: TONE.warn.bg, color: TONE.warn.fg }}>
+        <AlertTriangle className="h-6 w-6" />
+      </span>
+      <p className="mt-3 text-[15px] font-semibold" style={{ color: C.ink }}>{title}</p>
+      <p className="mx-auto mt-1 max-w-sm text-[13px] leading-relaxed" style={{ color: C.muted }}>{msg}</p>
+      {onRetry && (
+        <button onClick={onRetry} className="mt-4 inline-flex min-h-[40px] items-center rounded-xl px-5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: C.brand }}>
+          Reintentar
+        </button>
+      )}
     </div>
   );
 }
