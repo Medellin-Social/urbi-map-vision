@@ -9,6 +9,9 @@ import os
 PLANES: dict = {
     "pro": {
         "nombre": "MLS Pro",
+        # Retirado (precios 21-nov): no se vende más. Se conserva para que los
+        # suscriptores existentes sigan resolviendo nombre/features/renovación.
+        "activo": False,
         "descripcion": "Para tomar decisiones con datos",
         "precio_cop": 79_000,
         "precio_usd": 29,
@@ -30,6 +33,7 @@ PLANES: dict = {
     },
     "agente": {
         "nombre": "MLS Agente",
+        "activo": True,
         "descripcion": "Para profesionales inmobiliarios",
         "precio_cop": 199_000,
         "precio_usd": 59,
@@ -47,6 +51,15 @@ PLANES: dict = {
         ],
     },
 }
+
+# Respuesta para checkouts nuevos de un plan retirado.
+PLAN_RETIRADO_DETAIL = {"error": "plan_retirado", "upgrade_url": "/agentes/registro"}
+
+
+def plan_vendible(plan: str) -> bool:
+    """True si el plan existe y acepta compras nuevas."""
+    return plan in PLANES and PLANES[plan].get("activo", True)
+
 
 _ORDEN = ["free", "pro", "agente"]
 

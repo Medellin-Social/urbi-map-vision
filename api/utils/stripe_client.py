@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from api.config.planes import PLANES
+from api.config.planes import PLANES, plan_vendible
 
 _STRIPE_KEY = os.getenv("STRIPE_SECRET_KEY")
 STRIPE_WEBHOOK_SECRET = os.getenv("STRIPE_WEBHOOK_SECRET")
@@ -32,7 +32,7 @@ async def crear_checkout_session(
     cancel_url: str,
 ) -> Optional[str]:
     """Returns Stripe Checkout URL, or None if not configured."""
-    if not is_configured():
+    if not is_configured() or not plan_vendible(plan):
         return None
     price_id = PLANES[plan].get("stripe_price_id_usd")
     if not price_id:
