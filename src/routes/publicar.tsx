@@ -2143,57 +2143,6 @@ function PublicarPage() {
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-7 lg:items-start">
         <div className="min-w-0">
 
-        {!esAgente && user?.plan !== "pro" && user?.plan !== "agente" && (
-          <div
-            style={{
-              marginBottom: 20,
-              padding: "16px 20px",
-              background: K.tealLight,
-              border: `1.5px solid rgba(29,158,117,0.3)`,
-              borderRadius: 12,
-              display: "flex",
-              gap: 16,
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <p
-                style={{
-                  fontFamily: K.serif,
-                  fontSize: "0.95rem",
-                  fontWeight: 800,
-                  color: K.tealDeep,
-                  margin: "0 0 6px",
-                }}
-              >
-                Vendé más rápido con MLS Pro
-              </p>
-              <p style={{ fontSize: 12, color: K.muted, margin: 0, lineHeight: 1.6 }}>
-                Análisis de tiempo de venta por barrio, posicionamiento para
-                inversores extranjeros y comparador Airbnb vs renta larga.
-              </p>
-            </div>
-            <Link
-              to="/planes"
-              style={{
-                display: "inline-block",
-                background: K.tealDeep,
-                color: "#fff",
-                padding: "9px 18px",
-                borderRadius: 8,
-                fontWeight: 700,
-                fontSize: 13,
-                textDecoration: "none",
-                flexShrink: 0,
-                alignSelf: "center",
-              }}
-            >
-              Ver planes Pro →
-            </Link>
-          </div>
-        )}
-
         <div
           style={{
             background: "#fff",
