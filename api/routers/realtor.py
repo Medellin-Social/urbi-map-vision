@@ -7,7 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import date, time as _time
+from datetime import date, datetime, time as _time
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile
@@ -213,11 +213,13 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
             JOIN owner o ON o.id = i.owner_id
             LEFT JOIN listing l ON l.id = i.listing_id
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+            -- Inbox de captación = solo lo que aún requiere acción del realtor
+            -- (aceptar / completar ficha / publicar). En cuanto el listing pasa a
+            -- 'publicado' o 'en_revision' SALE del inbox y vive en "Mis listings".
             WHERE i.agent_id = $1
               AND (i.estado IN ('asignado', 'en_verificacion')
                    OR (i.estado = 'aceptado'
-                       AND (l.estado IS NULL OR l.estado IN ('borrador', 'rechazado')
-                            OR l.verificado = FALSE)))
+                       AND (l.estado IS NULL OR l.estado IN ('borrador', 'rechazado'))))
             ORDER BY i.created_at DESC
             """,
             agent.id,
@@ -336,6 +338,48 @@ async def tomar(intake_id: str, user: dict = Depends(get_current_user), pool=Dep
         raise HTTPException(status_code=403, detail=str(e))
 
 
+@router.post("/listings/{listing_id}/sumarme")
+async def sumarme_listing_abierto(listing_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    """El agente DE LA ZONA se suma a un anuncio ABIERTO (lo publicó una persona
+    natural, sin agente exclusivo) → aparece y rota en el listing. Opt-in, NO
+    exclusivo. No requiere DD; el DD da el sello «Verificada» + puntos (aparte)."""
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        lst = await conn.fetchrow(
+            "SELECT agent_id, estado::text AS estado, barrio_id FROM listing "
+            "WHERE id = $1 AND deleted_at IS NULL",
+            listing_id,
+        )
+        if not lst:
+            raise HTTPException(status_code=404, detail="Listing no encontrado")
+        if lst["agent_id"] is not None:
+            raise HTTPException(status_code=409, detail="Este listing tiene agente exclusivo; no es abierto")
+        if lst["estado"] != "publicado":
+            raise HTTPException(status_code=409, detail="El listing no está publicado")
+        # Zona-lock: igual que el pool — patrocinio activo de barrio o su comuna.
+        cubre = await conn.fetchval(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM sponsorship s
+              JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+              WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+                AND ( (s.zona_nivel = 'barrio' AND s.zona_codigo = $2::text)
+                   OR (s.zona_nivel = 'comuna' AND s.zona_codigo IN (
+                         SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc WHERE bc.barrio_id = $2)) )
+            )
+            """,
+            agent.id, lst["barrio_id"],
+        )
+        if not cubre:
+            raise HTTPException(status_code=403, detail="Solo agentes que patrocinan esta zona pueden sumarse")
+        await conn.execute(
+            "INSERT INTO listing_representante_abierto (listing_id, agent_id) VALUES ($1, $2) "
+            "ON CONFLICT (listing_id, agent_id) DO NOTHING",
+            listing_id, agent.id,
+        )
+    return {"listing_id": listing_id, "sumado": True}
+
+
 @router.get("/listings")
 async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     agent = await _agent_del_usuario(user, pool)
@@ -358,6 +402,9 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                    -- es_propio: creado por el agente (/publicar) vs asignado de un lead
                    -- (intake → listing, la propiedad es del owner). Solo para el badge.
                    NOT EXISTS (SELECT 1 FROM intake i WHERE i.listing_id = l.id) AS es_propio,
+                   -- intake de origen (si vino de un lead): permite re-abrir la
+                   -- verificación de documentos (DD) desde "Mis listings" tras publicar.
+                   (SELECT i.id::text FROM intake i WHERE i.listing_id = l.id LIMIT 1) AS intake_id,
                    (SELECT m.url FROM listing_media m WHERE m.listing_id = l.id
                       ORDER BY m.es_portada DESC, m.orden ASC LIMIT 1) AS cover_url,
                    COALESCE(v.total, 0) AS vistas_total, COALESCE(v.v30, 0) AS vistas_30d,
@@ -1245,6 +1292,16 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
                    COALESCE(v.nombre, u.nombre, 'Visitante') AS nombre,
                    v.telefono, u.email,
                    v.fecha_visita, v.mensaje, v.estado, v.resultado, v.created_at,
+                   v.nota_realtor, v.origen,
+                   -- Ficha del inmueble (para que el realtor sepa cuál es y a dónde ir).
+                   -- Datos del listing propio (lst); para scrapeados cae a staging/barrio.
+                   COALESCE(lst.barrio, b.nombre, s.barrio_raw)                 AS barrio,
+                   lst.direccion_aprox                                          AS direccion,
+                   lst.precio                                                   AS precio,
+                   COALESCE(lst.tipo_inmueble::text, s.tipo_inmueble::text)     AS tipo_inmueble,
+                   lst.operacion::text                                          AS operacion,
+                   lst.area_m2, lst.habitaciones, lst.banos,
+                   cov.url                                                      AS cover_url,
                    -- Calificación del lead (Zillow paso 2): el agente ve con quién habla.
                    v.intencion, v.presupuesto, v.plazo, v.credito,
                    (v.presupuesto IS NOT NULL OR v.plazo IS NOT NULL
@@ -1267,6 +1324,11 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             LEFT JOIN raw.barrios b ON b.id = s.barrio_id
             LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = s.barrio_id
             LEFT JOIN public.usuarios u ON u.id = v.usuario_id
+            LEFT JOIN public.listing lst ON lst.id::text = v.listing_url
+            LEFT JOIN LATERAL (
+                SELECT lm.url FROM public.listing_media lm
+                WHERE lm.listing_id = lst.id ORDER BY lm.es_portada DESC, lm.orden ASC LIMIT 1
+            ) cov ON TRUE
             WHERE m.url IS NOT NULL
                -- Lead ruteado directo al realtor (crear_visita / lead-in de GHL por
                -- zona): el agent_id se resolvió al crear. Sin esta rama, un lead
@@ -1301,6 +1363,8 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
     return {
         "visitas": [
             {**dict(v),
+             "precio": float(v["precio"]) if v["precio"] is not None else None,
+             "area_m2": float(v["area_m2"]) if v["area_m2"] is not None else None,
              "fecha_visita": v["fecha_visita"].isoformat() if v["fecha_visita"] else None,
              "created_at": v["created_at"].isoformat()}
             for v in visitas
@@ -1315,6 +1379,8 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
 class EstadoVisitaRequest(BaseModel):
     estado: str  # 'confirmada' | 'realizada' | 'cancelada' | 'no_asistio'
     resultado: str | None = None  # 'interesado' | 'oferta' | 'descartado' (solo con realizada)
+    fecha_visita: str | None = None            # ISO 8601 — fijar/ajustar al confirmar (#3)
+    nota: str | None = Field(None, max_length=500)  # nota del realtor sobre la visita (#4)
 
 
 @router.patch("/visitas/{visita_id}")
@@ -1331,11 +1397,20 @@ async def actualizar_visita(
             raise HTTPException(status_code=400, detail="Resultado inválido")
         if req.estado != "realizada":
             raise HTTPException(status_code=400, detail="El resultado solo aplica a visitas realizadas")
+    fecha_dt = None
+    if req.fecha_visita:
+        try:
+            fecha_dt = datetime.fromisoformat(req.fecha_visita.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
+    nota = (req.nota or "").strip() or None
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             _MIS_URLS_CTE + """
-            UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado), updated_at = NOW()
+            UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado),
+                   fecha_visita = COALESCE($6, v.fecha_visita),
+                   nota_realtor = COALESCE($7, v.nota_realtor), updated_at = NOW()
             WHERE v.id = $4 AND (
                 v.listing_url IN (SELECT url FROM mis_urls)
                 OR v.agent_id = $1   -- lead ruteado directo (crear_visita / GHL lead-in)
@@ -1353,11 +1428,68 @@ async def actualizar_visita(
             )
             RETURNING v.id
             """,
-            agent.id, user.get("id"), req.estado, visita_id, req.resultado,
+            agent.id, user.get("id"), req.estado, visita_id, req.resultado, fecha_dt, nota,
         )
     if not row:
         raise HTTPException(status_code=404, detail="Visita no encontrada o no es tuya")
     return {"id": visita_id, "estado": req.estado, "resultado": req.resultado}
+
+
+class CrearVisitaManualRequest(BaseModel):
+    """Visita que el realtor registra a mano (la agendó por fuera de la plataforma)."""
+    listing_id: str
+    nombre: str = Field(..., min_length=1, max_length=120)
+    telefono: str | None = Field(None, max_length=40)
+    fecha_visita: str | None = None             # ISO 8601
+    estado: str = "confirmada"                  # 'confirmada' (agendada) | 'realizada' (ya ocurrió)
+    resultado: str | None = None                # solo con 'realizada'
+    nota: str | None = Field(None, max_length=500)
+
+
+@router.post("/visitas", status_code=201)
+async def crear_visita_manual(
+    req: CrearVisitaManualRequest,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Registra una visita a mano sobre un listing PROPIO del realtor. origen='manual'
+    para distinguirla de las pedidas desde el mapa (decisión de producto: si cuentan
+    o no para el puntaje). Guardia de propiedad: solo listings del agente."""
+    if req.estado not in ("confirmada", "realizada"):
+        raise HTTPException(status_code=400, detail="Estado inválido (confirmada | realizada)")
+    if req.resultado is not None:
+        if req.resultado not in ("interesado", "oferta", "descartado"):
+            raise HTTPException(status_code=400, detail="Resultado inválido")
+        if req.estado != "realizada":
+            raise HTTPException(status_code=400, detail="El resultado solo aplica a visitas realizadas")
+    fecha_dt = None
+    if req.fecha_visita:
+        try:
+            fecha_dt = datetime.fromisoformat(req.fecha_visita.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
+    nota = (req.nota or "").strip() or None
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        # Guardia de propiedad: el listing debe ser del realtor (no de otro agente).
+        es_propio = await conn.fetchval(
+            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL",
+            req.listing_id, agent.id,
+        )
+        if not es_propio:
+            raise HTTPException(status_code=403, detail="Ese listing no es tuyo")
+        row = await conn.fetchrow(
+            """
+            INSERT INTO visita_solicitud
+                (listing_url, nombre, telefono, fecha_visita, estado, resultado,
+                 nota_realtor, origen, agent_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', $8)
+            RETURNING id
+            """,
+            req.listing_id, req.nombre.strip(), (req.telefono or "").strip() or None,
+            fecha_dt, req.estado, req.resultado, nota, agent.id,
+        )
+    return {"id": str(row["id"]), "estado": req.estado, "origen": "manual"}
 
 
 # zona_codigo llega en 2 namespaces que colisionan si se adivinan por string:

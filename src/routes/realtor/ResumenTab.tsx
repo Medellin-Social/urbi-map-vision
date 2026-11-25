@@ -93,11 +93,31 @@ function Funnel({ stages, title, nota, compact }: { stages: { label: string; val
 // La grid "Información del mercado" de la zona vive ahora en Mercado › Zonas de
 // interés (ResultadosTab §3) — se quitó de Inicio para no duplicarla.
 
+// Skeleton de carga: espeja el layout real (fila de gauges + card de zona) para
+// que no haya salto cuando llegan los datos.
+function ResumenSkeleton() {
+  const cell = { background: C.card, border: `1px solid ${C.line}` };
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Cargando desempeño">
+      <div>
+        <div className="mb-2 h-4 w-40 animate-pulse rounded" style={{ background: C.soft }} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl" style={cell} />)}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 h-4 w-52 animate-pulse rounded" style={{ background: C.soft }} />
+        <div className="h-40 animate-pulse rounded-2xl" style={cell} />
+      </div>
+    </div>
+  );
+}
+
 export function ResumenTab() {
   const { data: d, isLoading } = useDesempeno();
   const { data: emb } = useEmbudo() as { data: Embudo | undefined };
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Cargando…</div>;
+  if (isLoading) return <ResumenSkeleton />;
   if (!d) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Sin datos de desempeño aún.</div>;
 
   const cs = d.calificacion_servicio;

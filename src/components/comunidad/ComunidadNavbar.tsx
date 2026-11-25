@@ -2,10 +2,11 @@ import { useT } from "@/lib/i18n";
 import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
-import { useLang, FlagCO, FlagUS } from '../../lib/i18n'
+import { useLang, LanguageToggle } from '../../lib/i18n'
 import { Wordmark } from '../Wordmark'
 import { GraduationCap } from '@/lib/icons'
 import { useIsAgente } from '@/components/LockedField'
+import { useRealtorPerfil } from '@/hooks/useRealtorDashboard'
 import { auth } from '../../lib/auth'
 import { K as TOKENS } from "@/design/tokens";
 
@@ -75,13 +76,20 @@ const FALLBACK_ITEMS_EN = [
 
 export function ComunidadNavbar({ compact = false, hideTicker = false }: { compact?: boolean; hideTicker?: boolean }) {
   const { barrio } = useBarrio()
-  const { lang, setLang } = useLang()
+  const { lang } = useLang()
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
   const [reOpen,      setReOpen]      = useState(false)
-  const logged = !!auth.get()
+  const user = auth.get()
+  const logged = !!user
   const isAgente = useIsAgente()
+  // El agente ve su foto/nombre reales del backend (auth.avatar es local al device);
+  // no-agentes caen al user de auth. Fetch sólo si es agente.
+  const { data: realtorPerfil } = useRealtorPerfil(isAgente)
+  const accountName = realtorPerfil?.nombre || user?.name || ''
+  const accountAvatar = realtorPerfil?.avatar || user?.avatar
+  const accountInitials = accountName.trim().split(/\s+/).map(s => s[0]).slice(0, 2).join('').toUpperCase()
 
   const t = useT()
 
@@ -228,6 +236,10 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
           .mobile-menu-btn { display: none !important; }
           .mobile-only { display: none !important; }
         }
+        /* Chip de cuenta: nombre solo en pantallas anchas; en desktop angosto deja
+           solo la foto para que la sección derecha no desborde sobre los nav links. */
+        .nav-account-name { max-width: 150px; }
+        @media (max-width: 1100px) { .nav-account-name { display: none !important; } }
       `}</style>
 
       {/* ── Masthead (hidden in compact mode) ───────── */}
@@ -268,27 +280,25 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 {today}
               </span>
             )}
+            {/* Tutorial pegado al logo (izquierda): fuera del flujo central, no empuja
+               los nav links ni la sección derecha. Solo donde hay tour montado. */}
+            {(path === '/' || path === '/map' || path === '/realtor/dashboard') && (
+              <button
+                onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
+                data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : 'realtor-tour-replay'}
+                aria-label={t('Ver tutorial', 'View tutorial')}
+                title={t('Ver tutorial', 'View tutorial')}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
+                  background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
+                  borderRadius: 999, padding: '5px 11px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
+                }}
+              >
+                <GraduationCap size={15} style={{ color: K.amarillo }} />
+                <span className="desktop-only">{t('Tutorial', 'Tutorial')}</span>
+              </button>
+            )}
           </div>
-
-          {/* Tutorial — junto a HOME; solo donde hay tour montado (/, /map, dashboard).
-             Botón único, siempre visible (el tour lo spotlightea en su último paso);
-             el label se oculta en móvil, el ícono queda. */}
-          {(path === '/' || path === '/map' || path === '/realtor/dashboard') && (
-            <button
-              onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
-              data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : 'realtor-tour-replay'}
-              aria-label={t('Ver tutorial', 'View tutorial')}
-              title={t('Ver tutorial', 'View tutorial')}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, cursor: 'pointer',
-                background: 'transparent', border: '1px solid rgba(255,255,255,0.25)', color: '#fff',
-                borderRadius: 999, padding: '5px 11px', fontSize: 12, fontWeight: 700, whiteSpace: 'nowrap',
-              }}
-            >
-              <GraduationCap size={15} style={{ color: K.amarillo }} />
-              <span className="desktop-only">{t('Tutorial', 'Tutorial')}</span>
-            </button>
-          )}
 
           {/* CENTER: nav links — desktop only */}
           <div className="desktop-nav-links" data-tour="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
@@ -340,7 +350,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
 
           {/* RIGHT: login/account + subscribe + ES/EN — desktop only */}
           <div className="desktop-nav-right" style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, justifyContent: 'flex-end' }}>
-            {isAgente && (
+            {isAgente && path !== '/realtor/dashboard' && (
               <a
                 href="/realtor/dashboard"
                 style={{
@@ -352,12 +362,27 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 Dashboard
               </a>
             )}
-            <a
-              href={logged ? '/perfil' : '/login'}
-              style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
-            >
-              {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
-            </a>
+            {logged ? (
+              <a
+                href="/perfil"
+                aria-label={t('Mi cuenta', 'My account')}
+                style={{ display: 'flex', alignItems: 'center', gap: 8, maxWidth: 200, color: '#fff', textDecoration: 'none' }}
+              >
+                <span style={{ width: 28, height: 28, flexShrink: 0, borderRadius: 999, overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.15)', fontSize: 11, fontWeight: 700, color: '#fff' }}>
+                  {accountAvatar ? <img src={accountAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : accountInitials}
+                </span>
+                <span className="nav-account-name" style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {accountName || t('Mi cuenta', 'My account')}
+                </span>
+              </a>
+            ) : (
+              <a
+                href="/login"
+                style={{ color: 'rgba(255,255,255,0.85)', fontSize: 13, fontWeight: 600, textDecoration: 'none', letterSpacing: '.3px' }}
+              >
+                {t('Iniciar sesión', 'Log in')}
+              </a>
+            )}
             {!logged && (
               <a
                 href="/suscribirse"
@@ -372,49 +397,12 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
                 {t('Suscríbete', 'Subscribe')}
               </a>
             )}
-            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
-              {(['es', 'en'] as const).map(l => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  aria-label={l === 'es' ? 'Español' : 'English'}
-                  aria-pressed={lang === l}
-                  data-testid={`lang-${l}`}
-                  style={{
-                    border: 'none',
-                    background: lang === l ? K.amarillo : 'transparent',
-                    color: lang === l ? K.ink : '#fff',
-                    padding: '4px 10px',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  }}
-                >
-                  {l === 'es' ? <FlagCO /> : <FlagUS />}
-                </button>
-              ))}
-            </div>
+            <LanguageToggle />{/* principal (compartido i18n) — mismo botón que el resto del sitio */}
           </div>
 
           {/* Mobile: ES/EN siempre visible (fuera del menú) + hamburger */}
           <div className="mobile-only" style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
-            <div style={{ display: 'flex', border: '1px solid rgba(255,255,255,0.25)', borderRadius: 999, overflow: 'hidden' }}>
-              {(['es', 'en'] as const).map(l => (
-                <button
-                  key={l}
-                  onClick={() => setLang(l)}
-                  aria-label={l === 'es' ? 'Español' : 'English'}
-                  aria-pressed={lang === l}
-                  style={{
-                    border: 'none',
-                    background: lang === l ? K.amarillo : 'transparent',
-                    color: lang === l ? K.ink : '#fff',
-                    padding: '4px 10px',
-                    cursor: 'pointer', display: 'flex', alignItems: 'center',
-                  }}
-                >
-                  {l === 'es' ? <FlagCO /> : <FlagUS />}
-                </button>
-              ))}
-            </div>
+            <LanguageToggle />{/* principal (compartido i18n) — mismo botón que el resto del sitio */}
             <button
               onClick={() => setMenuAbierto(prev => !prev)}
               className="mobile-menu-btn"
@@ -481,7 +469,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               </a>
             ))}
 
-            {isAgente && (
+            {isAgente && path !== '/realtor/dashboard' && (
               <a
                 href="/realtor/dashboard"
                 onClick={() => setMenuAbierto(false)}
@@ -498,11 +486,16 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
               href={logged ? '/perfil' : '/login'}
               onClick={() => setMenuAbierto(false)}
               style={{
-                display: 'block', color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 500,
+                display: 'flex', alignItems: 'center', gap: 10, color: 'rgba(255,255,255,0.85)', fontSize: 15, fontWeight: 500,
                 textDecoration: 'none', padding: '10px 0', borderBottom: '0.5px solid rgba(255,255,255,0.08)',
               }}
             >
-              {logged ? t('Mi cuenta', 'My account') : t('Iniciar sesión', 'Log in')}
+              {logged && (
+                <span style={{ width: 30, height: 30, flexShrink: 0, borderRadius: 999, overflow: 'hidden', display: 'grid', placeItems: 'center', background: 'rgba(255,255,255,0.15)', fontSize: 12, fontWeight: 700, color: '#fff' }}>
+                  {accountAvatar ? <img src={accountAvatar} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : accountInitials}
+                </span>
+              )}
+              {logged ? (accountName || t('Mi cuenta', 'My account')) : t('Iniciar sesión', 'Log in')}
             </a>
 
             {!logged && (

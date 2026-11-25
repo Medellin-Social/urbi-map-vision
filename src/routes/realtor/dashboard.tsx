@@ -1,7 +1,7 @@
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { RouteError, RoutePending } from "@/components/RouteStates";
-import { createContext, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft, ArrowRight, Inbox, MapPinned, Plus, Eye, Heart, Home, Building2, Store, MapPin, Camera, X, Bed, Bath, Car, Maximize2,
@@ -22,12 +22,14 @@ import { SimuladorTab } from "./SimuladorTab";
 import { C } from "./_kit";
 import { Avatar, EmptyBlock, FilterTabs, IconChip, KpiCard, KpiGrid, MetricCell, MiniRing, PageHeader, Panel, Pill, Steps, TONE, type Tone } from "./-ui";
 import { formatCOP } from "@/lib/format";
-import { LanguageToggle, Name } from "@/lib/i18n";
+import { Name } from "@/lib/i18n";
 import {
   datosMinimosCompletos,
   realtorApi,
   validarCierre,
   CIERRE_LIMITES,
+  validarFicha,
+  FICHA_LIMITES,
   type Agenda,
   type EstadoListing,
   type Franja,
@@ -42,6 +44,7 @@ import { toast } from "sonner";
 import {
   useAceptarAsignado,
   useActualizarVisita,
+  useCrearVisitaManual,
   useAgenda,
   useDesempeno,
   useDueDiligence,
@@ -89,13 +92,17 @@ type Section = "inicio" | "listings" | "bandeja" | "mercado" | "herramientas";
 // Mercado lleva a Mis listings).
 const GoToSection = createContext<(s: Section) => void>(() => {});
 
+// Orden acción-first (ver AGENTS.md): el realtor abre a diario a RESPONDER, no a
+// mirar KPIs. Bandeja (quién te busca hoy) es el landing; los resultados/KPIs van
+// al final como consulta periódica. id "inicio" se conserva (deep-links + render
+// guard) aunque el label sea "Resultados".
 const SECTIONS: { id: Section; label: string }[] = [
-  { id: "inicio",       label: "Inicio" },
-  { id: "listings",     label: "Mis listings" },
   { id: "bandeja",      label: "Bandeja y agenda" },
+  { id: "listings",     label: "Mis listings" },
   // Mercado oculto: todo era _BARRIO_SQL público reskineado, sin valor pago propio.
   // Componente (MercadoSection) se deja en el archivo por si se repurposea.
   { id: "herramientas", label: "Herramientas" },
+  { id: "inicio",       label: "Resultados" },
 ];
 
 // Deep-link: ids viejos de ?tab= → sección nueva (no romper enlaces del navbar/listing).
@@ -115,9 +122,10 @@ function tabParam(): string {
 }
 
 function RealtorDashboardPage() {
-  // Default "inicio" en el primer render (SSR y cliente coinciden → sin hydration
-  // mismatch). El deep-link ?section= / ?tab= se aplica post-mount en el efecto.
-  const [section, setSection] = useState<Section>("inicio");
+  // Default "bandeja" (landing acción-first, ver AGENTS.md): el realtor aterriza
+  // en lo que debe responder hoy, no en el muro de KPIs. SSR y cliente coinciden
+  // → sin hydration mismatch. Deep-link ?section= / ?tab= se aplica post-mount.
+  const [section, setSection] = useState<Section>("bandeja");
   useEffect(() => {
     const p = new URLSearchParams(window.location.search);
     const raw = p.get("section") ?? p.get("tab") ?? "";
@@ -162,8 +170,10 @@ function RealtorDashboardPage() {
     <GoToSection.Provider value={goTo}>
     <div className="paper-theme min-h-screen bg-background">
       <RealtorTourModal />
-      {/* Navbar global (igual que el resto del sitio); RealtorNav se stickea debajo. */}
-      <ComunidadNavbar compact hideTicker />
+      {/* Navbar del home (masthead + barra teal sticky top:0 h52), sin la barra de
+          noticias (ticker). RealtorNav (tabs) se stickea debajo a top-[55px]; el
+          masthead es estático → scrollea fuera y solo queda la barra teal. */}
+      <ComunidadNavbar hideTicker />
       <RealtorNav section={section} onSection={setSection} />
       {/* scroll-mt-28: el foco no queda tapado por el header sticky (WCAG 2.2 SC 2.4.11). */}
       <main
@@ -194,7 +204,6 @@ function RealtorNav({ section, onSection }: { section: Section; onSection: (s: S
   const nuevos = asignados?.filter((a) => a.estado === "asignado").length ?? 0;
   const visitasPendientes = agenda?.visitas.filter((v) => v.estado === "pendiente").length ?? 0;
   const bandejaBadge = nuevos + visitasPendientes;
-  const initials = perfil?.nombre.split(/\s+/).map((s) => s[0]).slice(0, 2).join("").toUpperCase();
 
   const onKeyNav = (e: React.KeyboardEvent, idx: number) => {
     const n = SECTIONS.length;
@@ -223,28 +232,10 @@ function RealtorNav({ section, onSection }: { section: Section; onSection: (s: S
           <span className="truncate text-sm font-semibold text-foreground">Centro de agente</span>
         </div>
 
-        {perfil && (
-          <div className="flex shrink-0 items-center gap-3">
-            <LanguageToggle />
-            {perfil.estado === "pendiente" && (
-              <span className="hidden text-xs text-warning sm:block">Cuenta pendiente de aprobación</span>
-            )}
-            <div className="flex items-center gap-2">
-              <div className="grid h-8 w-8 place-items-center overflow-hidden rounded-full border border-border bg-surface text-xs font-semibold text-foreground">
-                {perfil.avatar
-                  ? <img src={perfil.avatar} alt={perfil.nombre} className="h-full w-full object-cover" />
-                  : initials}
-              </div>
-              <div className="hidden md:block">
-                <div className="text-sm font-medium leading-tight text-foreground"><Name>{perfil.nombre}</Name></div>
-                {perfil.zonas_patrocinadas.length > 0 && (
-                  <div className="text-[11px] leading-tight text-muted-foreground">
-                    {perfil.zonas_patrocinadas.map((z) => z.nombre).join(" · ")}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
+        {/* Avatar+nombre+zona y el toggle de idioma viven en el navbar global
+            (ComunidadNavbar) — no se duplican en esta 2ª barra apilada. */}
+        {perfil?.estado === "pendiente" && (
+          <span className="hidden shrink-0 text-xs text-warning sm:block">Cuenta pendiente de aprobación</span>
         )}
       </div>
 
@@ -977,8 +968,44 @@ const EDITOR_VISTA_OPTS = [{ v: "exterior", l: "Exterior" }, { v: "interior", l:
 // acepta, pre-llenados con los valores actuales del listing. ponytail: el pin
 // (lat/lon) se deja fuera — editar la ubicación exacta necesita el mapa de /publicar;
 // aquí se edita la dirección aproximada (texto). Subir pin picker si se pide.
+// A11y de modales: Esc para cerrar, focus-trap (Tab cicla dentro), foco al primer
+// elemento al abrir y lo devuelve al disparador al cerrar. Un hook, los 3 modales.
+// Corre una sola vez (montaje=abrir, desmontaje=cerrar); onClose vía ref para no
+// re-disparar el efecto en cada render cuando el callback es un arrow inline.
+function useModalA11y(onClose: () => void) {
+  const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  useEffect(() => {
+    const prev = document.activeElement as HTMLElement | null;
+    const focusables = () => {
+      const el = ref.current;
+      if (!el) return [] as HTMLElement[];
+      return Array.from(
+        el.querySelectorAll<HTMLElement>(
+          'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+        ),
+      ).filter((x) => x.offsetParent !== null);
+    };
+    focusables()[0]?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { e.preventDefault(); closeRef.current(); return; }
+      if (e.key !== "Tab") return;
+      const f = focusables();
+      if (f.length === 0) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => { document.removeEventListener("keydown", onKey); prev?.focus?.(); };
+  }, []);
+  return ref;
+}
+
 function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
   const editar = useEditarListing();
+  const dialogRef = useModalA11y(onClose);
   const num = (n: number | null | undefined) => (n != null ? String(n) : "");
   const cs = (k: string) => { const v = listing.caracteristicas?.[k]; return v == null ? "" : String(v); };
   const yn = (b: boolean | null) => (b === true ? "si" : b === false ? "no" : "");
@@ -1014,6 +1041,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
   const [closets, setClosets] = useState(cs("closets"));
   const [fotos, setFotos] = useState<File[]>([]);
   const [err, setErr] = useState<string | null>(null);
+  const [fieldErrs, setFieldErrs] = useState<Record<string, string>>({});
 
   const toggleAmen = (a: string) =>
     setAmenidades((prev) => (prev.includes(a) ? prev.filter((x) => x !== a) : [...prev, a]));
@@ -1085,6 +1113,15 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
       setErr("No hay cambios para guardar");
       return;
     }
+    // Valida contra las reglas del backend (ListingPatchRequest) → avisa en línea
+    // en vez de un 422 genérico. maxLength en los inputs cubre los largos de texto.
+    const fe = validarFicha(campos);
+    if (Object.keys(fe).length > 0) {
+      setFieldErrs(fe);
+      setErr("Corrige los campos marcados.");
+      return;
+    }
+    setFieldErrs({});
     setErr(null);
     try {
       await editar.mutateAsync({ listingId: listing.id, campos, fotos });
@@ -1100,6 +1137,7 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="Editar ficha del listing">
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
       <div
+        ref={dialogRef}
         className="paper-theme relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl"
         style={{ borderColor: C.line, background: C.card }}
         onClick={(e) => e.stopPropagation()}
@@ -1133,16 +1171,18 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
             </Field>
             <Field label={listing.operacion === "arriendo" ? "Canon mensual" : "Precio de venta"}>
               <MoneyInput value={precio} onChange={setPrecio} suffix={listing.operacion === "arriendo" ? "/mes" : undefined} />
+              {fieldErrs.precio && <CierreErr msg={fieldErrs.precio} />}
             </Field>
             <Field label="Administración" hint="(opcional)">
               <MoneyInput value={admin} onChange={setAdmin} suffix="/mes" />
+              {fieldErrs.administracion && <CierreErr msg={fieldErrs.administracion} />}
             </Field>
           </EdSection>
 
           <EdSection icon={Maximize2} title="Características">
-            <Field label="Área construida"><NumInput value={area} onChange={setArea} icon={Maximize2} suffix="m²" /></Field>
-            <Field label="Área de lote" hint="(opc.)"><NumInput value={areaLote} onChange={setAreaLote} suffix="m²" /></Field>
-            <Field label="Antigüedad"><NumInput value={antiguedad} onChange={setAntiguedad} icon={Calendar} suffix="años" /></Field>
+            <Field label="Área construida"><NumInput value={area} onChange={setArea} icon={Maximize2} suffix="m²" maxLength={7} />{fieldErrs.area_m2 && <CierreErr msg={fieldErrs.area_m2} />}</Field>
+            <Field label="Área de lote" hint="(opc.)"><NumInput value={areaLote} onChange={setAreaLote} suffix="m²" maxLength={7} />{fieldErrs.area_lote_m2 && <CierreErr msg={fieldErrs.area_lote_m2} />}</Field>
+            <Field label="Antigüedad"><NumInput value={antiguedad} onChange={setAntiguedad} icon={Calendar} suffix="años" maxLength={3} />{fieldErrs.antiguedad_anios && <CierreErr msg={fieldErrs.antiguedad_anios} />}</Field>
             <ChipField label="Habitaciones" icon={Bed} value={hab} onChange={setHab} options={COUNT_0_5} />
             <ChipField label="Baños" icon={Bath} value={banos} onChange={setBanos} options={COUNT_1_5} />
             <ChipField label="Parqueaderos" icon={Car} value={parqs} onChange={setParqs} options={COUNT_0_4} />
@@ -1168,10 +1208,10 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
 
           <EdSection icon={MapPin} title="Ubicación">
             <Field label="Nombre del edificio / unidad" className="col-span-2 sm:col-span-1">
-              <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={edInputCls} placeholder="Torre Alción" />
+              <input value={edificio} maxLength={FICHA_LIMITES.edificioMax} onChange={(e) => setEdificio(e.target.value)} className={edInputCls} placeholder="Torre Alción" />
             </Field>
             <Field label="Dirección aproximada" className="col-span-2">
-              <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className={edInputCls} placeholder="Cra. 34 # 7 Sur" />
+              <input value={direccion} maxLength={FICHA_LIMITES.direccionMax} onChange={(e) => setDireccion(e.target.value)} className={edInputCls} placeholder="Cra. 34 # 7 Sur" />
             </Field>
           </EdSection>
 
@@ -1188,16 +1228,16 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
 
           <EdSection icon={Camera} title="Multimedia" hint="Tour 3D y video embebibles (Matterport, Kuula, YouTube, Vimeo)">
             <Field label="URL tour 3D / 360°" className="col-span-2 sm:col-span-3">
-              <EmbedInput value={tourUrl} onChange={setTourUrl} placeholder="https://my.matterport.com/show/?m=…" />
+              <EmbedInput value={tourUrl} onChange={setTourUrl} maxLength={FICHA_LIMITES.urlMax} placeholder="https://my.matterport.com/show/?m=…" />
             </Field>
             <Field label="URL video" className="col-span-2 sm:col-span-3">
-              <EmbedInput value={videoUrl} onChange={setVideoUrl} placeholder="https://youtube.com/watch?v=…" />
+              <EmbedInput value={videoUrl} onChange={setVideoUrl} maxLength={FICHA_LIMITES.urlMax} placeholder="https://youtube.com/watch?v=…" />
             </Field>
           </EdSection>
 
           <EdSection icon={ClipboardList} title="Descripción" grid={false}>
             <Field label="Texto del aviso" counter={`${descripcion.length} car.`}>
-              <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${edInputCls} min-h-28 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
+              <textarea value={descripcion} maxLength={FICHA_LIMITES.descripcionMax} onChange={(e) => setDescripcion(e.target.value)} className={`${edInputCls} min-h-28 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
             </Field>
           </EdSection>
 
@@ -1210,19 +1250,27 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
               className="w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-foreground hover:file:bg-muted/40"
             />
           </EdSection>
+
+          {/* Verificación de documentos (DD) — solo si el listing vino de un lead.
+              Reabre el checklist tras publicar para ganar/mantener el sello «Verificada». */}
+          {listing.intake_id && (
+            <section className="rounded-xl border p-4 sm:p-5" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+              <DDChecklistSection intakeId={listing.intake_id} />
+            </section>
+          )}
         </div>
 
         {/* Footer */}
         <div className="flex items-center justify-between gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
-          {err ? <p className="text-sm font-medium" style={{ color: C.bad }}>{err}</p> : <span className="text-xs" style={{ color: C.muted }}>Los cambios se publican al guardar.</span>}
+          {err ? <p className="text-sm font-medium" style={{ color: C.bad }}>{err}</p> : <span className="hidden text-xs sm:inline" style={{ color: C.muted }}>Los cambios se publican al guardar.</span>}
           <div className="flex shrink-0 gap-2">
-            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
+            <button onClick={onClose} className="inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
               Cancelar
             </button>
             <button
               onClick={guardar}
               disabled={editar.isPending}
-              className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              className="inline-flex min-h-[44px] items-center justify-center rounded-lg px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
               style={{ background: C.brand }}
             >
               {editar.isPending ? "Guardando…" : "Guardar cambios"}
@@ -1267,7 +1315,7 @@ function SegYesNo({ value, onChange }: { value: string; onChange: (v: string) =>
             type="button"
             aria-pressed={on}
             onClick={() => onChange(on ? "" : o.v)}
-            className="min-h-[34px] flex-1 rounded-md text-sm font-semibold transition"
+            className="min-h-[40px] flex-1 rounded-md text-sm font-semibold transition"
             style={on ? { background: C.brand, color: "#fff" } : { color: C.sub }}
           >
             {o.l}
@@ -1294,7 +1342,7 @@ function AmenChip({ label, on, onClick }: { label: string; on: boolean; onClick:
       type="button"
       aria-pressed={on}
       onClick={onClick}
-      className="inline-flex min-h-[34px] items-center rounded-full border px-3.5 text-xs font-medium transition"
+      className="inline-flex min-h-[40px] items-center rounded-full border px-3.5 text-xs font-medium transition"
       style={on
         ? { background: C.brand, borderColor: C.brand, color: "#fff" }
         : { background: C.soft, borderColor: C.line, color: C.sub }}
@@ -1354,7 +1402,7 @@ function CountChips({ value, onChange, options }: { value: string; onChange: (v:
         const on = value === o.v;
         return (
           <button key={o.v} type="button" aria-pressed={on} onClick={() => onChange(on ? "" : o.v)}
-            className="min-h-[36px] min-w-[40px] rounded-lg border px-3 text-sm font-semibold transition"
+            className="min-h-[40px] min-w-[44px] rounded-lg border px-3 text-sm font-semibold transition"
             style={on
               ? { background: C.brand, borderColor: C.brand, color: "#fff", boxShadow: "0 1px 2px rgba(15,138,79,0.3)" }
               : { background: C.soft, borderColor: C.line, color: C.sub }}>
@@ -1396,13 +1444,13 @@ function embedState(url: string): "empty" | "ok" | "bad" {
 }
 
 // Input de URL embebible con feedback vivo (✓ válido / ✕ host no soportado).
-function EmbedInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+function EmbedInput({ value, onChange, placeholder, maxLength }: { value: string; onChange: (v: string) => void; placeholder?: string; maxLength?: number }) {
   const st = embedState(value);
   const ring = st === "ok" ? C.brand : st === "bad" ? C.bad : C.line;
   return (
     <div>
       <div className="relative">
-        <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
+        <input value={value} placeholder={placeholder} maxLength={maxLength} onChange={(e) => onChange(e.target.value)}
           className={`${edInputCls} pr-9`} style={{ borderColor: ring }} />
         {st !== "empty" && (
           <span className="absolute right-3 top-1/2 -translate-y-1/2">
@@ -1597,6 +1645,7 @@ function etiquetaDia(ms: number): string {
 
 function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType<typeof useActualizarVisita> }) {
   const [verHistorial, setVerHistorial] = useState(false);
+  const [registrando, setRegistrando] = useState(false);
   const visitas = data.visitas;
 
   // Por confirmar: primero las vencidas, luego Pro, luego las más antiguas.
@@ -1625,22 +1674,41 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
   const props = (v: VisitaSolicitud) => ({
     visita: v,
     pending: actualizar.isPending && actualizar.variables?.id === v.id,
-    onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", resultado?: "interesado" | "oferta" | "descartado") =>
-      actualizar.mutate({ id: v.id, estado, resultado }),
+    onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", opts?: { resultado?: "interesado" | "oferta" | "descartado"; fecha_visita?: string; nota?: string }) =>
+      actualizar.mutate({ id: v.id, estado, ...opts }),
   });
+
+  const registrarBtn = (
+    <button
+      type="button"
+      onClick={() => setRegistrando(true)}
+      className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border px-3.5 text-[13px] font-semibold transition hover:bg-black/[0.03]"
+      style={{ borderColor: C.line, color: C.sub }}
+    >
+      <Plus className="h-4 w-4" style={{ color: C.brand }} /> Registrar visita
+    </button>
+  );
 
   if (visitas.length === 0) {
     return (
-      <EmptyBlock
-        icon={Calendar}
-        title="Aún no tienes solicitudes de visita"
-        msg="Cuando alguien agende una visita a uno de tus inmuebles desde el mapa, aparecerá aquí para que la confirmes."
-      />
+      <>
+        <div className="mb-4 flex justify-end">{registrarBtn}</div>
+        <EmptyBlock
+          icon={Calendar}
+          title="Aún no tienes solicitudes de visita"
+          msg="Cuando alguien agende una visita a uno de tus inmuebles desde el mapa, aparecerá aquí. También puedes registrar a mano una visita que agendaste por fuera."
+        />
+        {registrando && <RegistrarVisitaModal onClose={() => setRegistrando(false)} />}
+      </>
     );
   }
 
   return (
     <div className="space-y-6">
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[13px]" style={{ color: C.muted }}>Confirma, marca el resultado o registra una visita que hiciste por fuera.</span>
+        {registrarBtn}
+      </div>
       <div className="grid items-start gap-5 lg:grid-cols-2">
         <Panel
           icon={CalendarClock}
@@ -1691,22 +1759,155 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
           {histVis.map((v, i) => {
             const e = VISITA_ESTADO[v.estado];
             return (
-              <div key={v.id} className="flex flex-wrap items-center gap-3 px-5 py-3" style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}>
-                <Avatar name={v.nombre} size={30} />
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-[13px] font-semibold" style={{ color: C.ink }}><Name>{v.nombre}</Name></div>
-                  <div className="truncate text-[12px]" style={{ color: C.muted }}>{v.listing_titulo}</div>
+              <div key={v.id} className="px-5 py-3" style={i === 0 ? undefined : { borderTop: `1px solid ${C.line}` }}>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Avatar name={v.nombre} size={30} />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      <span className="truncate text-[13px] font-semibold" style={{ color: C.ink }}><Name>{v.nombre}</Name></span>
+                      {v.origen === "manual" && <Pill tone="neutral" title="Visita registrada por ti a mano">Manual</Pill>}
+                    </div>
+                    <div className="flex items-center gap-1 truncate text-[12px]" style={{ color: C.sub }}><Home className="h-3 w-3 shrink-0" style={{ color: C.brand }} /><span className="truncate">{v.listing_titulo}</span></div>
+                  </div>
+                  <span className="text-[12px] tabular-nums" style={{ color: C.sub }}>
+                    {v.fecha_visita ? new Date(v.fecha_visita).toLocaleDateString("es-CO", { day: "numeric", month: "short" }) : "—"}
+                  </span>
+                  {v.resultado && <Pill tone={v.resultado === "oferta" ? "brand" : v.resultado === "interesado" ? "info" : "neutral"}>{RESULTADO_LABEL[v.resultado]}</Pill>}
+                  <Pill tone={e.tone} dot>{e.label}</Pill>
                 </div>
-                <span className="text-[12px] tabular-nums" style={{ color: C.sub }}>
-                  {v.fecha_visita ? new Date(v.fecha_visita).toLocaleDateString("es-CO", { day: "numeric", month: "short" }) : "—"}
-                </span>
-                {v.resultado && <Pill tone={v.resultado === "oferta" ? "brand" : v.resultado === "interesado" ? "info" : "neutral"}>{RESULTADO_LABEL[v.resultado]}</Pill>}
-                <Pill tone={e.tone} dot>{e.label}</Pill>
+                {v.nota_realtor && (
+                  <p className="mt-1.5 rounded-lg px-3 py-1.5 text-[12px] leading-snug" style={{ background: C.soft, color: C.sub }}>
+                    {v.nota_realtor}
+                  </p>
+                )}
               </div>
             );
           })}
         </Panel>
       )}
+
+      {registrando && <RegistrarVisitaModal onClose={() => setRegistrando(false)} />}
+    </div>
+  );
+}
+
+// Modal: el realtor registra a mano una visita que agendó por fuera del mapa.
+function RegistrarVisitaModal({ onClose }: { onClose: () => void }) {
+  const dialogRef = useModalA11y(onClose);
+  const crear = useCrearVisitaManual();
+  const { data: listings = [] } = useMisListings();
+  const editables = listings.filter((l) => l.es_propio && l.estado !== "cerrado");
+  const [listingId, setListingId] = useState("");
+  const [nombre, setNombre] = useState("");
+  const [telefono, setTelefono] = useState("");
+  const [fecha, setFecha] = useState("");
+  const [estado, setEstado] = useState<"confirmada" | "realizada">("confirmada");
+  const [resultado, setResultado] = useState<"interesado" | "oferta" | "descartado" | "">("");
+  const [nota, setNota] = useState("");
+  const [err, setErr] = useState<string | null>(null);
+
+  const puedeEnviar = !!listingId && nombre.trim().length > 0 && !crear.isPending;
+
+  async function enviar() {
+    if (!listingId) { setErr("Elige a cuál de tus inmuebles."); return; }
+    if (!nombre.trim()) { setErr("Escribe el nombre del comprador."); return; }
+    setErr(null);
+    try {
+      await crear.mutateAsync({
+        listing_id: listingId,
+        nombre: nombre.trim(),
+        telefono: telefono.trim() || undefined,
+        fecha_visita: localInputToIso(fecha),
+        estado,
+        resultado: estado === "realizada" && resultado ? resultado : undefined,
+        nota: nota.trim() || undefined,
+      });
+      onClose();
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : "No se pudo registrar");
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Registrar visita"
+        className="paper-theme relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ borderColor: C.line, background: C.card }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div className="flex items-start gap-3 border-b px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(15,138,79,0.12)" }}>
+            <CalendarClock className="h-5 w-5" style={{ color: C.brand }} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>Registrar visita</h3>
+            <p className="mt-0.5 text-xs" style={{ color: C.muted }}>Una visita que agendaste por fuera del mapa</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="shrink-0 rounded-lg p-1.5 transition hover:bg-black/5" style={{ color: C.muted }}><X className="h-5 w-5" /></button>
+        </div>
+
+        <div className="flex flex-col gap-3 overflow-y-auto px-6 py-5" style={{ background: C.soft }}>
+          <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+            <div className="grid gap-3">
+              <Field label="Inmueble">
+                <select value={listingId} onChange={(e) => setListingId(e.target.value)} className={edInputCls}>
+                  <option value="">Elige uno de tus inmuebles…</option>
+                  {editables.map((l) => <option key={l.id} value={l.id}>{l.titulo}{l.barrio ? ` · ${l.barrio}` : ""}</option>)}
+                </select>
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Nombre del comprador"><input value={nombre} maxLength={120} onChange={(e) => setNombre(e.target.value)} className={edInputCls} placeholder="Ej: Andrés Gómez" /></Field>
+                <Field label="Teléfono" hint="(opc.)"><input value={telefono} inputMode="tel" maxLength={40} onChange={(e) => setTelefono(e.target.value)} className={edInputCls} placeholder="300 000 0000" /></Field>
+              </div>
+              <Field label="Fecha y hora" hint="(opc.)"><input type="datetime-local" value={fecha} onChange={(e) => setFecha(e.target.value)} className={edInputCls} /></Field>
+              <Field label="Estado">
+                <SegGroup value={estado} onChange={(v) => setEstado(v as "confirmada" | "realizada")} options={[{ v: "confirmada", l: "Agendada" }, { v: "realizada", l: "Ya la hice" }]} />
+              </Field>
+              {estado === "realizada" && (
+                <Field label="¿Cómo terminó?">
+                  <SegGroup value={resultado} onChange={(v) => setResultado(v as typeof resultado)} options={[{ v: "oferta", l: "Hará oferta" }, { v: "interesado", l: "Interesado" }, { v: "descartado", l: "No le interesó" }]} />
+                </Field>
+              )}
+              <Field label="Nota" hint="(opc.)">
+                <textarea value={nota} rows={2} maxLength={500} onChange={(e) => setNota(e.target.value)} className={`${edInputCls} resize-y`} placeholder="Ej: ofrece $440M, pide 2 parqueaderos…" />
+              </Field>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          {err ? <p className="text-sm font-medium" style={{ color: C.bad }}>{err}</p> : <span className="hidden text-xs sm:inline" style={{ color: C.muted }}>Se marca como registrada por ti.</span>}
+          <div className="flex shrink-0 gap-2">
+            <button onClick={onClose} className="inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>Cancelar</button>
+            <button onClick={enviar} disabled={!puedeEnviar} className="inline-flex min-h-[44px] items-center justify-center rounded-lg px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50" style={{ background: C.brand }}>
+              {crear.isPending ? "Registrando…" : "Registrar visita"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Segmento genérico (1 selección) reusado por el modal de registrar visita.
+function SegGroup({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
+  return (
+    <div className="flex flex-wrap gap-2">
+      {options.map((o) => {
+        const on = value === o.v;
+        return (
+          <button key={o.v} type="button" aria-pressed={on} onClick={() => onChange(o.v)}
+            className="min-h-[40px] rounded-lg border px-4 text-sm font-semibold transition"
+            style={on ? { background: C.brand, borderColor: C.brand, color: "#fff" } : { background: C.card, borderColor: C.line, color: C.sub }}>
+            {o.l}
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -1742,6 +1943,19 @@ function leadPills(v: VisitaSolicitud): string[] {
   return out;
 }
 
+// ISO ⇆ valor de <input type="datetime-local"> (hora local, sin zona).
+function isoToLocalInput(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+function localInputToIso(val: string): string | undefined {
+  if (!val) return undefined;
+  const d = new Date(val);
+  return Number.isNaN(d.getTime()) ? undefined : d.toISOString();
+}
+
 function VisitaCard({
   visita: v,
   first,
@@ -1751,9 +1965,10 @@ function VisitaCard({
   visita: VisitaSolicitud;
   first: boolean;
   pending: boolean;
-  onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", resultado?: "interesado" | "oferta" | "descartado") => void;
+  onEstado: (estado: "confirmada" | "realizada" | "cancelada" | "no_asistio", opts?: { resultado?: "interesado" | "oferta" | "descartado"; fecha_visita?: string; nota?: string }) => void;
 }) {
-  const [pidiendoResultado, setPidiendoResultado] = useState(false);
+  const [nota, setNota] = useState("");                               // #4: nota opcional del resultado
+  const [fechaEdit, setFechaEdit] = useState(() => isoToLocalInput(v.fecha_visita)); // #3: fecha acordada
   const vencido = slaVencido(v);
   const fecha = v.fecha_visita
     ? new Date(v.fecha_visita).toLocaleString("es-CO", { weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })
@@ -1782,6 +1997,30 @@ function VisitaCard({
           <Avatar name={v.nombre} size={36} />
         )}
         <div className="min-w-0 flex-1">
+          {/* Ficha del inmueble: a cuál es la visita y a dónde ir — lo primero y claro. */}
+          <div className="mb-2 flex items-start gap-2.5 rounded-xl p-2.5" style={{ background: TONE.brand.bg, border: `1px solid ${TONE.brand.line}` }}>
+            {v.cover_url ? (
+              <img src={v.cover_url} alt="" loading="lazy" className="h-14 w-14 shrink-0 rounded-lg object-cover" />
+            ) : (
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-lg" style={{ background: C.card }}>
+                <Home className="h-5 w-5" style={{ color: C.brand }} />
+              </span>
+            )}
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-bold" style={{ color: TONE.brand.fg }} title={v.listing_titulo}>{v.listing_titulo}</div>
+              <div className="flex items-center gap-1 truncate text-[11.5px]" style={{ color: C.sub }}>
+                <MapPin className="h-3 w-3 shrink-0" style={{ color: C.muted }} />
+                <span className="truncate">{[v.direccion, v.barrio].filter(Boolean).join(" · ") || "Ubicación no indicada"}</span>
+              </div>
+              <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px]" style={{ color: C.sub }}>
+                {v.precio != null && <span className="font-bold tabular-nums" style={{ color: C.ink }}>{formatCOP(v.precio)}{v.operacion === "arriendo" ? "/mes" : ""}</span>}
+                {v.tipo_inmueble && <span className="capitalize">{v.tipo_inmueble}</span>}
+                {v.area_m2 != null && <span>{v.area_m2} m²</span>}
+                {v.habitaciones != null && <span>{v.habitaciones} hab</span>}
+                {v.banos != null && <span>{v.banos} baños</span>}
+              </div>
+            </div>
+          </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="text-[14px] font-semibold" style={{ color: C.ink }}><Name>{v.nombre}</Name></span>
             {v.es_pro && (
@@ -1797,12 +2036,11 @@ function VisitaCard({
               </Pill>
             )}
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px]" style={{ color: C.sub }}>
-            <span className="inline-flex min-w-0 items-center gap-1"><Home className="h-3.5 w-3.5 shrink-0" style={{ color: C.muted }} /><span className="truncate">{v.listing_titulo}</span></span>
-            {v.estado !== "confirmada" && (
+          {v.estado !== "confirmada" && (
+            <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[12.5px]" style={{ color: C.sub }}>
               <span className="inline-flex items-center gap-1" style={{ color: C.ink }}><Calendar className="h-3.5 w-3.5" style={{ color: C.muted }} />{fecha}</span>
-            )}
-          </div>
+            </div>
+          )}
           {(v.telefono || v.email) && (
             <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5 text-[12px]">
               {v.telefono && (
@@ -1832,42 +2070,59 @@ function VisitaCard({
             </div>
           )}
 
-          {(v.estado === "pendiente" || v.estado === "confirmada") && (
-            pidiendoResultado ? (
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                <span className="text-[12px] font-medium" style={{ color: C.sub }}>¿Cómo terminó?</span>
-                {(Object.keys(RESULTADO_LABEL) as (keyof typeof RESULTADO_LABEL)[]).map((r) => (
-                  <button key={r} onClick={() => { onEstado("realizada", r); setPidiendoResultado(false); }}
-                    disabled={pending} className={btn} style={ghost}>
-                    {RESULTADO_LABEL[r]}
-                  </button>
-                ))}
-                <button onClick={() => setPidiendoResultado(false)} className="text-[12px] transition hover:opacity-70" style={{ color: C.muted }}>
-                  Volver
+          {v.estado === "pendiente" && (
+            <div className="mt-3">
+              {/* #3: fija/ajusta la fecha acordada al confirmar (prellena la propuesta) */}
+              <label className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Fecha y hora acordada</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="datetime-local"
+                  value={fechaEdit}
+                  onChange={(e) => setFechaEdit(e.target.value)}
+                  className="rounded-lg border px-3 py-2 text-[13px]"
+                  style={{ borderColor: C.line, background: C.card, color: C.ink }}
+                />
+                <button onClick={() => onEstado("confirmada", { fecha_visita: localInputToIso(fechaEdit) })} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }}>
+                  <Check className="mr-1 h-3.5 w-3.5" /> Confirmar visita
                 </button>
-              </div>
-            ) : (
-              <div className="mt-3 flex flex-wrap gap-2">
-                {v.estado === "pendiente" && (
-                  <button onClick={() => onEstado("confirmada")} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }}>
-                    <Check className="mr-1 h-3.5 w-3.5" /> Confirmar
-                  </button>
-                )}
-                {v.estado === "confirmada" && (
-                  <>
-                    <button onClick={() => setPidiendoResultado(true)} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }}>
-                      Marcar realizada
-                    </button>
-                    <button onClick={() => onEstado("no_asistio")} disabled={pending} className={btn} style={ghost}>
-                      No asistió
-                    </button>
-                  </>
-                )}
                 <button onClick={() => onEstado("cancelada")} disabled={pending} className={btn} style={ghost}>
                   Cancelar
                 </button>
               </div>
-            )
+            </div>
+          )}
+
+          {v.estado === "confirmada" && (
+            <div className="mt-3">
+              {/* Resultado en UN tap (sin "Marcar realizada" intermedio) + nota opcional (#4) */}
+              <span className="mb-1.5 block text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>¿Cómo terminó la visita?</span>
+              <textarea
+                value={nota}
+                onChange={(e) => setNota(e.target.value)}
+                rows={2}
+                maxLength={500}
+                placeholder="Nota (opcional): ej. ofrece $440M, pide 2 parqueaderos…"
+                className="mb-2 w-full resize-y rounded-lg border px-3 py-2 text-[13px] outline-none"
+                style={{ borderColor: C.line, background: C.card, color: C.ink }}
+              />
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => onEstado("realizada", { resultado: "oferta", nota: nota.trim() || undefined })} disabled={pending} className={`${btn} font-bold text-white`} style={{ background: C.brand }} title="El comprador hará una oferta">
+                  <TrendingUp className="mr-1 h-3.5 w-3.5" /> Hará oferta
+                </button>
+                <button onClick={() => onEstado("realizada", { resultado: "interesado", nota: nota.trim() || undefined })} disabled={pending} className={`${btn} font-bold`} style={{ background: TONE.info.bg, color: TONE.info.fg, border: `1px solid ${TONE.info.line}` }} title="Interesado, sin oferta aún">
+                  <Heart className="mr-1 h-3.5 w-3.5" /> Interesado
+                </button>
+                <button onClick={() => onEstado("realizada", { resultado: "descartado", nota: nota.trim() || undefined })} disabled={pending} className={btn} style={ghost} title="Hizo la visita pero no le interesó">
+                  No le interesó
+                </button>
+                <button onClick={() => onEstado("no_asistio", { nota: nota.trim() || undefined })} disabled={pending} className={btn} style={ghost} title="No se presentó a la visita">
+                  No asistió
+                </button>
+                <button onClick={() => onEstado("cancelada")} disabled={pending} className={btn} style={{ color: C.muted }}>
+                  Cancelar
+                </button>
+              </div>
+            </div>
           )}
         </div>
       </div>
@@ -1964,11 +2219,14 @@ function grupoIcon(g: Exclude<ListingGrupo, "todos">) {
   return g === "activos" ? Globe2 : g === "preparacion" ? ClipboardList : Trophy;
 }
 
+const LISTINGS_PAGE = 12;   // cuántas cards se muestran antes del "Ver más"
+
 function ListingsTab() {
   const { data, isLoading, isError } = useMisListings();
   const [grupo, setGrupo] = useState<ListingGrupo>("todos");
   const [busqueda, setBusqueda] = useState("");
   const [orden, setOrden] = useState<ListingOrden>("recientes");
+  const [limite, setLimite] = useState(LISTINGS_PAGE);
   const [editando, setEditando] = useState<MiListing | null>(null);
   const [cerrando, setCerrando] = useState<MiListing | null>(null);
   const cambiarEstado = useCambiarEstadoListing();
@@ -1993,6 +2251,13 @@ function ListingsTab() {
     if (orden === "precio_asc") sorted.sort((a, b) => a.precio - b.precio);
     return sorted;
   }, [all, grupo, busqueda, orden]);
+
+  // Paginación ligera: resetea el límite al cambiar filtro/búsqueda/orden y
+  // muestra solo `limite` cards (con "Ver más") — un agente con 44 propios no
+  // renderiza 44 cards de una.
+  useEffect(() => setLimite(LISTINGS_PAGE), [grupo, busqueda, orden]);
+  const shown = visible.slice(0, limite);
+  const hayMas = visible.length > limite;
 
   const onEliminar = (l: MiListing) => {
     // ponytail: confirm nativo — accesible y sin modal extra; subir a modal si se pide.
@@ -2127,7 +2392,8 @@ function ListingsTab() {
           ) : grupo === "todos" ? (
             <div className="space-y-8">
               {(["preparacion", "activos", "cerrados"] as const).map((g) => {
-                const items = visible.filter((l) => GRUPO_DE[l.estado] === g);
+                const total = visible.filter((l) => GRUPO_DE[l.estado] === g).length;
+                const items = shown.filter((l) => GRUPO_DE[l.estado] === g);
                 if (items.length === 0) return null;
                 const m = GRUPO_META[g];
                 return (
@@ -2135,7 +2401,7 @@ function ListingsTab() {
                     <div className="mb-3 flex items-center gap-2.5">
                       <IconChip icon={grupoIcon(g)} tone={m.tone} size={28} />
                       <h2 className="text-[15px] font-semibold" style={{ color: C.ink }}>{m.titulo}</h2>
-                      <span className="text-[12px] tabular-nums" style={{ color: C.muted }}>{items.length}</span>
+                      <span className="text-[12px] tabular-nums" style={{ color: C.muted }}>{total}</span>
                       <span className="hidden text-[12px] sm:inline" style={{ color: C.muted }}>· {m.sub}</span>
                     </div>
                     {renderCards(items)}
@@ -2144,7 +2410,20 @@ function ListingsTab() {
               })}
             </div>
           ) : (
-            renderCards(visible)
+            renderCards(shown)
+          )}
+
+          {hayMas && (
+            <div className="mt-6 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setLimite((l) => l + LISTINGS_PAGE)}
+                className="inline-flex items-center gap-2 rounded-xl border px-5 py-2.5 text-sm font-semibold transition hover:bg-black/[0.03]"
+                style={{ borderColor: C.line, color: C.sub }}
+              >
+                Ver más <span className="tabular-nums" style={{ color: C.muted }}>({visible.length - limite} restantes)</span>
+              </button>
+            </div>
           )}
         </>
       )}
@@ -2168,6 +2447,7 @@ function CierreErr({ msg }: { msg: string }) {
 
 function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
   const cerrar = useCerrarListing();
+  const dialogRef = useModalA11y(onClose);
   const [precio, setPrecio] = useState("");
   // Prellena las llaves que ya trae el listing (de /publicar) → menos tipeo y el
   // reporte sale completo solo, lo que sube el puntaje (ver completitud).
@@ -2219,6 +2499,7 @@ function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose:
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
       <div
+        ref={dialogRef}
         role="dialog"
         aria-modal="true"
         aria-label="Reportar venta"
@@ -2303,13 +2584,13 @@ function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose:
 
         {/* Footer */}
         <div className="flex items-center justify-end gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
-          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
+          <button onClick={onClose} className="inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
             Cancelar
           </button>
           <button
             onClick={enviar}
             disabled={!puedeEnviar}
-            className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            className="inline-flex min-h-[44px] items-center justify-center rounded-lg px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
             style={{ background: C.brand }}
           >
             {cerrar.isPending ? "Reportando…" : "Reportar venta"}
@@ -3395,28 +3676,46 @@ function ConfirmarCompraModal({
   zonaNombre: string; nivel: "comuna" | "barrio"; meses: number; total: number;
   loading: boolean; onCancel: () => void; onConfirm: () => void;
 }) {
+  const dialogRef = useModalA11y(onCancel);
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Confirmar compra de zona">
-      <div className="absolute inset-0 bg-black/40" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" onClick={onCancel} role="dialog" aria-modal="true" aria-label="Confirmar compra de zona">
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
       <div
-        className="paper-theme relative w-full max-w-sm rounded-lg border border-border bg-background p-5 shadow-xl"
+        ref={dialogRef}
+        className="paper-theme relative flex w-full max-w-md flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ borderColor: C.line, background: C.card }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-base font-semibold text-foreground">Confirmar patrocinio</h3>
-        <div className="mt-3 space-y-2 rounded-lg border border-border bg-surface p-3 text-sm">
-          <div className="flex justify-between"><span className="text-muted-foreground">Zona</span><span className="font-medium text-foreground">{zonaNombre}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Nivel</span><span className="font-medium text-foreground">{nivel === "comuna" ? "Comuna" : "Barrio"}</span></div>
-          <div className="flex justify-between"><span className="text-muted-foreground">Duración</span><span className="font-medium text-foreground">{meses} {meses === 1 ? "mes" : "meses"}</span></div>
-          <div className="flex justify-between border-t border-border pt-2"><span className="text-muted-foreground">Total</span><span className="font-bold text-foreground">{formatCOP(total)}</span></div>
+        {/* Header */}
+        <div className="flex items-start gap-3 border-b px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(15,138,79,0.12)" }}>
+            <MapPinned className="h-5 w-5" style={{ color: C.brand }} />
+          </span>
+          <div className="min-w-0">
+            <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>Confirmar patrocinio</h3>
+            <p className="mt-0.5 text-xs" style={{ color: C.muted }}>Zona exclusiva para ti mientras esté activa</p>
+          </div>
         </div>
-        <p className="mt-3 text-xs text-muted-foreground">Zona exclusiva: al confirmar, ningún otro agente podrá patrocinarla mientras esté activa.</p>
-        <div className="mt-4 flex justify-end gap-2">
-          <button onClick={onCancel} disabled={loading}
-            className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-foreground transition hover:bg-surface disabled:opacity-50">
+
+        {/* Body */}
+        <div className="flex flex-col gap-3 px-6 py-5" style={{ background: C.soft }}>
+          <dl className="grid gap-2 rounded-xl border p-4 text-sm" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+            <div className="flex justify-between gap-2"><dt style={{ color: C.muted }}>Zona</dt><dd className="font-semibold" style={{ color: C.ink }}>{zonaNombre}</dd></div>
+            <div className="flex justify-between gap-2"><dt style={{ color: C.muted }}>Nivel</dt><dd className="font-semibold" style={{ color: C.ink }}>{nivel === "comuna" ? "Comuna" : "Barrio"}</dd></div>
+            <div className="flex justify-between gap-2"><dt style={{ color: C.muted }}>Duración</dt><dd className="font-semibold" style={{ color: C.ink }}>{meses} {meses === 1 ? "mes" : "meses"}</dd></div>
+            <div className="flex justify-between gap-2 border-t pt-2" style={{ borderColor: C.line }}><dt style={{ color: C.muted }}>Total</dt><dd className="text-[18px] font-bold tabular-nums" style={{ color: C.brand }}>{formatCOP(total)}</dd></div>
+          </dl>
+          <p className="flex items-start gap-1.5 text-[12px] leading-snug" style={{ color: C.muted }}>
+            <Lock className="mt-px h-3.5 w-3.5 shrink-0" /> Al confirmar, ningún otro agente podrá patrocinar esta zona mientras esté activa.
+          </p>
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <button onClick={onCancel} disabled={loading} className="inline-flex min-h-[44px] items-center justify-center rounded-lg border px-4 text-sm font-medium transition hover:bg-black/5 disabled:opacity-50" style={{ borderColor: C.line, color: C.sub }}>
             Cancelar
           </button>
-          <button onClick={onConfirm} disabled={loading}
-            className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-60">
+          <button onClick={onConfirm} disabled={loading} className="inline-flex min-h-[44px] items-center justify-center rounded-lg px-5 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-60" style={{ background: C.brand }}>
             {loading ? "Procesando…" : "Confirmar compra"}
           </button>
         </div>

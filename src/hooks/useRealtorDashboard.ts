@@ -22,11 +22,12 @@ export function useEmbudo() {
   });
 }
 
-export function useRealtorPerfil() {
+export function useRealtorPerfil(enabled = true) {
   return useQuery({
     queryKey: ["realtor", "perfil"],
     queryFn: () => realtorApi.getPerfil(),
     staleTime: 5 * 60 * 1000,
+    enabled,
   });
 }
 
@@ -79,6 +80,7 @@ export function usePublicarAsignado() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["realtor", "asignados"] });
       qc.invalidateQueries({ queryKey: ["realtor", "listings"] });
+      toast.success("Listing publicado — ya está en el mapa y en Mis listings");
     },
     onError: () => toast.error("No se pudo publicar el listing"),
   });
@@ -115,16 +117,31 @@ export function useAgenda() {
 export function useActualizarVisita() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, estado, resultado }: {
+    mutationFn: ({ id, estado, resultado, fecha_visita, nota }: {
       id: string;
       estado: "confirmada" | "realizada" | "cancelada" | "no_asistio";
       resultado?: "interesado" | "oferta" | "descartado";
-    }) => realtorApi.actualizarVisita(id, estado, resultado),
+      fecha_visita?: string;
+      nota?: string;
+    }) => realtorApi.actualizarVisita(id, estado, { resultado, fecha_visita, nota }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["realtor", "agenda"] });
       qc.invalidateQueries({ queryKey: ["realtor", "desempeno"] });
     },
     onError: () => toast.error("No se pudo actualizar la visita"),
+  });
+}
+
+export function useCrearVisitaManual() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: import("@/lib/realtorApi").CrearVisitaManualInput) => realtorApi.crearVisitaManual(input),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["realtor", "agenda"] });
+      qc.invalidateQueries({ queryKey: ["realtor", "desempeno"] });
+      toast.success("Visita registrada");
+    },
+    onError: () => toast.error("No se pudo registrar la visita"),
   });
 }
 

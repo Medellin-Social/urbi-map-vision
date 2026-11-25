@@ -73,17 +73,31 @@ para mirar un velocímetro. Abre para saber **a quién llamar**.
 
 ---
 
-## Veredicto vigente sobre el orden (nov 2026)
+## Orden del nav (nov 2026) — acción-first, DECIDIDO
 
-- **Inicio** hoy: tira fina "Qué hacer hoy" + muro grande "Cómo te está yendo"
-  (7 gauges). **Invertido.** El realtor abre a diario y lo primero es reflexión.
-- **Fix propuesto:** Inicio = la cola de acción expandida (leads sin responder
-  con aceptar en un tap, visitas de hoy, listings por arreglar). Los gauges
-  "Cómo te está yendo" bajan a secundario o a su propia vista de Desempeño
-  (consulta semanal/mensual).
+Orden vigente (y landing por defecto = el primero):
+
+1. **Bandeja y agenda** ← landing. Quién te busca hoy: propietarios, visitas,
+   interesados. El realtor aterriza en lo que debe responder.
+2. **Mis listings**
+3. **Herramientas** (simulador, comparador, servicios)
+4. **Resultados** (ex-"Inicio") — KPIs/desempeño/ROI. Al final: consulta
+   periódica (semanal/renovación), no rutina diaria.
+
+Razón: el realtor abre a diario a RESPONDER, no a mirar velocímetros. Antes
+Inicio era el landing y abría con un muro de 7 gauges → invertido.
+
+Notas de implementación:
+- id interno `"inicio"` se conserva (deep-links `?tab=resumen/desempeno` + render
+  guard) aunque el label sea "Resultados". `useState<Section>("bandeja")` fija el
+  landing.
 - **Mercado:** oculto — era `_BARRIO_SQL` público reskineado, sin valor pago
-  propio. El valor pago (leads/ROI/funnel de zona) vive en Inicio; ahí hay que
-  reforzarlo, no en un tab de "datos".
+  propio. El valor pago (leads/ROI/funnel de zona) vive en Resultados; ahí hay
+  que reforzarlo, no en un tab de "datos".
+- **Pendiente:** dentro de Resultados, "Qué hacer hoy" (`AlertasHoy`) sigue
+  arriba del muro de gauges. Es dup suave del top de Bandeja; evaluar quitarlo o
+  dejarlo como recap. Los gauges aún son el grueso de Resultados — ok para una
+  vista periódica.
 
 > Cuando cambie el orden o la info de valor, actualizar este bloque — es el
 > estado de la discusión, no sólo principios abstractos.

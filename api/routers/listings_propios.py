@@ -23,6 +23,7 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.schemas.intake_cuestionario import DECLARACIONES_KEYS, cuestionario_para
 from api.services.asignador_service import asignar_intake
+from api.services.due_diligence_service import generar_checklist
 from api.services.intake_service import _aplica, get_or_create_owner
 from api.services.listing_service import datos_minimos_completos
 from api.services.sponsorship_service import zona_cubierta
@@ -444,9 +445,13 @@ async def crear_listing(
                 _to_bool(mascotas), _to_bool(permite_airbnb),
                 titulo, descripcion,
                 nombre_contacto, telefono, email_contacto, horario_contacto,
-                json.dumps(declaraciones_obj), es_agente,
+                # $31 destacado: FALSE. "Featured" es una promoción deliberada
+                # (pagada/admin), NO un efecto de publicar siendo agente.
+                json.dumps(declaraciones_obj), False,
                 _safe_embed_url(tour_url), _safe_embed_url(video_url),
-                es_agente,  # $34: estado/verificado CASE
+                # $34 verificado: SIEMPRE FALSE al publicar. El sello «Verificada»
+                # se gana con el due diligence (DD), nunca por ser agente/agencia.
+                False,
                 nombre_edificio,  # $35
                 (matricula_inmobiliaria or "").strip() or None,  # $36
                 (cedula_catastral or "").strip() or None,        # $37
@@ -497,6 +502,38 @@ async def crear_listing(
         except Exception:
             # El listing ya está publicado; la asignación no puede tumbar el flujo.
             logger.exception("crear_listing: intake/asignación falló para listing %s", listing_id)
+    elif nuevo_agent_id is not None:
+        # Agente auto-publica: NO va al pool (es suyo), pero igual necesita un
+        # intake 'aceptado' a su nombre para colgar el checklist DD y poder GANAR
+        # el sello «Verificada» (verificado ya no se regala por ser agente).
+        try:
+            intake_id = str(uuid.uuid4())
+            zona_codigo = str(barrio_id) if barrio_id is not None else None
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO intake (
+                        id, owner_id, listing_id, agent_id, estado, operacion, tipo_inmueble,
+                        geom, municipio, barrio, zona_nivel, zona_codigo,
+                        direccion_aprox, precio_esperado, area_m2, habitaciones,
+                        banos, declaraciones
+                    ) VALUES (
+                        $1, $2, $3, $4, 'aceptado', $5, $6,
+                        ST_SetSRID(ST_MakePoint($7, $8), 4326), $9, $10, 'barrio', $11,
+                        $12, $13, $14, $15, $16, $17::jsonb
+                    )
+                    """,
+                    intake_id, owner_id, listing_id, nuevo_agent_id, operacion, tipo_inmueble,
+                    lon, lat, municipio_nom, barrio_nom, zona_codigo,
+                    direccion, precio_cop, area_m2, habitaciones, banos,
+                    json.dumps(declaraciones_obj),
+                )
+            await generar_checklist(
+                SimpleNamespace(id=intake_id, declaraciones=declaraciones_obj), pool
+            )
+        except Exception:
+            # El listing ya está publicado; el checklist DD no puede tumbar el flujo.
+            logger.exception("crear_listing: intake/DD de agente falló para listing %s", listing_id)
 
     await _notify_admin_new_listing(
         listing_id=listing_id, tipo_inmueble=tipo_inmueble,

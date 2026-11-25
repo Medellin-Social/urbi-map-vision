@@ -100,6 +100,9 @@ export type MiListing = {
   favoritos: number;       // veces guardado como favorito (raw.favoritos_listings)
   // es_propio: creado por el agente vs asignado de un lead (owner). Solo badge.
   es_propio: boolean;
+  // intake de origen (si vino de un lead): abre la verificación de documentos (DD)
+  // desde el editor en "Mis listings". null para listings propios (/publicar).
+  intake_id?: string | null;
   cover_url: string | null;
   // Ficha completa — pre-llena el editor (editar todo, no solo unas cosas).
   descripcion: string | null;
@@ -248,8 +251,48 @@ export function validarCierre(v: CierreCampos, hoy: string): Record<string, stri
   return e;
 }
 
+// Límites del PATCH de ficha — espejo de ListingPatchRequest en realtor.py (hardening
+// upstream). maxLength en los inputs cubre los de texto; aquí validamos los numéricos
+// (gt=0 / topes) que el input no puede expresar, para no mandar un 422 silencioso.
+export const FICHA_LIMITES = {
+  tituloMax: 200, descripcionMax: 5000, direccionMax: 200, edificioMax: 200, urlMax: 500,
+  precioMax: 1e13, areaMax: 1e6, adminMax: 1e10, antiguedadMax: 300,
+} as const;
+
+/** Valida el patch de ficha que se va a enviar (solo las llaves presentes).
+ *  Devuelve { campo: mensaje } vacío si todo OK. Las chips ya acotan hab/baños/
+ *  parq/estrato; aquí el foco son área (gt=0) y los topes numéricos. */
+export function validarFicha(c: Partial<ListingPatch>): Record<string, string> {
+  const e: Record<string, string> = {};
+  const L = FICHA_LIMITES;
+  const n = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+  if (n(c.precio) && (c.precio <= 0 || c.precio > L.precioMax)) e.precio = "Precio fuera de rango.";
+  if (n(c.area_m2) && (c.area_m2 <= 0 || c.area_m2 > L.areaMax)) e.area_m2 = "El área debe ser mayor a 0 (déjala vacía si no aplica).";
+  if (n(c.area_lote_m2) && (c.area_lote_m2 <= 0 || c.area_lote_m2 > L.areaMax)) e.area_lote_m2 = "El área de lote debe ser mayor a 0 (déjala vacía si no aplica).";
+  if (n(c.administracion) && (c.administracion < 0 || c.administracion > L.adminMax)) e.administracion = "Administración fuera de rango.";
+  if (n(c.antiguedad_anios) && (c.antiguedad_anios < 0 || c.antiguedad_anios > L.antiguedadMax)) e.antiguedad_anios = "Antigüedad fuera de rango (0–300).";
+  if (n(c.habitaciones) && (c.habitaciones < 0 || c.habitaciones > 100)) e.habitaciones = "Habitaciones fuera de rango.";
+  if (n(c.banos) && (c.banos < 0 || c.banos > 100)) e.banos = "Baños fuera de rango.";
+  if (n(c.parqueaderos) && (c.parqueaderos < 0 || c.parqueaderos > 100)) e.parqueaderos = "Parqueaderos fuera de rango.";
+  if (n(c.estrato) && (c.estrato < 0 || c.estrato > 6)) e.estrato = "Estrato inválido.";
+
+  return e;
+}
+
 export type EstadoVisita = "pendiente" | "confirmada" | "realizada" | "cancelada" | "no_asistio";
 export type ResultadoVisita = "interesado" | "oferta" | "descartado";
+
+// Visita que el realtor registra a mano (la agendó por fuera del mapa).
+export type CrearVisitaManualInput = {
+  listing_id: string;
+  nombre: string;
+  telefono?: string;
+  fecha_visita?: string;              // ISO 8601
+  estado: "confirmada" | "realizada";
+  resultado?: ResultadoVisita;
+  nota?: string;
+};
 
 // Calificación del lead (Zillow paso 2) — todos opcionales.
 export type IntencionLead   = "vivir" | "invertir";
@@ -268,6 +311,18 @@ export type VisitaSolicitud = {
   mensaje: string | null;
   estado: EstadoVisita;
   resultado: ResultadoVisita | null;
+  nota_realtor: string | null;   // nota libre del realtor sobre la visita (#4)
+  origen: "mapa" | "manual";     // 'manual' = la registró el realtor a mano (#2)
+  // Ficha del inmueble — para saber cuál es y a dónde ir.
+  barrio: string | null;
+  direccion: string | null;
+  precio: number | null;
+  tipo_inmueble: string | null;
+  operacion: string | null;
+  area_m2: number | null;
+  habitaciones: number | null;
+  banos: number | null;
+  cover_url: string | null;
   created_at: string;
   es_pro: boolean;
   horas_pendiente: number | null; // horas sin responder; null si ya se atendió
@@ -397,7 +452,8 @@ export interface RealtorDashboardApi {
   /** GET /api/v1/realtor/agenda */
   getAgenda(): Promise<Agenda>;
   /** PATCH /api/v1/realtor/visitas/:id */
-  actualizarVisita(id: string, estado: Exclude<EstadoVisita, "pendiente">, resultado?: ResultadoVisita): Promise<void>;
+  actualizarVisita(id: string, estado: Exclude<EstadoVisita, "pendiente">, opts?: { resultado?: ResultadoVisita; fecha_visita?: string; nota?: string }): Promise<void>;
+  crearVisitaManual(input: CrearVisitaManualInput): Promise<void>;
   /** GET /api/v1/realtor/inteligencia/:codigo */
   getInteligenciaBarrio(zonaCodigo: string, nivel?: ZonaNivel): Promise<InteligenciaBarrio>;
   /** GET/PUT /api/v1/realtor/disponibilidad */
@@ -667,12 +723,30 @@ const mockApi: RealtorDashboardApi = {
 
   async getAgenda() {
     await _d(500);
+    // Fechas relativas a HOY → el calendario muestra "Hoy"/"Mañana" y los SLA viven.
+    const H = 3600_000;
+    const iso = (hours: number) => new Date(Date.now() + hours * H).toISOString();
+    // Ficha del inmueble por listing_url (para saber a cuál ir).
+    const _ficha: Record<string, Partial<VisitaSolicitud>> = {
+      "l-1": { barrio: "El Poblado", direccion: "Cra. 34 # 7 Sur", precio: 620_000_000, tipo_inmueble: "apartamento", operacion: "venta", area_m2: 95, habitaciones: 3, banos: 2, cover_url: null },
+      "l-5": { barrio: "El Poblado", direccion: "Cl. 10 # 43-20, of. 704", precio: 320_000_000, tipo_inmueble: "oficina", operacion: "venta", area_m2: 60, habitaciones: null, banos: 1, cover_url: null },
+    };
+    const _fichaDefault: Partial<VisitaSolicitud> = { barrio: null, direccion: null, precio: null, tipo_inmueble: null, operacion: null, area_m2: null, habitaciones: null, banos: null, cover_url: null };
+    const _rawVisitas = [
+        // ── Por confirmar (inbox): una vencida (Pro) y una dentro de SLA ──
+        { id: "v-1", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Andrés Gómez",   telefono: "3001234567", email: "andres@example.com", fecha_visita: iso(26), mensaje: "¿Puedo este viernes a las 10am?", estado: "pendiente",  resultado: null, nota_realtor: null, origen: "mapa", created_at: iso(-9),  es_pro: true,  horas_pendiente: 9, intencion: "invertir", presupuesto: "500-1000M", plazo: "ya", credito: "aprobado", calificado: true },
+        { id: "v-2", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Sara Vélez",     telefono: null,         email: "sara@example.com",   fecha_visita: iso(52), mensaje: null,                            estado: "pendiente",  resultado: null, nota_realtor: null, origen: "mapa", created_at: iso(-3),  es_pro: false, horas_pendiente: 3, intencion: null, presupuesto: null, plazo: null, credito: null, calificado: false },
+        // ── Confirmadas (calendario por día): hoy y mañana ──
+        { id: "v-3", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Juan Ríos",      telefono: "3012223344", email: "juan@example.com",   fecha_visita: iso(5),  mensaje: null,                            estado: "confirmada", resultado: null, nota_realtor: null, origen: "mapa", created_at: iso(-30), es_pro: false, horas_pendiente: null, intencion: "vivir", presupuesto: "200-500M", plazo: "1-3m", credito: "en_tramite", calificado: true },
+        { id: "v-4", listing_url: "l-5", listing_titulo: "Oficina zona financiera El Poblado", nombre: "Marcela Díaz",   telefono: "3009998877", email: null,                 fecha_visita: iso(28), mensaje: "Confirmo para mañana.",           estado: "confirmada", resultado: null, nota_realtor: null, origen: "mapa", created_at: iso(-40), es_pro: false, horas_pendiente: null, intencion: null, presupuesto: null, plazo: null, credito: null, calificado: false },
+        // ── Historial: resultados variados + una manual + no asistió + cancelada ──
+        { id: "v-5", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Camilo Ruiz",    telefono: "3017654321", email: null,                 fecha_visita: iso(-48), mensaje: null,                           estado: "realizada", resultado: "oferta",     nota_realtor: "Ofrece $590M, pide dejar la cocina integral.",       origen: "mapa",   created_at: iso(-72), es_pro: false, horas_pendiente: null, intencion: "invertir", presupuesto: "500-1000M", plazo: "ya", credito: "aprobado", calificado: true },
+        { id: "v-6", listing_url: "l-5", listing_titulo: "Oficina zona financiera El Poblado", nombre: "Ana Torres",     telefono: null,         email: "ana@example.com",    fecha_visita: iso(-72), mensaje: null,                           estado: "realizada", resultado: "interesado", nota_realtor: "Le gustó; compara con otra en Envigado, decide esta semana.", origen: "mapa", created_at: iso(-96), es_pro: false, horas_pendiente: null, intencion: "vivir", presupuesto: "200-500M", plazo: "3-6m", credito: "no", calificado: true },
+        { id: "v-7", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Valeria Gómez",   telefono: "3005551212", email: null,                 fecha_visita: iso(-24), mensaje: null,                           estado: "realizada", resultado: "oferta",     nota_realtor: "Contacto mío; hará oferta formal el lunes.",          origen: "manual", created_at: iso(-26), es_pro: false, horas_pendiente: null, intencion: "invertir", presupuesto: ">1000M", plazo: "ya", credito: "contado", calificado: true },
+        { id: "v-8", listing_url: "l-5", listing_titulo: "Oficina zona financiera El Poblado", nombre: "Diego Salazar",  telefono: null,         email: null,                 fecha_visita: iso(-96), mensaje: null,                           estado: "no_asistio", resultado: null,        nota_realtor: null,                                                 origen: "mapa",   created_at: iso(-120), es_pro: false, horas_pendiente: null, intencion: null, presupuesto: null, plazo: null, credito: null, calificado: false },
+      ];
     return {
-      visitas: [
-        { id: "v-1", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Andrés Gómez",  telefono: "3001234567", email: "andres@example.com", fecha_visita: "2026-07-17T15:00:00Z", mensaje: "Viernes 17 jul a las 10:00 AM", estado: "pendiente",  resultado: null, created_at: "2026-07-15T09:00:00Z", es_pro: true, horas_pendiente: 9, intencion: "invertir", presupuesto: "500-1000M", plazo: "ya", credito: "aprobado", calificado: true },
-        { id: "v-2", listing_url: "l-1", listing_titulo: "Apartamento moderno en El Poblado", nombre: "Sara Vélez",    telefono: null,         email: "sara@example.com",   fecha_visita: "2026-07-18T19:30:00Z", mensaje: null,                          estado: "confirmada", resultado: null, created_at: "2026-07-14T12:00:00Z", es_pro: false, horas_pendiente: null, intencion: null, presupuesto: null, plazo: null, credito: null, calificado: false },
-        { id: "v-3", listing_url: "l-5", listing_titulo: "Oficina zona financiera El Poblado", nombre: "Camilo Ruiz",  telefono: "3017654321", email: null,                 fecha_visita: null,                    mensaje: "¿Se puede ver este fin de semana?", estado: "realizada", resultado: "interesado", created_at: "2026-07-08T16:00:00Z", es_pro: false, horas_pendiente: null, intencion: "vivir", presupuesto: "200-500M", plazo: "3-6m", credito: "en_tramite", calificado: true },
-      ],
+      visitas: _rawVisitas.map((v) => ({ ...(_ficha[v.listing_url] ?? _fichaDefault), ...v } as VisitaSolicitud)),
       interesados: [
         { nombre: "Laura Martínez", email: "laura@example.com",  listing_titulo: "Apartamento moderno en El Poblado", created_at: "2026-07-14T18:00:00Z" },
         { nombre: null,             email: "pedro@example.com",  listing_titulo: "Casa esquinera Laureles — 4 hab",   created_at: "2026-07-13T10:00:00Z" },
@@ -680,8 +754,12 @@ const mockApi: RealtorDashboardApi = {
     } satisfies Agenda;
   },
 
-  async actualizarVisita(_id, _estado, _resultado) {
+  async actualizarVisita(_id, _estado, _opts) {
     await _d(300);
+  },
+
+  async crearVisitaManual(_input) {
+    await _d(400);
   },
 
   async getDueDiligence(intakeId) {
@@ -787,7 +865,8 @@ const httpApi: RealtorDashboardApi = {
   publicarAsignado:     (id)   => apiFetch<void>               (`${API_BASE_URL}/realtor/asignados/${id}/publicar`, { method: "POST" }),
   getDesempeno:         ()     => apiFetch<Desempeno>          (`${API_BASE_URL}/realtor/desempeno`),
   getAgenda:            ()     => apiFetch<Agenda>             (`${API_BASE_URL}/realtor/agenda`),
-  actualizarVisita:     (id, estado, resultado) => apiFetch<void>(`${API_BASE_URL}/realtor/visitas/${id}`, { method: "PATCH", body: JSON.stringify({ estado, resultado }) }),
+  actualizarVisita:     (id, estado, opts) => apiFetch<void>(`${API_BASE_URL}/realtor/visitas/${id}`, { method: "PATCH", body: JSON.stringify({ estado, ...opts }) }),
+  crearVisitaManual:    (input) => apiFetch<void>(`${API_BASE_URL}/realtor/visitas`, { method: "POST", body: JSON.stringify(input) }),
   getInteligenciaBarrio:(code, nivel) => apiFetch<InteligenciaBarrio> (`${API_BASE_URL}/realtor/inteligencia/${code}${nivel ? `?nivel=${nivel}` : ""}`),
   getDisponibilidad:    ()     => apiFetch<Franja[]>          (`${API_BASE_URL}/realtor/disponibilidad`),
   putDisponibilidad:    (fr)   => apiFetch<void>              (`${API_BASE_URL}/realtor/disponibilidad`, { method: "PUT", body: JSON.stringify(fr) }),

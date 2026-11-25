@@ -1,6 +1,15 @@
 /* Spanish -> English dictionary. Loaded lazily (dynamic import) only when the UI language is EN.
  * Order matters: longer phrases first to avoid partial replacements. */
 export const PHRASES: Array<[string, string]> = [
+  // ── Visitas (resultado, nota, registro manual) ──
+  ["El comprador hará una oferta", "The buyer will make an offer"],
+  ["Hizo la visita pero no le interesó", "Visited but wasn't interested"],
+  ["No se presentó a la visita", "Didn't show up to the visit"],
+  ["Visita registrada por ti a mano", "Visit you logged manually"],
+  ["Se marca como registrada por ti.", "Logged as registered by you."],
+  ["¿Cómo terminó la visita?", "How did the visit go?"],
+  ["No le interesó", "Not interested"],
+  ["Ej: Andrés Gómez", "e.g. Andrés Gómez"],
   // ── Puntaje del realtor (ScoreInfo / reportar venta) ──
   ["Tu puntaje (0–100) premia lo que controlas. Se arma con cuatro partes:", "Your score (0–100) rewards what you control. It's built from four parts:"],
   [". Entre más completo el reporte, mejor.", ". The more complete the report, the better."],
