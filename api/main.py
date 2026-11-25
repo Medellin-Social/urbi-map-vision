@@ -48,7 +48,9 @@ logger = structlog.get_logger()
 # Fail closed: production behaviour (no /docs, no localhost CORS origins) is the
 # DEFAULT. Dev behaviour requires ENV=dev (or development/local) explicitly; a
 # missing or misnamed RAILWAY_ENVIRONMENT no longer opens anything up.
-_IS_DEV = os.getenv("ENV", "").strip().lower() in ("dev", "development", "local")
+from api.utils.env import is_dev as _is_dev  # noqa: E402
+
+_IS_DEV = _is_dev()
 _IS_PROD = not _IS_DEV
 
 _DEV_ORIGINS = [

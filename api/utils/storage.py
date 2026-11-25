@@ -15,17 +15,22 @@ Env vars:
 R2 no soporta ACL por objeto (el acceso público se configura a nivel bucket),
 por eso NO se envía ACL="public-read"; en S3 el acceso se da con bucket policy.
 
-If S3_BUCKET is unset, uploads are skipped and a placeholder URL is returned
-so the feature doesn't break in dev without credentials.
+If S3_BUCKET is unset: in dev (ENV=dev) uploads are skipped and a placeholder
+URL is returned; in production upload_file raises HTTP 503 and reports to Sentry.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import uuid
 
 import boto3
 from botocore.exceptions import ClientError
+
+from api.utils.env import is_production, report_misconfig
+
+_log = logging.getLogger(__name__)
 
 # Acepta los nombres S3_* (originales) y los AWS_* que usa el .env de R2.
 _BUCKET       = os.getenv("S3_BUCKET")       or os.getenv("AWS_BUCKET", "")
@@ -49,6 +54,11 @@ def _public_url(key: str) -> str:
 
 def _upload_sync(file_bytes: bytes, key: str, content_type: str) -> str:
     if not _BUCKET:
+        if is_production():
+            # Fail loudly: en prod un placeholder guardaba URLs rotas en la DB.
+            from fastapi import HTTPException
+            report_misconfig(_log, f"S3_BUCKET no configurado en producción: no se subió {key}")
+            raise HTTPException(status_code=503, detail="subida de fotos no disponible, intenta más tarde")
         print(f"[S3 STUB] would upload {key} ({len(file_bytes)} bytes)")
         return f"https://placeholder.s3.amazonaws.com/{key}"
 
