@@ -13,7 +13,17 @@ import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { K as TOKENS } from "@/design/tokens";
 
+type PublicarSearch = {
+  operacion?: "venta" | "arriendo";
+  plazo?: "corto" | "largo";
+};
+
 export const Route = createFileRoute("/publicar")({
+  // Las tarjetas de /real-estate llegan con ?operacion=arriendo&plazo=corto|largo o ?operacion=venta
+  validateSearch: (s: Record<string, unknown>): PublicarSearch => ({
+    operacion: s.operacion === "venta" || s.operacion === "arriendo" ? s.operacion : undefined,
+    plazo: s.operacion === "arriendo" && (s.plazo === "corto" || s.plazo === "largo") ? s.plazo : undefined,
+  }),
   component: PublicarRoot,
   head: () => seo({ title: "Publica tu inmueble · Medellín Social", description: "Publica tu apartamento, casa o local gratis y llega a compradores e inversionistas en Medellín.", path: "/publicar" }),
 });
@@ -1893,11 +1903,21 @@ function validateStep(step: number, data: FormData): string | null {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+/** Preselecciona operación (y plazo de arriendo) según los params de la URL. */
+function formFromSearch({ operacion, plazo }: PublicarSearch): FormData {
+  if (!operacion) return INITIAL_FORM;
+  const f: FormData = { ...INITIAL_FORM, tipo_operacion: operacion };
+  if (plazo === "corto") f.permite_airbnb = "si";
+  if (plazo === "largo") f.estadia_minima_meses = "12";
+  return f;
+}
+
 function PublicarPage() {
   const navigate  = useNavigate();
   const user      = typeof window !== "undefined" ? auth.get() : null;
   const [step, setStep]       = useState(0);
-  const [form, setFormRaw]    = useState<FormData>(INITIAL_FORM);
+  const search = Route.useSearch();
+  const [form, setFormRaw]    = useState<FormData>(() => formFromSearch(search));
   const [photos, setPhotos]   = useState<PhotoEntry[]>([]);
   const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
