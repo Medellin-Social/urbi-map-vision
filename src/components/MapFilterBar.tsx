@@ -1,8 +1,5 @@
 import { useState, useRef, useEffect, useMemo, useCallback, useReducer } from "react";
 
-function norm(s: string): string {
-  return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
-}
 import {
   ChevronDown, X, SlidersHorizontal, Search,
   UtensilsCrossed, Wind, WashingMachine, Snowflake,
@@ -385,12 +382,6 @@ function precioLabel(f: SharedFilters, isRent: boolean, lang: string, fmtPrice: 
   return en ? (isRent ? "Price/mo" : "Price") : (isRent ? "Precio/mes" : "Precio");
 }
 
-function habLabel(f: SharedFilters): string {
-  if (f.habitaciones === null) return "Habitaciones";
-  if (f.habitaciones === 0) return "Studio (0)";
-  return `${f.habitaciones}+ hab.`;
-}
-
 function tipoLabel(f: SharedFilters): string {
   const sel = f.tipoInmueble ?? [];
   if (sel.length === 0) return "Tipo";
@@ -487,11 +478,6 @@ function usePriceFieldText(
   return { text, handleChange };
 }
 
-function banosLabel(f: SharedFilters): string {
-  if (f.banos === null) return "Baños";
-  return `${f.banos}+ baños`;
-}
-
 function habBanosLabel(f: SharedFilters): string {
   const parts: string[] = [];
   if (f.habitaciones !== null) parts.push(f.habitaciones === 0 ? "Studio" : `${f.habitaciones}+ hab.`);
@@ -540,28 +526,6 @@ function BtnGroup({
         </button>
       ))}
     </div>
-  );
-}
-
-function NumInput({
-  placeholder, value, onChange,
-}: {
-  placeholder: string;
-  value: number | null;
-  onChange: (v: number | null) => void;
-}) {
-  return (
-    <input
-      type="number"
-      placeholder={placeholder}
-      value={value ?? ""}
-      onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
-      style={{
-        width: "100%", border: `1px solid ${C.border}`, borderRadius: 8,
-        padding: "7px 10px", fontSize: 12, outline: "none", background: C.white,
-        color: C.ink,
-      }}
-    />
   );
 }
 
@@ -767,127 +731,6 @@ function PrecioPanel({
 }
 
 // ─── AreaPanel ────────────────────────────────────────────────────────────────
-
-function AreaPanel({
-  filters, onChange, onClose, unit,
-}: {
-  unit: "m2" | "sqft";
-  filters: SharedFilters;
-  onChange: (f: Partial<SharedFilters>) => void;
-  onClose: () => void;
-}) {
-  const TOTAL_MIN = 0;
-  const TOTAL_MAX = 600;
-  const STEP      = 5;
-
-  const curMin = filters.areaMin ?? TOTAL_MIN;
-  const curMax = filters.areaMax ?? TOTAL_MAX;
-
-  const trackRef = useRef<HTMLDivElement>(null);
-
-  const snap  = (v: number) => Math.round(v / STEP) * STEP;
-  const toR   = (v: number) => (v - TOTAL_MIN) / (TOTAL_MAX - TOTAL_MIN);
-  const fromR = (r: number) => snap(TOTAL_MIN + r * (TOTAL_MAX - TOTAL_MIN));
-
-  const minR = toR(curMin);
-  const maxR = toR(curMax);
-
-  const getRatio = (e: React.PointerEvent) => {
-    if (!trackRef.current) return 0;
-    const rect = trackRef.current.getBoundingClientRect();
-    return Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-  };
-
-  const BARS = 30;
-  const hist = useMemo(() => {
-    // Medellín market: peak ~65–80 m² (apartments)
-    const peak  = 0.13;
-    const sigma = 0.13;
-    const raw   = Array.from({ length: BARS }, (_, i) => {
-      const x = (i + 0.5) / BARS;
-      return Math.exp(-0.5 * ((x - peak) / sigma) ** 2);
-    });
-    const maxH = Math.max(...raw);
-    return raw.map(h => h / maxH);
-  }, []);
-
-  const fmt = (v: number) => {
-    if (v <= TOTAL_MIN) return "0";
-    if (v >= TOTAL_MAX) return "Sin límite";
-    return `${Math.round((unit === "sqft" ? v * M2_PER_FT2 : v)).toLocaleString(unit === "sqft" ? "en-US" : "es-CO")} ${unit === "sqft" ? "ft²" : "m²"}`;
-  };
-
-  const thumbStyle: React.CSSProperties = {
-    position: "absolute", bottom: 2,
-    width: 20, height: 20,
-    background: "#fff", borderRadius: "50%",
-    border: `2.5px solid ${C.teal}`,
-    boxShadow: "0 1px 5px rgba(0,0,0,0.28)",
-    cursor: "ew-resize", touchAction: "none", zIndex: 2,
-    transform: "translateX(-50%)",
-  };
-
-  return (
-    <div style={{ ...panelBase, minWidth: 300, userSelect: "none" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMin)}</span>
-        <span style={{ fontSize: 13, fontWeight: 700, color: C.teal }}>{fmt(curMax)}</span>
-      </div>
-
-      <div ref={trackRef} style={{ position: "relative", height: 76, marginBottom: 4 }}>
-        <div style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 24, display: "flex", alignItems: "flex-end", gap: 2 }}>
-          {hist.map((h, i) => {
-            const barR   = (i + 0.5) / BARS;
-            const inRange = barR >= minR && barR <= maxR;
-            return (
-              <div key={i} style={{
-                flex: 1,
-                height: `${Math.max(h * 100, 4)}%`,
-                background: inRange ? C.teal : "#D4CEC5",
-                borderRadius: "2px 2px 0 0",
-                opacity: inRange ? 0.8 : 0.3,
-                transition: "background 0.07s, opacity 0.07s",
-              }} />
-            );
-          })}
-        </div>
-
-        <div style={{ position: "absolute", bottom: 8, left: 0, right: 0, height: 4, background: "#E5E0D5", borderRadius: 2 }}>
-          <div style={{ position: "absolute", left: `${minR * 100}%`, width: `${(maxR - minR) * 100}%`, height: "100%", background: C.teal, borderRadius: 2 }} />
-        </div>
-
-        <div
-          style={{ ...thumbStyle, left: `${minR * 100}%` }}
-          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
-          onPointerMove={(e) => {
-            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-            const v = fromR(getRatio(e));
-            onChange({ areaMin: v <= TOTAL_MIN ? null : Math.min(v, curMax - STEP) });
-          }}
-          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
-        />
-
-        <div
-          style={{ ...thumbStyle, left: `${maxR * 100}%` }}
-          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
-          onPointerMove={(e) => {
-            if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
-            const v = fromR(getRatio(e));
-            onChange({ areaMax: v >= TOTAL_MAX ? null : Math.max(v, curMin + STEP) });
-          }}
-          onPointerUp={(e) => e.currentTarget.releasePointerCapture(e.pointerId)}
-        />
-      </div>
-
-      <button
-        onClick={onClose}
-        style={{ width: "100%", padding: "8px", borderRadius: 8, background: C.teal, color: "#fff", border: "none", fontSize: 12, fontWeight: 600, cursor: "pointer" }}
-      >
-        Aplicar
-      </button>
-    </div>
-  );
-}
 
 // ─── HabBanosPanel ───────────────────────────────────────────────────────────
 
@@ -1273,9 +1116,7 @@ export function MapFilterBar({
   const isRent     = activeTab === "rent";
   const activeCount = countActive(filters);
   const precioActive     = filters.precioMax !== null || filters.precioMin !== null;
-  const habActive        = filters.habitaciones !== null;
   const tipoActive       = (filters.tipoInmueble?.length ?? 0) > 0;
-  const banosActive      = filters.banos !== null;
 
   // ── Sell tab: barrio selector ──────────────────────────────────────────────
   const sellContent = (

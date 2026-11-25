@@ -120,7 +120,7 @@ export function setScoreThresholds(t: Record<string, [number, number, number]>):
   }
 }
 
-export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, perfil?: string, risk?: string): string {
+export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, _perfil?: string, risk?: string): string {
   const p = SCORE_PALETTES[paletteId ?? getActivePaletteId(risk)];
   if (score === null) return p.sin_datos;
   const [tAlto, tMedio, tBajo] = RISK_THRESHOLDS[risk ?? "moderado"] ?? _defaultRiskThreshold;
@@ -130,7 +130,7 @@ export function getScoreColor(score: number | null, paletteId?: ScorePaletteId, 
   return p.muy_bajo;
 }
 
-export function getScoreLabel(score: number | null, perfil?: string, risk?: string): string {
+export function getScoreLabel(score: number | null, _perfil?: string, risk?: string): string {
   if (score === null) return "Sin datos";
   const [tAlto, tMedio, tBajo] = RISK_THRESHOLDS[risk ?? "moderado"] ?? _defaultRiskThreshold;
   if (score >= tAlto) return "Excelente";

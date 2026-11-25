@@ -162,8 +162,6 @@ export function ComparadorBadge() {
 
   if (!isAgente || listings.length === 0) return null;
 
-  const slots = Array.from({ length: MAX_COMPARADOR });
-
   function goToComparador() {
     const ids = listings.map((l) => l.id).join(",");
     navigate({ to: "/comparador", search: { listings: ids } as any });
@@ -202,22 +200,11 @@ export function ComparadorBadge() {
       >
         {/* Top row: thumbnails + count */}
         <div className="flex items-center gap-2">
-          <div className="flex items-center gap-1">
-            {slots.map((_, i) => {
-              const l = listings[i];
-              return l ? (
-                <Thumb key={l.id} listing={l} />
-              ) : (
-                <div
-                  key={i}
-                  className="h-8 w-8 shrink-0 rounded-md"
-                  style={{ border: "1.5px dashed rgba(255,255,255,0.2)", background: "rgba(255,255,255,0.05)" }}
-                />
-              );
-            })}
+          <div className="flex flex-wrap items-center gap-1">
+            {listings.map((l) => <Thumb key={l.id} listing={l} />)}
           </div>
           <span className="flex-1 text-center text-xs font-medium text-white/80">
-            {listings.length} inmueble{listings.length !== 1 ? "s" : ""} seleccionado{listings.length !== 1 ? "s" : ""}
+            {listings.length}/{MAX_COMPARADOR} seleccionado{listings.length !== 1 ? "s" : ""}
           </span>
         </div>
 

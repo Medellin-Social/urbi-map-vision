@@ -37,11 +37,33 @@ async def _avisar(filas) -> int:
     return ok
 
 
+async def _sync_ghl(conn) -> None:
+    """Re-sincroniza a GHL los agentes cuyo slot cambió en esta corrida (quita/pone tag zona-*)."""
+    try:
+        from api import db
+        from api.utils import ghl_client
+        if not ghl_client.is_configured():
+            return
+        ids = [str(r["agent_id"]) for r in await conn.fetch(
+            "SELECT DISTINCT agent_id FROM realtor_preferido_slot "
+            "WHERE (updated_at >= now() - interval '5 minutes' OR created_at >= now() - interval '5 minutes') AND agent_id IS NOT NULL")]
+        if not ids:
+            return
+        await db.create_pool()
+        for aid in ids:
+            await ghl_client.sync_agent_safe(aid)
+        await db.close_pool()
+        log.info("ghl sync agentes=%s", len(ids))
+    except Exception:
+        log.exception("sync GHL del cron falló (ignorado)")
+
+
 async def main() -> int:
     conn = await asyncpg.connect(os.environ["DATABASE_URL"])
     try:
         vencidos = await svc.vencer_slots(conn)
         seed = await svc.seed_gratis(conn)
+        await _sync_ghl(conn)
         planes = await prog.vencer_planes(conn)
         tiers = await svc.sincronizar_tier(conn)
         avisos = await svc.por_vencer(conn)

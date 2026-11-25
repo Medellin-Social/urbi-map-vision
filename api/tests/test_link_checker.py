@@ -1,6 +1,5 @@
 """Link checker unit tests. ALL HTTP is mocked with respx (no network); the DB layer is an in-memory fake."""
 import asyncio
-from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 
 import httpx
@@ -8,7 +7,6 @@ import pytest
 import respx
 
 from scraping.link_checker import runner, store
-from scraping.link_checker.classify import Fetch, classify
 from scraping.link_checker.config import Markers, Settings
 from scraping.link_checker.fetcher import LinkFetcher
 from scraping.link_checker.state import next_state
@@ -324,6 +322,19 @@ def test_cli_parses_age_and_flags():
     a = build_parser().parse_args(["--limit", "5", "--source", "habi", "--older-than", "48h", "--dry-run"])
     assert a.limit == 5 and a.source == ["habi"] and a.older_than == timedelta(hours=48) and a.dry_run
     assert parse_age("7d") == timedelta(days=7)
+
+
+@pytest.mark.asyncio
+async def test_gather_drops_body_to_bound_memory():
+    """_gather_results must strip f.body after classify (retaining N HTML bodies OOM'd the run at high
+    --limit). classify already ran inside check(), so downstream never needs the body."""
+    from scraping.link_checker.classify import Fetch, Verdict, OK
+    class _StubFetcher:
+        cfg = type("C", (), {"domain_concurrency": 1})()
+        async def check(self, url):
+            return Verdict(OK, "ok"), Fetch(200, url, body="x" * 100_000)
+    out = await runner._gather_results(_StubFetcher(), [{"url": MC, "fuente": "metrocuadrado"}])
+    assert len(out) == 1 and out[0][2].body is None and out[0][2].status == 200
 
 
 def test_retire_only_runs_auto_retire_and_skips_sweep(monkeypatch):

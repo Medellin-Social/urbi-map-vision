@@ -85,6 +85,18 @@ def _as_bool(v):
 # Reverse de ghl_client._evento_campos_to_properties — mismos nombres de campo
 # (§1 del contrato). Solo mapea lo que GHL manda; None se descarta para que el
 # UPDATE sea parcial (no pisa columnas que el payload no trae).
+def _safe_url(v):
+    """URL http(s) válida o None. GHL escribe directo a campos que se renderizan
+    en páginas públicas: un javascript:/data: URL sería XSS almacenado. Si es
+    inválida se descarta el campo (el resto del payload sigue), y se loguea."""
+    from api.utils.urls import require_safe_url
+    try:
+        return require_safe_url(str(v)) if v is not None else None
+    except ValueError:
+        logger.warning("ghl_webhook: URL descartada por insegura: %.80r", v)
+        return None
+
+
 def _evento_payload_to_row(props: dict) -> dict:
     row = {
         "titulo": props.get("event_title"),
@@ -95,8 +107,8 @@ def _evento_payload_to_row(props: dict) -> dict:
         "fecha_fin": _parse_dt(props.get("end_date")),
         "precio": props.get("price"),
         "gratuito": _as_bool(props.get("is_free")),
-        "url_externo": props.get("external_url"),
-        "foto_url": props.get("photo_url"),
+        "url_externo": _safe_url(props.get("external_url")),
+        "foto_url": _safe_url(props.get("photo_url")),
         "organizador": props.get("organizer"),
         "max_asistentes": props.get("max_attendees"),
         "activo": _as_bool(props.get("is_active")),
@@ -199,7 +211,7 @@ def _tienda_payload_to_row(props: dict) -> dict:
     row = {
         "nombre": props.get("name"),
         "telefono": props.get("phone"),
-        "website": props.get("website"),
+        "website": _safe_url(props.get("website")),
         "direccion": props.get("address"),
         "descripcion": props.get("description"),
         "subcategoria": props.get("business_subcategory"),
@@ -313,17 +325,20 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
     from api.services.realtor_preferido_service import SlotError, procesar_pago_slot
 
     props = payload.get("properties") or payload
-    pool = get_pool()
     agent_id = props.get("agent_id")
     email = (props.get("agent_email") or "").strip().lower()
     zona_nivel, zona_codigo = props.get("zona_nivel"), str(props.get("zona_codigo") or "")
-    pago_ref = props.get("pago_ref")
+    pago_ref = str(props.get("pago_ref") or "").strip()
+    if not pago_ref or pago_ref == "simulado":
+        # Sin pago_ref real no hay idempotencia: un reenvío extendería el slot dos veces.
+        raise HTTPException(status_code=400, detail="falta pago_ref (id de la orden)")
     if not zona_codigo or (not agent_id and not email):
         raise HTTPException(status_code=400, detail="falta agent_id/agent_email o zona_codigo")
     try:
         meses = max(1, min(12, int(props.get("meses") or 1)))
     except (TypeError, ValueError):
         raise HTTPException(status_code=400, detail="meses inválido")
+    pool = get_pool()
     async with pool.acquire() as conn:
         if not agent_id:
             agent_id = await conn.fetchval(
@@ -337,6 +352,8 @@ async def _activar_slot_realtor_preferido(payload: dict) -> None:
         logger.error("realtor_slot PAGO SIN SLOT pago_ref=%s agent=%s zona=%s/%s: %s",
                      pago_ref, agent_id, zona_nivel, zona_codigo, e)
         raise HTTPException(status_code=409, detail=str(e))
+    from api.utils import ghl_client
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
 
 
 async def _pago_agent_program(payload: dict) -> None:

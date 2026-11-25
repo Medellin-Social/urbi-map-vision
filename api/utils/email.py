@@ -21,7 +21,6 @@ from api.utils.pii import mask_email
 from html import escape as _html_escape
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from typing import Optional
 
 _SMTP_HOST  = os.getenv("SMTP_HOST", "smtp.gmail.com")
 _SMTP_PORT  = int(os.getenv("SMTP_PORT", "587"))
@@ -63,7 +62,7 @@ def _send_sync(to: str, subject: str, html: str) -> None:
     msg["To"]      = to
     msg.attach(MIMEText(html, "html"))
 
-    with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT) as server:
+    with smtplib.SMTP(_SMTP_HOST, _SMTP_PORT, timeout=10) as server:
         server.ehlo()
         server.starttls()
         server.login(_SMTP_USER, _SMTP_PASS)
@@ -172,7 +171,6 @@ async def notify_agente_aprobado(email: str, nombre: str, dashboard_url: str) ->
 
 
 async def send_verify_email(to: str, nombre: str, verify_url: str) -> None:
-    nombre_h = esc(nombre)
     verify_url_h = safe_url(verify_url)
     nombre_display = esc(nombre or to)
     html = _wrap(f"""
@@ -193,7 +191,6 @@ async def send_verify_email(to: str, nombre: str, verify_url: str) -> None:
 
 
 async def send_reset_password(to: str, nombre: str, reset_url: str) -> None:
-    nombre_h = esc(nombre)
     reset_url_h = safe_url(reset_url)
     nombre_display = esc(nombre or to)
     html = _wrap(f"""
@@ -274,3 +271,41 @@ async def notify_agente_rechazado(email: str, nombre: str, motivo: str, formular
       </div>
     """)
     await send_email(email, "Solicitud de agente — información adicional requerida", html)
+
+
+# ── Avisos del flujo (best-effort: se llaman con ghl_client.spawn) ──────────
+
+async def notify_admin_negocio(origen: str, nombre: str, email: str, telefono: str, detalle: str = "") -> None:
+    """Aviso interno: llegó un lead de negocio o una tienda pendiente de aprobar."""
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">{esc(origen)}</h3>
+      <p><strong>{esc(nombre)}</strong><br>{esc(email)} · {esc(telefono)}</p>
+      <p style="color:#62736d">{esc(detalle)}</p>
+    """)
+    await send_email(ADMIN_EMAIL, f"{origen} — {nombre}", html)
+
+
+async def notify_negocio_recibido(email: str, nombre_negocio: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Recibimos tu solicitud</h3>
+      <p>Hola, recibimos la solicitud de <strong>{esc(nombre_negocio)}</strong>.
+      Te contactamos en las próximas 24 horas.</p>
+    """)
+    await send_email(email, "Recibimos tu solicitud · Medellín Social", html)
+
+
+async def notify_tienda_aprobada(email: str, nombre_negocio: str, app_url: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">¡Tu negocio ya está en el mapa!</h3>
+      <p><strong>{esc(nombre_negocio)}</strong> fue aprobado y ya aparece en el directorio del barrio.</p>
+      <p><a href="{safe_url(app_url)}" style="color:#085041;font-weight:600">Ver Medellín Social</a></p>
+    """)
+    await send_email(email, "Tu negocio fue aprobado · Medellín Social", html)
+
+
+async def notify_agente_solicitud_recibida(email: str, nombre: str) -> None:
+    html = _wrap(f"""
+      <h3 style="color:#1D9E75">Recibimos tu solicitud de agente</h3>
+      <p>Hola {esc(nombre)}, la revisamos y te avisamos por correo apenas esté aprobada.</p>
+    """)
+    await send_email(email, "Recibimos tu solicitud de agente · Medellín Social", html)

@@ -47,6 +47,9 @@ export async function apiFetch<T>(url: string, options: FetchOptions = {}): Prom
     "Content-Type": "application/json",
     ...(init.headers as Record<string, string> | undefined),
   };
+  // FormData debe fijar su propio Content-Type con boundary multipart. Forzar
+  // application/json rompe el parseo del archivo en el backend (UploadFile → 422).
+  if (init.body instanceof FormData) delete headers["Content-Type"];
 
   const token = getToken();
   if (!skipAuth) Object.assign(headers, authHeaders());

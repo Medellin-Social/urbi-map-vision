@@ -52,13 +52,6 @@ function Stars({ rating }: { rating: number | null | undefined }) {
   )
 }
 
-function PriceRange({ value }: { value: string | null | undefined }) {
-  if (!value) return null
-  return (
-    <span style={{ fontSize: '.7rem', color: K.muted, fontWeight: 700, marginLeft: 6 }}>{value}</span>
-  )
-}
-
 function ActionButtons({ tienda, compact }: { tienda: TiendaData; compact?: boolean }) {
   const btnBase: React.CSSProperties = {
     display: 'inline-flex', alignItems: 'center', gap: 4,

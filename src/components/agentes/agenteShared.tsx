@@ -427,8 +427,8 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
-    <div className="rounded-2xl border-l-4 p-4 transition hover:shadow-sm sm:p-5"
-      style={{ borderLeftColor: a.destacado ? K.tealDeep : K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF" }}>
+    <div className="rounded-2xl border-l-4 p-4 transition hover:-translate-y-px hover:shadow-md sm:p-5"
+      style={{ borderLeftColor: a.destacado ? K.tealDeep : K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF", boxShadow: "0 1px 3px rgba(17,20,24,0.05)" }}>
       {a.destacado && (
         <div className="mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: K.tealDeep, color: "#FFFFFF" }}>
           <Star width={10} height={10} fill="#FFFFFF" stroke="#FFFFFF" /> Destacado

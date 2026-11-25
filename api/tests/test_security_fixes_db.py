@@ -38,6 +38,9 @@ async def _clean(*emails):
     await pool.execute("DELETE FROM usuarios WHERE email = ANY($1)", list(emails))
 
 
+from api.routers.auth import _hash_token  # noqa: E402
+
+
 async def _register(client, email, pw=PW):
     return await client.post("/api/v1/auth/register", json={"email": email, "password": pw, "nombre": "X"})
 
@@ -46,7 +49,8 @@ async def _magic_login(client, email):
     r = await client.post("/api/v1/auth/magic-link", json={"email": email})
     assert r.status_code == 200
     pool = await _pool()
-    token = await pool.fetchval("SELECT token FROM magic_link_tokens WHERE email = $1", email)
+    token = "known-" + __import__("uuid").uuid4().hex  # en DB solo se guarda el hash: fijamos uno conocido
+    await pool.execute("UPDATE magic_link_tokens SET token = $2 WHERE email = $1", email, _hash_token(token))
     r = await client.post("/api/v1/auth/magic-link/verificar", json={"token": token})
     assert r.status_code == 200
     return r.json()
@@ -68,8 +72,10 @@ async def test_register_issues_no_session_and_login_is_blocked_until_verified(cl
     pool = await _pool()
     assert await pool.fetchval("SELECT email_verificado FROM usuarios WHERE email = $1", email) is False
     # the emailed link flips it
-    tok = await pool.fetchval(
-        "SELECT t.token FROM email_verification_tokens t JOIN usuarios u ON u.id = t.usuario_id WHERE u.email = $1", email)
+    tok = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute(
+        "UPDATE email_verification_tokens t SET token = $2 FROM usuarios u WHERE u.id = t.usuario_id AND u.email = $1",
+        email, _hash_token(tok))
     assert tok
     assert (await client.get("/api/v1/auth/verify-email", params={"token": tok})).status_code == 200
     r = await client.post("/api/v1/auth/login", json={"email": email, "password": PW})
@@ -136,8 +142,10 @@ async def test_password_reset_revokes_existing_sessions_and_verifies(client):
     assert (await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {old}"})).status_code == 200
 
     await client.post("/api/v1/auth/forgot-password", json={"email": email})
-    rt = await pool.fetchval(
-        "SELECT t.token FROM password_reset_tokens t JOIN usuarios u ON u.id=t.usuario_id WHERE u.email=$1", email)
+    rt = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute(
+        "UPDATE password_reset_tokens t SET token = $2 FROM usuarios u WHERE u.id=t.usuario_id AND u.email=$1",
+        email, _hash_token(rt))
     r = await client.post("/api/v1/auth/reset-password", json={"token": rt, "new_password": "Brand-new-pass-1"})
     assert r.status_code == 200
     assert (await client.get("/api/v1/auth/me", headers={"Authorization": f"Bearer {old}"})).status_code == 401
@@ -229,10 +237,19 @@ async def test_suscribirse_does_not_leak_ids_or_existence(client):
         "SELECT 1 FROM information_schema.columns WHERE table_name='usuarios' AND column_name='rol'"
     ):
         pytest.skip("usuarios.rol missing in this DB (schema drift, unrelated to this fix)")
-    a = await client.post("/api/v1/usuario/suscribirse", json={"nombre": "A", "email": email})
-    b = await client.post("/api/v1/usuario/suscribirse", json={"nombre": "A", "email": email})
+    body = {"nombre": "A", "email": email, "habeas_data": True}
+    a = await client.post("/api/v1/usuario/suscribirse", json=body)
+    b = await client.post("/api/v1/usuario/suscribirse", json=body)
     assert a.status_code == b.status_code == 200
     assert a.json() == b.json() == {"success": True}
+    # Consentimiento no verificado: alta anónima queda inactiva y sin sello de habeas data.
+    row = await pool.fetchrow(
+        "SELECT newsletter_activo, habeas_data_aceptado FROM usuarios WHERE email=$1", email)
+    assert not row["newsletter_activo"] and not row["habeas_data_aceptado"]
+    # Un anónimo no puede alterar el estado de una cuenta existente.
+    await pool.execute("UPDATE usuarios SET newsletter_activo=TRUE WHERE email=$1", email)
+    await client.post("/api/v1/usuario/suscribirse", json={**body, "newsletter_activo": False})
+    assert await pool.fetchval("SELECT newsletter_activo FROM usuarios WHERE email=$1", email) is True
 
 
 async def test_login_unknown_and_wrong_password_are_the_same_401(client):

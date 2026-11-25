@@ -80,3 +80,4 @@ qc-report-realtor/
 link_review_digests/
 test-results/
 exports/
+.venv/

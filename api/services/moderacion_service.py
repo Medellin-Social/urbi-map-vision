@@ -18,15 +18,27 @@ from api.utils import ghl_client
 logger = logging.getLogger(__name__)
 
 
-async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
-    """en_revision → publicado + bitácora. transition setea published_at 1ª vez."""
+async def aprobar(listing: Any, moderador_id: str, pool: Any, verificar: bool = True) -> None:
+    """en_revision → publicado + bitácora. transition setea published_at 1ª vez.
+
+    verificar=True (default, moderación admin): el aprobador da fe → sello Verificada.
+    verificar=False (auto-publicación del realtor): publica SIN forzar el sello; el
+    sello lo gana la verificación de documentos (DD), no el solo hecho de publicar.
+    """
     transition(listing, "publicado")  # valida en_revision→publicado
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE listing SET estado = 'publicado', verificado = TRUE, "
-            "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
-            listing.id,
-        )
+        if verificar:
+            await conn.execute(
+                "UPDATE listing SET estado = 'publicado', verificado = TRUE, "
+                "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
+                listing.id,
+            )
+        else:
+            await conn.execute(
+                "UPDATE listing SET estado = 'publicado', "
+                "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
+                listing.id,
+            )
         await conn.execute(
             "INSERT INTO listing_moderacion (id, listing_id, accion, moderador_id) "
             "VALUES ($1, $2, 'aprobado', $3)",
@@ -37,9 +49,7 @@ async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
         await insert_listing_into_cache(pool, listing.id)
     except Exception:
         logger.exception("aprobar: insert_listing_into_cache falló para %s", listing.id)
-    await ghl_client.sync_listing(listing.id)
-
-
+    ghl_client.spawn(ghl_client.sync_listing(listing.id))
 async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> None:
     """en_revision → rechazado + bitácora con el motivo."""
     if not motivo:
@@ -55,4 +65,4 @@ async def rechazar(listing: Any, moderador_id: str, motivo: str, pool: Any) -> N
             "VALUES ($1, $2, 'rechazado', $3, $4)",
             str(uuid.uuid4()), listing.id, motivo, moderador_id,
         )
-    await ghl_client.sync_listing(listing.id)
+    ghl_client.spawn(ghl_client.sync_listing(listing.id))

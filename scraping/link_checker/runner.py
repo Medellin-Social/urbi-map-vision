@@ -52,6 +52,8 @@ async def _gather_results(fetcher: LinkFetcher, items: list[dict]) -> list[tuple
     async def work(group):
         for it in group:
             v, f = await fetcher.check(it["url"])
+            f.body = None   # classify already consumed the body; dropping it keeps the whole-run list tiny
+                            # (retaining ~N HTML bodies in RAM was the OOM/SIGKILL at high --limit)
             out.append((it, v, f))
 
     # concurrency within a domain comes from the pacer; spawn `domain_concurrency` workers per domain

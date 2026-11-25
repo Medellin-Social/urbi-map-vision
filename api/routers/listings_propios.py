@@ -14,7 +14,7 @@ import uuid
 from types import SimpleNamespace
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Query, UploadFile, Request
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, Request
 from api.limiter import limiter
 from pydantic import BaseModel, Field
 
@@ -23,6 +23,7 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.schemas.intake_cuestionario import DECLARACIONES_KEYS, cuestionario_para
 from api.services.asignador_service import asignar_intake
+from api.services.due_diligence_service import generar_checklist
 from api.services.intake_service import _aplica, get_or_create_owner
 from api.services.listing_service import datos_minimos_completos
 from api.services.sponsorship_service import zona_cubierta
@@ -32,6 +33,8 @@ from api.utils.storage import read_upload_bounded, upload_file
 from api.utils.pii import mask_email
 
 logger = logging.getLogger(__name__)
+
+from api.services.zona_sponsor_service import get_or_create_agency
 
 router = APIRouter()
 
@@ -300,10 +303,9 @@ async def crear_listing(
         raise HTTPException(400, "Falta la ubicación (pin en el mapa)")
     if not (direccion or "").strip():
         raise HTTPException(400, "La dirección exacta es obligatoria")
-    # #11: matrícula obligatoria solo en VENTAS nuevas (identidad de propiedad +
-    # dedup ORIP). En arriendo no aplica. Los existentes no se tocan.
-    if tipo_operacion == "venta" and not (matricula_inmobiliaria or "").strip():
-        raise HTTPException(400, "La matrícula inmobiliaria es obligatoria para publicar en venta")
+    # Matrícula inmobiliaria (ORIP): OPCIONAL al publicar (venta o arriendo).
+    # Sigue siendo obligatoria para el sello Verificada y para reportar el cierre
+    # (ver realtor.py: cierre). Se guarda como NULL si no la dan.
 
     pool = get_pool()
     operacion = _OPERACION_MAP.get(tipo_operacion)
@@ -347,6 +349,7 @@ async def crear_listing(
         try:
             amenidades_arr = json.loads(amenidades)
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Ficha rica (JSONB catch-all). Solo se persiste si parsea a objeto.
@@ -357,6 +360,7 @@ async def crear_listing(
             if isinstance(parsed, dict):
                 caracteristicas_obj = {k: v for k, v in parsed.items() if v not in (None, "", [], {})}
         except Exception:
+            logger.warning("crear_listing: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     # Título: el realtor puede escribir el suyo (mejor SEO/UX); si no, se arma solo.
@@ -394,6 +398,15 @@ async def crear_listing(
 
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # Realtor (sistema nuevo `agent`): el listing queda a su nombre.
+            nuevo_agent_id = nuevo_agency_id = None
+            if es_agente:
+                nuevo_agent_id = await conn.fetchval(
+                    "SELECT id FROM agent WHERE usuario_id = $1 AND estado = 'activo' LIMIT 1",
+                    current_user["id"],
+                )
+                if nuevo_agent_id:
+                    nuevo_agency_id = await get_or_create_agency(conn, nuevo_agent_id)
             await conn.execute(
                 """
                 INSERT INTO listing (
@@ -409,8 +422,8 @@ async def crear_listing(
                     matricula_inmobiliaria, cedula_catastral, caracteristicas,
                     published_at, created_at, updated_at
                 ) VALUES (
-                    $1, $2, $3, NULL, NULL,
-                    $39::listing_estado,
+                    $1, $2, $3, $39, $40,
+                    $41::listing_estado,
                     $34,
                     ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, $7, $8, FALSE,
                     $9, $10, 'COP', $11,
@@ -432,14 +445,19 @@ async def crear_listing(
                 _to_bool(mascotas), _to_bool(permite_airbnb),
                 titulo, descripcion,
                 nombre_contacto, telefono, email_contacto, horario_contacto,
-                json.dumps(declaraciones_obj), es_agente,
+                # $31 destacado: FALSE. "Featured" es una promoción deliberada
+                # (pagada/admin), NO un efecto de publicar siendo agente.
+                json.dumps(declaraciones_obj), False,
                 _safe_embed_url(tour_url), _safe_embed_url(video_url),
-                es_agente,  # $34: estado/verificado CASE
+                # $34 verificado: SIEMPRE FALSE al publicar. El sello «Verificada»
+                # se gana con el due diligence (DD), nunca por ser agente/agencia.
+                False,
                 nombre_edificio,  # $35
                 (matricula_inmobiliaria or "").strip() or None,  # $36
                 (cedula_catastral or "").strip() or None,        # $37
                 json.dumps(caracteristicas_obj) if caracteristicas_obj else None,  # $38
-                estado_inicial,  # $39
+                nuevo_agent_id, nuevo_agency_id,  # $39, $40
+                estado_inicial,  # $41
             )
             for i, url in enumerate(foto_urls):
                 await conn.execute(
@@ -448,8 +466,7 @@ async def crear_listing(
                     listing_id, url, i, i == 0,
                 )
 
-    await ghl_client.sync_listing(listing_id)
-
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     # Puente al inbox del realtor: la publicación del owner crea un intake y el
     # asignador lo entrega (zona patrocinada → realtor; sin patrocinador → pool).
     if not es_agente:
@@ -485,6 +502,38 @@ async def crear_listing(
         except Exception:
             # El listing ya está publicado; la asignación no puede tumbar el flujo.
             logger.exception("crear_listing: intake/asignación falló para listing %s", listing_id)
+    elif nuevo_agent_id is not None:
+        # Agente auto-publica: NO va al pool (es suyo), pero igual necesita un
+        # intake 'aceptado' a su nombre para colgar el checklist DD y poder GANAR
+        # el sello «Verificada» (verificado ya no se regala por ser agente).
+        try:
+            intake_id = str(uuid.uuid4())
+            zona_codigo = str(barrio_id) if barrio_id is not None else None
+            async with pool.acquire() as conn:
+                await conn.execute(
+                    """
+                    INSERT INTO intake (
+                        id, owner_id, listing_id, agent_id, estado, operacion, tipo_inmueble,
+                        geom, municipio, barrio, zona_nivel, zona_codigo,
+                        direccion_aprox, precio_esperado, area_m2, habitaciones,
+                        banos, declaraciones
+                    ) VALUES (
+                        $1, $2, $3, $4, 'aceptado', $5, $6,
+                        ST_SetSRID(ST_MakePoint($7, $8), 4326), $9, $10, 'barrio', $11,
+                        $12, $13, $14, $15, $16, $17::jsonb
+                    )
+                    """,
+                    intake_id, owner_id, listing_id, nuevo_agent_id, operacion, tipo_inmueble,
+                    lon, lat, municipio_nom, barrio_nom, zona_codigo,
+                    direccion, precio_cop, area_m2, habitaciones, banos,
+                    json.dumps(declaraciones_obj),
+                )
+            await generar_checklist(
+                SimpleNamespace(id=intake_id, declaraciones=declaraciones_obj), pool
+            )
+        except Exception:
+            # El listing ya está publicado; el checklist DD no puede tumbar el flujo.
+            logger.exception("crear_listing: intake/DD de agente falló para listing %s", listing_id)
 
     await _notify_admin_new_listing(
         listing_id=listing_id, tipo_inmueble=tipo_inmueble,
@@ -632,7 +681,7 @@ async def actualizar_listing(
         f"UPDATE listing SET {', '.join(updates)} WHERE id = ${idx}",
         *params,
     )
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"ok": True}
 
 
@@ -649,9 +698,7 @@ async def desactivar_listing(
         "UPDATE listing SET estado = 'cerrado', updated_at = NOW() WHERE id = $1",
         listing_id,
     )
-    await ghl_client.sync_listing(listing_id)
-
-
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
 # ── Email ──────────────────────────────────────────────────────────────────────
 
 async def _notify_admin_new_listing(

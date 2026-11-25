@@ -31,8 +31,10 @@ NULL). Agregar timeout por-job si algún cuelgue real aparece.
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
+import re
 import subprocess
 import sys
 import time
@@ -132,7 +134,27 @@ def _notify(subject: str, body: str) -> None:
               file=sys.stderr, flush=True)
 
 
+def _acquire_lock(job: str):
+    """flock no bloqueante por job: si la corrida anterior sigue viva (scraper de
+    horas), esta se salta en vez de solaparse y duplicar/pisar escrituras.
+    Devuelve el fd (mantenerlo vivo = mantener el lock) o None si está tomado."""
+    safe = re.sub(r"[^A-Za-z0-9_.-]", "_", job)
+    try:
+        fh = open(f"/tmp/urbi_job_{safe}.lock", "w")
+        fcntl.flock(fh, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        return fh
+    except BlockingIOError:
+        return None
+    except OSError as e:  # sin /tmp escribible: no bloquear el job
+        print(f"[run_job] aviso: sin lock ({e})", file=sys.stderr, flush=True)
+        return open(os.devnull)
+
+
 def run(job: str, cmd: list[str]) -> int:
+    lock = _acquire_lock(job)
+    if lock is None:
+        print(f"[run_job] {job} ya está corriendo — se salta esta ejecución", flush=True)
+        return 0
     run_id = _ledger_start(job)
     tail: deque[str] = deque(maxlen=_TAIL_LINES)
     t0 = time.monotonic()

@@ -51,6 +51,23 @@ async def sweep_asignados_vencidos(pool: Any) -> int:
     return n
 
 
+async def _reclamar(conn: Any, intake_id: Any, agent_id: Any, estado: str = "asignado") -> bool:
+    """UPDATE condicional del intake 'nuevo'. True solo si ESTA llamada lo cambió.
+
+    Sin el RETURNING, una asignación concurrente (doble clic del admin, dos workers)
+    hacía que ambas reportaran 'asignado' y notificaran al realtor aunque una no
+    escribiera nada.
+    """
+    if estado not in ("asignado", "en_pool"):  # constante interna, nunca input
+        raise ValueError(estado)
+    row = await conn.fetchrow(
+        f"UPDATE intake SET agent_id = $1, estado = '{estado}', updated_at = NOW() "
+        "WHERE id = $2 AND estado = 'nuevo' RETURNING id",
+        agent_id, intake_id,
+    )
+    return row is not None
+
+
 def _val(x: Any) -> Any:
     return x.value if hasattr(x, "value") else x
 
@@ -115,6 +132,16 @@ async def _notificar_lead_asignado(agent_id: str, intake_id: str, pool: Any) -> 
         logger.exception("Lead %s: notificación al agente %s falló", intake_id, agent_id)
 
 
+async def _ya_procesado(intake: Any, pool: Any) -> Dict[str, Any]:
+    """Otro proceso movió el intake primero: devolver su estado real, sin notificar."""
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow("SELECT estado, agent_id FROM intake WHERE id = $1", intake.id)
+    estado = row["estado"] if row else "desconocido"
+    agent = str(row["agent_id"]) if row and row["agent_id"] else None
+    logger.info("asignar_intake(%s): ya procesado por otro (estado=%s)", intake.id, estado)
+    return {"resultado": "idempotente", "estado": estado, "agent_id": agent}
+
+
 async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
     """Asigna el intake a un realtar según patrocinio de su zona, o lo manda al pool.
 
@@ -131,6 +158,25 @@ async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
         zona = await resolver_zona(intake.geom, pool)
         barrio_id = zona["barrio_id"]
 
+    # 1b. Realtor Preferido (slot activo en la zona): rotación round-robin.
+    try:
+        from api.services.realtor_preferido_service import siguiente_realtor
+        async with pool.acquire() as conn:
+            # Transacción: si el intake ya no está 'nuevo' el UPDATE no escribe y el
+            # avance del puntero de rotación se revierte (no se quema el turno).
+            async with conn.transaction():
+                elegido = await siguiente_realtor(conn, "barrio", str(barrio_id))
+                if elegido and not await _reclamar(conn, intake.id, elegido["id"]):
+                    return await _ya_procesado(intake, pool)
+        if elegido:
+            intake.agent_id = elegido["id"]
+            intake.estado = "asignado"
+            await _notificar_lead_asignado(elegido["id"], intake.id, pool)
+            return {"resultado": "asignado", "estado": "asignado",
+                    "agent_id": elegido["id"], "via": "realtor_preferido"}
+    except Exception:
+        logger.exception("Ruteo por slot falló; sigue a patrocinadores/pool")
+
     # 2. Patrocinadores vigentes (ordenados por antigüedad; [0] = más antiguo).
     agencies = await patrocinadores_vigentes("barrio", barrio_id, pool)
     reparto = len(agencies) > 1  # informativo; TODO reparto: round-robin/tier/carga
@@ -141,13 +187,8 @@ async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
         owner_agent = await _owner_activo_de_agency(agency_id, pool)
         if owner_agent:
             async with pool.acquire() as conn:
-                await conn.execute(
-                    # updated_at = NOW(): el reloj del timeout de 24h cuenta desde la
-                    # asignación (mismo motivo que tomar_del_pool).
-                    "UPDATE intake SET agent_id = $1, estado = 'asignado', updated_at = NOW() "
-                    "WHERE id = $2 AND estado = 'nuevo'",
-                    owner_agent, intake.id,
-                )
+                if not await _reclamar(conn, intake.id, owner_agent):
+                    return await _ya_procesado(intake, pool)
             intake.agent_id = owner_agent
             intake.estado = "asignado"
             await _notificar_lead_asignado(owner_agent, intake.id, pool)
@@ -163,11 +204,8 @@ async def asignar_intake(intake: Any, pool: Any) -> Dict[str, Any]:
 
     # 0 patrocinadores, o ninguno con owner activo → pool.
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE intake SET estado = 'en_pool', agent_id = NULL "
-            "WHERE id = $1 AND estado = 'nuevo'",
-            intake.id,
-        )
+        if not await _reclamar(conn, intake.id, None, "en_pool"):
+            return await _ya_procesado(intake, pool)
     intake.estado = "en_pool"
     intake.agent_id = None
     return {"resultado": "en_pool", "estado": "en_pool", "agent_id": None}

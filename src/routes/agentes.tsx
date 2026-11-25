@@ -2,7 +2,7 @@ import { seo } from "@/lib/seo";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 import { useMemo } from "react";
-import { Search, Users, ArrowRight, X, HelpCircle, ChevronRight, MapPin } from "@/lib/icons";
+import { Search, Users, ArrowRight, X, HelpCircle, ChevronRight, ChevronDown, MapPin } from "@/lib/icons";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
@@ -53,6 +53,27 @@ const ESPECIALIDADES = [
 const ZONAS_POPULARES = ["El Poblado", "Laureles", "Envigado", "Belén", "Sabaneta", "La América"];
 
 const PAGE_SIZE = 20;
+
+// Select de filtro con chevron propio (appearance-none) → se ve diseñado, no el
+// desplegable por defecto del sistema operativo. Mismo look en todos los filtros.
+function FilterSelect({ label, value, onChange, children }: {
+  label: string; value: string | number; onChange: (e: React.ChangeEvent<HTMLSelectElement>) => void; children: React.ReactNode;
+}) {
+  return (
+    <div className="relative">
+      <select
+        aria-label={label}
+        value={value}
+        onChange={onChange}
+        className="cursor-pointer appearance-none rounded-lg border py-2 pl-3 pr-9 text-sm font-medium outline-none transition hover:border-[#0F8A4F]/50 focus:ring-2 focus:ring-[#0F8A4F]/25"
+        style={{ borderColor: K.line, background: "#FFFFFF", color: K.ink }}
+      >
+        {children}
+      </select>
+      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: K.muted }} />
+    </div>
+  );
+}
 
 function CardSkeleton() {
   return (
@@ -141,15 +162,15 @@ function DirectorioPage() {
 
         {/* Barra de filtros */}
         <div className="mt-3 flex flex-wrap items-center gap-2">
-          <select aria-label="Tipo de agente" value={sp.tipo ?? ""} onChange={(e) => setFilter({ tipo: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{TIPOS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
-          <select aria-label="Idioma" value={sp.idiomas ?? ""} onChange={(e) => setFilter({ idiomas: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{IDIOMAS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
-          <select aria-label="Especialidad" value={sp.especialidad ?? ""} onChange={(e) => setFilter({ especialidad: str(e.target.value) })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{ESPECIALIDADES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</select>
-          <select aria-label="Calificación mínima" value={sp.rating_min ?? ""} onChange={(e) => setFilter({ rating_min: e.target.value ? Number(e.target.value) : undefined })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>
+          <FilterSelect label="Tipo de agente" value={sp.tipo ?? ""} onChange={(e) => setFilter({ tipo: str(e.target.value) })}>{TIPOS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>
+          <FilterSelect label="Idioma" value={sp.idiomas ?? ""} onChange={(e) => setFilter({ idiomas: str(e.target.value) })}>{IDIOMAS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>
+          <FilterSelect label="Especialidad" value={sp.especialidad ?? ""} onChange={(e) => setFilter({ especialidad: str(e.target.value) })}>{ESPECIALIDADES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>
+          <FilterSelect label="Calificación mínima" value={sp.rating_min ?? ""} onChange={(e) => setFilter({ rating_min: e.target.value ? Number(e.target.value) : undefined })}>
             <option value="">Cualquier calificación</option><option value="4">4★ o más</option><option value="4.5">4.5★ o más</option>
-          </select>
+          </FilterSelect>
           <div className="ml-auto flex items-center gap-2">
             <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: K.muted }}>Ordenar</label>
-            <select aria-label="Ordenar por" value={sp.orden ?? "relevantes"} onChange={(e) => setFilter({ orden: e.target.value })} className="rounded-lg px-3 py-2 text-sm outline-none" style={selStyle}>{ORDENES.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</select>
+            <FilterSelect label="Ordenar por" value={sp.orden ?? "relevantes"} onChange={(e) => setFilter({ orden: e.target.value })}>{ORDENES.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}</FilterSelect>
           </div>
         </div>
 

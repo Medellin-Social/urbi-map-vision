@@ -350,7 +350,7 @@ async def test_admin_link_health_summary(client, conn):
 @pytest.mark.require_db
 @pytest.mark.asyncio
 async def test_end_to_end_runner_two_strikes_then_human_review(conn):
-    import respx, httpx
+    import respx
     from datetime import timedelta as td
     from scraping.link_checker import runner
     from scraping.link_checker.config import Settings

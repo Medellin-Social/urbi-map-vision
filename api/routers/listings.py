@@ -18,6 +18,7 @@ from api.limiter import _client_ip, limiter, view_throttle
 from api.services.asignador_service import asignar_intake
 from api.services.intake_service import get_or_create_owner
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
+from api.utils.ttl_cache import TTLCache
 from api.services.trm_service import cop_from_moneda, get_usd_rate, usd_from_cop
 
 logger = logging.getLogger(__name__)
@@ -774,6 +775,19 @@ async def _expand_neighbors(
     return result
 
 
+# Pool = 10 conexiones. El listado lanza hasta 4 consultas en paralelo por request
+# (venta+arriendo × COUNT+LISTINGS); sin tope, 3 requests simultáneos agotan el pool y
+# bloquean el resto de la API. Cada consulta toma UN cupo (sin esperar otro mientras lo
+# tiene → sin deadlock) y se dejan 2 conexiones libres para los demás endpoints.
+_LISTING_DB_SLOTS = asyncio.Semaphore(8)
+_VIEWPORT_CACHE = TTLCache(ttl=30, maxsize=200)
+
+
+async def _limited(coro):
+    async with _LISTING_DB_SLOTS:
+        return await coro
+
+
 async def _count_and_fetch(
     pool: Any, args: tuple, fetch_limit: int, fetch_offset: int,
     count_sql: str | None = None,
@@ -783,8 +797,8 @@ async def _count_and_fetch(
     csql = count_sql if count_sql is not None else _COUNT_SQL
     lsql = (listings_sql if listings_sql is not None else _LISTINGS_SQL) + f" LIMIT {fetch_limit} OFFSET {fetch_offset}"
     count, rows = await asyncio.gather(
-        pool.fetchval(csql, *args),
-        pool.fetch(lsql, *args),
+        _limited(pool.fetchval(csql, *args)),
+        _limited(pool.fetch(lsql, *args)),
     )
     return count or 0, rows
 
@@ -851,6 +865,7 @@ async def get_all_listings(
             if prow and prow["objetivo"]:
                 perfil_dict = dict(prow)
         except Exception:
+            logger.warning("get_all_listings: excepción suprimida (best-effort)", exc_info=True)
             pass
 
     am_clauses, am_extra = _build_amenidades_sql(amenidades or [])
@@ -897,8 +912,8 @@ async def get_all_listings(
         )
         listings_sql = _lk(_LISTINGS_ALLCITY_SQL, _inc) if allcity_fast else _eff_listings_sql
         total, rows = await asyncio.gather(
-            pool.fetchval(_eff_count_sql, *args),
-            pool.fetch(listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args),
+            _limited(pool.fetchval(_eff_count_sql, *args)),
+            _limited(pool.fetch(listings_sql + f" LIMIT {fetch_limit} OFFSET {fetch_offset}", *args)),
         )
         total = total or 0
 
@@ -1494,6 +1509,35 @@ ORDER BY c._prio, ('x' || substr(md5(c.url), 1, 8))::bit(32)::int, c.url
 """
 
 
+_SITEMAP_TTL_S = 3600
+_sitemap_cache: dict = {"t": 0.0, "rows": []}
+
+
+@router.get("/sitemap-ids")
+@limiter.limit("30/minute")
+async def sitemap_ids(request: Request):
+    """Ids públicos para el sitemap (solo id + fecha, sin payload). Cache 1 h en memoria;
+    tope 50.000 (límite de un sitemap)."""
+    import time as _time
+
+    now = _time.monotonic()
+    if _sitemap_cache["rows"] and now - _sitemap_cache["t"] < _SITEMAP_TTL_S:
+        return _sitemap_cache["rows"]
+    sql = f"""
+        SELECT ('x'||substr(md5(url),1,8))::bit(32)::int AS id, fecha_scraping
+        FROM staging.stg_listings_unificado
+        WHERE url IS NOT NULL AND lat IS NOT NULL AND lat != 0 AND lon IS NOT NULL AND lon != 0
+          AND (precio_cop >= 500000 OR (tipo_operacion = 'arriendo' AND precio_cop >= 150000))
+          AND {_LINK_ALIVE_STG}
+        ORDER BY fecha_scraping DESC NULLS LAST
+        LIMIT 50000
+    """
+    rows = await get_pool().fetch(sql)
+    out = [{"id": r["id"], "fecha": r["fecha_scraping"]} for r in rows]
+    _sitemap_cache.update(t=now, rows=out)
+    return out
+
+
 @router.get("/viewport", response_model=ViewportResponse)
 @limiter.limit("120/minute")
 async def get_listings_viewport(
@@ -1574,6 +1618,18 @@ async def get_listings_viewport(
             d["direccion_raw"] = None
         return ViewportListing(**d)
 
+    # Cache de servidor (30 s): la respuesta es pública e idéntica para todos; los
+    # admins con inactivos van siempre a la DB. Clave = filtros + zoom + formato.
+    _vkey = None if _inc else repr((args, zoom, compact, moneda, rate))
+    if _vkey is not None:
+        _hit = _VIEWPORT_CACHE.get(_vkey)
+        if _hit is not None:
+            body, etag = _hit
+            headers = {"Cache-Control": "public, max-age=60, stale-while-revalidate=240", "ETag": etag}
+            if request.headers.get("if-none-match") == etag:
+                return Response(status_code=304, headers=headers)
+            return Response(content=body, media_type="application/json", headers=headers)
+
     if zoom >= _VIEWPORT_FULL_POINTS_ZOOM:
         rows = await pool.fetch(_lk(_VIEWPORT_POINTS_SQL, _inc) + f" LIMIT {_VIEWPORT_POINTS_CAP}", *args)
         result = ViewportResponse(mode="points", zoom=zoom, listings=[_vl(r) for r in rows])
@@ -1599,6 +1655,8 @@ async def get_listings_viewport(
     # 60 s fresh + SWR: map data refreshes hourly server-side; 5 min max-age on top of
     # the client cache made new/removed listings look 5-10 min late.
     headers = {"Cache-Control": "private, no-store" if _inc else "public, max-age=60, stale-while-revalidate=240", "ETag": etag}
+    if _vkey is not None:
+        _VIEWPORT_CACHE.set(_vkey, (body, etag))
     if request.headers.get("if-none-match") == etag:
         return Response(status_code=304, headers=headers)
     # Send the already-serialized body directly — no json.loads + JSONResponse
@@ -2320,6 +2378,7 @@ async def get_listing_by_id(
         try:
             row_d["caracteristicas"] = json.loads(row_d["caracteristicas"])
         except Exception:
+            logger.warning("get_listing_by_id: excepción suprimida (best-effort)", exc_info=True)
             row_d["caracteristicas"] = None
     historia = await pool.fetch(_PRECIO_HISTORIA_SQL, row_d.get("url") or "")  # before url is nulled for 'propio'
     _finalize_row(row_d, await get_usd_rate())
@@ -2374,6 +2433,22 @@ LIMIT 1
 """.replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
+# Agente ASIGNADO de un listing propio (persona natural que lo subió → el realtor
+# que lo tomó/gestiona y cobra la comisión, o el agente que publicó directo). Este
+# gana sobre los sponsors de zona: el listing es suyo, no es vitrina rotatoria.
+_LISTING_AGENTE_PROPIO_SQL = """
+SELECT a.id::text, a.slug, a.nombre, a.telefono, a.foto_url,
+       (SELECT ag.nombre FROM agency_member am JOIN agency ag ON ag.id = am.agency_id
+        WHERE am.agent_id = a.id LIMIT 1) AS agencia_nombre,
+       __AGENTE_TIPOS__ AS tipos, __PREFERENTE__ AS preferente_json
+FROM staging.stg_listings_unificado l
+JOIN public.listing lp ON lp.id::text = l.url AND l.fuente = 'propio' AND lp.agent_id IS NOT NULL
+JOIN public.agent a ON a.id = lp.agent_id AND a.estado = 'activo'
+WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
+LIMIT 1
+""".replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
+
+
 _LISTING_AGENTE_SQL = """
 WITH lz AS (
     SELECT l.barrio_id, bc.cd_comuna
@@ -2405,18 +2480,27 @@ SELECT nombre, telefono, foto_url, email, zona_nivel FROM ranked WHERE rn = 1
 @limiter.limit("100/minute")
 async def get_listing_agente(request: Request, listing_id: int):
     pool = get_pool()
-    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     out = ListingAgentes()
+    # 1) Representante formal (agent-program, listing_representacion) o, si no hay,
+    #    el agente ASIGNADO del listing propio (quien lo tomó/gestiona + cobra).
+    #    Cualquiera de los dos es "el agente del inmueble" → se muestra SOLO ese,
+    #    sin la vitrina rotatoria de sponsors de zona (el listing no es vitrina).
     try:
         rep = await pool.fetchrow(_LISTING_REPRESENTANTE_SQL, listing_id)
+        if not rep:
+            rep = await pool.fetchrow(_LISTING_AGENTE_PROPIO_SQL, listing_id)
     except Exception:
-        logger.exception("representante de listing %s falló", listing_id)
+        logger.exception("representante/agente propio de listing %s falló", listing_id)
         rep = None
     if rep:
         d = dict(rep)
         d["tipos"] = list(d["tipos"] or [])
         d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
         out.representante = ListingRepresentante(**d)
+        return out  # listing con dueño/agente asignado → solo ese, sin sponsors de zona
+
+    # 2) Listing sin agente asignado (scrapeado) → vitrina de sponsors de la zona.
+    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
     for r in rows:
         ag = ListingAgente(**dict(r))
         if ag.zona_nivel == "comuna":

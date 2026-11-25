@@ -80,6 +80,9 @@ async def asignar_zona(conn, agent_id: str, zona_nivel: str, zona_codigo: str,
     ZonaOcupadaError si otra agencia la tiene. Correr dentro de una transacción."""
     if zona_nivel not in ("comuna", "barrio"):
         raise ValueError("zona_nivel debe ser comuna o barrio")
+    # Serializa asignaciones concurrentes de la MISMA zona: sin esto dos agencias
+    # pasan el chequeo de "ocupada" a la vez y ambas insertan (exclusividad rota).
+    await conn.execute("SELECT pg_advisory_xact_lock(hashtext($1))", f"zona:{zona_nivel}:{zona_codigo}")
     agency_id = await get_or_create_agency(conn, agent_id)
     if await zona_ocupada_por_otro(conn, zona_nivel, zona_codigo, agency_id):
         raise ZonaOcupadaError(f"{zona_nivel} {zona_codigo} ya tiene patrocinador")

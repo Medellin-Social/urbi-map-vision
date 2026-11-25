@@ -5,12 +5,13 @@ public.user_events (event_type='listing_view', entity_id = listing.id::text | sl
 """
 from __future__ import annotations
 
+import json
 import logging
-from datetime import date, time as _time
+from datetime import date, datetime, time as _time
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, UploadFile
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
@@ -18,7 +19,9 @@ from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
 from api.services.listing_service import TRANSICIONES_VALIDAS, EstadoError, datos_minimos_completos
 from api.services.moderacion_service import aprobar
+from api.routers.listings_propios import _safe_embed_url
 from api.utils import ghl_client
+from api.utils.email import send_email, _wrap, esc
 from api.utils.storage import read_upload_bounded, upload_file
 
 from api.services.trm_service import get_usd_rate
@@ -33,8 +36,17 @@ _DECL_KEYS = ("tiene_escritura", "al_dia_predial", "al_dia_administracion", "tie
 # ── Incentivos del realtor — parámetros de PRODUCTO (PLACEHOLDER, ajustar con negocio) ──
 # NO son decisiones técnicas: definen el comportamiento que premiamos. Tunéalos acá.
 # Pesos del puntaje de standing (0..1, deben sumar 1.0).
-_PUNTAJE_PESOS = {"contribucion": 0.30, "velocidad": 0.30, "show_rate": 0.20, "aceptacion": 0.20}
+# Asistencia (show_rate) SE QUITÓ del puntaje: un plantón es culpa del comprador que
+# no se presenta, no del realtor → no lo penalizamos. Sigue visible como métrica
+# informativa (gauge "Asistencia"), pero no mueve el ranking. Pesos sobre lo que el
+# realtor SÍ controla: cerrar, responder rápido, aceptar sus leads. Suman 1.0.
+_PUNTAJE_PESOS = {"contribucion": 0.35, "velocidad": 0.35, "aceptacion": 0.30}
 _CONTRIB_CAP = 5             # cierres (12m) que topan el componente de contribución
+# Nudge por COMPLETITUD de datos: un cierre reportado con cédula catastral es
+# verificable contra catastro → datos de más calidad. Si todos tus cierres incluyen
+# catastral, la contribución sube hasta +10% (topada a 100). Nunca penaliza ni
+# infla sobre el cap — solo premia reportar completo. Product knob: subir/bajar aquí.
+_COMPLETITUD_BONUS = 0.10
 _RANKING_MIN_ACTIVIDAD = 3   # actividad mínima (visitas resp + intakes + cierres, 90d/12m) para
                              # tener puntaje/ranking; por debajo → "datos insuficientes" (no inventamos señal)
 # Reciprocidad: cierres reportados (12m) para desbloquear los comparables de cierre.
@@ -198,17 +210,20 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
                    l.precio AS l_precio, l.municipio AS l_municipio, l.barrio AS l_barrio,
                    (l.geom IS NOT NULL) AS l_geom_set, l.area_m2 AS l_area,
                    l.titulo AS l_titulo, l.habitaciones AS l_hab, l.banos AS l_banos,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct,
                    (SELECT COUNT(*) FROM listing_media m
                      WHERE m.listing_id = l.id AND m.es_portada) AS l_fotos_portada
             FROM intake i
             JOIN owner o ON o.id = i.owner_id
             LEFT JOIN listing l ON l.id = i.listing_id
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+            -- Inbox de captación = solo lo que aún requiere acción del realtor
+            -- (aceptar / completar ficha / publicar). En cuanto el listing pasa a
+            -- 'publicado' o 'en_revision' SALE del inbox y vive en "Mis listings".
             WHERE i.agent_id = $1
               AND (i.estado IN ('asignado', 'en_verificacion')
                    OR (i.estado = 'aceptado'
-                       AND (l.estado IS NULL OR l.estado IN ('borrador', 'rechazado')
-                            OR l.verificado = FALSE)))
+                       AND (l.estado IS NULL OR l.estado IN ('borrador', 'rechazado'))))
             ORDER BY i.created_at DESC
             """,
             agent.id,
@@ -243,6 +258,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
             "barrio": r["barrio"],
             "municipio": r["municipio"],
             "owner_nombre": r["owner_nombre"],
+            "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
             "declarado": {
                 "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
                 "habitaciones": r["habitaciones"],
@@ -266,6 +282,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
                 "habitaciones": r["l_hab"],
                 "banos": r["l_banos"],
                 "fotos_portada": int(r["l_fotos_portada"] or 0),
+                "estado": r["l_estado"],
             } if r["l_id"] else None,
             "created_at": r["created_at"].isoformat(),
         })
@@ -285,9 +302,11 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
             SELECT i.id::text AS id, i.tipo_inmueble::text AS tipo_inmueble,
                    i.operacion::text AS operacion, i.precio_esperado,
                    COALESCE(i.barrio, b.nombre, '') AS barrio,
-                   COALESCE(i.municipio, '') AS municipio, i.created_at
+                   COALESCE(i.municipio, '') AS municipio, i.created_at,
+                   (l.caracteristicas->>'comision_pct')::float8 AS comision_pct
             FROM intake i
             LEFT JOIN raw.barrios b ON b.id::text = i.zona_codigo
+            LEFT JOIN listing l ON l.id = i.listing_id
             WHERE i.estado = 'en_pool'
               AND EXISTS (
                 SELECT 1 FROM sponsorship s
@@ -305,6 +324,7 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
         )
     return [
         {**dict(r), "precio_esperado": float(r["precio_esperado"] or 0),
+         "comision_pct": float(r["comision_pct"]) if r["comision_pct"] is not None else None,
          "created_at": r["created_at"].isoformat()}
         for r in rows
     ]
@@ -314,9 +334,54 @@ async def pool_abierto(user: dict = Depends(get_current_user), pool=Depends(get_
 async def tomar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     agent = await _agent_del_usuario(user, pool)
     try:
-        return await tomar_del_pool(intake_id, agent, pool)
+        res = await tomar_del_pool(intake_id, agent, pool)
+        from api.utils import ghl_client
+        ghl_client.spawn(ghl_client.sync_owner_intake(intake_id))
+        return res
     except AsignadorError as e:
         raise HTTPException(status_code=403, detail=str(e))
+
+
+@router.post("/listings/{listing_id}/sumarme")
+async def sumarme_listing_abierto(listing_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    """El agente DE LA ZONA se suma a un anuncio ABIERTO (lo publicó una persona
+    natural, sin agente exclusivo) → aparece y rota en el listing. Opt-in, NO
+    exclusivo. No requiere DD; el DD da el sello «Verificada» + puntos (aparte)."""
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        lst = await conn.fetchrow(
+            "SELECT agent_id, estado::text AS estado, barrio_id FROM listing "
+            "WHERE id = $1 AND deleted_at IS NULL",
+            listing_id,
+        )
+        if not lst:
+            raise HTTPException(status_code=404, detail="Listing no encontrado")
+        if lst["agent_id"] is not None:
+            raise HTTPException(status_code=409, detail="Este listing tiene agente exclusivo; no es abierto")
+        if lst["estado"] != "publicado":
+            raise HTTPException(status_code=409, detail="El listing no está publicado")
+        # Zona-lock: igual que el pool — patrocinio activo de barrio o su comuna.
+        cubre = await conn.fetchval(
+            """
+            SELECT EXISTS (
+              SELECT 1 FROM sponsorship s
+              JOIN agency_member am ON am.agency_id = s.agency_id AND am.agent_id = $1
+              WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
+                AND ( (s.zona_nivel = 'barrio' AND s.zona_codigo = $2::text)
+                   OR (s.zona_nivel = 'comuna' AND s.zona_codigo IN (
+                         SELECT bc.cd_comuna::text FROM analytics.barrios_cd bc WHERE bc.barrio_id = $2)) )
+            )
+            """,
+            agent.id, lst["barrio_id"],
+        )
+        if not cubre:
+            raise HTTPException(status_code=403, detail="Solo agentes que patrocinan esta zona pueden sumarse")
+        await conn.execute(
+            "INSERT INTO listing_representante_abierto (listing_id, agent_id) VALUES ($1, $2) "
+            "ON CONFLICT (listing_id, agent_id) DO NOTHING",
+            listing_id, agent.id,
+        )
+    return {"listing_id": listing_id, "sumado": True}
 
 
 @router.get("/listings")
@@ -333,10 +398,17 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                    l.descripcion, l.area_m2, l.habitaciones, l.banos, l.parqueaderos,
                    l.estrato, l.antiguedad_anios, l.direccion_aprox, l.nombre_edificio,
                    l.administracion, COALESCE(l.amenidades, '{{}}') AS amenidades,
+                   l.area_lote_m2, l.amoblado, l.mascotas, l.permite_airbnb,
+                   l.tour_url, l.video_url,
+                   l.matricula_inmobiliaria, l.cedula_catastral,
+                   COALESCE(l.caracteristicas, '{{}}'::jsonb) AS caracteristicas,
                    ST_Y(l.geom) AS lat, ST_X(l.geom) AS lon,
                    -- es_propio: creado por el agente (/publicar) vs asignado de un lead
                    -- (intake → listing, la propiedad es del owner). Solo para el badge.
                    NOT EXISTS (SELECT 1 FROM intake i WHERE i.listing_id = l.id) AS es_propio,
+                   -- intake de origen (si vino de un lead): permite re-abrir la
+                   -- verificación de documentos (DD) desde "Mis listings" tras publicar.
+                   (SELECT i.id::text FROM intake i WHERE i.listing_id = l.id LIMIT 1) AS intake_id,
                    (SELECT m.url FROM listing_media m WHERE m.listing_id = l.id
                       ORDER BY m.es_portada DESC, m.orden ASC LIMIT 1) AS cover_url,
                    COALESCE(v.total, 0) AS vistas_total, COALESCE(v.v30, 0) AS vistas_30d,
@@ -364,31 +436,44 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
         {**dict(r),
          "precio": float(r["precio"] or 0),
          "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
+         "area_lote_m2": float(r["area_lote_m2"]) if r["area_lote_m2"] is not None else None,
          "administracion": float(r["administracion"]) if r["administracion"] is not None else None,
          "amenidades": list(r["amenidades"] or []),
+         "caracteristicas": (json.loads(r["caracteristicas"]) if isinstance(r["caracteristicas"], str) else (r["caracteristicas"] or {})),
          "updated_at": r["updated_at"].isoformat()}
         for r in rows
     ]
 
 
 class ListingPatchRequest(BaseModel):
-    titulo: str | None = None
-    descripcion: str | None = None
-    precio: float | None = None
-    area_m2: float | None = None
-    habitaciones: int | None = None
-    banos: int | None = None
-    direccion_aprox: str | None = None
+    titulo: str | None = Field(None, max_length=200)
+    descripcion: str | None = Field(None, max_length=5000)
+    precio: float | None = Field(None, le=1e13, allow_inf_nan=False)
+    area_m2: float | None = Field(None, gt=0, le=1e6, allow_inf_nan=False)
+    habitaciones: int | None = Field(None, ge=0, le=100)
+    banos: int | None = Field(None, ge=0, le=100)
+    direccion_aprox: str | None = Field(None, max_length=200)
     # Ficha completa (reclamar/editar todo): ubicación + resto de campos
-    lat: float | None = None
-    lon: float | None = None
-    tipo_inmueble: str | None = None
-    estrato: int | None = None
-    parqueaderos: int | None = None
-    antiguedad_anios: int | None = None
-    nombre_edificio: str | None = None
-    administracion: float | None = None
-    amenidades: list[str] | None = None
+    lat: float | None = Field(None, ge=-90, le=90, allow_inf_nan=False)
+    lon: float | None = Field(None, ge=-180, le=180, allow_inf_nan=False)
+    tipo_inmueble: str | None = Field(None, max_length=40)
+    estrato: int | None = Field(None, ge=0, le=6)
+    parqueaderos: int | None = Field(None, ge=0, le=100)
+    antiguedad_anios: int | None = Field(None, ge=0, le=300)
+    nombre_edificio: str | None = Field(None, max_length=200)
+    administracion: float | None = Field(None, ge=0, le=1e10, allow_inf_nan=False)
+    amenidades: list[str] | None = Field(None, max_length=60)
+    # Ficha completa (guiado por /publicar): columnas extra + ficha rica JSONB.
+    # Validadas al mismo estilo que los campos de arriba (hardening upstream).
+    area_lote_m2: float | None = Field(None, gt=0, le=1e6, allow_inf_nan=False)
+    amoblado: bool | None = None
+    mascotas: bool | None = None
+    permite_airbnb: bool | None = None
+    tour_url: str | None = Field(None, max_length=500)
+    video_url: str | None = Field(None, max_length=500)
+    # caracteristicas: ficha rica (año, área privada, estado, piso, orientación…).
+    # Se MERGEA (||), no se pisa: así se preserva comision_pct, que vive aquí.
+    caracteristicas: dict | None = None
 
 
 @router.patch("/listings/{listing_id}")
@@ -404,6 +489,12 @@ async def editar_listing(
     # Ubicación va aparte: 'listing' guarda geom (Point), no columnas lat/lon.
     lat = data.pop("lat", None)
     lon = data.pop("lon", None)
+    caracs = data.pop("caracteristicas", None)
+    # tour/video: sanear al host embebible (anti-clickjacking), igual que en /publicar.
+    # ponytail: URL inválida → None → se ignora (no se puede limpiar el campo, aceptable).
+    for k in ("tour_url", "video_url"):
+        if data.get(k) is not None:
+            data[k] = _safe_embed_url(data[k])
     campos = {k: v for k, v in data.items() if v is not None}
     if "precio" in campos and campos["precio"] <= 0:
         raise HTTPException(status_code=400, detail="Precio inválido")
@@ -414,27 +505,39 @@ async def editar_listing(
         n = len(valores)
         set_parts.append(f"geom = ST_SetSRID(ST_MakePoint(${n + 3}, ${n + 4}), 4326)")
         valores.extend([lon, lat])  # MakePoint(x=lon, y=lat)
+    if caracs:
+        # Merge sobre la JSONB existente para no perder llaves (p.ej. comision_pct).
+        n = len(valores) + 3
+        set_parts.append(f"caracteristicas = COALESCE(caracteristicas, '{{}}'::jsonb) || ${n}::jsonb")
+        valores.append(json.dumps(caracs))
     if not set_parts:
         raise HTTPException(status_code=400, detail="Nada que actualizar")
 
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             f"UPDATE listing SET {', '.join(set_parts)}, updated_at = NOW() "
-            "WHERE id = $1 AND agent_id = $2 RETURNING id",
+            "WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL RETURNING id",
             listing_id, agent.id, *valores,
         )
     if not row:
         raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     actualizado = sorted(campos) + (["ubicacion"] if lat is not None and lon is not None else [])
     return {"id": listing_id, "actualizado": actualizado}
 
 
 class CerrarListingRequest(BaseModel):
-    precio_cierre: float = Field(..., gt=0)
+    precio_cierre: float = Field(..., gt=0, le=1e13, allow_inf_nan=False)
     fecha_cierre: date | None = None            # default: hoy (CURRENT_DATE)
-    matricula_inmobiliaria: str | None = None   # llave ORIP — si no vino al publicar
-    cedula_catastral: str | None = None         # llave catastro
+    matricula_inmobiliaria: str | None = Field(None, max_length=30, pattern=r"^[0-9A-Za-z\-\s]+$")
+    cedula_catastral: str | None = Field(None, max_length=40, pattern=r"^[0-9A-Za-z\-\s]+$")
+
+    @field_validator("fecha_cierre")
+    @classmethod
+    def _no_futura(cls, v):
+        if v is not None and v > date.today():
+            raise ValueError("fecha_cierre no puede ser futura")
+        return v
 
 
 @router.post("/listings/{listing_id}/cerrar")
@@ -512,7 +615,7 @@ async def cerrar_listing(
         )
     except Exception:
         log.warning("conversion event insert falló (listing=%s)", listing_id, exc_info=True)
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": "cerrado", "precio_cierre": req.precio_cierre}
 
 
@@ -549,7 +652,7 @@ async def cambiar_estado_listing(
                 "UPDATE listing SET estado = $2::listing_estado, updated_at = NOW() WHERE id = $1",
                 listing_id, nuevo,
             )
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     return {"id": listing_id, "estado": nuevo}
 
 
@@ -669,15 +772,19 @@ async def subir_fotos(
 ):
     """Sube fotos del listing a R2. La primera foto del listing queda de portada."""
     agent = await _agent_del_usuario(user, pool)
+    if len(fotos) > 20:
+        raise HTTPException(status_code=400, detail="Máximo 20 fotos por envío")
     async with pool.acquire() as conn:
         own = await conn.fetchval(
-            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2", listing_id, agent.id
+            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL", listing_id, agent.id
         )
         if not own:
             raise HTTPException(status_code=404, detail="Listing no encontrado o no es tuyo")
         existentes = await conn.fetchval(
             "SELECT COUNT(*) FROM listing_media WHERE listing_id = $1", listing_id
         )
+        if existentes + len(fotos) > 60:
+            raise HTTPException(status_code=400, detail="Máximo 60 fotos por listing")
         urls = []
         for i, f in enumerate(fotos):
             if not (f.filename and f.size):
@@ -694,12 +801,51 @@ async def subir_fotos(
     return {"id": listing_id, "fotos": urls}
 
 
+# Gap C: avisar al propietario cuando su inmueble se publica o se verifica.
+# Email del owner: listing.owner_id → usuarios.email; fallback listing.email_contacto.
+_OWNER_EVENTO = {
+    "publicado":  ("¡Tu inmueble ya está publicado!", "fue <strong>publicado en el mapa</strong> de Medellín Social y ya es visible para compradores."),
+    "verificado": ("Tu inmueble obtuvo el sello «Verificada»", "pasó la verificación de documentos y ahora muestra el <strong>sello «Verificada»</strong>, que genera más confianza en los compradores."),
+}
+
+async def _notify_owner_listing(pool, listing_id: str, evento: str) -> None:
+    titulo_msg = _OWNER_EVENTO.get(evento)
+    if not titulo_msg:
+        return
+    titulo, detalle = titulo_msg
+    try:
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                """
+                SELECT COALESCE(u.email, l.email_contacto) AS email,
+                       COALESCE(u.nombre, l.nombre_contacto, 'propietario') AS nombre,
+                       COALESCE(l.titulo, 'tu inmueble') AS titulo
+                FROM listing l
+                LEFT JOIN owner o ON o.id = l.owner_id
+                LEFT JOIN usuarios u ON u.id = o.usuario_id
+                WHERE l.id = $1
+                """,
+                listing_id,
+            )
+        if not row or not row["email"]:
+            return
+        html = _wrap(f"""
+          <h3 style="color:#1D9E75">{esc(titulo)}</h3>
+          <p style="font-size:14px;color:#1A1208;margin-bottom:8px">Hola <strong>{esc(row['nombre'])}</strong>,</p>
+          <p style="font-size:14px;color:#1A1208">Tu inmueble <strong>{esc(row['titulo'])}</strong> {detalle}</p>
+        """)
+        await send_email(row["email"], titulo, html)
+    except Exception:
+        log.exception("notify_owner: fallo avisando %s de listing %s", evento, listing_id)
+
+
 @router.post("/asignados/{intake_id}/publicar")
 async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     """El realtor confirma los datos y publica al mapa (borrador → publicado).
 
-    El realtor de la zona ES el revisor: no pasa por admin. aprobar() setea
-    publicado+verificado+published_at e inserta en el cache (al mapa al instante).
+    El realtor de la zona ES el revisor: no pasa por admin. aprobar(verificar=False)
+    setea publicado+published_at e inserta en el cache (al mapa al instante). El sello
+    «Verificada» NO se otorga por publicar: lo gana la verificación de documentos (DD).
     """
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
@@ -739,9 +885,12 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
         fotos_portada=row["fotos_portada"],
     )
     try:
-        await aprobar(listing_obj, str(agent.id), pool)  # realtor = moderador
+        # verificar=False: publica al mapa SIN el sello; el sello lo da el DD.
+        await aprobar(listing_obj, str(agent.id), pool, verificar=False)
     except EstadoError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    # Gap C: avisar al owner de que su inmueble ya está publicado en el mapa.
+    await _notify_owner_listing(pool, str(row["listing_id"]), "publicado")
     return {"listing_id": str(row["listing_id"]), "estado": "publicado"}
 
 
@@ -774,16 +923,20 @@ def _componente_velocidad(resp_med: float | None) -> float:
 
 
 def _puntaje_standing(row) -> int:
-    """Puntaje 0..100 del agente a partir de sus 4 componentes. Pesos en
-    _PUNTAJE_PESOS (decisión de producto). Solo se llama para agentes con
+    """Puntaje 0..100 del agente a partir de sus 3 componentes (contribución,
+    velocidad, aceptación). Pesos en _PUNTAJE_PESOS (decisión de producto).
+    Asistencia no entra (plantón = del comprador). Solo se llama para agentes con
     actividad >= umbral — no se infla con ceros."""
-    contrib = min(int(row["cierres"]), _CONTRIB_CAP) / _CONTRIB_CAP * 100.0
+    cierres = int(row["cierres"])
+    completos = int(row.get("cierres_completos", 0) or 0)  # cierres con cédula catastral
+    contrib_base = min(cierres, _CONTRIB_CAP) / _CONTRIB_CAP * 100.0
+    completitud = (completos / cierres) if cierres else 0.0  # fracción con datos verificables
+    contrib = min(100.0, contrib_base * (1 + _COMPLETITUD_BONUS * completitud))
     vel = _componente_velocidad(float(row["resp_med"]) if row["resp_med"] is not None else None)
-    show = float(row["show_rate"] or 0) * 100.0
     acep = float(row["aceptacion"] or 0) * 100.0
+    # show_rate (asistencia) NO entra: el plantón es del comprador, no del realtor.
     p = (_PUNTAJE_PESOS["contribucion"] * contrib
          + _PUNTAJE_PESOS["velocidad"] * vel
-         + _PUNTAJE_PESOS["show_rate"] * show
          + _PUNTAJE_PESOS["aceptacion"] * acep)
     return round(p)
 
@@ -800,6 +953,10 @@ _STANDING_COMPONENTS_SQL = """
          WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
            AND pe.matricula_inmobiliaria IS NOT NULL
            AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres,
+      (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM public.propiedad_evento pe
+         WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+           AND pe.matricula_inmobiliaria IS NOT NULL AND pe.cedula_catastral IS NOT NULL
+           AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres_completos,
       (SELECT percentile_cont(0.5) WITHIN GROUP (
                  ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0)
          FROM public.visita_solicitud v
@@ -852,7 +1009,7 @@ def _standing_de(rows, agent_id: str) -> dict:
         "puntaje": puntaje,
         "cierres_reportados_12m": cierres,
         "ranking": ranking,
-        "nota": "Reportar cierres y responder rápido sube tu puntaje.",
+        "nota": "Reportar cierres (con matrícula y cédula catastral) y responder rápido sube tu puntaje.",
     }
 
 
@@ -1139,6 +1296,16 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
                    COALESCE(v.nombre, u.nombre, 'Visitante') AS nombre,
                    v.telefono, u.email,
                    v.fecha_visita, v.mensaje, v.estado, v.resultado, v.created_at,
+                   v.nota_realtor, v.origen,
+                   -- Ficha del inmueble (para que el realtor sepa cuál es y a dónde ir).
+                   -- Datos del listing propio (lst); para scrapeados cae a staging/barrio.
+                   COALESCE(lst.barrio, b.nombre, s.barrio_raw)                 AS barrio,
+                   lst.direccion_aprox                                          AS direccion,
+                   lst.precio                                                   AS precio,
+                   COALESCE(lst.tipo_inmueble::text, s.tipo_inmueble::text)     AS tipo_inmueble,
+                   lst.operacion::text                                          AS operacion,
+                   lst.area_m2, lst.habitaciones, lst.banos,
+                   cov.url                                                      AS cover_url,
                    -- Calificación del lead (Zillow paso 2): el agente ve con quién habla.
                    v.intencion, v.presupuesto, v.plazo, v.credito,
                    (v.presupuesto IS NOT NULL OR v.plazo IS NOT NULL
@@ -1161,6 +1328,11 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
             LEFT JOIN raw.barrios b ON b.id = s.barrio_id
             LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = s.barrio_id
             LEFT JOIN public.usuarios u ON u.id = v.usuario_id
+            LEFT JOIN public.listing lst ON lst.id::text = v.listing_url
+            LEFT JOIN LATERAL (
+                SELECT lm.url FROM public.listing_media lm
+                WHERE lm.listing_id = lst.id ORDER BY lm.es_portada DESC, lm.orden ASC LIMIT 1
+            ) cov ON TRUE
             WHERE m.url IS NOT NULL
                -- Lead ruteado directo al realtor (crear_visita / lead-in de GHL por
                -- zona): el agent_id se resolvió al crear. Sin esta rama, un lead
@@ -1195,6 +1367,8 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
     return {
         "visitas": [
             {**dict(v),
+             "precio": float(v["precio"]) if v["precio"] is not None else None,
+             "area_m2": float(v["area_m2"]) if v["area_m2"] is not None else None,
              "fecha_visita": v["fecha_visita"].isoformat() if v["fecha_visita"] else None,
              "created_at": v["created_at"].isoformat()}
             for v in visitas
@@ -1209,6 +1383,8 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
 class EstadoVisitaRequest(BaseModel):
     estado: str  # 'confirmada' | 'realizada' | 'cancelada' | 'no_asistio'
     resultado: str | None = None  # 'interesado' | 'oferta' | 'descartado' (solo con realizada)
+    fecha_visita: str | None = None            # ISO 8601 — fijar/ajustar al confirmar (#3)
+    nota: str | None = Field(None, max_length=500)  # nota del realtor sobre la visita (#4)
 
 
 @router.patch("/visitas/{visita_id}")
@@ -1225,11 +1401,20 @@ async def actualizar_visita(
             raise HTTPException(status_code=400, detail="Resultado inválido")
         if req.estado != "realizada":
             raise HTTPException(status_code=400, detail="El resultado solo aplica a visitas realizadas")
+    fecha_dt = None
+    if req.fecha_visita:
+        try:
+            fecha_dt = datetime.fromisoformat(req.fecha_visita.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
+    nota = (req.nota or "").strip() or None
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             _MIS_URLS_CTE + """
-            UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado), updated_at = NOW()
+            UPDATE visita_solicitud v SET estado = $3, resultado = COALESCE($5, v.resultado),
+                   fecha_visita = COALESCE($6, v.fecha_visita),
+                   nota_realtor = COALESCE($7, v.nota_realtor), updated_at = NOW()
             WHERE v.id = $4 AND (
                 v.listing_url IN (SELECT url FROM mis_urls)
                 OR v.agent_id = $1   -- lead ruteado directo (crear_visita / GHL lead-in)
@@ -1247,11 +1432,68 @@ async def actualizar_visita(
             )
             RETURNING v.id
             """,
-            agent.id, user.get("id"), req.estado, visita_id, req.resultado,
+            agent.id, user.get("id"), req.estado, visita_id, req.resultado, fecha_dt, nota,
         )
     if not row:
         raise HTTPException(status_code=404, detail="Visita no encontrada o no es tuya")
     return {"id": visita_id, "estado": req.estado, "resultado": req.resultado}
+
+
+class CrearVisitaManualRequest(BaseModel):
+    """Visita que el realtor registra a mano (la agendó por fuera de la plataforma)."""
+    listing_id: str
+    nombre: str = Field(..., min_length=1, max_length=120)
+    telefono: str | None = Field(None, max_length=40)
+    fecha_visita: str | None = None             # ISO 8601
+    estado: str = "confirmada"                  # 'confirmada' (agendada) | 'realizada' (ya ocurrió)
+    resultado: str | None = None                # solo con 'realizada'
+    nota: str | None = Field(None, max_length=500)
+
+
+@router.post("/visitas", status_code=201)
+async def crear_visita_manual(
+    req: CrearVisitaManualRequest,
+    user: dict = Depends(get_current_user),
+    pool=Depends(get_pool),
+):
+    """Registra una visita a mano sobre un listing PROPIO del realtor. origen='manual'
+    para distinguirla de las pedidas desde el mapa (decisión de producto: si cuentan
+    o no para el puntaje). Guardia de propiedad: solo listings del agente."""
+    if req.estado not in ("confirmada", "realizada"):
+        raise HTTPException(status_code=400, detail="Estado inválido (confirmada | realizada)")
+    if req.resultado is not None:
+        if req.resultado not in ("interesado", "oferta", "descartado"):
+            raise HTTPException(status_code=400, detail="Resultado inválido")
+        if req.estado != "realizada":
+            raise HTTPException(status_code=400, detail="El resultado solo aplica a visitas realizadas")
+    fecha_dt = None
+    if req.fecha_visita:
+        try:
+            fecha_dt = datetime.fromisoformat(req.fecha_visita.replace("Z", "+00:00"))
+        except ValueError:
+            raise HTTPException(status_code=400, detail="fecha_visita inválida (ISO 8601)")
+    nota = (req.nota or "").strip() or None
+    agent = await _agent_del_usuario(user, pool)
+    async with pool.acquire() as conn:
+        # Guardia de propiedad: el listing debe ser del realtor (no de otro agente).
+        es_propio = await conn.fetchval(
+            "SELECT 1 FROM listing WHERE id = $1 AND agent_id = $2 AND deleted_at IS NULL",
+            req.listing_id, agent.id,
+        )
+        if not es_propio:
+            raise HTTPException(status_code=403, detail="Ese listing no es tuyo")
+        row = await conn.fetchrow(
+            """
+            INSERT INTO visita_solicitud
+                (listing_url, nombre, telefono, fecha_visita, estado, resultado,
+                 nota_realtor, origen, agent_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, 'manual', $8)
+            RETURNING id
+            """,
+            req.listing_id, req.nombre.strip(), (req.telefono or "").strip() or None,
+            fecha_dt, req.estado, req.resultado, nota, agent.id,
+        )
+    return {"id": str(row["id"]), "estado": req.estado, "origen": "manual"}
 
 
 # zona_codigo llega en 2 namespaces que colisionan si se adivinan por string:

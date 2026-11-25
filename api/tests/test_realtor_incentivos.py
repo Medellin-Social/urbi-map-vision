@@ -12,7 +12,6 @@ en vivo y con cleanup. Correr: `pytest api/tests/test_realtor_incentivos.py -v`.
 import datetime as dt
 from decimal import Decimal
 
-import pytest
 import pytest_asyncio
 from httpx import ASGITransport, AsyncClient
 
@@ -32,9 +31,10 @@ def test_componente_velocidad_umbrales():
     assert R._componente_velocidad(40) == 25.0       # lento
 
 
-def _row(cierres=0, resp_med=None, show_rate=None, aceptacion=None, actividad=0, agent_id="a"):
+def _row(cierres=0, resp_med=None, show_rate=None, aceptacion=None, actividad=0, agent_id="a", cierres_completos=0):
     return {"agent_id": agent_id, "cierres": cierres, "resp_med": resp_med,
-            "show_rate": show_rate, "aceptacion": aceptacion, "actividad": actividad}
+            "show_rate": show_rate, "aceptacion": aceptacion, "actividad": actividad,
+            "cierres_completos": cierres_completos}
 
 
 def test_puntaje_perfecto_y_cero():
@@ -46,13 +46,35 @@ def test_puntaje_perfecto_y_cero():
     assert R._puntaje_standing(cero) == 0
 
 
+def test_asistencia_no_penaliza_al_realtor():
+    # Un plantón (show_rate bajo) NO baja el puntaje: no asistir es del comprador.
+    base = dict(cierres=3, resp_med=3, aceptacion=1.0)
+    con_plantones = _row(show_rate=0.2, **base)
+    sin_plantones = _row(show_rate=1.0, **base)
+    assert R._puntaje_standing(con_plantones) == R._puntaje_standing(sin_plantones)
+    assert "show_rate" not in R._PUNTAJE_PESOS
+    assert abs(sum(R._PUNTAJE_PESOS.values()) - 1.0) < 1e-9
+
+
 def test_puntaje_respeta_pesos():
-    # Solo contribución al tope (peso 0.30) → 30. Verifica que el peso manda.
+    # Solo contribución al tope → contribucion*100. Verifica que el peso manda.
     solo_contrib = _row(cierres=5, resp_med=None, show_rate=0, aceptacion=0)
     assert R._puntaje_standing(solo_contrib) == round(R._PUNTAJE_PESOS["contribucion"] * 100)
     # Contribución topa en _CONTRIB_CAP: 10 cierres no suma más que 5.
     assert R._puntaje_standing(_row(cierres=10, resp_med=None, show_rate=0, aceptacion=0)) == \
            R._puntaje_standing(_row(cierres=R._CONTRIB_CAP, resp_med=None, show_rate=0, aceptacion=0))
+
+
+def test_puntaje_premia_completitud():
+    # Cédula catastral en los cierres sube la contribución (datos verificables).
+    sin = _row(cierres=2, cierres_completos=0, resp_med=None, show_rate=0, aceptacion=0)
+    con = _row(cierres=2, cierres_completos=2, resp_med=None, show_rate=0, aceptacion=0)
+    assert R._puntaje_standing(con) > R._puntaje_standing(sin)
+    # Nunca pasa de 100 aunque la contribución ya esté al tope + completa.
+    tope = _row(cierres=5, cierres_completos=5, resp_med=2, show_rate=1.0, aceptacion=1.0)
+    assert R._puntaje_standing(tope) == 100
+    # Sin cierres no revienta (división por cero) → 0.
+    assert R._puntaje_standing(_row(cierres=0, cierres_completos=0, show_rate=0, aceptacion=0)) == 0
 
 
 def test_standing_degrada_honesto_sin_actividad():

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, GraduationCap } from "@/lib/icons";
+import { X } from "@/lib/icons";
 import { useLang } from "@/lib/i18n";
 
 const LS_KEY = "home_tour_seen";
@@ -146,11 +146,12 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  const replay = () => {
-    setStep(0);
-    setRect(null);
-    setShow(true);
-  };
+  // El botón de replay ahora vive en el navbar — escucha su evento.
+  useEffect(() => {
+    const h = () => { setStep(0); setRect(null); setShow(true); };
+    window.addEventListener("replay-tour", h);
+    return () => window.removeEventListener("replay-tour", h);
+  }, []);
 
   const s = STEPS[step];
   const isLast = step === STEPS.length - 1;
@@ -226,17 +227,6 @@ export function HomeTourModal({ isMobile }: { isMobile: boolean }) {
 
   return (
     <>
-      <button
-        onClick={replay}
-        aria-label={tt("Tutorial del sitio", "Site tutorial")}
-        data-tour="tour-replay-home"
-        className="fixed z-[45] flex items-center gap-1.5 whitespace-nowrap rounded-full px-3 py-1.5 text-xs font-semibold shadow-md transition hover:opacity-90"
-        style={{ bottom: 20, right: 20, background: "#FAF8F3", border: "1px solid #E5E0D5", color: "#0F8A4F" }}
-      >
-        <GraduationCap size={14} />
-        {tt("Tutorial del sitio", "Site tutorial")}
-      </button>
-
       <AnimatePresence>
         {show && (
           <>

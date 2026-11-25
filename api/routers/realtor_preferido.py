@@ -18,7 +18,11 @@ from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
 from api.routers.admin import require_admin
+from api.utils import ghl_client
 from api.services import realtor_preferido_service as svc
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 Nivel = Literal["barrio", "comuna"]
@@ -108,9 +112,11 @@ async def confirmar_simulado(body: CheckoutIn, user: dict = Depends(get_current_
         raise HTTPException(status_code=403, detail="Confirmación simulada deshabilitada")
     agent_id = await _agente_activo(user, pool)
     try:
-        return await svc.procesar_pago_slot(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses, "simulado")
+        r = await svc.procesar_pago_slot(pool, agent_id, body.zona_nivel, body.zona_codigo, body.meses, "simulado")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
+    return r
 
 
 class AsignarIn(BaseModel):
@@ -127,10 +133,12 @@ async def admin_asignar(body: AsignarIn, admin: dict = Depends(require_admin), p
         async with pool.acquire() as conn:
             async with conn.transaction():
                 await svc.validar_zona(conn, body.zona_nivel, body.zona_codigo)
-                return await svc.asignar_slot(conn, body.agent_id, body.zona_nivel, body.zona_codigo,
-                                              body.tipo, body.meses, "admin")
+                r = await svc.asignar_slot(conn, body.agent_id, body.zona_nivel, body.zona_codigo,
+                                           body.tipo, body.meses, "admin")
     except svc.SlotError as e:
         raise HTTPException(status_code=409, detail=str(e))
+    ghl_client.spawn(ghl_client.sync_agent_safe(body.agent_id))
+    return r
 
 
 @router.delete("/admin/slot/{slot_id}")
@@ -157,6 +165,7 @@ async def admin_cobertura(nivel: Optional[Nivel] = None, admin: dict = Depends(r
                 "WHERE s.zona_nivel='barrio' AND s.zona_codigo=b.id::text AND s.estado='activo') ORDER BY b.nombre")
             total = await conn.fetchval("SELECT COUNT(*) FROM raw.barrios WHERE municipio ILIKE '%medellin%'")
         except Exception:
+            log.warning("admin_cobertura: excepción suprimida (best-effort)", exc_info=True)
             sin, total = [], 0
     return {"zonas": [dict(r) for r in zonas], "barrios_total": total,
             "barrios_sin_preferido": [dict(r) for r in sin]}
@@ -177,6 +186,7 @@ async def zonas(request: Request, pool=Depends(get_pool)):
             niv = {(r["zona_nivel"], r["zona_codigo"]): r["nivel"] for r in await conn.fetch(
                 "SELECT zona_nivel, zona_codigo::text AS zona_codigo, nivel FROM analytics.zonas_nivel_precio")}
         except Exception:
+            log.warning("zonas: excepción suprimida (best-effort)", exc_info=True)
             niv = {}
         barrios = await conn.fetch(
             "SELECT id::text AS codigo, INITCAP(LOWER(nombre)) AS nombre, municipio FROM raw.barrios "
@@ -212,4 +222,5 @@ async def admin_casa(body: CasaIn, admin: dict = Depends(require_admin), pool=De
     r = await pool.execute("UPDATE agent SET es_realtor_casa = $1 WHERE id = $2::uuid", body.es_realtor_casa, body.agent_id)
     if r.endswith(" 0"):
         raise HTTPException(status_code=404, detail="Agente no encontrado")
+    ghl_client.spawn(ghl_client.sync_agent_safe(body.agent_id))
     return {"ok": True}

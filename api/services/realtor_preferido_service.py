@@ -34,11 +34,14 @@ def _validar_zona(zona_nivel: str) -> None:
 
 async def nivel_zona(conn, zona_nivel: str, zona_codigo: str) -> str:
     try:
-        n = await conn.fetchval(
-            "SELECT nivel FROM analytics.zonas_nivel_precio WHERE zona_nivel = $1 AND zona_codigo = $2",
-            zona_nivel, zona_codigo,
-        )
+        # savepoint: si la tabla no existe, no aborta la transacción del caller
+        async with conn.transaction():
+            n = await conn.fetchval(
+                "SELECT nivel FROM analytics.zonas_nivel_precio WHERE zona_nivel = $1 AND zona_codigo = $2",
+                zona_nivel, zona_codigo,
+            )
     except Exception:  # dbt aún no corrió en este env → nivel por defecto
+        logger.warning("nivel_zona: excepción suprimida (best-effort)", exc_info=True)
         return NIVEL_DEFAULT
     return n or NIVEL_DEFAULT
 
@@ -172,6 +175,7 @@ async def validar_zona(conn, zona_nivel: str, zona_codigo: str) -> None:
     try:
         ok = await conn.fetchval("SELECT 1 FROM raw.barrios WHERE id = $1", int(zona_codigo))
     except Exception:
+        logger.warning("validar_zona: excepción suprimida (best-effort)", exc_info=True)
         return  # raw.barrios ausente en este env: no bloquear
     if not ok:
         raise SlotError("El barrio no existe")

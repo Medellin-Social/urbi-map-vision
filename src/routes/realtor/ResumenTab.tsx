@@ -1,9 +1,63 @@
+import { useState } from "react";
 import {
   useDesempeno, useEmbudo, type Embudo,
 } from "@/hooks/useRealtorDashboard";
 import { C, fmt, fmtCOP, Card, Gauge, Stat } from "./_kit";
+import { Info, ChevronDown } from "@/lib/icons";
 
 const pctN = (v: number | null | undefined) => (v == null ? null : v * 100);
+
+// Drivers del puntaje Standing (espejo de _puntaje_standing en el backend). Pesos
+// como % del total; la cédula catastral en los cierres da el nudge de completitud.
+const SCORE_DRIVERS: { label: string; peso: number; desc: string }[] = [
+  { label: "Cierres reportados", peso: 35, desc: "Ventas cerradas y reportadas (últimos 12 meses). Reportar con cédula catastral las hace verificables y sube más tu puntaje." },
+  { label: "Velocidad de respuesta", peso: 35, desc: "Qué tan rápido contestas las solicitudes de visita. Menos de 4 h = puntaje máximo." },
+  { label: "Aceptación de leads", peso: 30, desc: "De los clientes que te asignamos, cuántos tomas antes de que vuelvan al pool." },
+];
+// Nota mostrada abajo: la asistencia es informativa, NO penaliza (un plantón es del comprador).
+
+function ScoreInfo() {
+  const [open, setOpen] = useState(false);
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1 text-[11.5px] font-semibold transition hover:bg-black/[0.03]"
+        style={{ borderColor: C.line, color: C.sub }}
+      >
+        <Info className="h-3.5 w-3.5" style={{ color: C.brand }} />
+        ¿Cómo se calcula?
+        <ChevronDown className="h-3.5 w-3.5 transition-transform" style={{ color: C.muted, transform: open ? "rotate(180deg)" : "none" }} />
+      </button>
+      {open && (
+        <div className="mt-2 rounded-xl border p-4" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+          <p className="mb-3 text-[12.5px] leading-snug" style={{ color: C.sub }}>
+            Tu puntaje (0–100) premia lo que controlas. Se arma con cuatro partes:
+          </p>
+          <ul className="flex flex-col gap-3">
+            {SCORE_DRIVERS.map((d) => (
+              <li key={d.label}>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[13px] font-semibold" style={{ color: C.ink }}>{d.label}</span>
+                  <span className="text-[12px] font-bold tabular-nums" style={{ color: C.brand }}>{d.peso}%</span>
+                </div>
+                <div className="my-1 h-1.5 overflow-hidden rounded-full" style={{ background: C.soft }}>
+                  <div className="h-full rounded-full" style={{ width: `${d.peso}%`, background: C.brand }} />
+                </div>
+                <p className="text-[11.5px] leading-snug" style={{ color: C.muted }}>{d.desc}</p>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-3 border-t pt-3 text-[11.5px] leading-snug" style={{ borderColor: C.line, color: C.muted }}>
+            La asistencia a visitas se muestra como referencia pero <strong>no baja tu puntaje</strong> — un plantón es del comprador, no tuyo. Necesitas un mínimo de actividad reciente para tener puntaje. Cierres: últimos 12 meses · velocidad y aceptación: últimos 90 días.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
 const fmtMes = (n: number | null | undefined) => (n == null ? "—" : `$${(n / 1e6).toFixed(n >= 1e6 ? 1 : 0)}M/mes`);
 
 // Embudo horizontal (ancho ∝ conteo, rampa ordinal + % de conversión).
@@ -39,11 +93,31 @@ function Funnel({ stages, title, nota, compact }: { stages: { label: string; val
 // La grid "Información del mercado" de la zona vive ahora en Mercado › Zonas de
 // interés (ResultadosTab §3) — se quitó de Inicio para no duplicarla.
 
+// Skeleton de carga: espeja el layout real (fila de gauges + card de zona) para
+// que no haya salto cuando llegan los datos.
+function ResumenSkeleton() {
+  const cell = { background: C.card, border: `1px solid ${C.line}` };
+  return (
+    <div className="flex flex-col gap-6" aria-busy="true" aria-label="Cargando desempeño">
+      <div>
+        <div className="mb-2 h-4 w-40 animate-pulse rounded" style={{ background: C.soft }} />
+        <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+          {Array.from({ length: 7 }).map((_, i) => <div key={i} className="h-28 animate-pulse rounded-2xl" style={cell} />)}
+        </div>
+      </div>
+      <div>
+        <div className="mb-2 h-4 w-52 animate-pulse rounded" style={{ background: C.soft }} />
+        <div className="h-40 animate-pulse rounded-2xl" style={cell} />
+      </div>
+    </div>
+  );
+}
+
 export function ResumenTab() {
   const { data: d, isLoading } = useDesempeno();
   const { data: emb } = useEmbudo() as { data: Embudo | undefined };
 
-  if (isLoading) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Cargando…</div>;
+  if (isLoading) return <ResumenSkeleton />;
   if (!d) return <div className="py-16 text-center text-[13px]" style={{ color: C.muted }}>Sin datos de desempeño aún.</div>;
 
   const cs = d.calificacion_servicio;
@@ -66,7 +140,10 @@ export function ResumenTab() {
     <div className="flex flex-col gap-6">
       {/* ① Cómo te está yendo */}
       <div>
-        <div className="mb-2 text-[13px] font-semibold tracking-tight" style={{ color: C.ink }}>Cómo te está yendo</div>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="text-[13px] font-semibold tracking-tight" style={{ color: C.ink }}>Cómo te está yendo</span>
+          <ScoreInfo />
+        </div>
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
           <Gauge value={st?.puntaje ?? null} label="Standing" sub={st?.ranking ? `#${st.ranking.posicion} de ${st.ranking.total}` : "Puntaje 0–100"} />
           <Gauge value={pctN(d.tasa_aceptacion)} label="Aceptación" suffix="%" sub={`llegaron ${d.asignados_90d}, aceptaste ${d.aceptados_90d}`} />
