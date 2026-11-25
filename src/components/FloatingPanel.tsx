@@ -27,7 +27,6 @@ import {
   Shield,
   Train,
   Trees,
-  Utensils,
   ShoppingBag,
   Sparkles,
   Star,
@@ -130,13 +129,11 @@ function matchColor(score: number): string {
   return "#5B5F5C";
 }
 
-export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS, perfil: perfilProp, risk: riskProp }: Props) {
+export function FloatingPanel({ selected, onClear, onSelect, onGoToMLS }: Props) {
   const isMobile = useIsMobile();
   const [view, setView] = useState<View>("city");
   const [minimized, setMinimized] = useState(true);
   const user = typeof window !== "undefined" ? auth.get() : null;
-  const perfil = perfilProp ?? GOAL_TO_PERFIL[user?.goal ?? ""];
-  const risk = riskProp ?? user?.risk;
 
   const [size, setSize] = useState<{ width: number; height: number }>(() =>
     typeof window !== "undefined" ? readPanelSize() : { width: 380, height: 520 }
@@ -632,14 +629,6 @@ const TRAFICO_COLORS: Record<string, string> = {
   "alto":  "#CE1126",
 };
 
-const VERDE_COLORS: Record<string, string> = {
-  "ALTA":    "#0F8A4F",
-  "MEDIA":   "#0F8A4F",
-  "BAJA":    "#F2B807",
-  "MÍNIMA":  "#CE1126",
-  "SIN DATOS": "#5B5F5C",
-};
-
 // Interpolate gray (#8A8E8A) → plant green (#0F8A4F) based on 0–1 ratio
 function verdeColor(ratio: number): string {
   const r = Math.round(156 + (34 - 156) * ratio);
@@ -683,7 +672,7 @@ const _GOAL_TO_PERFIL: Record<string, string> = {
   mediano_plazo: "mediano_plazo",
 };
 
-function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal; onGoToMLS?: (n: Neighborhood) => void }) {
+function BarrioDetail({ n, onBack, goal, onGoToMLS }: { n: Neighborhood; onBack: () => void; onListings: () => void; goal?: Goal; onGoToMLS?: (n: Neighborhood) => void }) {
   const perfil = _GOAL_TO_PERFIL[goal ?? ""];
   const risk = auth.get()?.risk;
   const { target, setTarget } = useTarget();
@@ -693,9 +682,7 @@ function BarrioDetail({ n, onBack, onListings, goal, onGoToMLS }: { n: Neighborh
   const poblacion = n.poblacionComuna ?? n.poblacionMunicipio ?? null;
   const poblacionZona = n.poblacionComuna != null ? "Comuna" : "Municipio";
 
-  const { data: listingsData, isLoading: listingsLoading } = useListings(n.id, 6);
-  const apiListings = listingsData?.listings ?? [];
-  const listings: ApiListing[] = apiListings.slice(0, 3);
+  useListings(n.id, 6);
 
   const { data: allBarrios } = useBarrios();
   const maxVerdePct = useMemo(() => {
@@ -1837,7 +1824,6 @@ function ListingsView({
   n,
   onBack,
   perfil,
-  risk,
 }: {
   n: Neighborhood;
   onBack: () => void;

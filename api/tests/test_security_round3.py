@@ -1,5 +1,4 @@
 """Regression tests for the ALL-ISSUES round-3 fixes (no DB needed)."""
-import hashlib
 
 import jwt
 import pytest

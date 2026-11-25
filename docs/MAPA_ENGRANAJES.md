@@ -8,9 +8,9 @@ Hallazgo clave: `api/utils/email.py` YA tiene `notify_agente_aprobado`, `notify_
 
 | # | Evento | A quién hay que avisar | Hoy | Estado |
 |---|---|---|---|---|
-| A1 | Realtor se registra (`/agentes/registro`) | Admin (revisar) + realtor ("recibimos tu solicitud") | Solo GHL. `notify_admin_new_agente` existe sin llamar | ROTO |
-| A2 | Admin aprueba | Realtor ("aprobado, siguiente: elige tu zona") + GHL etapa | Solo UPDATE. `notify_agente_aprobado` sin llamar | ROTO |
-| A3 | Admin rechaza | Realtor (motivo) + GHL | Solo UPDATE. `notify_agente_rechazado` sin llamar | ROTO |
+| A1 ✅ | Realtor se registra (`/agentes/registro`) | Admin (revisar) + realtor ("recibimos tu solicitud") | Solo GHL. `notify_admin_new_agente` existe sin llamar | ROTO |
+| A2 ✅ | Admin aprueba | Realtor ("aprobado, siguiente: elige tu zona") + GHL etapa | Solo UPDATE. `notify_agente_aprobado` sin llamar | ROTO |
+| A3 ✅ | Admin rechaza | Realtor (motivo) + GHL | Solo UPDATE. `notify_agente_rechazado` sin llamar | ROTO |
 | A4 | Realtor aprobado sin zona | Realtor ("sin zona no recibes leads") | Nada | FALTA |
 | A5 | Compra de zona (pago) | Realtor + admin | `/zonas/checkout` 501; solo admin asigna a mano | FALTA |
 | A6 | Pago de plan | Realtor | Webhook Stripe OK + email OK; falta crear el checkout | FALTA (checkout) |
@@ -23,8 +23,8 @@ Hallazgo clave: `api/utils/email.py` YA tiene `notify_agente_aprobado`, `notify_
 
 | # | Evento | A quién | Hoy | Estado |
 |---|---|---|---|---|
-| B1 | Visitante pide visita | **Agente asignado** (listing o sponsor de zona) | Nada. Solo email a `rentalinquiries@` si NO hay agente | **ROTO (crítico)** |
-| B2 | Idem | Visitante ("recibimos tu solicitud, te escribe X") | Nada | ROTO |
+| B1 | Visitante pide visita | Agente asignado | `notificar_visita_al_realtor` (email) ya existía; sin agente → `rentalinquiries@`. (Corrección: antes lo marqué ROTO por error) | OK |
+| B2 | Idem | Visitante | Sin campo email en el form → solo posible por WhatsApp/GHL (workflow) | FALTA (GHL) |
 | B3 | Idem | GHL (Contact+nota+opp) | OK | OK |
 | B4 | Agente no responde en N horas | Admin / reasignar | Nada | FALTA |
 | B5 | Agente marca confirmada/realizada/resultado (`PATCH /realtor/visitas`) | Visitante (confirmación) + GHL etapa | Solo UPDATE | FALTA |
@@ -43,10 +43,10 @@ Hallazgo clave: `api/utils/email.py` YA tiene `notify_agente_aprobado`, `notify_
 
 | # | Evento | A quién | Hoy | Estado |
 |---|---|---|---|---|
-| D1 | `/negocios/unirse` (lead) | Admin + negocio ("te contactamos") | GHL sí; email no; ninguna tabla lo consume | ROTO |
+| D1 ✅ | `/negocios/unirse` (lead) | Admin + negocio ("te contactamos") | GHL sí; email no; ninguna tabla lo consume | ROTO |
 | D2 | Lead → tienda | Admin convierte | No hay puente ni vista admin | FALTA |
-| D3 | `/mi-negocio` crea tienda inactiva | Admin | Aparece en `/tiendas/pendientes` pero sin aviso | PARCIAL |
-| D4 | Admin aprueba/rechaza tienda | Dueño del negocio | `sync_tienda` a GHL; sin email | FALTA |
+| D3 ✅ | `/mi-negocio` crea tienda inactiva | Admin | Aparece en `/tiendas/pendientes` pero sin aviso | PARCIAL |
+| D4 ✅ | Admin aprueba/rechaza tienda | Dueño del negocio | `sync_tienda` a GHL; sin email | FALTA |
 | D5 | Pago → `destacado` | Negocio | Sin planes de negocio, sin cobro | FALTA |
 | D6 | Alta de deals | — | Solo sembrados | FALTA |
 | D7 | Reporte "te vieron N" | Negocio (mensual) | Eventos existen, sin reporte ni cron | FALTA |
@@ -84,3 +84,7 @@ Principio: **el API envía emails transaccionales ya (util existe); GHL recibe t
 Después: puente lead→tienda + vista admin (D2, 2 h), email al dueño en moderación (C2), aviso "elige tu zona" tras aprobar (A4), GHL stage updates al aprobar/rechazar (A2/A3), deals y destacado de pago (D5/D6).
 
 Reglas del proyecto: todo en código committeado; cron en `Dockerfile.cron`; probar en DEV antes de prod. Falta verificar en DEV que el email realmente sale (E5).
+
+
+## Implementado (2026-11-22, sin commit, probado solo con tests unitarios, falta DEV)
+A1 (admin + realtor al registrarse), A2/A3 (aprobado/rechazado), D1 (admin + negocio), D3 (admin), D4 (dueño al aprobar tienda). Vía `ghl_client.spawn` (best-effort).

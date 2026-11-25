@@ -6,7 +6,6 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { ArrowLeft, Plus, Check, Heart } from "@/lib/icons";
 import { useNavigate } from "@tanstack/react-router";
 import type { ApiListing, BarrioOption, Neighborhood } from "@/lib/adapters";
-import { formatCOP } from "@/lib/format";
 import { favKey, useFavoritosListings } from "@/hooks/useFavoritosListings";
 import { getToken } from "@/lib/apiClient";
 import { useTarget, targetTipoOperacion } from "@/contexts/TargetContext";
@@ -76,12 +75,6 @@ const TIPO_LABELS: Record<string, string> = {
   lote:          "Lote",
 };
 
-const TIPO_GRUPOS = [
-  { label: "Residencial", tipos: ["apartamento", "casa", "casa_lote", "finca"] },
-  { label: "Comercial",   tipos: ["local", "oficina", "bodega", "consultorio"] },
-  { label: "Terreno",     tipos: ["lote"] },
-];
-
 const TIPO_INMUEBLE_COLOR: Record<string, string> = {
   apartamento:   '#0F8A4F',
   casa:          '#CE1126',
@@ -97,11 +90,6 @@ const TIPO_INMUEBLE_COLOR: Record<string, string> = {
 function getTipoInmuebleBadgeStyle(tipo: string): React.CSSProperties {
   const bg = TIPO_INMUEBLE_COLOR[tipo] ?? '#6E726E';
   return { background: bg, color: '#FFFFFF' };
-}
-
-function tierColor(l: ApiListing): string {
-  if (l.tier === "agencia_premium") return "#FCD116";
-  return TIPO_INMUEBLE_COLOR[l.tipo_inmueble ?? ""] ?? "#6E726E";
 }
 
 // Listing con visibilidad pagada (owner Pro o agente verificado) → destacado.
@@ -433,9 +421,6 @@ export function MLSPanel({
   highlightedListingId,
   onListingHover,
   activeBarrioName,
-  onBarrioFilter,
-  allBarrios,
-  onBarrioNavigate,
   radioUsadoMetros,
   barriosIncluidos,
   premiumExpanded = [],
@@ -447,9 +432,7 @@ export function MLSPanel({
   onClearFilters,
   activeComuna,
   activeMunicipio,
-  comunaBarrios,
   onBackToComuna,
-  onSelectBarrioInComune,
   embedded = false,
 }: Props) {
   const isMobile = useIsMobile();
@@ -467,7 +450,7 @@ export function MLSPanel({
   const ef = externalFilters ?? EMPTY_SHARED_FILTERS;
   const navigate = useNavigate();
   const { isFav, toggle: toggleFav } = useFavoritosListings();
-  const { target, setTarget } = useTarget();
+  const { target } = useTarget();
   const { lang } = useLang();
   const sortBy: SortKey = ef.orden ?? "destacados";
 
@@ -487,14 +470,6 @@ export function MLSPanel({
   useEffect(() => { setVisibleCount(RENDER_STEP); listContainerRef.current?.scrollTo({ top: 0 }); }, [listings, sortBy, activeBarrioName]);
 
 
-  const nVenta = useMemo(
-    () => listings.filter((l) => l.tipo_operacion === "venta").length,
-    [listings],
-  );
-  const nArriendo = useMemo(
-    () => listings.filter((l) => l.tipo_operacion === "arriendo").length,
-    [listings],
-  );
 
   // Premium state — reads from SharedFilters (controlled by MapFilterBar)
   const premiumFilterActive = ef.soloPromium;
@@ -528,9 +503,6 @@ export function MLSPanel({
   }, [premiumFilterActive, premiumInCurrent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Source: use premiumExpanded when premium filter active and no local premium
-  const effectiveListings = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
-    ? premiumExpanded
-    : listings;
   const effectiveRadio = premiumFilterActive && premiumInCurrent === 0 && premiumExpanded.length > 0
     ? premiumRadio
     : radioUsadoMetros;

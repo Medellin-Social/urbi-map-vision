@@ -2,9 +2,7 @@
 
 H1/H2/M3..M8 behaviours that need a database live in test_security_fixes_db.py.
 """
-import asyncio
 import importlib
-import json
 
 import jwt
 import pytest

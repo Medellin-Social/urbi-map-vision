@@ -79,6 +79,11 @@ def fetch_oficial() -> list[dict]:
     rows = []
     for f in resp.json()["features"]:
         p = f["properties"]
+        d = p.get("Datos_Ruido_7D_prom_dia")
+        n = p.get("Datos_Ruido_7D_prom_noche")
+        # Sentinel -999 = estación offline/sin lectura (igual que la red ciudadana).
+        if d is None or n is None or d <= -900 or n <= -900:
+            continue
         lon, lat = f["geometry"]["coordinates"]
         rows.append({
             "codigo": p["codigo"], "red": "oficial",
@@ -130,6 +135,9 @@ def main():
     print(f"  → {len(ciudadano)} sensores con lectura válida (de ~373 totales)")
 
     rows = oficial + ciudadano
+    if not rows:
+        # Fuente sin lecturas válidas: salir != 0 para que run_job alerte (no escribir nada).
+        raise SystemExit("ERROR: SIATA no devolvió ninguna lectura válida de ruido")
 
     if args.dry_run:
         avg_dia = sum(r["db_prom_dia"] for r in rows) / len(rows)

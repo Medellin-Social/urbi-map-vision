@@ -10,9 +10,13 @@ from pydantic import BaseModel
 from api.config import USD_TO_COP
 from api.db import get_pool
 from api.dependencies import get_optional_user, is_agente
+from api.utils.ttl_cache import TTLCache
 from api.routers.listings import ListingFull, ListingsAllResponse, _finalize_row, _gate_market_fields
 from api.services.trm_service import get_usd_rate
 from api.services.personalizacion import PRESUPUESTO_MAX
+import logging
+
+log = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -880,6 +884,9 @@ def _build_amenidades(row: dict) -> Optional[Amenidades]:
 
 # ── Endpoints ─────────────────────────────────────────────────────────────────
 
+_BARRIOS_ROWS_CACHE = TTLCache(ttl=60, maxsize=64)
+
+
 @router.get("", response_model=list[BarrioResponse])
 async def list_barrios(
     response: Response,
@@ -924,7 +931,13 @@ async def list_barrios(
           AND (sc.{score_col} IS NULL OR sc.{score_col} >= $3)
         ORDER BY sc.{score_col} DESC NULLS LAST
     """
-    rows = await pool.fetch(sql, municipio, estrato, score_min)
+    # Las filas (geometría + scores) no dependen del usuario, solo de estos parámetros:
+    # se cachean 60 s por worker; la personalización se aplica después en _build_response.
+    _rkey = (fields, score_col, municipio, estrato, score_min)
+    rows = _BARRIOS_ROWS_CACHE.get(_rkey)
+    if rows is None:
+        rows = await pool.fetch(sql, municipio, estrato, score_min)
+        _BARRIOS_ROWS_CACHE.set(_rkey, rows)
     use_max = not effective_perfil
     # Browser cache: polygons/scores change hourly at most. `private` when the
     # response is personalized (logged-in user's perfil), `public` otherwise so
@@ -979,6 +992,7 @@ async def _load_aliases() -> list[dict]:
         """)
         return [dict(r) for r in rows]
     except Exception:
+        log.warning("_load_aliases: excepción suprimida (best-effort)", exc_info=True)
         return list(_BARRIO_ALIASES_FALLBACK)
 
 
@@ -1018,6 +1032,7 @@ async def buscar_barrio(response: Response, q: str = Query(..., min_length=2, ma
                 out.append({"alias": d["barrio_nombre"].title(), "alias_norm": _norm_q(d["barrio_nombre"]),
                             "asumido": False, **d})
         except Exception:
+            log.warning("buscar_barrio: excepción suprimida (best-effort)", exc_info=True)
             pass
     response.headers["Cache-Control"] = "public, max-age=300"
     return [BarrioAlias(**a) for a in out[:10]]

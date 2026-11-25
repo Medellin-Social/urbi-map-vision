@@ -31,6 +31,9 @@ def test_every_token_has_a_unique_jti_even_within_one_second():
     assert len(jtis) == 5
 
 
+from api.routers.auth import _hash_token  # noqa: E402
+
+
 async def test_signature_padding_variant_is_revoked_with_the_token(client):
     email = "r2_pad@example.com"
     await _clean(email)
@@ -77,7 +80,8 @@ async def test_magic_link_token_is_consumed_atomically(client):
     await _clean(email)
     assert (await client.post("/api/v1/auth/magic-link", json={"email": email})).status_code == 200
     pool = await _pool()
-    token = await pool.fetchval("SELECT token FROM magic_link_tokens WHERE email = $1", email)
+    token = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute("UPDATE magic_link_tokens SET token = $2 WHERE email = $1", email, _hash_token(token))
     rs = await asyncio.gather(*[client.post("/api/v1/auth/magic-link/verificar", json={"token": token}) for _ in range(6)])
     assert sorted(r.status_code for r in rs).count(200) == 1
     assert all(r.status_code in (200, 400) for r in rs)
@@ -89,7 +93,8 @@ async def test_expired_magic_link_is_rejected_and_not_consumed_state_untouched(c
     await client.post("/api/v1/auth/magic-link", json={"email": email})
     pool = await _pool()
     await pool.execute("UPDATE magic_link_tokens SET expires_at = NOW() - interval '1 minute' WHERE email = $1", email)
-    token = await pool.fetchval("SELECT token FROM magic_link_tokens WHERE email = $1", email)
+    token = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute("UPDATE magic_link_tokens SET token = $2 WHERE email = $1", email, _hash_token(token))
     r = await client.post("/api/v1/auth/magic-link/verificar", json={"token": token})
     assert r.status_code == 400
     assert await pool.fetchval("SELECT COUNT(*) FROM usuarios WHERE email = $1", email) == 0
@@ -101,8 +106,10 @@ async def test_password_reset_token_changes_the_password_exactly_once(client):
     await _magic_login(client, email)
     await client.post("/api/v1/auth/forgot-password", json={"email": email})
     pool = await _pool()
-    token = await pool.fetchval(
-        "SELECT t.token FROM password_reset_tokens t JOIN usuarios u ON u.id = t.usuario_id WHERE u.email = $1", email)
+    token = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute(
+        "UPDATE password_reset_tokens SET token = $2 WHERE usuario_id = (SELECT id FROM usuarios WHERE email = $1)",
+        email, _hash_token(token))
     rs = await asyncio.gather(*[
         client.post("/api/v1/auth/reset-password", json={"token": token, "new_password": f"Password-{i}-xxxx"})
         for i in range(5)])
@@ -119,8 +126,10 @@ async def test_email_verification_token_is_consumed_atomically(client):
     await _clean(email)
     await _register(client, email)
     pool = await _pool()
-    token = await pool.fetchval(
-        "SELECT t.token FROM email_verification_tokens t JOIN usuarios u ON u.id = t.usuario_id WHERE u.email = $1", email)
+    token = "known-" + __import__("uuid").uuid4().hex
+    await pool.execute(
+        "UPDATE email_verification_tokens SET token = $2 WHERE usuario_id = (SELECT id FROM usuarios WHERE email = $1)",
+        email, _hash_token(token))
     rs = await asyncio.gather(*[client.get("/api/v1/auth/verify-email", params={"token": token}) for _ in range(4)])
     assert sorted(r.status_code for r in rs) == [200, 400, 400, 400]
 
@@ -141,7 +150,6 @@ async def _google(client):
 
 
 async def test_google_requires_sub_in_the_verified_token(monkeypatch):
-    import httpx
     from api.routers import auth as auth_mod
     monkeypatch.setenv("GOOGLE_CLIENT_ID", "cid")
 

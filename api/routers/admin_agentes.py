@@ -1,10 +1,12 @@
 """Verificación manual de agentes (admin) — cola + aprobar/rechazar/suspender."""
+import os
 from types import SimpleNamespace
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from pydantic import BaseModel
 
 from api.db import get_pool
+from api.utils import ghl_client
 from api.limiter import limiter
 from api.routers.admin import _audit, _verify_admin_password, require_admin
 from api.services.agent_service import (
@@ -30,7 +32,7 @@ class MotivoConPasswordRequest(BaseModel):
 async def _cargar_agent(agent_id: str, pool):
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, estado, usuario_id FROM agent WHERE id = $1", agent_id
+            "SELECT id, estado, usuario_id, email, nombre FROM agent WHERE id = $1", agent_id
         )
     if not row:
         raise HTTPException(status_code=404, detail="Agente no encontrado")
@@ -59,6 +61,11 @@ async def aprobar(request: Request, agent_id: str, req: AprobarRequest = Body(..
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "aprobar_agente", "agent", agent_id, None, request)
+    if agent.email:
+        from api.utils.email import notify_agente_aprobado
+        app_url = os.getenv("APP_URL", "https://medellin.social")
+        ghl_client.spawn(notify_agente_aprobado(agent.email, agent.nombre or "", f"{app_url}/realtor/dashboard"))
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "activo"}
 
 
@@ -71,6 +78,11 @@ async def rechazar(request: Request, agent_id: str, req: MotivoRequest = Body(..
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "rechazar_agente", "agent", agent_id, {"motivo": req.motivo}, request)
+    if agent.email:
+        from api.utils.email import notify_agente_rechazado
+        app_url = os.getenv("APP_URL", "https://medellin.social")
+        ghl_client.spawn(notify_agente_rechazado(agent.email, agent.nombre or "", req.motivo, f"{app_url}/agentes/registro"))
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "rechazado"}
 
 
@@ -84,6 +96,7 @@ async def suspender(request: Request, agent_id: str, req: MotivoConPasswordReque
     except AgentError as e:
         raise HTTPException(status_code=409, detail=str(e))
     await _audit(pool, admin, "suspender_agente", "agent", agent_id, {"motivo": req.motivo}, request)
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "inactivo"}
 
 
@@ -177,3 +190,37 @@ async def zonas_catalogo(admin: dict = Depends(require_admin), pool=Depends(get_
         "comunas": [{"cd_comuna": r["cd_comuna"], "nombre": r["nombre"]} for r in comunas],
         "barrios": [{"id": r["id"], "nombre": r["nombre"], "cd_comuna": r["cd_comuna"]} for r in barrios],
     }
+
+
+# ── Fallos de push a GHL (visibilidad + reintento manual) ────────────────────
+
+class ReintentarFallosRequest(BaseModel):
+    ids: list[int]
+
+
+@router.get("/ghl/fallos")
+async def ghl_fallos(
+    abiertos: bool = Query(True),
+    admin: dict = Depends(require_admin),
+    pool=Depends(get_pool),
+):
+    """Pushes a GHL que fallaron. `agotado` = superó el tope de reintentos automáticos."""
+    from api.services.ghl_retry_service import MAX_ATTEMPTS, listar_fallos
+    fallos = await listar_fallos(pool, solo_abiertos=abiertos)
+    return {"max_intentos": MAX_ATTEMPTS, "total": len(fallos), "fallos": fallos}
+
+
+@router.post("/ghl/fallos/reintentar")
+@limiter.limit("10/minute")
+async def ghl_fallos_reintentar(
+    request: Request,
+    req: ReintentarFallosRequest = Body(...),
+    admin: dict = Depends(require_admin),
+    pool=Depends(get_pool),
+):
+    """Reintento manual (ignora backoff y tope). Máx. 50 ids por llamada."""
+    from api.services.ghl_retry_service import reintentar_ids
+    ids = req.ids[:50]
+    res = await reintentar_ids(pool, ids)
+    await _audit(pool, admin, "ghl_reintentar", "ghl_push_failures", None, {"ids": ids, **res}, request)
+    return res

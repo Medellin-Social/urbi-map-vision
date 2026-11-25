@@ -12,10 +12,12 @@ from pydantic import BaseModel
 from api.utils.storage import read_upload_bounded
 
 from api.db import get_pool
+from api.utils import ghl_client
 from api.dependencies import get_current_user
 from api.routers.asignador import _agent_del_usuario
 from api.schemas.intake_cuestionario import cuestionario_para
 from api.services.asignador_service import asignar_intake
+from api.services.zona_sponsor_service import get_or_create_agency
 from api.services.catastro_plausibilidad import plausibilidad_catastro
 from api.services.due_diligence_service import (
     checklist_completo, checklist_verificado, generar_checklist, verificar_item,
@@ -121,6 +123,9 @@ async def crear_intake_endpoint(
         import logging
         logging.getLogger(__name__).exception("intake %s: auto-asignación falló", intake["id"])
 
+    ghl_client.spawn(ghl_client.sync_owner_intake(intake["id"]))  # background, best-effort
+    if agent_id:
+        ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": intake["id"], "estado": estado, "agent_id": agent_id}
 
 
@@ -218,7 +223,9 @@ async def aceptar_intake_endpoint(
             agent.id,
         )
         if agency_id is None:
-            raise HTTPException(status_code=409, detail="El agente no pertenece a ninguna agency")
+            # Realtor independiente: se le crea su agency personal (owner).
+            async with conn.transaction():
+                agency_id = await get_or_create_agency(conn, agent.id)
 
     if row["listing_id"]:
         # Flujo "publica primero" (0053): el owner ya publicó y el intake nació
@@ -267,6 +274,7 @@ async def aceptar_intake_endpoint(
             SimpleNamespace(id=intake_id, declaraciones=decl), pool
         )
 
+    ghl_client.spawn(ghl_client.sync_owner_intake(intake_id))
     return {"intake_id": intake_id, "listing_id": listing_id,
             "estado": "aceptado", "dd_items": dd_items}
 

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useBarriosComunas, useBarriosPorComuna, useComparar } from "@/hooks/useBarrios";
 import type { Neighborhood } from "@/lib/adapters";
-import { C, fmt, fmtCOP, Card } from "./_kit";
+import { C, fmtCOP, Card } from "./_kit";
 
 type Metric = {
   key: string; label: string; grupo: "negocio" | "zona"; get: (n: Neighborhood) => number | null;

@@ -10,6 +10,9 @@ import jwt
 from jwt import PyJWTError
 
 from api.db import get_pool
+import logging
+
+log = logging.getLogger(__name__)
 
 _bearer = HTTPBearer(auto_error=False)
 
@@ -34,6 +37,7 @@ def _canonical_token(token: str) -> str:
     try:
         raw = jwt.utils.base64url_decode(sig.encode())
     except Exception:
+        log.warning("_canonical_token: excepción suprimida (best-effort)", exc_info=True)
         return token
     return f"{head}.{jwt.utils.base64url_encode(raw).decode()}"
 

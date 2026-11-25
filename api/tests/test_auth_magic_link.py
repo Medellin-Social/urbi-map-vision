@@ -9,9 +9,13 @@ from datetime import datetime, timedelta, timezone
 async def _get_token_for_email(email: str) -> str:
     from api.db import get_pool
     pool = get_pool()
-    return await pool.fetchval(
-        "SELECT token FROM magic_link_tokens WHERE email = $1", email
+    # El token se guarda hasheado: fijamos uno conocido y devolvemos el crudo.
+    from api.routers.auth import _hash_token
+    raw = "known-raw-" + email
+    res = await pool.execute(
+        "UPDATE magic_link_tokens SET token = $2 WHERE email = $1", email, _hash_token(raw)
     )
+    return raw if res.endswith("1") else None
 
 
 @pytest.mark.require_db

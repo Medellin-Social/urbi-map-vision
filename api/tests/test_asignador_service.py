@@ -21,8 +21,18 @@ class FakeConn:
         self.executed.append((sql, args))
         return "OK"
 
+    def transaction(self):
+        class _Tx:
+            async def __aenter__(self_):
+                return self_
+
+            async def __aexit__(self_, *a):
+                return False
+        return _Tx()
+
     async def fetchrow(self, sql, *args):
-        # Para tomar_del_pool: RETURNING id → row o None (carrera)
+        # UPDATE ... RETURNING id → row o None (carrera). Se registra como los execute.
+        self.executed.append((sql, args))
         if self._fetchrow_result == "__row__":
             return {"id": args[1] if len(args) > 1 else "x"}
         return self._fetchrow_result
@@ -175,6 +185,26 @@ async def test_tomar_agente_no_activo_rechazado():
 
 
 @pytest.mark.asyncio
+async def test_carrera_no_reporta_asignado_ni_notifica(monkeypatch):
+    """El UPDATE no escribió (otro lo movió antes): no se dice 'asignado' ni se notifica."""
+    from api.services import asignador_service as svc
+    avisos = []
+
+    async def _notif(*a, **k):
+        avisos.append(a)
+
+    async def _pat(*a, **k):
+        return ["ag-1"]
+
+    async def _owner(*a, **k):
+        return "owner-1"
+    monkeypatch.setattr(svc, "_notificar_lead_asignado", _notif)
+    monkeypatch.setattr(svc, "patrocinadores_vigentes", _pat)
+    monkeypatch.setattr(svc, "_owner_activo_de_agency", _owner)
+    conn = FakeConn(fetchrow_result=None)  # el claim siempre pierde
+    r = await svc.asignar_intake(_intake(), FakePool(conn))
+    assert r["resultado"] == "idempotente"
+    assert avisos == []
 async def test_tomar_fuera_de_zona_rechazado(monkeypatch):
     """Zona-lock: un realtor activo NO toma un intake fuera de su zona."""
     async def _no_cubierta(pool, barrio_id, agent_id=None):

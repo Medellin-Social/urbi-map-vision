@@ -5,6 +5,9 @@ from collections import defaultdict, deque
 
 from slowapi import Limiter
 from starlette.requests import Request
+import logging
+
+log = logging.getLogger(__name__)
 
 
 def _trusted_proxy_count() -> int | None:
@@ -114,6 +117,7 @@ class KeyedThrottle:
                     await conn.execute("INSERT INTO public.throttle_hits (key) VALUES ($1)", key)
                     return True
         except Exception:
+            log.warning("allow_shared: excepción suprimida (best-effort)", exc_info=True)
             return self.allow(key)
 
     async def count_shared(self, pool, key: str) -> int:
@@ -125,12 +129,14 @@ class KeyedThrottle:
                 key, float(self.window_s),
             ) or 0)
         except Exception:
+            log.warning("count_shared: excepción suprimida (best-effort)", exc_info=True)
             return 0
 
     async def hit_shared(self, pool, key: str) -> None:
         try:
             await pool.execute("INSERT INTO public.throttle_hits (key) VALUES ($1)", key)
         except Exception:
+            log.warning("hit_shared: excepción suprimida (best-effort)", exc_info=True)
             pass
 
 

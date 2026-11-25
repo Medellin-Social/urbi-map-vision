@@ -4,7 +4,7 @@ import {
 } from "recharts";
 import { useBarriosComunas, useBarriosPorComuna } from "@/hooks/useBarrios";
 import { useSimular, type SimulacionRequest, type FlujoCajaDesglose } from "@/hooks/useCalculadora";
-import { C, fmt, fmtCOP, Card, Gauge, Stat, Segmented } from "./_kit";
+import { C, fmtCOP, Card, Gauge, Stat, Segmented } from "./_kit";
 
 const PRESUPUESTOS = [200, 350, 500, 800, 1000]; // millones COP
 type Modalidad = "airbnb" | "renta_media" | "renta_larga";

@@ -6,13 +6,13 @@ from datetime import date, datetime, timedelta
 from typing import Any, Optional
 
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
 from api.utils.event_import import ImportError_, import_event
-from api.utils.urls import require_safe_url
+from api.utils.urls import require_plain_text, require_safe_url
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -974,17 +974,22 @@ async def get_noticias(
 # ── POST /eventos — publicación de usuario, queda pendiente de aprobación ──────
 
 class EventoSubmitIn(BaseModel):
-    titulo: str
-    fecha_inicio: str  # ISO datetime
-    fecha_fin: Optional[str] = None
-    descripcion: Optional[str] = None
-    categoria: Optional[str] = None
+    titulo: str = Field(min_length=1, max_length=200)
+    fecha_inicio: str = Field(max_length=40)  # ISO datetime
+    fecha_fin: Optional[str] = Field(None, max_length=40)
+    descripcion: Optional[str] = Field(None, max_length=3000)
+    categoria: Optional[str] = Field(None, max_length=60)
     barrio_id: Optional[int] = None
-    organizador: Optional[str] = None
+    organizador: Optional[str] = Field(None, max_length=120)
     gratuito: bool = True
-    precio: float = 0
-    url_externo: Optional[str] = None
-    foto_url: Optional[str] = None
+    precio: float = Field(0, ge=0, le=100_000_000)
+    url_externo: Optional[str] = Field(None, max_length=500)
+    foto_url: Optional[str] = Field(None, max_length=500)
+
+    _v_titulo = field_validator("titulo")(require_plain_text(200))
+    _v_descripcion = field_validator("descripcion")(require_plain_text(3000))
+    _v_categoria = field_validator("categoria")(require_plain_text(60))
+    _v_organizador = field_validator("organizador")(require_plain_text(120))
 
     _validar_url_externo = field_validator("url_externo")(require_safe_url)
     _validar_foto_url = field_validator("foto_url")(require_safe_url)
@@ -996,7 +1001,9 @@ class EventoSubmitOut(BaseModel):
 
 
 @router.post("/eventos", response_model=EventoSubmitOut, status_code=201)
+@limiter.limit("10/minute")
 async def submit_evento(
+    request: Request,
     body: EventoSubmitIn = Body(...),
     current_user: dict = Depends(get_current_user),
     pool=Depends(get_pool),

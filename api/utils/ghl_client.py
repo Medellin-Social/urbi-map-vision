@@ -79,6 +79,44 @@ def _should_retry(method: str, exc: Optional[Exception], resp: Optional[httpx.Re
     return False
 
 
+_client: Optional[httpx.AsyncClient] = None
+
+
+def _get_client() -> httpx.AsyncClient:
+    """AsyncClient compartido (keep-alive/pool de conexiones) en vez de uno por llamada."""
+    global _client
+    if _client is None or _client.is_closed:
+        _client = httpx.AsyncClient(timeout=_TIMEOUT)
+    return _client
+
+
+async def aclose() -> None:
+    """Cierra el cliente compartido (shutdown de la app)."""
+    global _client
+    if _client is not None and not _client.is_closed:
+        await _client.aclose()
+    _client = None
+
+
+_bg_tasks: set = set()
+
+
+def spawn(coro) -> None:
+    """Corre un sync a GHL fuera del request (hasta ~45 s con reintentos).
+
+    Best-effort: los push_* ya registran sus fallos en ghl_push_failures; aquí solo
+    se loguea cualquier excepción residual y se guarda referencia para que el task
+    no sea recolectado a mitad de vuelo."""
+    task = asyncio.ensure_future(coro)
+    _bg_tasks.add(task)
+
+    def _done(t):
+        _bg_tasks.discard(t)
+        if not t.cancelled() and t.exception() is not None:
+            logger.error("sync GHL en background falló: %r", t.exception())
+    task.add_done_callback(_done)
+
+
 async def _request(method: str, path: str, **kwargs) -> httpx.Response:
     """HTTP call to GHL with timeout + bounded retries (see _should_retry).
     Raises httpx.HTTPStatusError / httpx.TransportError after the last attempt."""
@@ -90,8 +128,7 @@ async def _request(method: str, path: str, **kwargs) -> httpx.Response:
         resp: Optional[httpx.Response] = None
         exc: Optional[Exception] = None
         try:
-            async with httpx.AsyncClient(timeout=_TIMEOUT) as client:
-                resp = await client.request(method, f"{_BASE_URL}{path}", headers=_headers(), **kwargs)
+            resp = await _get_client().request(method, f"{_BASE_URL}{path}", headers=_headers(), **kwargs)
         except httpx.TransportError as e:
             exc = last_exc = e
         if resp is not None and resp.status_code < 400:
@@ -407,6 +444,18 @@ async def _record_sync_result(
         """,
         object_type, str(internal_id), ghl_id, _GHL_LOCATION_ID, status, error,
     )
+
+
+async def resolve_push_failure(object_type: str, internal_id) -> None:
+    """Marca como resuelto el fallo abierto de este objeto (push exitoso). Nunca lanza."""
+    try:
+        await get_pool().execute(
+            "UPDATE public.ghl_push_failures SET resolved_at = now() "
+            "WHERE object_type = $1 AND internal_object_id = $2 AND resolved_at IS NULL",
+            object_type, str(internal_id),
+        )
+    except Exception:
+        logger.exception("ghl_push_failures resolve(%s, %s)", object_type, internal_id)
 
 
 async def _record_push_failure(object_type: str, internal_id, error: str) -> None:
@@ -939,6 +988,7 @@ async def push_referidor_to_ghl(referidor_id: int, campos: dict) -> Optional[str
             f"Experiencia: {campos.get('experiencia')}\nMotivación: {campos.get('motivacion')}"
         ))
         await upsert_opportunity(contact_id, "embajadores", f"{tipo.capitalize()}: {campos.get('nombre') or referidor_id}")
+        await resolve_push_failure("referidor", referidor_id)
         return contact_id
     except Exception as e:
         logger.error("push_referidor_to_ghl(%s) falló: %s", referidor_id, e)
@@ -984,7 +1034,8 @@ async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
         contact_id = await upsert_contact(
             email=campos.get("email"), nombre=campos.get("nombre"),
             phone=campos.get("telefono"),
-            tags=["agent", f"agent-{campos.get('estado') or 'pending'}"],
+            tags=["agent", f"agent-{campos.get('estado') or 'pending'}",
+                  *(campos.get("tags_extra") or [])],
         )
     except Exception as e:
         logger.error("push_agent_to_ghl(%s) falló: %s", agent_id, e)
@@ -999,7 +1050,8 @@ async def push_agent_to_ghl(agent_id: str, campos: dict) -> Optional[str]:
 
 
 _AGENT_SELECT = """
-    SELECT nombre, email, telefono, estado::text AS estado, motivo_estado, foto_url
+    SELECT nombre, email, telefono, estado::text AS estado, motivo_estado, foto_url,
+           es_realtor_casa
     FROM public.agent WHERE id = $1
 """
 
@@ -1015,7 +1067,64 @@ async def sync_agent(agent_id: str) -> Optional[str]:
     row = await pool.fetchrow(_AGENT_SELECT, agent_id)
     if row is None:
         return None
-    return await push_agent_to_ghl(agent_id, dict(row))
+    campos = dict(row)
+    # Tags de Realtor Preferido: zonas con slot activo + realtor casa.
+    extra = []
+    slots = await pool.fetch(
+        "SELECT zona_nivel, zona_codigo FROM public.realtor_preferido_slot "
+        "WHERE agent_id = $1 AND estado = 'activo'", agent_id)
+    if slots:
+        extra.append("realtor-preferido")
+        extra += [f"zona-{x['zona_nivel']}-{x['zona_codigo']}" for x in slots]
+    if campos.pop("es_realtor_casa", False):
+        extra.append("realtor-casa")
+    campos["tags_extra"] = extra
+    return await push_agent_to_ghl(agent_id, campos)
+
+
+async def sync_agent_safe(agent_id) -> None:
+    """sync_agent que nunca levanta (para call sites que no deben fallar)."""
+    try:
+        await sync_agent(str(agent_id))
+    except Exception:  # noqa: BLE001
+        logger.exception("sync_agent(%s) falló", agent_id)
+
+
+async def sync_owner_intake(intake_id: str) -> Optional[str]:
+    """Owner con intake -> Contact (tags owner, owner-intake-<estado>). Best-effort."""
+    if not is_configured():
+        return None
+    try:
+        pool = get_pool()
+        row = await pool.fetchrow(
+            "SELECT i.estado::text AS estado, o.email, o.nombre, o.telefono "
+            "FROM public.intake i JOIN public.owner o ON o.id = i.owner_id WHERE i.id = $1", intake_id)
+        if row is None:
+            return None
+        contact_id = await upsert_contact(
+            email=row["email"], nombre=row["nombre"], phone=row["telefono"],
+            tags=["owner", f"owner-intake-{row['estado']}"])
+        await _record_sync_result("owner_intake", str(intake_id), contact_id, "synced", None)
+        return contact_id
+    except Exception as e:  # noqa: BLE001
+        logger.error("sync_owner_intake(%s) falló: %s", intake_id, e)
+        try:
+            await _record_sync_result("owner_intake", str(intake_id), "", "failed", str(e))
+        except Exception:  # noqa: BLE001
+            logger.warning("sync_owner_intake: excepción suprimida (best-effort)", exc_info=True)
+            pass
+        return None
+
+
+async def sync_contact_safe(email, nombre=None, phone=None, tags=None, source: str = "sitio") -> Optional[str]:
+    """Contact genérico con tags (buyer, pasante, negocio-local...). Best-effort, nunca levanta."""
+    if not is_configured() or not email:
+        return None
+    try:
+        return await upsert_contact(email=email, nombre=nombre, phone=phone, tags=list(tags or []), source=source)
+    except Exception as e:  # noqa: BLE001
+        logger.error("sync_contact_safe(%s) falló: %s", email, e)
+        return None
 
 
 # ── Visita (solicitud de cita a un listing) → Appointment / Calendar ────────
@@ -1066,6 +1175,7 @@ async def push_negocio_lead_to_ghl(lead_id, campos: dict) -> Optional[str]:
             f"Plan: {campos.get('plan_tipo')}\nMensaje: {campos.get('mensaje')}"
         ))
         await upsert_opportunity(contact_id, "negocios", f"Negocio: {campos.get('nombre_negocio')}")
+        await resolve_push_failure("negocio", lead_id)
         return contact_id
     except Exception as e:
         logger.error("push_negocio_lead_to_ghl(%s) falló: %s", lead_id, e)
@@ -1088,6 +1198,7 @@ async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
             f"Agente: {campos.get('agent_id')}"
         ))
         await upsert_opportunity(contact_id, "visitas", f"Visita: {campos.get('listing_url') or visita_id}")
+        await resolve_push_failure("visita", visita_id)
         return contact_id
     except Exception as e:
         logger.error("push_visita_to_ghl(%s) falló: %s", visita_id, e)

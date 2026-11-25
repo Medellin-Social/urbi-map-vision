@@ -97,6 +97,15 @@ RUN useradd --uid 10001 --create-home --shell /usr/sbin/nologin app \
 #     06:00 diario         link_checker --retire-only (drena pending_review en segundos, SQL puro;
 #                          independiente del barrido pesado — un OOM/kill del sweep ya no varaba el retiro)
 #     09:30 diario         scraping.link_checker      (reemplaza validate_listings_urls.py semanal)
+#     02:00 día 1 del mes  seed_obras_publicas.py (upsert idempotente del seed curado)
+#     02:15 día 1 ene/abr/jul/oct  load_icfes_municipio.py (Socrata, upsert)
+#     02:30 día 10 ene/abr/jul/oct load_internet_speed.py (Ookla trimestral, upsert; reintenta trimestre anterior)
+#     02:45 martes         load_ruido_siata.py        (SIATA, upsert)
+#                          Estos 4 corren ANTES del lunes 04:00 compute_barrios_pois que los lee.
+#     NO agendados: load_traffic_here/trafico_muestrear (exigen HERE_API_KEY, no hay cuota/key en prod),
+#       catastro_medellin[_vigente] (CSV gitignored, no está en la imagen), fetch_airbnb_otros_municipios
+#       (run_airbnb_semanal ya cubre todos los barrios y el script borra historia), fetch_airbnb_str_ids
+#       (Playwright+AirROI pago, fase C frágil).
 #                          ponytail: --limit 50000 (no 180000). 180k materializa todos los Fetch con body
 #                          HTML en RAM para el freno mass-gone -> OOM/SIGKILL ~16h, nunca llegaba a
 #                          auto_retire (final del run). 50k completa en ~2-3h; catálogo (~130k) cubierto
@@ -141,11 +150,18 @@ RUN printf '%s\n' \
     "0 10 * * 3 app cd /app && python3 scripts/run_job.py remates_dbt python3 scripts/dbt_run.py run --select score_largo_plazo barrios_score_consolidado >> /var/log/urbi/remates_dbt.log 2>&1" \
     "30 3 1 * * app cd /app && python3 scripts/run_job.py ingest_barrios python3 scripts/load_barrios.py >> /var/log/urbi/ingest_barrios.log 2>&1" \
     "0 4 * * 1 app cd /app && python3 scripts/run_job.py ingest_pois python3 scripts/load_pois.py --build-analytics >> /var/log/urbi/ingest_pois.log 2>&1 && python3 scripts/run_job.py ingest_pois_overpass python3 scripts/load_pois_overpass.py >> /var/log/urbi/ingest_pois.log 2>&1 && python3 scripts/run_job.py compute_barrios_pois python3 scripts/compute_barrios_pois.py >> /var/log/urbi/ingest_pois.log 2>&1" \
+    "0 2 1 * * app cd /app && python3 scripts/run_job.py seed_obras python3 scripts/seed_obras_publicas.py >> /var/log/urbi/seed_obras.log 2>&1" \
+    "15 2 1 1,4,7,10 * app cd /app && python3 scripts/run_job.py icfes_municipio python3 scripts/load_icfes_municipio.py >> /var/log/urbi/icfes_municipio.log 2>&1" \
+    "30 2 10 1,4,7,10 * app cd /app && python3 scripts/run_job.py internet_speed python3 scripts/load_internet_speed.py >> /var/log/urbi/internet_speed.log 2>&1" \
+    "45 2 * * 2 app cd /app && python3 scripts/run_job.py ruido_siata python3 scripts/load_ruido_siata.py >> /var/log/urbi/ruido_siata.log 2>&1" \
     "0 12 1 * * app cd /app && python3 scripts/run_job.py seguridad_mensual python3 scripts/run_seguridad_mensual.py >> /var/log/urbi/seguridad_mensual.log 2>&1" \
     "0 11 * * * app cd /app && python3 scripts/run_job.py parametros_diario python3 scripts/fetch_usd_rate.py >> /var/log/urbi/parametros_diario.log 2>&1" \
     "15 11 * * 1 app cd /app && python3 scripts/run_job.py trm_semanal python3 scripts/fetch_trm.py >> /var/log/urbi/trm_semanal.log 2>&1" \
     "0 14 * * * app cd /app && python3 scripts/run_job.py alertas python3 scripts/alertas_notificar.py >> /var/log/urbi/alertas.log 2>&1" \
     "0 * * * * app cd /app && python3 scripts/run_job.py sweep_asignados python3 scripts/sweep_asignados.py >> /var/log/urbi/sweep_asignados.log 2>&1" \
+    "*/30 * * * * app cd /app && python3 scripts/run_job.py visita_followup python3 scripts/run_visita_followup.py >> /var/log/urbi/visita_followup.log 2>&1" \
+    "*/15 * * * * app cd /app && python3 scripts/run_job.py ghl_retry python3 scripts/run_ghl_retry.py >> /var/log/urbi/ghl_retry.log 2>&1" \
+    "0 14 1-3 * * app cd /app && python3 scripts/run_job.py reporte_mensual python3 scripts/run_reporte_mensual.py >> /var/log/urbi/reporte_mensual.log 2>&1" \
     > /etc/cron.d/urbidata \
     && chmod 0644 /etc/cron.d/urbidata \
     && crontab /etc/cron.d/urbidata

@@ -3070,8 +3070,6 @@ export const PHRASES: Array<[string, string]> = [
   // ── Dashboard realtor (secciones + subtabs) ──
   ["costo por cliente conseguido", "cost per client acquired"],
   // Protectoras (longest-first): evitan Spanglish en otras páginas al meter palabras cortas
-  ["Escritura, medios, marketing, inmuebles, cívico, organizaciones, ventas, cámara de comercio — cualquier cosa relevante. URL de LinkedIn está bien.",
-    "Writing, media, marketing, real estate, civic, organizations, sales, chamber of commerce — anything relevant. A LinkedIn URL is fine."],
   ["Seguro de arrendamiento", "Rental insurance"],
   ["Seguro propiedad", "Property insurance"],
   // Secciones + labels
@@ -3088,7 +3086,6 @@ export const PHRASES: Array<[string, string]> = [
   ["Yield Airbnb", "Airbnb yield"],
   ["últimos periodos", "recent periods"],
   ["Poco caminable", "Not very walkable"],
-  ["Muy caminable", "Very walkable"],
   ["del canon", "of rent"],
   ["📎 Adjuntar archivo", "📎 Attach file"],
   ["Plan Comuna", "Comuna Plan"],
@@ -3111,7 +3108,6 @@ export const PHRASES: Array<[string, string]> = [
   ["Ingreso bruto", "Gross income"],
   ["Fee plataforma", "Platform fee"],
   ["Mantenimiento", "Maintenance"],
-  ["Vacancia", "Vacancy"],
   ["Simulando…", "Simulating…"],
   ["Oportunidad", "Opportunity"],
   // Palabras sueltas (seguras / consistentes app-wide)
@@ -3189,7 +3185,6 @@ export const PHRASES: Array<[string, string]> = [
   ["Asignado de un lead — representas al propietario", "Assigned from a lead — you represent the owner"],
   ["Pega un link de evidencia (opcional)", "Paste an evidence link (optional)"],
   ["No se pudo abrir el archivo", "Could not open the file"],
-  ["Parámetros de la simulación", "Simulation parameters"],
   ["a dónde va la plata", "where the money goes"],
   ["Filtrar por etapa", "Filter by stage"],
   ["Oferta / interés", "Offer / interest"],
@@ -3198,4 +3193,8 @@ export const PHRASES: Array<[string, string]> = [
   ["Aceptación", "Acceptance"],
   ["Retención", "Withholding"],
   ["Mañana", "Tomorrow"],
+  ["Así quedará tu aviso", "This is how your listing will look"],
+  ["Tu foto de portada", "Your cover photo"],
+  ["¿Quieres que nuestro realtor preferido", "Do you want our preferred realtor"],
+  ["te contacte y te ayude a encontrar tu hogar?", "to contact you and help you find your home?"],
 ];

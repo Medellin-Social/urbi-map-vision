@@ -253,6 +253,6 @@ async def aceptar_intake(
     except Exception:
         logger.exception("aceptar_intake: enrich desde scrapeado falló (listing %s)", listing_id)
 
-    await ghl_client.sync_listing(listing_id)
+    ghl_client.spawn(ghl_client.sync_listing(listing_id))
     await ghl_client.link_agency_to_listing(listing_id, agency_id)
     return listing_id
