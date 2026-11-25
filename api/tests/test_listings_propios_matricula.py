@@ -1,4 +1,4 @@
-"""Guards de POST /listings-propios — matrícula obligatoria SOLO en venta.
+"""Guards de POST /listings-propios — matrícula OPCIONAL al publicar.
 
 Suite repetible, SIN tocar DB. Todos los guards de validación corren antes del
 primer acceso a DB; monkeypatcheamos `_get_agente_id` (primer query real) para que
@@ -6,7 +6,8 @@ lance un sentinel 299 = "pasó todos los guards". Así un 299 prueba que el fluj
 superó la validación, y un 400/401/422 prueba que un guard específico la cortó.
 
 Cubre: sin cuenta, campos vacíos, acepta_*, ubicación, declaraciones legales,
-operación inválida, y el fix: arriendo NO exige matrícula, venta sí.
+operación inválida, y la regla: matrícula es OPCIONAL (venta o arriendo). Solo es
+obligatoria para el sello Verificada y para reportar el cierre (ver realtor.py).
 
 Correr: pytest api/tests/test_listings_propios_matricula.py -v
 """
@@ -111,11 +112,13 @@ async def test_operacion_invalida_400(client):
     assert r.status_code == 400 and "Operación inválida" in r.text
 
 
-# ── EL FIX: matrícula obligatoria en venta, no en arriendo ───────────────────
+# ── Matrícula OPCIONAL: venta sin matrícula (con declaraciones) pasa el guard ──
 
-async def test_venta_sin_matricula_400(client):
+async def test_venta_sin_matricula_pasa(client):
+    # Antes cortaba en 400; ahora la matrícula es opcional → con declaraciones OK
+    # el flujo llega al sentinel.
     r = await client.post(URL, data=_form(tipo_operacion="venta", declaraciones=_DECLS_VENTA_OK))
-    assert r.status_code == 400 and "matrícula" in r.text.lower()
+    assert r.status_code == _SENTINEL, r.text
 
 
 async def test_arriendo_sin_matricula_pasa_guard(client):

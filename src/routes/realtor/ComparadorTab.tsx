@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useBarriosComunas, useBarriosPorComuna, useComparar } from "@/hooks/useBarrios";
+import { useMisListings } from "@/hooks/useRealtorDashboard";
+import { useComparadorStore } from "@/hooks/useComparadorStore";
+import { TabInmuebles } from "@/routes/comparador";
 import type { Neighborhood } from "@/lib/adapters";
-import { C, fmtCOP, Card } from "./_kit";
+import type { MiListing } from "@/lib/realtorApi";
+import { C, fmt, fmtCOP, Card } from "./_kit";
 
 type Metric = {
   key: string; label: string; grupo: "negocio" | "zona"; get: (n: Neighborhood) => number | null;
@@ -29,7 +33,73 @@ const GRUPOS: { id: "negocio" | "zona"; label: string }[] = [
   { id: "zona", label: "📍 Precio & zona" },
 ];
 
+// Una métrica con barras por ítem; reusada en barrio y mis-listings.
+// compact = caja más chica (menos padding, barras finas) para mis-listings.
+function MetricCard({ label, vals, fmtVal, higherBetter, compact }: {
+  label: string; vals: { nombre: string; v: number | null }[]; fmtVal: (v: number) => string; higherBetter: boolean; compact?: boolean;
+}) {
+  const nums = vals.map((x) => x.v).filter((x): x is number => x != null);
+  const max = Math.max(...nums, 1);
+  const best = nums.length ? (higherBetter ? Math.max(...nums) : Math.min(...nums)) : null;
+  const rows = (
+    <div className="flex flex-col gap-1.5">
+      {vals.map((x, i) => {
+        const w = x.v == null ? 0 : Math.max(5, (x.v / max) * 100);
+        const isBest = x.v != null && x.v === best;
+        return (
+          <div key={i} className="flex items-center gap-2">
+            <div className={`${compact ? "w-16 text-[10.5px]" : "w-24 text-[11.5px]"} shrink-0 truncate`} style={{ color: C.sub }} title={x.nombre}>{x.nombre}</div>
+            <div className={`${compact ? "h-4" : "h-6"} flex-1 overflow-hidden rounded`} style={{ background: C.soft }}>
+              <div className="h-full rounded" style={{ width: `${w}%`, background: C.cat[i % C.cat.length], opacity: isBest ? 1 : 0.55 }} />
+            </div>
+            <div className={`${compact ? "w-16 text-[11px]" : "w-24 text-[12px]"} shrink-0 text-right font-semibold tabular-nums`} style={{ color: isBest ? C.brand : C.ink }}>
+              {x.v == null ? "—" : fmtVal(x.v)}{isBest && " ★"}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+  if (compact) {
+    return (
+      <div className="rounded-xl p-3" style={{ background: C.card, border: `1px solid ${C.line}` }}>
+        <div className="mb-2 text-[11px] font-semibold tracking-tight" style={{ color: C.ink }}>{label}</div>
+        {rows}
+      </div>
+    );
+  }
+  return <Card title={label}>{rows}</Card>;
+}
+
+function Pills<T extends string>({ value, onChange, items }: {
+  value: T; onChange: (v: T) => void; items: readonly (readonly [T, string])[];
+}) {
+  return (
+    <div className="inline-flex gap-1 rounded-xl p-1 self-start" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
+      {items.map(([id, label]) => (
+        <button key={id} onClick={() => onChange(id)}
+          className="rounded-lg px-4 py-1.5 text-[13px] font-semibold transition-colors"
+          style={value === id ? { background: C.brand, color: "#fff" } : { color: C.sub }}>
+          {label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 export function ComparadorTab() {
+  // Si vienen listings seleccionados del mapa (store), abrir directo en Por listing.
+  const fromMap = useComparadorStore().listings.length > 0;
+  const [modo, setModo] = useState<"barrio" | "listing">(fromMap ? "listing" : "barrio");
+  return (
+    <div className="flex flex-col gap-5">
+      <Pills value={modo} onChange={setModo} items={[["barrio", "Por barrio"], ["listing", "Por listing"]] as const} />
+      {modo === "barrio" ? <BarrioCompare /> : <ListingCompare />}
+    </div>
+  );
+}
+
+function BarrioCompare() {
   const [comuna, setComuna] = useState<string | null>(null);
   const [sel, setSel] = useState<{ id: number; nombre: string }[]>([]);
   const { data: comunas } = useBarriosComunas();
@@ -86,39 +156,94 @@ export function ComparadorTab() {
             <div key={g.id}>
               <div className="mb-2 text-[12px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>{g.label}</div>
               <div className="grid gap-4 sm:grid-cols-2">
-                {METRICS.filter((m) => m.grupo === g.id).map((m) => {
-                  const vals = comp.map((n) => ({ nombre: n.nombre, v: m.get(n) }));
-                  const nums = vals.map((x) => x.v).filter((x): x is number => x != null);
-                  const max = Math.max(...nums, 1);
-                  const best = nums.length ? (m.higherBetter ? Math.max(...nums) : Math.min(...nums)) : null;
-                  return (
-                    <Card key={m.key} title={m.label}>
-                      <div className="flex flex-col gap-2">
-                        {vals.map((x, i) => {
-                          const w = x.v == null ? 0 : Math.max(5, (x.v / max) * 100);
-                          const isBest = x.v != null && x.v === best;
-                          return (
-                            <div key={i} className="flex items-center gap-2.5">
-                              <div className="w-24 shrink-0 truncate text-[11.5px]" style={{ color: C.sub }} title={x.nombre}>{x.nombre}</div>
-                              <div className="h-6 flex-1 overflow-hidden rounded" style={{ background: C.soft }}>
-                                <div className="h-full rounded" style={{ width: `${w}%`, background: C.cat[i % C.cat.length], opacity: isBest ? 1 : 0.55 }} />
-                              </div>
-                              <div className="w-24 shrink-0 text-right text-[12px] font-semibold tabular-nums" style={{ color: isBest ? C.brand : C.ink }}>
-                                {x.v == null ? "—" : m.fmtVal(x.v)}{isBest && " ★"}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </Card>
-                  );
-                })}
+                {METRICS.filter((m) => m.grupo === g.id).map((m) => (
+                  <MetricCard key={m.key} label={m.label} higherBetter={m.higherBetter} fmtVal={m.fmtVal}
+                    vals={comp.map((n) => ({ nombre: n.nombre, v: m.get(n) }))} />
+                ))}
               </div>
             </div>
           ))}
         </div>
       ) : (
         <div className="py-10 text-center text-[13px]" style={{ color: C.muted }}>Cargando comparación…</div>
+      )}
+    </div>
+  );
+}
+
+function ListingCompare() {
+  // "se pregunta": mis listings vs cualquier listing (este último vía mapa → store).
+  const fromMap = useComparadorStore().listings.length > 0;
+  const [fuente, setFuente] = useState<"mios" | "cualquiera">(fromMap ? "cualquiera" : "mios");
+  return (
+    <div className="flex flex-col gap-5">
+      <div>
+        <p className="mb-2 text-[13px]" style={{ color: C.sub }}>¿Qué listings quieres comparar?</p>
+        <Pills value={fuente} onChange={setFuente}
+          items={[["mios", "Mis listings"], ["cualquiera", "Cualquier listing"]] as const} />
+      </div>
+      {fuente === "mios" ? <MisListingsCompare /> : <TabInmuebles />}
+    </div>
+  );
+}
+
+type LMetric = { key: string; label: string; get: (l: MiListing) => number | null; fmtVal: (v: number) => string; higherBetter: boolean };
+const MIS_METRICS: LMetric[] = [
+  { key: "precio", label: "Precio", get: (l) => l.precio ?? null, fmtVal: (v) => fmtCOP(v), higherBetter: false },
+  { key: "m2", label: "Precio / m²", get: (l) => (l.area_m2 && l.precio ? Math.round(l.precio / l.area_m2) : null), fmtVal: (v) => fmtCOP(v), higherBetter: false },
+  { key: "area", label: "Área", get: (l) => l.area_m2 ?? null, fmtVal: (v) => `${fmt(v)} m²`, higherBetter: true },
+  { key: "hab", label: "Habitaciones", get: (l) => l.habitaciones ?? null, fmtVal: (v) => `${v}`, higherBetter: true },
+  { key: "banos", label: "Baños", get: (l) => l.banos ?? null, fmtVal: (v) => `${v}`, higherBetter: true },
+  { key: "estrato", label: "Estrato", get: (l) => l.estrato ?? null, fmtVal: (v) => `${v}`, higherBetter: true },
+  { key: "vistas", label: "Vistas", get: (l) => l.vistas_total ?? null, fmtVal: (v) => `${v}`, higherBetter: true },
+  { key: "favs", label: "Favoritos", get: (l) => l.favoritos ?? null, fmtVal: (v) => `${v}`, higherBetter: true },
+];
+
+function MisListingsCompare() {
+  const { data: listings = [], isLoading } = useMisListings();
+  const [selIds, setSelIds] = useState<string[]>([]);
+  const toggle = (id: string) =>
+    setSelIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : prev.length >= 5 ? prev : [...prev, id]);
+  const sel = listings.filter((l) => selIds.includes(l.id));
+
+  if (isLoading) return <div className="py-10 text-center text-[13px]" style={{ color: C.muted }}>Cargando tus listings…</div>;
+  if (listings.length === 0)
+    return (
+      <div className="rounded-2xl px-5 py-10 text-center text-[13px]" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.muted }}>
+        Aún no tienes listings publicados para comparar.
+      </div>
+    );
+
+  return (
+    <div className="flex flex-col gap-5">
+      <Card title="Elige tus listings (2 a 5)">
+        <div className="flex flex-wrap gap-2">
+          {listings.map((l) => {
+            const on = selIds.includes(l.id);
+            const dis = !on && selIds.length >= 5;
+            return (
+              <button key={l.id} onClick={() => toggle(l.id)} disabled={dis}
+                className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition-colors"
+                style={on ? { background: C.brand, color: "#fff" } : { background: C.soft, color: C.sub, border: `1px solid ${C.line}`, opacity: dis ? 0.4 : 1 }}
+                title={l.titulo}>
+                {l.titulo.length > 28 ? l.titulo.slice(0, 28) + "…" : l.titulo}
+              </button>
+            );
+          })}
+        </div>
+      </Card>
+
+      {sel.length < 2 ? (
+        <div className="rounded-2xl px-5 py-10 text-center text-[13px]" style={{ background: C.card, border: `1px solid ${C.line}`, color: C.muted }}>
+          Selecciona al menos 2 de tus listings para comparar.
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          {MIS_METRICS.map((m) => (
+            <MetricCard key={m.key} compact label={m.label} higherBetter={m.higherBetter} fmtVal={m.fmtVal}
+              vals={sel.map((l) => ({ nombre: l.titulo, v: m.get(l) }))} />
+          ))}
+        </div>
       )}
     </div>
   );

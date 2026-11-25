@@ -5,7 +5,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { z } from "zod";
 import {
   ArrowLeft, Lock, Plus, X, ChevronDown, ChevronUp,
-  Trophy, MapPin, Clock, Trash2, Home, Building2, BarChart2,
+  MapPin, Clock, Trash2, Home, Building2, BarChart2,
 } from "@/lib/icons";
 import { MapNavbar } from "@/components/MapNavbar";
 import { formatCOP, formatPct, yieldColor } from "@/lib/format";
@@ -557,99 +557,6 @@ function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
   );
 }
 
-function getWinnerIdx(listings: ComparadorListing[], goal?: string): number {
-  if (listings.length === 0) return 0;
-  type Score = { idx: number; score: number };
-  const scores: Score[] = listings.map((l, i) => {
-    let s = 0;
-    if (goal === "investor" || goal === "airbnb") {
-      s += (l.yield_estimado ?? 0) * 10;
-      s += (100 - (l.dias_en_mercado ?? 0)) * 0.1;
-    } else if (goal === "landlord") {
-      s += (l.arriendo_p50_barrio ?? 0) / 100_000;
-    } else if (goal === "renter") {
-      s -= (l.precio_cop ?? 0) / 10_000_000;
-      s += 100 - (l.dias_en_mercado ?? 99);
-    } else {
-      // buyer: precio/m2 low + seguridad
-      const pm2 = l.precio_m2 ?? 999_999_999;
-      s -= pm2 / 1_000_000;
-      s += (l.seguridad_score ?? 0) / 10;
-      s += (l.pct_bajo_mediana ?? 0);
-    }
-    return { idx: i, score: s };
-  });
-  return scores.reduce((best, cur) => cur.score > best.score ? cur : best).idx;
-}
-
-function WinnerCard({ listing, idx: _idx, goal }: { listing: ComparadorListing; idx: number; goal?: string }) {
-  const navigate = useNavigate();
-
-  const reasonLabel = goal === "investor" || goal === "airbnb"
-    ? `Mejor yield estimado (${listing.yield_estimado?.toFixed(1) ?? "—"}%)`
-    : goal === "landlord"
-    ? `Mayor canon estimado (${listing.arriendo_p50_barrio ? formatCOP(listing.arriendo_p50_barrio) + "/mes" : "—"})`
-    : goal === "renter"
-    ? `Mejor precio (${listing.precio_cop ? formatCOP(listing.precio_cop) : "—"})`
-    : `Mejor precio/m² (${listing.pct_bajo_mediana != null ? listing.pct_bajo_mediana.toFixed(0) + "% vs mediana" : "—"})`;
-
-  return (
-    <div
-      className="mt-8 rounded-2xl p-5"
-      style={{ background: "#E7F4EC", border: "1.5px solid #0F8A4F" }}
-    >
-      <div className="mb-3 flex items-center gap-2">
-        <Trophy className="h-5 w-5 text-[#0A5C36]" />
-        <span className="text-sm font-bold text-[#0A5C36]">MEJOR OPCIÓN</span>
-      </div>
-      <div className="flex items-start gap-4">
-        {listing.foto_principal && (
-          <img
-            src={listing.foto_principal}
-            alt=""
-            className="h-20 w-20 shrink-0 rounded-xl object-cover"
-          />
-        )}
-        <div className="min-w-0 flex-1">
-          <div className="text-base font-bold text-[#111418]">
-            {listing.precio_cop ? formatCOP(listing.precio_cop) : "—"}
-          </div>
-          <div className="mt-0.5 flex items-center gap-1 text-xs text-[#5B5F5C]">
-            <MapPin className="h-3 w-3 shrink-0" />
-            {listing.barrio_nombre ?? "—"}
-          </div>
-          <div className="mt-2 text-xs text-[#0A5C36]">{reasonLabel}</div>
-          {listing.seguridad_score != null && listing.seguridad_score >= 60 && (
-            <div className="mt-0.5 text-xs text-[#0A5C36]">Zona segura</div>
-          )}
-        </div>
-      </div>
-      <div className="mt-4 flex gap-2">
-        <Link
-          to="/listing/$id"
-          params={{ id: String(listing.id) }}
-          className="flex flex-1 items-center justify-center rounded-xl py-2.5 text-xs font-semibold text-white transition hover:opacity-90"
-          style={{ background: "#0F8A4F" }}
-        >
-          Ver listing →
-        </Link>
-        <button
-          onClick={() => {
-            const p = new URLSearchParams();
-            if (listing.barrio_id) p.set("barrio", String(listing.barrio_id));
-            if (listing.precio_cop) p.set("precio", String(listing.precio_cop));
-            navigate({ to: "/simulador", search: { barrio: listing.barrio_id ?? undefined, precio: listing.precio_cop ?? undefined } });
-          }}
-          className="flex-1 rounded-xl py-2.5 text-xs font-semibold text-[#0A5C36] transition hover:bg-[#E7F4EC]"
-          style={{ border: "1px solid #0F8A4F" }}
-        >
-          Simular →
-        </button>
-      </div>
-    </div>
-  );
-}
-
 function toIdArray(val: unknown): number[] {
   if (Array.isArray(val)) return (val as unknown[]).map(Number).filter(Boolean);
   if (typeof val === "string") {
@@ -659,11 +566,11 @@ function toIdArray(val: unknown): number[] {
   return [];
 }
 
-function TabInmuebles({
+export function TabInmuebles({
   initialIds,
 }: {
   initialIds?: number[] | string;
-  onSwitchTab: () => void;
+  onSwitchTab?: () => void;
 }) {
   const isPro = useIsPro();
   const qc = useQueryClient();
@@ -677,7 +584,6 @@ function TabInmuebles({
     else setIds(storeListings.map((l) => l.id));
   }, [Array.isArray(initialIds) ? initialIds.join(",") : String(initialIds ?? ""), storeListings.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const userGoal = auth.get()?.goal;
   const [nombre, setNombre] = useState("");
 
   const { data: listings = [], isLoading } = useQuery<ComparadorListing[]>({
@@ -713,8 +619,7 @@ function TabInmuebles({
             El Comparador de Inmuebles es exclusivo de MLS Pro
           </p>
           <p className="mt-1 text-sm text-[#5B5F5C]">
-            Compara hasta 5 propiedades lado a lado con análisis de precio, yield, zona
-            y recomendación automática según tu perfil de inversión.
+            Compara hasta 10 propiedades lado a lado con análisis de precio, yield y zona.
           </p>
         </div>
         <Link
@@ -762,7 +667,6 @@ function TabInmuebles({
   }
 
   const n = listings.length;
-  const winnerIdx = getWinnerIdx(listings, userGoal);
 
   return (
     <>
@@ -806,50 +710,47 @@ function TabInmuebles({
         <div className="min-w-[520px] overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E5E0D5" }}>
         <table className="w-full text-sm" style={{ background: "#FFFFFF" }}>
           <thead>
-            <tr style={{ background: "#F3F0E8" }}>
-              <th className="py-3 pr-4 text-left text-[10px] font-semibold uppercase tracking-widest text-[#5B5F5C]" style={{ minWidth: 110 }}>
-                Métrica
+            <tr style={{ borderBottom: "0.5px solid #E5E0D5" }}>
+              <th className="py-3 pl-4 pr-3 text-left align-bottom text-[10px] font-semibold uppercase tracking-widest text-[#8A8F8B]"
+                  style={{ minWidth: 120 }}>
+                Inmueble
               </th>
-              {listings.map((l, i) => (
-                <th key={l.id} className="py-2 pl-3 text-left" style={{ minWidth: 140 }}>
-                  {/* Photo header */}
-                  <div className="relative">
-                    <div className="h-[120px] overflow-hidden rounded-xl">
-                      {l.foto_principal
-                        ? <img src={l.foto_principal} alt="" className="h-full w-full object-cover" />
-                        : <div className="flex h-full w-full items-center justify-center text-2xl" style={{ background: "linear-gradient(135deg,#0F8A4F,#0A5C36)" }}>🏠</div>
-                      }
-                    </div>
-                    {i === winnerIdx && (
-                      <div className="absolute -top-1 -right-1 rounded-full p-1" style={{ background: "#0F8A4F" }}>
-                        <Trophy className="h-3.5 w-3.5 text-white" />
-                      </div>
-                    )}
+              {listings.map((l) => (
+                <th key={l.id} className="px-2 pb-3 pt-3 text-left align-top font-normal" style={{ width: 168 }}>
+                  <div className="h-28 w-40 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5" }}>
+                    {l.foto_principal
+                      ? <img src={l.foto_principal} alt="" className="h-full w-full object-cover" />
+                      : <div className="flex h-full w-full items-center justify-center text-2xl text-white" style={{ background: "linear-gradient(135deg,#0F8A4F,#0A5C36)" }}>🏠</div>
+                    }
                   </div>
-                  <div className="mt-2 text-xs font-bold text-[#111418]">
+                  <div className="mt-2 w-40 text-[13px] font-bold text-[#111418]">
                     {l.precio_cop ? formatCOP(l.precio_cop) : "—"}
                   </div>
-                  <div className="text-[10px] text-[#5B5F5C]">
-                    {(l.tipo_operacion ?? "").toUpperCase()} · {(l.tipo_inmueble ?? "").toUpperCase()}
+                  <div className="w-40 truncate text-[10px] uppercase tracking-wide text-[#8A8F8B]">
+                    {(l.tipo_operacion ?? "")} · {(l.tipo_inmueble ?? "")}
                   </div>
-                  <div className="mt-1 flex items-center gap-1 text-[10px] text-[#6E726E]">
+                  <div className="mt-0.5 flex w-40 items-center gap-1 text-[10px] text-[#6E726E]">
                     <MapPin className="h-2.5 w-2.5 shrink-0" />
-                    {l.barrio_nombre ?? "—"}
+                    <span className="truncate">{l.barrio_nombre ?? "—"}</span>
                   </div>
-                  <button
-                    onClick={() => setIds((prev) => prev.filter((id) => id !== l.id))}
-                    className="mt-1 text-[10px] text-[#6E726E] hover:text-[#CE1126]"
-                  >
-                    × Quitar
-                  </button>
-                  <Link
-                    to="/listing/$id"
-                    params={{ id: String(l.id) }}
-                    className="mt-2 block rounded-lg py-1.5 text-center text-[10px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
-                    style={{ border: "0.5px solid #0F8A4F" }}
-                  >
-                    Ver →
-                  </Link>
+                  <div className="mt-2 flex w-40 items-center gap-1.5">
+                    <Link
+                      to="/listing/$id"
+                      params={{ id: String(l.id) }}
+                      className="flex-1 rounded-lg py-1 text-center text-[10px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
+                      style={{ border: "0.5px solid #0F8A4F" }}
+                    >
+                      Ver →
+                    </Link>
+                    <button
+                      onClick={() => setIds((prev) => prev.filter((id) => id !== l.id))}
+                      aria-label="Quitar"
+                      className="rounded-lg px-2 py-1 text-[12px] leading-none text-[#6E726E] transition hover:text-[#CE1126]"
+                      style={{ border: "0.5px solid #E5E0D5" }}
+                    >
+                      ×
+                    </button>
+                  </div>
                 </th>
               ))}
             </tr>
@@ -936,11 +837,6 @@ function TabInmuebles({
         </table>
         </div>
       </div>
-
-      {/* Ganador automático */}
-      {listings.length >= 2 && (
-        <WinnerCard listing={listings[winnerIdx]} idx={winnerIdx} goal={userGoal} />
-      )}
     </>
   );
 }

@@ -5,6 +5,7 @@ public.user_events (event_type='listing_view', entity_id = listing.id::text | sl
 """
 from __future__ import annotations
 
+import json
 import logging
 from datetime import date, time as _time
 from types import SimpleNamespace
@@ -18,6 +19,7 @@ from api.routers.barrios import BarrioResponse, _BARRIO_SQL, _build_response
 from api.services.asignador_service import AsignadorError, sweep_asignados_vencidos, tomar_del_pool
 from api.services.listing_service import TRANSICIONES_VALIDAS, EstadoError, datos_minimos_completos
 from api.services.moderacion_service import aprobar
+from api.routers.listings_propios import _safe_embed_url
 from api.utils import ghl_client
 from api.utils.email import send_email, _wrap, esc
 from api.utils.storage import read_upload_bounded, upload_file
@@ -36,6 +38,11 @@ _DECL_KEYS = ("tiene_escritura", "al_dia_predial", "al_dia_administracion", "tie
 # Pesos del puntaje de standing (0..1, deben sumar 1.0).
 _PUNTAJE_PESOS = {"contribucion": 0.30, "velocidad": 0.30, "show_rate": 0.20, "aceptacion": 0.20}
 _CONTRIB_CAP = 5             # cierres (12m) que topan el componente de contribución
+# Nudge por COMPLETITUD de datos: un cierre reportado con cédula catastral es
+# verificable contra catastro → datos de más calidad. Si todos tus cierres incluyen
+# catastral, la contribución sube hasta +10% (topada a 100). Nunca penaliza ni
+# infla sobre el cap — solo premia reportar completo. Product knob: subir/bajar aquí.
+_COMPLETITUD_BONUS = 0.10
 _RANKING_MIN_ACTIVIDAD = 3   # actividad mínima (visitas resp + intakes + cierres, 90d/12m) para
                              # tener puntaje/ranking; por debajo → "datos insuficientes" (no inventamos señal)
 # Reciprocidad: cierres reportados (12m) para desbloquear los comparables de cierre.
@@ -269,6 +276,7 @@ async def asignados(user: dict = Depends(get_current_user), pool=Depends(get_poo
                 "habitaciones": r["l_hab"],
                 "banos": r["l_banos"],
                 "fotos_portada": int(r["l_fotos_portada"] or 0),
+                "estado": r["l_estado"],
             } if r["l_id"] else None,
             "created_at": r["created_at"].isoformat(),
         })
@@ -342,6 +350,10 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
                    l.descripcion, l.area_m2, l.habitaciones, l.banos, l.parqueaderos,
                    l.estrato, l.antiguedad_anios, l.direccion_aprox, l.nombre_edificio,
                    l.administracion, COALESCE(l.amenidades, '{{}}') AS amenidades,
+                   l.area_lote_m2, l.amoblado, l.mascotas, l.permite_airbnb,
+                   l.tour_url, l.video_url,
+                   l.matricula_inmobiliaria, l.cedula_catastral,
+                   COALESCE(l.caracteristicas, '{{}}'::jsonb) AS caracteristicas,
                    ST_Y(l.geom) AS lat, ST_X(l.geom) AS lon,
                    -- es_propio: creado por el agente (/publicar) vs asignado de un lead
                    -- (intake → listing, la propiedad es del owner). Solo para el badge.
@@ -373,8 +385,10 @@ async def mis_listings(user: dict = Depends(get_current_user), pool=Depends(get_
         {**dict(r),
          "precio": float(r["precio"] or 0),
          "area_m2": float(r["area_m2"]) if r["area_m2"] is not None else None,
+         "area_lote_m2": float(r["area_lote_m2"]) if r["area_lote_m2"] is not None else None,
          "administracion": float(r["administracion"]) if r["administracion"] is not None else None,
          "amenidades": list(r["amenidades"] or []),
+         "caracteristicas": (json.loads(r["caracteristicas"]) if isinstance(r["caracteristicas"], str) else (r["caracteristicas"] or {})),
          "updated_at": r["updated_at"].isoformat()}
         for r in rows
     ]
@@ -398,6 +412,17 @@ class ListingPatchRequest(BaseModel):
     nombre_edificio: str | None = Field(None, max_length=200)
     administracion: float | None = Field(None, ge=0, le=1e10, allow_inf_nan=False)
     amenidades: list[str] | None = Field(None, max_length=60)
+    # Ficha completa (guiado por /publicar): columnas extra + ficha rica JSONB.
+    # Validadas al mismo estilo que los campos de arriba (hardening upstream).
+    area_lote_m2: float | None = Field(None, gt=0, le=1e6, allow_inf_nan=False)
+    amoblado: bool | None = None
+    mascotas: bool | None = None
+    permite_airbnb: bool | None = None
+    tour_url: str | None = Field(None, max_length=500)
+    video_url: str | None = Field(None, max_length=500)
+    # caracteristicas: ficha rica (año, área privada, estado, piso, orientación…).
+    # Se MERGEA (||), no se pisa: así se preserva comision_pct, que vive aquí.
+    caracteristicas: dict | None = None
 
 
 @router.patch("/listings/{listing_id}")
@@ -413,6 +438,12 @@ async def editar_listing(
     # Ubicación va aparte: 'listing' guarda geom (Point), no columnas lat/lon.
     lat = data.pop("lat", None)
     lon = data.pop("lon", None)
+    caracs = data.pop("caracteristicas", None)
+    # tour/video: sanear al host embebible (anti-clickjacking), igual que en /publicar.
+    # ponytail: URL inválida → None → se ignora (no se puede limpiar el campo, aceptable).
+    for k in ("tour_url", "video_url"):
+        if data.get(k) is not None:
+            data[k] = _safe_embed_url(data[k])
     campos = {k: v for k, v in data.items() if v is not None}
     if "precio" in campos and campos["precio"] <= 0:
         raise HTTPException(status_code=400, detail="Precio inválido")
@@ -423,6 +454,11 @@ async def editar_listing(
         n = len(valores)
         set_parts.append(f"geom = ST_SetSRID(ST_MakePoint(${n + 3}, ${n + 4}), 4326)")
         valores.extend([lon, lat])  # MakePoint(x=lon, y=lat)
+    if caracs:
+        # Merge sobre la JSONB existente para no perder llaves (p.ej. comision_pct).
+        n = len(valores) + 3
+        set_parts.append(f"caracteristicas = COALESCE(caracteristicas, '{{}}'::jsonb) || ${n}::jsonb")
+        valores.append(json.dumps(caracs))
     if not set_parts:
         raise HTTPException(status_code=400, detail="Nada que actualizar")
 
@@ -756,8 +792,9 @@ async def _notify_owner_listing(pool, listing_id: str, evento: str) -> None:
 async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
     """El realtor confirma los datos y publica al mapa (borrador → publicado).
 
-    El realtor de la zona ES el revisor: no pasa por admin. aprobar() setea
-    publicado+verificado+published_at e inserta en el cache (al mapa al instante).
+    El realtor de la zona ES el revisor: no pasa por admin. aprobar(verificar=False)
+    setea publicado+published_at e inserta en el cache (al mapa al instante). El sello
+    «Verificada» NO se otorga por publicar: lo gana la verificación de documentos (DD).
     """
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
@@ -797,10 +834,11 @@ async def publicar(intake_id: str, user: dict = Depends(get_current_user), pool=
         fotos_portada=row["fotos_portada"],
     )
     try:
-        await aprobar(listing_obj, str(agent.id), pool)  # realtor = moderador
+        # verificar=False: publica al mapa SIN el sello; el sello lo da el DD.
+        await aprobar(listing_obj, str(agent.id), pool, verificar=False)
     except EstadoError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    # Gap C: avisar al owner. aprobar() publica + verifica → un solo evento al dueño.
+    # Gap C: avisar al owner de que su inmueble ya está publicado en el mapa.
     await _notify_owner_listing(pool, str(row["listing_id"]), "publicado")
     return {"listing_id": str(row["listing_id"]), "estado": "publicado"}
 
@@ -837,7 +875,11 @@ def _puntaje_standing(row) -> int:
     """Puntaje 0..100 del agente a partir de sus 4 componentes. Pesos en
     _PUNTAJE_PESOS (decisión de producto). Solo se llama para agentes con
     actividad >= umbral — no se infla con ceros."""
-    contrib = min(int(row["cierres"]), _CONTRIB_CAP) / _CONTRIB_CAP * 100.0
+    cierres = int(row["cierres"])
+    completos = int(row.get("cierres_completos", 0) or 0)  # cierres con cédula catastral
+    contrib_base = min(cierres, _CONTRIB_CAP) / _CONTRIB_CAP * 100.0
+    completitud = (completos / cierres) if cierres else 0.0  # fracción con datos verificables
+    contrib = min(100.0, contrib_base * (1 + _COMPLETITUD_BONUS * completitud))
     vel = _componente_velocidad(float(row["resp_med"]) if row["resp_med"] is not None else None)
     show = float(row["show_rate"] or 0) * 100.0
     acep = float(row["aceptacion"] or 0) * 100.0
@@ -860,6 +902,10 @@ _STANDING_COMPONENTS_SQL = """
          WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
            AND pe.matricula_inmobiliaria IS NOT NULL
            AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres,
+      (SELECT count(DISTINCT pe.matricula_inmobiliaria) FROM public.propiedad_evento pe
+         WHERE pe.agent_id = a.id AND pe.tipo_evento = 'venta'
+           AND pe.matricula_inmobiliaria IS NOT NULL AND pe.cedula_catastral IS NOT NULL
+           AND pe.fecha > CURRENT_DATE - INTERVAL '12 months')                       AS cierres_completos,
       (SELECT percentile_cont(0.5) WITHIN GROUP (
                  ORDER BY EXTRACT(EPOCH FROM (v.updated_at - v.created_at)) / 3600.0)
          FROM public.visita_solicitud v
@@ -912,7 +958,7 @@ def _standing_de(rows, agent_id: str) -> dict:
         "puntaje": puntaje,
         "cierres_reportados_12m": cierres,
         "ranking": ranking,
-        "nota": "Reportar cierres y responder rápido sube tu puntaje.",
+        "nota": "Reportar cierres (con matrícula y cédula catastral) y responder rápido sube tu puntaje.",
     }
 
 

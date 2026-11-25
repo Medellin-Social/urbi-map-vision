@@ -26,6 +26,8 @@ import { LanguageToggle, Name } from "@/lib/i18n";
 import {
   datosMinimosCompletos,
   realtorApi,
+  validarCierre,
+  CIERRE_LIMITES,
   type Agenda,
   type EstadoListing,
   type Franja,
@@ -91,7 +93,8 @@ const SECTIONS: { id: Section; label: string }[] = [
   { id: "inicio",       label: "Inicio" },
   { id: "listings",     label: "Mis listings" },
   { id: "bandeja",      label: "Bandeja y agenda" },
-  { id: "mercado",      label: "Mercado" },
+  // Mercado oculto: todo era _BARRIO_SQL público reskineado, sin valor pago propio.
+  // Componente (MercadoSection) se deja en el archivo por si se repurposea.
   { id: "herramientas", label: "Herramientas" },
 ];
 
@@ -100,7 +103,7 @@ const TAB_TO_SECTION: Record<string, Section> = {
   resumen: "inicio", desempeno: "inicio",
   listings: "listings",
   inbox: "bandeja", agenda: "bandeja",
-  resultados: "mercado", inteligencia: "mercado",
+  resultados: "inicio", inteligencia: "inicio",  // Mercado oculto → viejos deep-links caen en Inicio
   simulador: "herramientas", comparador: "herramientas", config: "herramientas",
 };
 
@@ -173,7 +176,6 @@ function RealtorDashboardPage() {
         {section === "inicio"       && <InicioSection />}
         {section === "listings"     && <ListingsTab />}
         {section === "bandeja"      && <BandejaSection />}
-        {section === "mercado"      && <MercadoSection />}
         {section === "herramientas" && <HerramientasSection />}
       </main>
     </div>
@@ -501,7 +503,7 @@ function MercadoSection() {
 function HerramientasSection() {
   const [sub, setSub] = useState<"simulador" | "comparador" | "servicios">(() => {
     const t = tabParam();
-    return t === "comparador" ? "comparador" : t === "config" ? "servicios" : "simulador";
+    return t === "simulador" ? "simulador" : t === "config" ? "servicios" : "comparador";
   });
   return (
     <div>
@@ -510,14 +512,14 @@ function HerramientasSection() {
         value={sub}
         onChange={setSub}
         items={[
-          { id: "simulador", label: "Simulador" },
           { id: "comparador", label: "Comparador" },
+          { id: "simulador", label: "Simulador" },
           { id: "servicios", label: "Servicios" },
         ]}
       />
       <p className="-mt-2 mb-5 text-[13px]" style={{ color: C.sub }}>
         {sub === "simulador" && "Proyecta la rentabilidad de una inversión en cualquier barrio para mostrársela a tu cliente."}
-        {sub === "comparador" && "Pon hasta 4 barrios lado a lado: rentabilidad, precio, seguridad y ubicación."}
+        {sub === "comparador" && "Pon hasta 4 barrios o listings lado a lado para comparar."}
         {sub === "servicios" && "Tu perfil público, el horario en que aceptas visitas y las zonas que patrocinas."}
       </p>
       <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
@@ -538,16 +540,19 @@ type LeadItem =
 type LeadFilter = "todos" | "nuevos" | "proceso" | "pool";
 
 // Etapas del flujo de captación — el stepper del detalle y la barrita de la lista.
-const LEAD_STEPS = ["Aceptar", "Documentos", "Ficha", "Publicar"];
+// "Documentos" (DD) NO es un paso bloqueante: es opcional (da el sello Verificada),
+// por eso no está en la secuencia.
+const LEAD_STEPS = ["Aceptar", "Ficha", "Publicar"];
 
 function leadEtapa(lead: LeadItem): { step: number; tone: Tone; txt: string } {
   if (lead.kind === "pool") return { step: 0, tone: "info", txt: "Disponible en pool" };
   const a = lead.data;
   if (a.estado === "asignado") return { step: 0, tone: "brand", txt: "Nuevo · requiere respuesta" };
-  if (!a.due_diligence.documentos_completos) return { step: 1, tone: "warn", txt: "Verificando documentos" };
+  if (a.listing?.estado === "publicado") return { step: 2, tone: "brand", txt: "Publicado" };
+  if (a.listing?.estado === "en_revision") return { step: 2, tone: "info", txt: "En revisión" };
   const c = a.listing ? datosMinimosCompletos(a.listing) : null;
-  if (c && !c.ok) return { step: 2, tone: "warn", txt: "Ficha incompleta" };
-  return { step: 3, tone: "brand", txt: "Listo para publicar" };
+  if (c && !c.ok) return { step: 1, tone: "warn", txt: "Ficha incompleta" };
+  return { step: 2, tone: "brand", txt: "Listo para publicar" };
 }
 
 function InboxTab() {
@@ -765,21 +770,35 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
   } else if (esNuevo) {
     nextStep = {
       titulo: "Acepta al propietario",
-      texto: "Acepta este inmueble para iniciar la verificación de documentos.",
+      texto: "Acepta este inmueble para completar la ficha y publicarlo.",
       accion: { label: aceptar.isPending ? "Aceptando…" : "Aceptar inmueble", run: () => aceptar.mutate(d.id), pending: aceptar.isPending },
     };
-  } else if (!ddOk) {
-    nextStep = { titulo: "Verifica los documentos", texto: "Verifica con el propietario los documentos pendientes." };
+  } else if (asignado?.listing?.estado === "publicado") {
+    nextStep = {
+      titulo: "Publicado en el mapa",
+      texto: ddOk
+        ? "Listo. Tu aviso está publicado y con el sello «Verificada»."
+        : "Tu aviso ya está en el mapa. Verifica los documentos para ganar el sello «Verificada».",
+    };
+  } else if (asignado?.listing?.estado === "en_revision") {
+    nextStep = {
+      titulo: "En revisión",
+      texto: "Este aviso está en revisión por un administrador. No requiere acción de tu parte por ahora.",
+    };
   } else if (completeness && !completeness.ok) {
     nextStep = {
       titulo: "Completa la ficha",
-      texto: "Documentos al día. Completa la ficha para poder publicar.",
+      texto: "Completa los datos mínimos del aviso para poder publicar.",
       accion: { label: "Completar ficha", run: () => setEditandoFicha(true), pending: false },
     };
   } else {
+    // Los documentos (DD) NO bloquean la publicación: muchas veces no se tiene
+    // todo al inicio. Verificarlos da el sello «Verificada», no es requisito.
     nextStep = {
       titulo: "Listo para publicar",
-      texto: "Todo listo. Al publicar, aparece en el mapa al instante.",
+      texto: ddOk
+        ? "Todo listo. Al publicar, aparece en el mapa al instante."
+        : "Puedes publicar ya. Verifica los documentos cuando los tengas para ganar el sello «Verificada».",
       accion: { label: publicar.isPending ? "Publicando…" : "Publicar listing", run: () => publicar.mutate(d.id), pending: publicar.isPending },
     };
   }
@@ -929,6 +948,9 @@ function LeadDetail({ lead, onBack }: { lead: LeadItem; onBack: () => void }) {
             parqueaderos: null, estrato: null, antiguedad_anios: null,
             direccion_aprox: null, nombre_edificio: null, administracion: null,
             amenidades: [], lat: null, lon: null,
+            area_lote_m2: null, amoblado: null, mascotas: null, permite_airbnb: null,
+            tour_url: null, video_url: null, caracteristicas: {},
+            matricula_inmobiliaria: null, cedula_catastral: null,
           }}
           onClose={() => setEditandoFicha(false)}
         />
@@ -945,11 +967,11 @@ const EDITOR_TIPO_OPTS: { v: string; l: string }[] = [
 ];
 // Vocabulario de amenidades (int + ext) reusado de /publicar. Se duplica aquí a
 // propósito: importar desde publicar.tsx arrastraría su módulo mapbox de 1900 líneas.
-const EDITOR_AMENIDADES: string[] = [
-  "Balcón/terraza", "Depósito", "Cuarto de servicio", "Estudio", "Cocina integral",
-  "Walk-in closet", "Chimenea", "Jacuzzi", "Piscina", "Gimnasio", "Salón comunal",
-  "Portería 24h", "Vigilancia", "CCTV", "Zonas verdes", "Parque infantil", "BBQ", "Cancha deportiva",
-];
+const EDITOR_AMEN_INT = ["Balcón/terraza", "Depósito", "Cuarto de servicio", "Estudio", "Cocina integral", "Walk-in closet", "Chimenea", "Jacuzzi"];
+const EDITOR_AMEN_EXT = ["Piscina", "Gimnasio", "Salón comunal", "Portería 24h", "Vigilancia", "CCTV", "Zonas verdes", "Parque infantil", "BBQ", "Cancha deportiva"];
+const EDITOR_ESTADO_OPTS = [{ v: "nuevo", l: "Nuevo" }, { v: "usado", l: "Usado" }, { v: "remodelado", l: "Remodelado" }, { v: "sobre_planos", l: "Sobre planos" }];
+const EDITOR_ORIENT_OPTS = [{ v: "norte", l: "Norte" }, { v: "sur", l: "Sur" }, { v: "oriente", l: "Oriente" }, { v: "occidente", l: "Occidente" }];
+const EDITOR_VISTA_OPTS = [{ v: "exterior", l: "Exterior" }, { v: "interior", l: "Interior" }, { v: "panoramica", l: "Panorámica" }];
 
 // Editor de ficha COMPLETO: todos los campos que el backend (ListingPatchRequest)
 // acepta, pre-llenados con los valores actuales del listing. ponytail: el pin
@@ -958,11 +980,15 @@ const EDITOR_AMENIDADES: string[] = [
 function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
   const editar = useEditarListing();
   const num = (n: number | null | undefined) => (n != null ? String(n) : "");
+  const cs = (k: string) => { const v = listing.caracteristicas?.[k]; return v == null ? "" : String(v); };
+  const yn = (b: boolean | null) => (b === true ? "si" : b === false ? "no" : "");
+  // Columnas
   const [titulo, setTitulo] = useState(listing.titulo ?? "");
   const [tipo, setTipo] = useState<string>(listing.tipo_inmueble ?? "");
   const [precio, setPrecio] = useState(num(listing.precio));
   const [admin, setAdmin] = useState(num(listing.administracion));
   const [area, setArea] = useState(num(listing.area_m2));
+  const [areaLote, setAreaLote] = useState(num(listing.area_lote_m2));
   const [hab, setHab] = useState(num(listing.habitaciones));
   const [banos, setBanos] = useState(num(listing.banos));
   const [parqs, setParqs] = useState(num(listing.parqueaderos));
@@ -972,6 +998,20 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
   const [direccion, setDireccion] = useState(listing.direccion_aprox ?? "");
   const [descripcion, setDescripcion] = useState(listing.descripcion ?? "");
   const [amenidades, setAmenidades] = useState<string[]>(listing.amenidades ?? []);
+  const [amoblado, setAmoblado] = useState(yn(listing.amoblado));
+  const [mascotas, setMascotas] = useState(yn(listing.mascotas));
+  const [airbnb, setAirbnb] = useState(yn(listing.permite_airbnb));
+  const [tourUrl, setTourUrl] = useState(listing.tour_url ?? "");
+  const [videoUrl, setVideoUrl] = useState(listing.video_url ?? "");
+  // Ficha rica (caracteristicas JSONB)
+  const [anoConstr, setAnoConstr] = useState(cs("ano_construccion"));
+  const [areaPriv, setAreaPriv] = useState(cs("area_privada_m2"));
+  const [estado, setEstado] = useState(cs("estado"));
+  const [piso, setPiso] = useState(cs("piso"));
+  const [niveles, setNiveles] = useState(cs("niveles"));
+  const [orient, setOrient] = useState(cs("orientacion"));
+  const [vista, setVista] = useState(cs("vista"));
+  const [closets, setClosets] = useState(cs("closets"));
   const [fotos, setFotos] = useState<File[]>([]);
   const [err, setErr] = useState<string | null>(null);
 
@@ -989,12 +1029,19 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
       const v = asNum(s);
       if (v !== orig && v != null) (campos as Record<string, unknown>)[key] = v;
     };
+    // tri-estado: '' = sin selección (no tocar). ponytail: no se puede volver a "null".
+    const diffBool = (val: string, orig: boolean | null, key: keyof import("@/lib/realtorApi").ListingPatch) => {
+      if (val === "") return;
+      const b = val === "si";
+      if (b !== orig) (campos as Record<string, unknown>)[key] = b;
+    };
 
     if (titulo.trim() && titulo.trim() !== (listing.titulo ?? "")) campos.titulo = titulo.trim();
     if (tipo && tipo !== listing.tipo_inmueble) campos.tipo_inmueble = tipo;
     if (precio && Number(precio) > 0 && Number(precio) !== listing.precio) campos.precio = Number(precio);
     diffNum(admin, listing.administracion, "administracion");
     diffNum(area, listing.area_m2, "area_m2");
+    diffNum(areaLote, listing.area_lote_m2, "area_lote_m2");
     diffNum(hab, listing.habitaciones, "habitaciones");
     diffNum(banos, listing.banos, "banos");
     diffNum(parqs, listing.parqueaderos, "parqueaderos");
@@ -1003,8 +1050,36 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
     diffStr(edificio, listing.nombre_edificio, "nombre_edificio");
     diffStr(direccion, listing.direccion_aprox, "direccion_aprox");
     diffStr(descripcion, listing.descripcion, "descripcion");
+    diffStr(tourUrl, listing.tour_url, "tour_url");
+    diffStr(videoUrl, listing.video_url, "video_url");
+    diffBool(amoblado, listing.amoblado, "amoblado");
+    diffBool(mascotas, listing.mascotas, "mascotas");
+    diffBool(airbnb, listing.permite_airbnb, "permite_airbnb");
     if (JSON.stringify([...amenidades].sort()) !== JSON.stringify([...(listing.amenidades ?? [])].sort()))
       campos.amenidades = amenidades;
+
+    // Ficha rica → caracteristicas (solo llaves cambiadas; el backend las mergea).
+    const caracs: Record<string, unknown> = {};
+    const origC = listing.caracteristicas ?? {};
+    const richNum = (s: string, key: string) => {
+      const v = asNum(s);
+      const o = origC[key] == null ? null : Number(origC[key]);
+      if (v !== o && v != null) caracs[key] = v;
+    };
+    const richStr = (s: string, key: string) => {
+      const v = s.trim();
+      const o = origC[key] == null ? "" : String(origC[key]);
+      if (v !== o && v !== "") caracs[key] = v;
+    };
+    richNum(anoConstr, "ano_construccion");
+    richNum(areaPriv, "area_privada_m2");
+    richNum(piso, "piso");
+    richNum(niveles, "niveles");
+    richNum(closets, "closets");
+    richStr(estado, "estado");
+    richStr(orient, "orientacion");
+    richStr(vista, "vista");
+    if (Object.keys(caracs).length) campos.caracteristicas = caracs;
 
     if (Object.keys(campos).length === 0 && fotos.length === 0) {
       setErr("No hay cambios para guardar");
@@ -1019,151 +1094,326 @@ function EditorFichaModal({ listing, onClose }: { listing: MiListing; onClose: (
     }
   };
 
+  const estadoTone = TONE[listing.estado === "publicado" ? "brand" : listing.estado === "rechazado" ? "bad" : "neutral"];
+
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="Editar ficha del listing">
-      <div className="absolute inset-0 bg-black/50" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4" onClick={onClose} role="dialog" aria-modal="true" aria-label="Editar ficha del listing">
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
       <div
-        className="paper-theme relative flex max-h-[90vh] w-full max-w-2xl flex-col rounded-2xl border bg-background shadow-xl"
-        style={{ borderColor: C.line }}
+        className="paper-theme relative flex max-h-[92vh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ borderColor: C.line, background: C.card }}
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between border-b px-5 py-4" style={{ borderColor: C.line }}>
-          <div>
-            <h3 className="text-base font-semibold text-foreground">Editar ficha</h3>
-            <p className="text-xs capitalize text-muted-foreground">{listing.operacion} · {listing.barrio || "sin barrio"}</p>
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3 border-b px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>Editar ficha</h3>
+              <span className="rounded-full px-2 py-0.5 text-[11px] font-semibold capitalize" style={{ background: estadoTone.bg, color: estadoTone.fg }}>{listing.estado.replace("_", " ")}</span>
+            </div>
+            <p className="mt-0.5 truncate text-xs" style={{ color: C.muted }}>
+              <span className="capitalize">{listing.operacion}</span> · {listing.barrio || "sin barrio"} · toda la información del inmueble
+            </p>
           </div>
-          <button onClick={onClose} aria-label="Cerrar" className="rounded-lg p-1.5 text-muted-foreground transition hover:bg-muted/50 hover:text-foreground">
+          <button onClick={onClose} aria-label="Cerrar" className="shrink-0 rounded-lg p-1.5 transition hover:bg-black/5" style={{ color: C.muted }}>
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <div className="grid gap-5 overflow-y-auto px-5 py-5 sm:grid-cols-2">
-          <FieldGroup title="Datos del aviso" cols={2}>
-            <Field label="Título del aviso" className="sm:col-span-2">
-              <input value={titulo} onChange={(e) => setTitulo(e.target.value)} className={inputCls} placeholder="Apartamento en El Poblado con balcón" />
+        {/* Body */}
+        <div className="flex flex-col gap-4 overflow-y-auto px-5 py-5 sm:px-6" style={{ background: C.soft }}>
+          <EdSection icon={ClipboardList} title="Datos del aviso">
+            <Field label="Título del aviso" counter={`${titulo.length}/90`} className="col-span-2 sm:col-span-3">
+              <input value={titulo} maxLength={90} onChange={(e) => setTitulo(e.target.value)} className={edInputCls} placeholder="Apartamento en El Poblado con balcón" />
             </Field>
             <Field label="Tipo de inmueble">
-              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={inputCls}>
+              <select value={tipo} onChange={(e) => setTipo(e.target.value)} className={edInputCls}>
                 {EDITOR_TIPO_OPTS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}
               </select>
             </Field>
-            <Field label="Precio (COP)">
-              <input inputMode="numeric" value={precio} onChange={(e) => setPrecio(e.target.value.replace(/\D/g, ""))} className={inputCls} />
+            <Field label={listing.operacion === "arriendo" ? "Canon mensual" : "Precio de venta"}>
+              <MoneyInput value={precio} onChange={setPrecio} suffix={listing.operacion === "arriendo" ? "/mes" : undefined} />
             </Field>
-            <Field label="Administración (COP/mes)">
-              <input inputMode="numeric" value={admin} onChange={(e) => setAdmin(e.target.value.replace(/\D/g, ""))} className={inputCls} placeholder="opcional" />
+            <Field label="Administración" hint="(opcional)">
+              <MoneyInput value={admin} onChange={setAdmin} suffix="/mes" />
             </Field>
-          </FieldGroup>
+          </EdSection>
 
-          <FieldGroup title="Características">
-            <Field label="Área (m²)">
-              <input inputMode="numeric" value={area} onChange={(e) => setArea(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </Field>
-            <Field label="Habitaciones">
-              <input inputMode="numeric" value={hab} onChange={(e) => setHab(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </Field>
-            <Field label="Baños">
-              <input inputMode="numeric" value={banos} onChange={(e) => setBanos(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </Field>
-            <Field label="Parqueaderos">
-              <input inputMode="numeric" value={parqs} onChange={(e) => setParqs(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </Field>
-            <Field label="Estrato">
-              <select value={estrato} onChange={(e) => setEstrato(e.target.value)} className={inputCls}>
-                <option value="">—</option>
-                {["1", "2", "3", "4", "5", "6"].map((e) => <option key={e} value={e}>{e}</option>)}
-              </select>
-            </Field>
-            <Field label="Antigüedad (años)">
-              <input inputMode="numeric" value={antiguedad} onChange={(e) => setAntiguedad(e.target.value.replace(/\D/g, ""))} className={inputCls} />
-            </Field>
-          </FieldGroup>
+          <EdSection icon={Maximize2} title="Características">
+            <Field label="Área construida"><NumInput value={area} onChange={setArea} icon={Maximize2} suffix="m²" /></Field>
+            <Field label="Área de lote" hint="(opc.)"><NumInput value={areaLote} onChange={setAreaLote} suffix="m²" /></Field>
+            <Field label="Antigüedad"><NumInput value={antiguedad} onChange={setAntiguedad} icon={Calendar} suffix="años" /></Field>
+            <ChipField label="Habitaciones" icon={Bed} value={hab} onChange={setHab} options={COUNT_0_5} />
+            <ChipField label="Baños" icon={Bath} value={banos} onChange={setBanos} options={COUNT_1_5} />
+            <ChipField label="Parqueaderos" icon={Car} value={parqs} onChange={setParqs} options={COUNT_0_4} />
+            <ChipField label="Estrato" icon={Building2} value={estrato} onChange={setEstrato} options={ESTRATO_OPTS} />
+          </EdSection>
 
-          <FieldGroup title="Ubicación" className="sm:col-span-2">
-            <Field label="Nombre del edificio / unidad">
-              <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={inputCls} placeholder="Torre Alción" />
-            </Field>
-            <Field label="Dirección aproximada">
-              <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className={inputCls} placeholder="Cra. 34 # 7 Sur" />
-            </Field>
-          </FieldGroup>
+          <EdSection icon={Sparkles} title="Ficha detallada" hint="Más detalle = más confianza del comprador">
+            <Field label="Año de construcción"><NumInput value={anoConstr} onChange={setAnoConstr} icon={Calendar} maxLength={4} placeholder="2015" /></Field>
+            <Field label="Área privada"><NumInput value={areaPriv} onChange={setAreaPriv} suffix="m²" /></Field>
+            <Field label="Piso"><NumInput value={piso} onChange={setPiso} icon={Building2} /></Field>
+            <Field label="Niveles" hint="(dúplex/casa)"><NumInput value={niveles} onChange={setNiveles} /></Field>
+            <Field label="Clósets"><NumInput value={closets} onChange={setClosets} /></Field>
+            <ChipField label="Estado del inmueble" icon={Sparkles} value={estado} onChange={setEstado} options={EDITOR_ESTADO_OPTS} />
+            <ChipField label="Orientación" icon={Sun} value={orient} onChange={setOrient} options={EDITOR_ORIENT_OPTS} />
+            <ChipField label="Vista" icon={Eye} value={vista} onChange={setVista} options={EDITOR_VISTA_OPTS} />
+          </EdSection>
 
-          <div className="sm:col-span-2">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amenidades</h4>
-            <div className="flex flex-wrap gap-2">
-              {EDITOR_AMENIDADES.map((a) => {
-                const on = amenidades.includes(a);
-                return (
-                  <button
-                    key={a}
-                    type="button"
-                    aria-pressed={on}
-                    onClick={() => toggleAmen(a)}
-                    className="inline-flex min-h-[32px] items-center rounded-full border px-3 text-xs font-medium transition"
-                    style={on
-                      ? { background: C.brand, borderColor: C.brand, color: "#fff" }
-                      : { background: C.soft, borderColor: C.line, color: C.sub }}
-                  >
-                    {a}
-                  </button>
-                );
-              })}
+          <EdSection icon={Sun} title="Condiciones">
+            <CondTile label="Amoblado" value={amoblado} onChange={setAmoblado} />
+            <CondTile label="Acepta mascotas" value={mascotas} onChange={setMascotas} />
+            <CondTile label="Airbnb / renta corta" value={airbnb} onChange={setAirbnb} />
+          </EdSection>
+
+          <EdSection icon={MapPin} title="Ubicación">
+            <Field label="Nombre del edificio / unidad" className="col-span-2 sm:col-span-1">
+              <input value={edificio} onChange={(e) => setEdificio(e.target.value)} className={edInputCls} placeholder="Torre Alción" />
+            </Field>
+            <Field label="Dirección aproximada" className="col-span-2">
+              <input value={direccion} onChange={(e) => setDireccion(e.target.value)} className={edInputCls} placeholder="Cra. 34 # 7 Sur" />
+            </Field>
+          </EdSection>
+
+          <EdSection icon={Home} title="Amenidades" grid={false}>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Interiores</p>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {EDITOR_AMEN_INT.map((a) => <AmenChip key={a} label={a} on={amenidades.includes(a)} onClick={() => toggleAmen(a)} />)}
             </div>
-          </div>
+            <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Comunes / exteriores</p>
+            <div className="flex flex-wrap gap-2">
+              {EDITOR_AMEN_EXT.map((a) => <AmenChip key={a} label={a} on={amenidades.includes(a)} onClick={() => toggleAmen(a)} />)}
+            </div>
+          </EdSection>
 
-          <Field label="Descripción" className="sm:col-span-2">
-            <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${inputCls} min-h-24 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
-          </Field>
+          <EdSection icon={Camera} title="Multimedia" hint="Tour 3D y video embebibles (Matterport, Kuula, YouTube, Vimeo)">
+            <Field label="URL tour 3D / 360°" className="col-span-2 sm:col-span-3">
+              <EmbedInput value={tourUrl} onChange={setTourUrl} placeholder="https://my.matterport.com/show/?m=…" />
+            </Field>
+            <Field label="URL video" className="col-span-2 sm:col-span-3">
+              <EmbedInput value={videoUrl} onChange={setVideoUrl} placeholder="https://youtube.com/watch?v=…" />
+            </Field>
+          </EdSection>
 
-          <div className="sm:col-span-2">
-            <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-              Agregar fotos {fotos.length > 0 && <span className="text-foreground">({fotos.length} seleccionadas)</span>}
-            </h4>
+          <EdSection icon={ClipboardList} title="Descripción" grid={false}>
+            <Field label="Texto del aviso" counter={`${descripcion.length} car.`}>
+              <textarea value={descripcion} onChange={(e) => setDescripcion(e.target.value)} className={`${edInputCls} min-h-28 resize-y`} placeholder="Describe el inmueble, el sector y lo que lo hace especial." />
+            </Field>
+          </EdSection>
+
+          <EdSection icon={Camera} title={`Fotos${fotos.length > 0 ? ` · ${fotos.length} nuevas` : ""}`} hint="Se añaden a las existentes; la primera queda como portada" grid={false}>
             <input
               type="file"
               accept="image/*"
               multiple
               onChange={(e) => setFotos(Array.from(e.target.files ?? []))}
-              className="text-sm text-foreground file:mr-3 file:rounded-md file:border file:border-border file:bg-surface file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-foreground"
+              className="w-full text-sm text-foreground file:mr-3 file:rounded-lg file:border file:border-border file:bg-surface file:px-3.5 file:py-2 file:text-xs file:font-semibold file:text-foreground hover:file:bg-muted/40"
             />
-            <p className="mt-1 text-xs text-muted-foreground">Se añaden a las existentes; la primera queda como portada.</p>
-          </div>
+          </EdSection>
         </div>
 
-        {err && <p className="px-5 text-sm text-danger">{err}</p>}
-
-        <div className="flex justify-end gap-2 border-t px-5 py-4" style={{ borderColor: C.line }}>
-          <button onClick={onClose} className="rounded-lg border border-border px-4 py-2 text-sm font-medium text-muted-foreground transition hover:text-foreground">
-            Cancelar
-          </button>
-          <button
-            onClick={guardar}
-            disabled={editar.isPending}
-            className="rounded-lg bg-primary px-5 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-50"
-          >
-            {editar.isPending ? "Guardando…" : "Guardar cambios"}
-          </button>
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          {err ? <p className="text-sm font-medium" style={{ color: C.bad }}>{err}</p> : <span className="text-xs" style={{ color: C.muted }}>Los cambios se publican al guardar.</span>}
+          <div className="flex shrink-0 gap-2">
+            <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
+              Cancelar
+            </button>
+            <button
+              onClick={guardar}
+              disabled={editar.isPending}
+              className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+              style={{ background: C.brand }}
+            >
+              {editar.isPending ? "Guardando…" : "Guardar cambios"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
   );
 }
 
-function FieldGroup({ title, className = "", cols = 3, children }: { title: string; className?: string; cols?: 2 | 3; children: React.ReactNode }) {
+// Input refinado del editor: white, borde fino, rounded-lg (estilo dashboard limpio).
+const edInputCls = "w-full rounded-lg border border-border bg-surface px-3.5 py-2.5 text-sm text-foreground outline-none transition placeholder:text-muted-foreground focus:border-primary focus:ring-2 focus:ring-primary/20";
+
+// Tarjeta de sección: superficie blanca con borde fino + badge de icono tintado
+// (estilo del dashboard de referencia). grid=false para contenido libre.
+function EdSection({ icon: Icon, title, hint, grid = true, children }: { icon: typeof Home; title: string; hint?: string; grid?: boolean; children: React.ReactNode }) {
   return (
-    <div className={className}>
-      <h4 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">{title}</h4>
-      <div className={`grid grid-cols-2 gap-3 ${cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>{children}</div>
+    <section className="rounded-xl border p-4 sm:p-5" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+      <div className="mb-4 flex items-center gap-2.5">
+        <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg" style={{ background: "rgba(15,138,79,0.1)" }}>
+          <Icon className="h-4 w-4" style={{ color: C.brand }} />
+        </span>
+        <div className="min-w-0">
+          <h4 className="text-sm font-bold leading-tight" style={{ color: C.ink }}>{title}</h4>
+          {hint && <p className="mt-0.5 text-[11px] leading-tight" style={{ color: C.muted }}>{hint}</p>}
+        </div>
+      </div>
+      <div className={grid ? "grid grid-cols-2 gap-3 sm:grid-cols-3" : ""}>{children}</div>
+    </section>
+  );
+}
+
+function SegYesNo({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex w-full rounded-lg border p-0.5" style={{ borderColor: C.line, background: C.soft }}>
+      {[{ v: "si", l: "Sí" }, { v: "no", l: "No" }].map((o) => {
+        const on = value === o.v;
+        return (
+          <button
+            key={o.v}
+            type="button"
+            aria-pressed={on}
+            onClick={() => onChange(on ? "" : o.v)}
+            className="min-h-[34px] flex-1 rounded-md text-sm font-semibold transition"
+            style={on ? { background: C.brand, color: "#fff" } : { color: C.sub }}
+          >
+            {o.l}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
-function Field({ label, className = "", children }: { label: string; className?: string; children: React.ReactNode }) {
+function CondTile({ label, value, onChange }: { label: string; value: string; onChange: (v: string) => void }) {
+  const set = value !== "";
   return (
-    <label className={`grid gap-1 text-xs text-muted-foreground ${className}`}>
+    <div className="flex flex-col gap-2 rounded-xl border p-3 transition" style={{ borderColor: set ? C.brand : C.line, background: set ? "rgba(15,138,79,0.06)" : C.soft }}>
+      <span className="text-xs font-medium" style={{ color: C.sub }}>{label}</span>
+      <SegYesNo value={value} onChange={onChange} />
+    </div>
+  );
+}
+
+function AmenChip({ label, on, onClick }: { label: string; on: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-pressed={on}
+      onClick={onClick}
+      className="inline-flex min-h-[34px] items-center rounded-full border px-3.5 text-xs font-medium transition"
+      style={on
+        ? { background: C.brand, borderColor: C.brand, color: "#fff" }
+        : { background: C.soft, borderColor: C.line, color: C.sub }}
+    >
       {label}
+    </button>
+  );
+}
+
+function Field({ label, hint, counter, className = "", children }: { label: string; hint?: string; counter?: string; className?: string; children: React.ReactNode }) {
+  return (
+    <label className={`grid gap-1.5 ${className}`}>
+      <span className="flex items-baseline justify-between gap-2">
+        <span className="text-xs font-medium" style={{ color: C.sub }}>
+          {label}{hint && <span className="ml-1 font-normal" style={{ color: C.muted }}>{hint}</span>}
+        </span>
+        {counter && <span className="text-[10px] tabular-nums" style={{ color: C.muted }}>{counter}</span>}
+      </span>
       {children}
     </label>
+  );
+}
+
+// Input con "$" vivo: formatea miles es-CO mientras escriben. Guarda dígitos crudos.
+function MoneyInput({ value, onChange, placeholder, suffix }: { value: string; onChange: (v: string) => void; placeholder?: string; suffix?: string }) {
+  const display = value ? Number(value).toLocaleString("es-CO") : "";
+  return (
+    <div className="relative">
+      <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold" style={{ color: C.brand }}>$</span>
+      <input inputMode="numeric" value={display} placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+        className={`${edInputCls} pl-7 ${suffix ? "pr-12" : ""} font-semibold tabular-nums`} />
+      {suffix && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium" style={{ color: C.muted }}>{suffix}</span>}
+    </div>
+  );
+}
+
+// Input numérico con icono izq. opcional + unidad der. (m², años…).
+function NumInput({ value, onChange, icon: Icon, suffix, placeholder, maxLength }: { value: string; onChange: (v: string) => void; icon?: typeof Home; suffix?: string; placeholder?: string; maxLength?: number }) {
+  return (
+    <div className="relative">
+      {Icon && <Icon className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: C.muted }} />}
+      <input inputMode="numeric" value={value} placeholder={placeholder} maxLength={maxLength}
+        onChange={(e) => onChange(e.target.value.replace(/\D/g, ""))}
+        className={`${edInputCls} ${Icon ? "pl-9" : ""} ${suffix ? "pr-10" : ""} tabular-nums`} />
+      {suffix && <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium" style={{ color: C.muted }}>{suffix}</span>}
+    </div>
+  );
+}
+
+// Selector por chips (tap, no teclear): conteos, estrato y enums cortos. Volver a
+// tocar el activo lo deselecciona (queda vacío → el diff no lo toca).
+function CountChips({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: { v: string; l: string }[] }) {
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {options.map((o) => {
+        const on = value === o.v;
+        return (
+          <button key={o.v} type="button" aria-pressed={on} onClick={() => onChange(on ? "" : o.v)}
+            className="min-h-[36px] min-w-[40px] rounded-lg border px-3 text-sm font-semibold transition"
+            style={on
+              ? { background: C.brand, borderColor: C.brand, color: "#fff", boxShadow: "0 1px 2px rgba(15,138,79,0.3)" }
+              : { background: C.soft, borderColor: C.line, color: C.sub }}>
+            {o.l}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+// Fila label(+icono) sobre chips, ancho completo.
+function ChipField({ label, icon: Icon, value, onChange, options, className = "col-span-2 sm:col-span-3" }: { label: string; icon?: typeof Home; value: string; onChange: (v: string) => void; options: { v: string; l: string }[]; className?: string }) {
+  return (
+    <div className={className}>
+      <span className="mb-1.5 flex items-center gap-1.5 text-xs font-medium" style={{ color: C.sub }}>
+        {Icon && <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />}{label}
+      </span>
+      <CountChips value={value} onChange={onChange} options={options} />
+    </div>
+  );
+}
+
+// Opciones de conteo reutilizables.
+const COUNT_0_5 = ["0", "1", "2", "3", "4", "5"].map((v) => ({ v, l: v === "5" ? "5+" : v }));
+const COUNT_1_5 = ["1", "2", "3", "4", "5"].map((v) => ({ v, l: v === "5" ? "5+" : v }));
+const COUNT_0_4 = ["0", "1", "2", "3", "4"].map((v) => ({ v, l: v === "4" ? "4+" : v }));
+const ESTRATO_OPTS = ["1", "2", "3", "4", "5", "6"].map((v) => ({ v, l: v }));
+
+// Whitelist de hosts embebibles (espejo del backend _ALLOWED_EMBED_HOSTS). Solo
+// para feedback vivo en el input; el backend re-valida y sanea al guardar.
+const EMBED_HOSTS = ["matterport.com", "kuula.co", "cloudpano.com", "istaging.com", "ricoh360.com", "insta360.com", "youtube.com", "youtu.be", "vimeo.com"];
+function embedState(url: string): "empty" | "ok" | "bad" {
+  if (!url.trim()) return "empty";
+  try {
+    const h = new URL(url.trim()).hostname.toLowerCase();
+    return EMBED_HOSTS.some((d) => h === d || h.endsWith("." + d)) ? "ok" : "bad";
+  } catch { return "bad"; }
+}
+
+// Input de URL embebible con feedback vivo (✓ válido / ✕ host no soportado).
+function EmbedInput({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder?: string }) {
+  const st = embedState(value);
+  const ring = st === "ok" ? C.brand : st === "bad" ? C.bad : C.line;
+  return (
+    <div>
+      <div className="relative">
+        <input value={value} placeholder={placeholder} onChange={(e) => onChange(e.target.value)}
+          className={`${edInputCls} pr-9`} style={{ borderColor: ring }} />
+        {st !== "empty" && (
+          <span className="absolute right-3 top-1/2 -translate-y-1/2">
+            {st === "ok"
+              ? <Check className="h-4 w-4" style={{ color: C.brand }} />
+              : <XCircle className="h-4 w-4" style={{ color: C.bad }} />}
+          </span>
+        )}
+      </div>
+      {st === "bad" && <p className="mt-1 text-[11px]" style={{ color: C.bad }}>Host no soportado — se ignorará al guardar.</p>}
+    </div>
   );
 }
 
@@ -1204,7 +1454,7 @@ function DDChecklistSection({ intakeId }: { intakeId: string }) {
     <section className="md:col-span-2">
       <h3 className="text-sm font-semibold" style={{ color: C.ink }}>Verificación de documentos</h3>
       <p className="mt-0.5 text-xs" style={{ color: C.muted }}>
-        Revisa cada punto con el propietario y adjunta la evidencia (link o archivo). Con todo verificado, el listing recibe el sello.
+        Revisa cada punto con el propietario y adjunta la evidencia como archivo (se guarda en la plataforma). Con todo verificado, el listing recibe el sello.
       </p>
 
       <PlausibilidadBanner intakeId={intakeId} />
@@ -1227,7 +1477,6 @@ function DDItemRow({ item, first, verificar, subir }: {
   item: import("@/lib/realtorApi").DDItem; first: boolean;
   verificar: ReturnType<typeof useVerificarDDItem>; subir: ReturnType<typeof useSubirEvidenciaDD>;
 }) {
-  const [link, setLink] = useState("");
   const pend = item.estado === "pendiente";
 
   // Descarga autenticada del archivo guardado en la DB (bytea) → blob → nueva pestaña.
@@ -1253,7 +1502,7 @@ function DDItemRow({ item, first, verificar, subir }: {
         {pend ? (
           <div className="flex shrink-0 gap-2">
             <button
-              onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado", evidencia: link.trim() || undefined })}
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "verificado" })}
               disabled={verificar.isPending}
               className="rounded-xl px-3 py-1 text-xs font-bold text-white transition hover:opacity-90 disabled:opacity-50"
               style={{ background: C.brand }}
@@ -1261,7 +1510,7 @@ function DDItemRow({ item, first, verificar, subir }: {
               Verificado
             </button>
             <button
-              onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado", evidencia: link.trim() || undefined })}
+              onClick={() => verificar.mutate({ itemId: item.id, estado: "rechazado" })}
               disabled={verificar.isPending}
               className="rounded-xl px-3 py-1 text-xs font-semibold transition hover:opacity-80 disabled:opacity-50"
               style={{ border: `1px solid ${C.line}`, color: C.ink }}
@@ -1279,6 +1528,7 @@ function DDItemRow({ item, first, verificar, subir }: {
 
       {/* Evidencia: existente (link + archivo) + controles para adjuntar */}
       <div className="flex flex-wrap items-center gap-2 text-xs">
+        {/* Link legado (ya no se crean nuevos): se muestra si un item viejo lo tiene. */}
         {item.evidencia && (
           <a href={item.evidencia} target="_blank" rel="noopener noreferrer"
             className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline"
@@ -1288,15 +1538,6 @@ function DDItemRow({ item, first, verificar, subir }: {
           <button onClick={verArchivo} className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 font-medium underline" style={{ color: C.brand }}>
             📄 {item.evidencia_nombre ?? "archivo"}
           </button>
-        )}
-        {pend && (
-          <input
-            value={link}
-            onChange={(e) => setLink(e.target.value)}
-            placeholder="Pega un link de evidencia (opcional)"
-            className="min-w-0 flex-1 rounded-md border px-2 py-1 text-xs"
-            style={{ borderColor: C.line, background: C.card, color: C.ink }}
-          />
         )}
         <label className="inline-flex cursor-pointer items-center gap-1 rounded-md px-2 py-1 font-medium" style={{ border: `1px solid ${C.line}`, color: C.sub }}>
           {subir.isPending ? "Subiendo…" : "📎 Adjuntar archivo"}
@@ -1769,7 +2010,7 @@ function ListingsTab() {
   const toggleGrupo = (g: ListingGrupo) => setGrupo((cur) => (cur === g ? "todos" : g));
 
   const renderCards = (items: MiListing[]) => (
-    <div className="grid gap-4 md:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
       {items.map((l) => (
         <ListingCard
           key={l.id}
@@ -1921,15 +2162,40 @@ function ListingsTab() {
 
 // Modal "Marcar vendido" — reporta el cierre (precio + matrícula obligatoria).
 // ES la contribución que desbloquea los comparables y sube el puntaje (incentivo).
+function CierreErr({ msg }: { msg: string }) {
+  return <p className="mt-1 flex items-center gap-1 text-[11px]" style={{ color: C.bad }}><XCircle className="h-3 w-3 shrink-0" />{msg}</p>;
+}
+
 function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose: () => void }) {
   const cerrar = useCerrarListing();
   const [precio, setPrecio] = useState("");
-  const [matricula, setMatricula] = useState("");
+  // Prellena las llaves que ya trae el listing (de /publicar) → menos tipeo y el
+  // reporte sale completo solo, lo que sube el puntaje (ver completitud).
+  const [matricula, setMatricula] = useState(listing.matricula_inmobiliaria ?? "");
   const [fecha, setFecha] = useState("");
-  const [catastral, setCatastral] = useState("");
+  const [catastral, setCatastral] = useState(listing.cedula_catastral ?? "");
 
   const precioNum = Number(precio.replace(/[^\d]/g, ""));
-  const puedeEnviar = precioNum > 0 && matricula.trim().length > 0 && !cerrar.isPending;
+  const hoy = new Date().toISOString().slice(0, 10);
+  // Valida contra las reglas del backend (CerrarListingRequest) → avisa en línea
+  // en vez de un 422 genérico. Solo mostramos el error si el campo ya tiene algo.
+  const errs = validarCierre(
+    { precio_cierre: precioNum, matricula_inmobiliaria: matricula, cedula_catastral: catastral, fecha_cierre: fecha },
+    hoy,
+  );
+  const puedeEnviar = Object.keys(errs).length === 0 && !cerrar.isPending;
+
+  // Calidad del reporte: entre más completo, más verificable y más sube el puntaje.
+  // La cédula catastral cruza con catastro (dato de más valor) → nudge real al score.
+  const checklist = [
+    { on: precioNum > 0, label: "Precio de cierre", hint: "obligatorio", boost: false },
+    { on: matricula.trim().length > 0, label: "Matrícula inmobiliaria", hint: "verifica con el SNR", boost: false },
+    { on: !!fecha, label: "Fecha de cierre", hint: "fija la antigüedad del dato", boost: false },
+    { on: catastral.trim().length > 0, label: "Cédula catastral", hint: "cruza con catastro · sube tu puntaje", boost: true },
+  ];
+  const completos = checklist.filter((c) => c.on).length;
+  const pct = Math.round((completos / checklist.length) * 100);
+  const nivel = pct >= 100 ? "Excelente" : pct >= 75 ? "Muy bueno" : pct >= 50 ? "Básico" : "Incompleto";
 
   async function enviar() {
     if (!puedeEnviar) return;
@@ -1950,72 +2216,101 @@ function CerrarVendidoModal({ listing, onClose }: { listing: MiListing; onClose:
   }
 
   return (
-    <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/40" />
+    <div className="fixed inset-0 z-[60] flex items-center justify-center p-3 sm:p-4" onClick={onClose}>
+      <div className="absolute inset-0 bg-black/55 backdrop-blur-[2px]" />
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Marcar vendido"
-        className="relative w-full max-w-md rounded-xl border border-border bg-surface p-6 shadow-xl"
+        aria-label="Reportar venta"
+        className="paper-theme relative flex max-h-[92vh] w-full max-w-lg flex-col overflow-hidden rounded-2xl border shadow-2xl"
+        style={{ borderColor: C.line, background: C.card }}
         onClick={(e) => e.stopPropagation()}
       >
-        <h3 className="text-lg font-semibold text-foreground">Reportar venta</h3>
-        <p className="mt-1 text-sm text-muted-foreground">
-          {listing.titulo}. Reportar el cierre <strong>desbloquea los comparables de cierre</strong> y sube tu puntaje.
-        </p>
+        {/* Header */}
+        <div className="flex items-start gap-3 border-b px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: "rgba(15,138,79,0.12)" }}>
+            <Trophy className="h-5 w-5" style={{ color: C.brand }} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>Reportar venta</h3>
+            <p className="mt-0.5 truncate text-xs" style={{ color: C.muted }}>{listing.titulo}</p>
+          </div>
+          <button onClick={onClose} aria-label="Cerrar" className="shrink-0 rounded-lg p-1.5 transition hover:bg-black/5" style={{ color: C.muted }}>
+            <X className="h-5 w-5" />
+          </button>
+        </div>
 
-        <div className="mt-4 space-y-3">
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Precio de cierre (COP) *</span>
-            <input
-              value={precio}
-              onChange={(e) => setPrecio(e.target.value)}
-              inputMode="numeric"
-              placeholder="450000000"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            {precioNum > 0 && <span className="mt-0.5 block text-xs text-muted-foreground">{formatCOP(precioNum)}</span>}
-          </label>
-          <label className="block">
-            <span className="text-xs font-medium text-muted-foreground">Matrícula inmobiliaria (ORIP) *</span>
-            <input
-              value={matricula}
-              onChange={(e) => setMatricula(e.target.value)}
-              placeholder="001-123456"
-              className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-            />
-            <span className="mt-0.5 block text-xs text-muted-foreground">Obligatoria — es la llave del registro de la propiedad.</span>
-          </label>
-          <div className="grid grid-cols-2 gap-3">
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Fecha de cierre</span>
-              <input
-                type="date"
-                value={fecha}
-                onChange={(e) => setFecha(e.target.value)}
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </label>
-            <label className="block">
-              <span className="text-xs font-medium text-muted-foreground">Cédula catastral</span>
-              <input
-                value={catastral}
-                onChange={(e) => setCatastral(e.target.value)}
-                placeholder="opcional"
-                className="mt-1 w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
-              />
-            </label>
+        {/* Body */}
+        <div className="flex flex-col gap-4 overflow-y-auto px-6 py-5" style={{ background: C.soft }}>
+          <div className="flex items-start gap-2 rounded-xl border px-3.5 py-2.5 text-[12px] leading-snug" style={{ borderColor: TONE.brand.line, background: TONE.brand.bg, color: TONE.brand.fg }}>
+            <Info className="mt-px h-4 w-4 shrink-0" />
+            <span>Reportar el cierre <strong>desbloquea los comparables de cierre</strong> y <strong>sube tu puntaje</strong>. Entre más completo el reporte, mejor.</span>
+          </div>
+
+          <div className="rounded-xl border p-4 sm:p-5" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+            <div className="grid gap-3">
+              <Field label="Precio de cierre" hint="obligatorio">
+                <MoneyInput value={precio.replace(/[^\d]/g, "")} onChange={setPrecio} />
+                {errs.precio && precio.trim() && <CierreErr msg={errs.precio} />}
+              </Field>
+              <Field label="Matrícula inmobiliaria (ORIP)" hint="obligatoria · llave del registro">
+                <div className="relative">
+                  <KeyRound className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: C.muted }} />
+                  <input value={matricula} maxLength={CIERRE_LIMITES.matriculaMax} onChange={(e) => setMatricula(e.target.value)} placeholder="001-123456" className={`${edInputCls} pl-9`} />
+                </div>
+                {errs.matricula && matricula.trim() && <CierreErr msg={errs.matricula} />}
+              </Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Fecha de cierre" hint="(opc.)">
+                  <input type="date" value={fecha} max={hoy} onChange={(e) => setFecha(e.target.value)} className={edInputCls} />
+                  {errs.fecha && <CierreErr msg={errs.fecha} />}
+                </Field>
+                <Field label="Cédula catastral" hint="(opc.)">
+                  <div className="relative">
+                    <ShieldCheck className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: catastral.trim() ? C.brand : C.muted }} />
+                    <input value={catastral} maxLength={CIERRE_LIMITES.catastralMax} onChange={(e) => setCatastral(e.target.value)} placeholder="opcional" className={`${edInputCls} pl-9`} />
+                  </div>
+                  {errs.catastral && <CierreErr msg={errs.catastral} />}
+                </Field>
+              </div>
+            </div>
+          </div>
+
+          {/* Calidad del reporte */}
+          <div className="rounded-xl border p-4" style={{ borderColor: C.line, background: C.card, boxShadow: "0 1px 2px rgba(16,24,40,0.04)" }}>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <span className="flex items-center gap-1.5 text-[13px] font-bold" style={{ color: C.ink }}>
+                <Sparkles className="h-4 w-4" style={{ color: C.brand }} /> Calidad del reporte
+              </span>
+              <span className="text-[12px] font-semibold tabular-nums" style={{ color: pct >= 75 ? C.brand : C.sub }}>{nivel} · {pct}%</span>
+            </div>
+            <div className="h-2 overflow-hidden rounded-full" style={{ background: C.soft }}>
+              <div className="h-full rounded-full transition-all" style={{ width: `${pct}%`, background: C.brand }} />
+            </div>
+            <ul className="mt-3 grid gap-1.5">
+              {checklist.map((c) => (
+                <li key={c.label} className="flex items-center gap-2 text-[12px]">
+                  {c.on
+                    ? <CheckCircle className="h-4 w-4 shrink-0" style={{ color: C.brand }} />
+                    : <span className="h-4 w-4 shrink-0 rounded-full border" style={{ borderColor: C.line }} />}
+                  <span style={{ color: c.on ? C.ink : C.muted }}>{c.label}</span>
+                  <span className="text-[11px]" style={{ color: c.boost ? C.brand : C.muted }}>· {c.hint}</span>
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
-          <button onClick={onClose} className="rounded-md px-4 py-2 text-sm text-muted-foreground hover:text-foreground">
+        {/* Footer */}
+        <div className="flex items-center justify-end gap-2 border-t px-6 py-4" style={{ borderColor: C.line, background: C.soft }}>
+          <button onClick={onClose} className="rounded-lg border px-4 py-2 text-sm font-medium transition hover:bg-black/5" style={{ borderColor: C.line, color: C.sub }}>
             Cancelar
           </button>
           <button
             onClick={enviar}
             disabled={!puedeEnviar}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-40"
+            className="rounded-lg px-5 py-2 text-sm font-semibold text-white transition hover:opacity-90 disabled:opacity-50"
+            style={{ background: C.brand }}
           >
             {cerrar.isPending ? "Reportando…" : "Reportar venta"}
           </button>
@@ -2038,7 +2333,7 @@ function RowAction({ onClick, disabled, variant = "ghost", title, children }: {
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="inline-flex min-h-[34px] shrink-0 items-center rounded-lg px-3 text-[12px] font-semibold transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:opacity-50"
+      className="inline-flex min-h-[30px] shrink-0 items-center rounded-lg px-2.5 text-[11.5px] font-semibold transition hover:opacity-85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 disabled:opacity-50"
       style={style}
     >
       {children}
@@ -2056,9 +2351,11 @@ function tipoIcon(tipo: string) {
 
 // Próximo paso sugerido para un listing según su estado y su ficha.
 function proximoPasoListing(l: MiListing): { tone: Tone; texto: string } | null {
-  if (l.estado === "rechazado") return { tone: "bad", texto: "Rechazado en revisión: corrige la ficha y vuelve a enviarla." };
-  if (l.estado === "borrador") return { tone: "warn", texto: "Borrador: completa la ficha para enviarla a revisión." };
-  if (l.estado === "en_revision") return { tone: "info", texto: "En revisión por el equipo. Te avisamos cuando se apruebe." };
+  if (l.estado === "rechazado") return { tone: "bad", texto: "Rechazado: corrige la ficha y vuelve a publicarla." };
+  if (l.estado === "borrador") return { tone: "warn", texto: "Borrador: completa la ficha y publícala tú mismo desde Bandeja y agenda." };
+  // Sin banner para en_revision: el listing de un dueño normal cae a los agentes de
+  // su zona (barrio/comuna) como asignado — el realtor es el revisor, no "el equipo".
+  // No mostramos copy de revisión externa al realtor.
   if (l.estado === "pausado") return { tone: "neutral", texto: "Pausado: no aparece en el mapa hasta que lo reactives." };
   if (l.estado === "publicado" && !l.cover_url) return { tone: "warn", texto: "Sin foto de portada: agrégala para destacar en el mapa." };
   if (l.estado === "publicado" && !l.descripcion) return { tone: "info", texto: "Agrega una descripción para que los interesados entiendan el inmueble." };
@@ -2073,7 +2370,6 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
   const puedeCerrar = l.estado === "publicado" || l.estado === "pausado";
   const PlaceIcon = tipoIcon(l.tipo_inmueble);
   const paso = proximoPasoListing(l);
-  const conv = l.vistas_total > 0 ? Math.round(((l.favoritos ?? 0) / l.vistas_total) * 100) : null;
 
   const spec = (val: number | null, suffix: string, Icon: typeof Bed) =>
     val == null ? null : (
@@ -2090,18 +2386,18 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
       style={{ background: C.card, border: `1px solid ${C.line}`, opacity: l.estado === "cerrado" ? 0.85 : 1 }}
     >
       {/* Portada */}
-      <div className={`relative shrink-0 overflow-hidden ${l.cover_url ? "h-44" : "h-28"}`} style={{ background: `linear-gradient(135deg, ${C.soft}, #ECE7DA)` }}>
+      <div className={`relative shrink-0 overflow-hidden ${l.cover_url ? "h-32" : "h-20"}`} style={{ background: `linear-gradient(135deg, ${C.soft}, #ECE7DA)` }}>
         {l.cover_url ? (
           <img src={l.cover_url} alt="" loading="lazy" className="h-full w-full object-cover" />
         ) : (
           <div className="grid h-full w-full place-items-center">
-            <div className="flex flex-col items-center gap-1.5" style={{ color: C.muted }}>
-              <PlaceIcon className="h-9 w-9 opacity-60" />
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Camera className="h-3 w-3" /> Sin foto</span>
+            <div className="flex flex-col items-center gap-1" style={{ color: C.muted }}>
+              <PlaceIcon className="h-7 w-7 opacity-60" />
+              <span className="inline-flex items-center gap-1 text-[10px] font-medium"><Camera className="h-3 w-3" /> Sin foto</span>
             </div>
           </div>
         )}
-        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-3">
+        <div className="absolute inset-x-0 top-0 flex items-center justify-between gap-2 p-2.5">
           <Pill tone={estado.tone} dot testId="listing-estado">{estado.label}</Pill>
           <span
             className="rounded-full px-2.5 py-0.5 text-[11px] font-semibold leading-5 backdrop-blur"
@@ -2114,20 +2410,20 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
       </div>
 
       {/* Info */}
-      <div className="flex flex-1 flex-col p-4">
+      <div className="flex flex-1 flex-col p-3">
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h3 className="line-clamp-2 text-[15px] font-semibold leading-snug" style={{ color: C.ink }}>{l.titulo}</h3>
-            <p className="mt-1 flex items-center gap-1 truncate text-[12px] capitalize" style={{ color: C.muted }}>
-              <MapPin className="h-3.5 w-3.5 shrink-0" />
+            <h3 className="line-clamp-1 text-[13.5px] font-semibold leading-snug" style={{ color: C.ink }}>{l.titulo}</h3>
+            <p className="mt-0.5 flex items-center gap-1 truncate text-[11.5px] capitalize" style={{ color: C.muted }}>
+              <MapPin className="h-3 w-3 shrink-0" />
               {l.tipo_inmueble} · {l.operacion}{l.barrio ? ` · ${l.barrio}` : ""}
             </p>
           </div>
         </div>
-        <div className="mt-2 text-[20px] font-bold tabular-nums tracking-tight" style={{ color: C.ink }}>
+        <div className="mt-1 text-[17px] font-bold tabular-nums tracking-tight" style={{ color: C.ink }}>
           {formatCOP(l.precio)}
         </div>
-        <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+        <div className="mt-1 flex flex-wrap items-center gap-x-2.5 gap-y-1">
           {spec(l.area_m2, " m²", Maximize2)}
           {spec(l.habitaciones, " hab", Bed)}
           {spec(l.banos, " baños", Bath)}
@@ -2135,38 +2431,33 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
         </div>
 
         {/* Rendimiento */}
-        <dl className="mt-4 grid grid-cols-3 overflow-hidden rounded-xl" style={{ background: C.soft }}>
+        <dl className="mt-2.5 grid grid-cols-3 overflow-hidden rounded-lg" style={{ background: C.soft }}>
           {[
             { k: "aperturas", v: l.vistas_total.toLocaleString("es-CO"), icon: Eye },
-            { k: "últimos 30d", v: l.vistas_30d.toLocaleString("es-CO"), icon: TrendingUp },
+            { k: "30d", v: l.vistas_30d.toLocaleString("es-CO"), icon: TrendingUp },
             { k: "favoritos", v: (l.favoritos ?? 0).toLocaleString("es-CO"), icon: Heart },
           ].map(({ k, v, icon: Icon }, i) => (
-            <div key={k} className="px-3 py-2.5" style={i > 0 ? { borderLeft: `1px solid ${C.line}` } : undefined}>
-              <dd className="flex items-center gap-1 text-[15px] font-bold tabular-nums" style={{ color: C.ink }}>
-                <Icon className="h-3.5 w-3.5" style={{ color: C.muted }} />{v}
+            <div key={k} className="px-2.5 py-1.5" style={i > 0 ? { borderLeft: `1px solid ${C.line}` } : undefined}>
+              <dd className="flex items-center gap-1 text-[13px] font-bold tabular-nums" style={{ color: C.ink }}>
+                <Icon className="h-3 w-3" style={{ color: C.muted }} />{v}
               </dd>
-              <dt className="text-[11px]" style={{ color: C.muted }}>{k}</dt>
+              <dt className="text-[10px]" style={{ color: C.muted }}>{k}</dt>
             </div>
           ))}
         </dl>
-        {conv != null && conv > 0 && (
-          <p className="mt-1.5 text-[11px]" style={{ color: C.muted }}>
-            {conv}% de quienes lo abren lo guardan en favoritos.
-          </p>
-        )}
 
         {paso && (
           <div
-            className="mt-3 flex items-start gap-2 rounded-xl px-3 py-2 text-[12px] leading-snug"
+            className="mt-2 flex items-start gap-1.5 rounded-lg px-2.5 py-1.5 text-[11px] leading-snug"
             style={{ background: TONE[paso.tone].bg, color: TONE[paso.tone].fg }}
           >
-            <Info className="mt-px h-3.5 w-3.5 shrink-0" />
-            <span>{paso.texto}</span>
+            <Info className="mt-px h-3 w-3 shrink-0" />
+            <span className="line-clamp-2">{paso.texto}</span>
           </div>
         )}
 
         {/* Acciones */}
-        <div className="mt-auto flex flex-wrap items-center gap-2 pt-4">
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
           <span className="mr-auto text-[11px]" style={{ color: C.muted }}>Actualizado {relativeTime(l.updated_at)}</span>
           {l.estado !== "cerrado" && (
             <RowAction onClick={onEditar} disabled={busy} variant="primary" title="Editar la ficha completa">Editar</RowAction>

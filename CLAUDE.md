@@ -1,5 +1,13 @@
 # CLAUDE.md
 
+## Dashboard de realtor: el realtor manda
+
+Cualquier trabajo en `src/routes/realtor/*` → **lee primero
+[`src/routes/realtor/AGENTS.md`](src/routes/realtor/AGENTS.md)**. Diseñar siempre
+para el realtor (persona objetivo que lo usa): acción antes que métricas,
+mobile-first, lenguaje llano, un tap para responder un lead. No para el admin ni
+para lucir KPIs.
+
 ## Proceso: todo cambio reproducible DEV → PROD
 
 **Regla base:** el código ya se reproduce solo (DEV y PROD corren el mismo commit).

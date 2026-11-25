@@ -48,6 +48,7 @@ export type ListingDraft = {
   habitaciones: number | null;
   banos: number | null;
   fotos_portada: number; // count of ListingMedia with es_portada=true
+  estado?: EstadoListing | null; // estado del listing: ya publicado ⇒ no re-publicar
 };
 
 export type ItemAsignado = {
@@ -112,6 +113,17 @@ export type MiListing = {
   nombre_edificio: string | null;
   administracion: number | null;
   amenidades: string[];
+  area_lote_m2: number | null;
+  amoblado: boolean | null;
+  mascotas: boolean | null;
+  permite_airbnb: boolean | null;
+  tour_url: string | null;
+  video_url: string | null;
+  // Llaves del registro — prellenan el modal de cierre (reportar venta).
+  matricula_inmobiliaria: string | null;
+  cedula_catastral: string | null;
+  // Ficha rica (año, área privada, estado, piso, orientación, vista, niveles, closets…).
+  caracteristicas: Record<string, unknown>;
   lat: number | null;
   lon: number | null;
 };
@@ -194,6 +206,48 @@ export type CerrarListingInput = {
   cedula_catastral?: string;
 };
 
+// Límites del cierre — espejo de CerrarListingRequest en api/routers/realtor.py.
+// El backend rechaza (422) lo que no cumpla; validamos antes para avisar en línea.
+export const CIERRE_LIMITES = {
+  precioMax: 1e13,
+  matriculaMax: 30,
+  catastralMax: 40,
+  llavePattern: /^[0-9A-Za-z\s-]+$/,   // letras, números, espacios y guiones
+} as const;
+
+type CierreCampos = {
+  precio_cierre: number;
+  matricula_inmobiliaria?: string | null;
+  cedula_catastral?: string | null;
+  fecha_cierre?: string | null;        // YYYY-MM-DD
+};
+
+/** Valida el reporte de cierre contra las reglas del backend. Devuelve
+ *  { campo: mensaje } vacío si todo OK. `hoy` (YYYY-MM-DD) se inyecta para testear. */
+export function validarCierre(v: CierreCampos, hoy: string): Record<string, string> {
+  const e: Record<string, string> = {};
+  const { precioMax, matriculaMax, catastralMax, llavePattern } = CIERRE_LIMITES;
+
+  if (!(v.precio_cierre > 0)) e.precio = "Ingresa un precio de cierre válido.";
+  else if (!Number.isFinite(v.precio_cierre) || v.precio_cierre > precioMax) e.precio = "El precio es demasiado alto.";
+
+  const mat = (v.matricula_inmobiliaria ?? "").trim();
+  if (!mat) e.matricula = "La matrícula es obligatoria.";
+  else if (mat.length > matriculaMax) e.matricula = `Máximo ${matriculaMax} caracteres.`;
+  else if (!llavePattern.test(mat)) e.matricula = "Solo letras, números, espacios y guiones.";
+
+  const cat = (v.cedula_catastral ?? "").trim();
+  if (cat) {
+    if (cat.length > catastralMax) e.catastral = `Máximo ${catastralMax} caracteres.`;
+    else if (!llavePattern.test(cat)) e.catastral = "Solo letras, números, espacios y guiones.";
+  }
+
+  const f = (v.fecha_cierre ?? "").trim();
+  if (f && f > hoy) e.fecha = "La fecha no puede ser futura.";
+
+  return e;
+}
+
 export type EstadoVisita = "pendiente" | "confirmada" | "realizada" | "cancelada" | "no_asistio";
 export type ResultadoVisita = "interesado" | "oferta" | "descartado";
 
@@ -245,6 +299,14 @@ export type ListingPatch = {
   nombre_edificio?: string;
   administracion?: number;
   amenidades?: string[];
+  area_lote_m2?: number;
+  amoblado?: boolean;
+  mascotas?: boolean;
+  permite_airbnb?: boolean;
+  tour_url?: string;
+  video_url?: string;
+  // Ficha rica JSONB: solo las llaves cambiadas viajan; el backend las mergea.
+  caracteristicas?: Record<string, unknown>;
 };
 
 export type DDItemEstado = "pendiente" | "verificado" | "rechazado";
@@ -415,6 +477,9 @@ const _mockFicha = {
   descripcion: null, area_m2: null, habitaciones: null, banos: null, parqueaderos: null,
   estrato: null, antiguedad_anios: null, direccion_aprox: null, nombre_edificio: null,
   administracion: null, amenidades: [] as string[], lat: null, lon: null,
+  area_lote_m2: null, amoblado: null, mascotas: null, permite_airbnb: null,
+  tour_url: null, video_url: null, caracteristicas: {} as Record<string, unknown>,
+  matricula_inmobiliaria: null, cedula_catastral: null,
   es_propio: true, cover_url: null,
 };
 let _mockListings: MiListing[] = [

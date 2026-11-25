@@ -17,10 +17,17 @@ router = APIRouter()
 
 
 async def _agent_del_usuario(user: dict, pool) -> SimpleNamespace:
-    """Resuelve el agent vinculado al usuario autenticado."""
+    """Resuelve el agent vinculado al usuario autenticado.
+
+    Determinista: si un usuario tuviera >1 fila agent, TODOS los endpoints deben
+    resolver a la MISMA (canónica = más vieja; activa gana). Sin este ORDER BY,
+    aceptar/verificar (asignador) y asignados/pool (realtor) elegían filas
+    distintas → `agent_id != agent.id` → 403 al aceptar un lead propio.
+    """
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
-            "SELECT id, estado, usuario_id FROM agent WHERE usuario_id = $1",
+            "SELECT id, estado, usuario_id FROM agent WHERE usuario_id = $1 "
+            "ORDER BY (estado = 'activo') DESC, created_at ASC LIMIT 1",
             user.get("id"),
         )
     if not row:

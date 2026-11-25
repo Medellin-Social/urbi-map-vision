@@ -1,6 +1,12 @@
 /* Spanish -> English dictionary. Loaded lazily (dynamic import) only when the UI language is EN.
  * Order matters: longer phrases first to avoid partial replacements. */
 export const PHRASES: Array<[string, string]> = [
+  // ── Puntaje del realtor (ScoreInfo / reportar venta) ──
+  ["Tu puntaje (0–100) premia lo que controlas. Se arma con cuatro partes:", "Your score (0–100) rewards what you control. It's built from four parts:"],
+  [". Entre más completo el reporte, mejor.", ". The more complete the report, the better."],
+  ["¿Cómo se calcula?", "How is it calculated?"],
+  ["Calidad del reporte", "Report quality"],
+  ["sube tu puntaje", "raises your score"],
   ["Quitar filtro", "Remove filter"],
   ["Limpiar búsqueda", "Clear search"],
   ["Tipo de propiedad", "Property type"],

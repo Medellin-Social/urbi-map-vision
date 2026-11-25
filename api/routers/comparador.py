@@ -120,8 +120,8 @@ async def batch_listings(
         raise HTTPException(status_code=400, detail="ids must be comma-separated integers")
     if not id_list:
         raise HTTPException(status_code=400, detail="Provide at least 1 listing ID")
-    if len(id_list) > 5:
-        raise HTTPException(status_code=400, detail="Máximo 5 listings por comparación")
+    if len(id_list) > 10:
+        raise HTTPException(status_code=400, detail="Máximo 10 listings por comparación")
 
     pool = get_pool()
     from api.services.trm_service import get_usd_rate

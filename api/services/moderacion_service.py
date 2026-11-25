@@ -18,15 +18,27 @@ from api.utils import ghl_client
 logger = logging.getLogger(__name__)
 
 
-async def aprobar(listing: Any, moderador_id: str, pool: Any) -> None:
-    """en_revision → publicado + bitácora. transition setea published_at 1ª vez."""
+async def aprobar(listing: Any, moderador_id: str, pool: Any, verificar: bool = True) -> None:
+    """en_revision → publicado + bitácora. transition setea published_at 1ª vez.
+
+    verificar=True (default, moderación admin): el aprobador da fe → sello Verificada.
+    verificar=False (auto-publicación del realtor): publica SIN forzar el sello; el
+    sello lo gana la verificación de documentos (DD), no el solo hecho de publicar.
+    """
     transition(listing, "publicado")  # valida en_revision→publicado
     async with pool.acquire() as conn:
-        await conn.execute(
-            "UPDATE listing SET estado = 'publicado', verificado = TRUE, "
-            "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
-            listing.id,
-        )
+        if verificar:
+            await conn.execute(
+                "UPDATE listing SET estado = 'publicado', verificado = TRUE, "
+                "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
+                listing.id,
+            )
+        else:
+            await conn.execute(
+                "UPDATE listing SET estado = 'publicado', "
+                "published_at = COALESCE(published_at, NOW()) WHERE id = $1",
+                listing.id,
+            )
         await conn.execute(
             "INSERT INTO listing_moderacion (id, listing_id, accion, moderador_id) "
             "VALUES ($1, $2, 'aprobado', $3)",

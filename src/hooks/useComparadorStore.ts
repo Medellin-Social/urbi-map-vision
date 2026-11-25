@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect } from "react";
 import type { ApiListing } from "@/lib/adapters";
 
 const LS_KEY = "comparador_listings";
-export const MAX_COMPARADOR = 5;
+export const MAX_COMPARADOR = 10;
 
 function loadFromStorage(): ApiListing[] {
   try {
