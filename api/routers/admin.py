@@ -1450,7 +1450,7 @@ async def aprobar_tienda(request: Request, tienda_id: int, admin: dict = Depends
     if dueno and dueno["email"]:
         from api.utils.email import notify_tienda_aprobada
         ghl_client.spawn(notify_tienda_aprobada(
-            dueno["email"], dueno["nombre"], os.getenv("APP_URL", "https://medellin.social")))
+            dueno["email"], dueno["nombre"], os.getenv("APP_URL", "https://medellinsocial.com")))
     return {"id": tienda_id, "activo": True}
 
 

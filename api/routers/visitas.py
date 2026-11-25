@@ -78,7 +78,7 @@ async def notificar_visita_al_realtor(agent_id: str, visita_id: str, pool) -> No
             )
         if not row or not row["email"]:
             return
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         cuando = row["fecha_visita"].strftime("%Y-%m-%d %H:%M") if row["fecha_visita"] else "sin fecha propuesta"
         calif = " · ".join(filter(None, [row["intencion"], row["presupuesto"]]))
         await send_email(

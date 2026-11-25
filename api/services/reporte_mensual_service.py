@@ -54,7 +54,7 @@ def _hay_actividad(m: Dict[str, int]) -> bool:
 def _html(nombre: str, inicio: date, m: Dict[str, int]) -> str:
     from api.utils.email import esc
 
-    app_url = os.getenv("APP_URL", "https://medellin.social")
+    app_url = os.getenv("APP_URL", "https://medellinsocial.com")
     resp = (f"{round(100 * m['visitas_respondidas'] / m['visitas_recibidas'])} %"
             if m["visitas_recibidas"] else "—")
     return f"""

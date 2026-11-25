@@ -34,7 +34,7 @@ async def _avisar(conn: Any, visita_id: Any, agent_id: Any, asunto: str, intro: 
         )
         if not row or not row["email"]:
             return
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         await send_email(
             row["email"], asunto,
             f"<p>Hola {esc(row['agente'])}, {esc(intro)}</p>"

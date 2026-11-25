@@ -38,7 +38,7 @@ _LINK_ENV = {
     "cert_ilimitado": "GHL_LINK_CERT_ILIMITADO",
     "anuncio": "GHL_LINK_ANUNCIO",
 }
-APP_URL = os.getenv("APP_URL", "https://medellin.social")
+APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
 
 def _simulacion_habilitada() -> bool:

@@ -21,7 +21,7 @@ log = logging.getLogger("realtor_slots")
 
 async def _avisar(filas) -> int:
     from api.utils.email import esc, send_email
-    app_url = os.getenv("APP_URL", "https://medellin.social")
+    app_url = os.getenv("APP_URL", "https://medellinsocial.com")
     ok = 0
     for r in filas:
         try:

@@ -20,7 +20,7 @@ from api.utils import ghl_client, stripe_client
 router = APIRouter()
 log = logging.getLogger(__name__)
 
-_FRONTEND_URL = os.getenv("FRONTEND_URL", "https://medellin.social")
+_FRONTEND_URL = os.getenv("FRONTEND_URL", "https://medellinsocial.com")
 _ADMIN_WHATSAPP = os.getenv("ADMIN_WHATSAPP", "")
 
 
@@ -237,7 +237,7 @@ async def registro_agente(
         log.exception("sync_agent(%s) falló", row["id"])  # best-effort, no bloquea el registro
     if row["estado"] == "pendiente":
         from api.utils.email import notify_admin_new_agente, notify_agente_solicitud_recibida
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         ghl_client.spawn(notify_admin_new_agente(
             body.nombre.strip(), "—", current_user["email"], body.telefono.strip(), f"{app_url}/admin"))
         ghl_client.spawn(notify_agente_solicitud_recibida(current_user["email"], body.nombre.strip()))

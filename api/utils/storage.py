@@ -8,7 +8,7 @@ Env vars:
   S3_ENDPOINT_URL     — endpoint S3-compat. Para R2:
                         https://<account_id>.r2.cloudflarestorage.com
                         Vacío → AWS S3 normal.
-  S3_PUBLIC_URL       — base URL pública/CDN (e.g. https://cdn.medellin.social
+  S3_PUBLIC_URL       — base URL pública/CDN (e.g. https://cdn.medellinsocial.com
                         o https://<hash>.r2.dev). Falls back a
                         https://{bucket}.s3.amazonaws.com
 
