@@ -39,6 +39,5 @@ jobs:
       - run: npm ci
       - name: Build
         run: npm run build
-      - name: "Tests frontend (informativo, 3 tests i18n fallan de antes)"
+      - name: Tests frontend
         run: npm test
-        continue-on-error: true
