@@ -772,8 +772,8 @@ export const PHRASES: Array<[string, string]> = [
   ["Quitar", "Remove"],
 
   // ---- Onboarding / mapa ----
-  ["No pudimos guardar tu perfil en el servidor. Puedes continuar normalmente.",
-    "Could not save your profile to the server. You can continue normally."],
+  ["No pudimos guardar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
+    "Could not save your profile. Check your connection and try again."],
   ["Mayor yield potencial en zonas emergentes", "Highest yield potential in emerging areas"],
   ["Zonas consolidadas con yields estables", "Consolidated areas with stable yields"],
   ["Zonas emergentes", "Emerging areas"],
