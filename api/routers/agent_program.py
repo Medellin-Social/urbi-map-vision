@@ -38,7 +38,7 @@ _LINK_ENV = {
     "cert_ilimitado": "GHL_LINK_CERT_ILIMITADO",
     "anuncio": "GHL_LINK_ANUNCIO",
 }
-APP_URL = os.getenv("APP_URL", "https://medellin.social")
+APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
 
 def _simulacion_habilitada() -> bool:
@@ -468,11 +468,7 @@ async def admin_lead_servicio_estado(request: Request, lead_id: str, body: LeadE
 
 # ── Público: "Más información" ────────────────────────────────────────────────
 
-TIPO_LEAD_LABEL = {
-    "realtor_casa": "Realtor de la casa",
-    "property_manager": "Property manager",
-    "administracion": "Administración del inmueble",
-}
+from api.utils.ghl_client import TIPO_LEAD_LABEL  # noqa: E402 — también lo usa sync_lead_servicio
 
 
 class LeadServicioIn(BaseModel):

@@ -14,9 +14,11 @@ SMTP env vars:
 """
 from __future__ import annotations
 
+import logging
 import os
 import smtplib
 import asyncio
+from api.utils.env import is_production, report_misconfig
 from api.utils.pii import mask_email
 from html import escape as _html_escape
 from email.mime.multipart import MIMEMultipart
@@ -28,6 +30,7 @@ _SMTP_USER  = os.getenv("SMTP_USER", "")
 _SMTP_PASS  = os.getenv("SMTP_PASS", "")
 _FROM       = os.getenv("EMAIL_FROM", _SMTP_USER)
 ADMIN_EMAIL = os.getenv("ADMIN_EMAIL", "edwardgiraldo101@gmail.com")
+_log = logging.getLogger(__name__)
 
 
 def esc(value: object) -> str:
@@ -50,8 +53,18 @@ def _one_line(value: str) -> str:
     return " ".join(str(value).replace("\r", " ").replace("\n", " ").split())
 
 
+class EmailNotConfigured(RuntimeError):
+    """Producción sin Gmail API ni SMTP: el correo NO salió."""
+
+
 def _send_sync(to: str, subject: str, html: str) -> None:
     if not _SMTP_USER or not _SMTP_PASS:
+        if is_production():
+            # Fail loudly: en prod un "[EMAIL STUB]" silencioso perdía correos
+            # (magic links, avisos al admin) sin que nadie se enterara.
+            report_misconfig(_log, "email no configurado en producción (ni Gmail API ni "
+                                   f"SMTP_USER/SMTP_PASS): no se envió '{subject}'")
+            raise EmailNotConfigured("email no configurado en producción")
         # Dev fallback: print to stdout so the feature doesn't break
         print(f"[EMAIL STUB] To={mask_email(to)} Subject={subject}")
         return

@@ -38,7 +38,7 @@ from api.services.zona_sponsor_service import get_or_create_agency
 
 router = APIRouter()
 
-_APP_URL = os.getenv("APP_URL", "https://medellin.social")
+_APP_URL = os.getenv("APP_URL", "https://medellinsocial.com")
 
 # Enum listing_operacion solo tiene venta|arriendo.
 _OPERACION_MAP = {"venta": "venta", "arriendo": "arriendo"}

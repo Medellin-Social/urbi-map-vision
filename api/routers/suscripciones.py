@@ -11,7 +11,7 @@ from api.limiter import limiter
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 
-from api.config.planes import PLANES
+from api.config.planes import PLAN_RETIRADO_DETAIL, PLANES, plan_vendible
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.utils.email import ADMIN_EMAIL, _wrap, esc, send_email
@@ -20,7 +20,7 @@ from api.utils import ghl_client, stripe_client
 router = APIRouter()
 log = logging.getLogger(__name__)
 
-_FRONTEND_URL = os.getenv("FRONTEND_URL", "https://medellin.social")
+_FRONTEND_URL = os.getenv("FRONTEND_URL", "https://medellinsocial.com")
 _ADMIN_WHATSAPP = os.getenv("ADMIN_WHATSAPP", "")
 
 
@@ -35,6 +35,8 @@ async def get_planes(moneda: str = "COP"):
 
     result = []
     for key, p in PLANES.items():
+        if not p.get("activo", True):
+            continue  # retirado: no se ofrece a usuarios nuevos
         result.append({
             "id": key,
             "nombre": p["nombre"],
@@ -60,6 +62,9 @@ async def iniciar_suscripcion(
 ):
     if plan not in PLANES:
         raise HTTPException(400, "Plan inválido")
+    if not plan_vendible(plan):
+        # Suscriptores existentes de "pro" no se tocan; solo se bloquean compras nuevas.
+        raise HTTPException(410, PLAN_RETIRADO_DETAIL)
     moneda = moneda.upper()
     if moneda not in ("COP", "USD"):
         raise HTTPException(400, "Moneda inválida")
@@ -237,7 +242,7 @@ async def registro_agente(
         log.exception("sync_agent(%s) falló", row["id"])  # best-effort, no bloquea el registro
     if row["estado"] == "pendiente":
         from api.utils.email import notify_admin_new_agente, notify_agente_solicitud_recibida
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         ghl_client.spawn(notify_admin_new_agente(
             body.nombre.strip(), "—", current_user["email"], body.telefono.strip(), f"{app_url}/admin"))
         ghl_client.spawn(notify_agente_solicitud_recibida(current_user["email"], body.nombre.strip()))

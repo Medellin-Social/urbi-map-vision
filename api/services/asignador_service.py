@@ -114,7 +114,7 @@ async def _notificar_lead_asignado(agent_id: str, intake_id: str, pool: Any) -> 
             )
         if not row or not row["email"]:
             return
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         precio = f"${float(row['precio_esperado'] or 0):,.0f} COP"
         await send_email(
             row["email"],

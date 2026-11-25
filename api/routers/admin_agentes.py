@@ -63,7 +63,7 @@ async def aprobar(request: Request, agent_id: str, req: AprobarRequest = Body(..
     await _audit(pool, admin, "aprobar_agente", "agent", agent_id, None, request)
     if agent.email:
         from api.utils.email import notify_agente_aprobado
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         ghl_client.spawn(notify_agente_aprobado(agent.email, agent.nombre or "", f"{app_url}/realtor/dashboard"))
     ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "activo"}
@@ -80,7 +80,7 @@ async def rechazar(request: Request, agent_id: str, req: MotivoRequest = Body(..
     await _audit(pool, admin, "rechazar_agente", "agent", agent_id, {"motivo": req.motivo}, request)
     if agent.email:
         from api.utils.email import notify_agente_rechazado
-        app_url = os.getenv("APP_URL", "https://medellin.social")
+        app_url = os.getenv("APP_URL", "https://medellinsocial.com")
         ghl_client.spawn(notify_agente_rechazado(agent.email, agent.nombre or "", req.motivo, f"{app_url}/agentes/registro"))
     ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "rechazado"}
