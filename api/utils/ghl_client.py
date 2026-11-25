@@ -1152,11 +1152,59 @@ async def push_lead_servicio_to_ghl(lead_id, campos: dict, label: str) -> Option
             f"Anuncio: {campos.get('listing_url')}\nMensaje: {campos.get('mensaje')}"
         ))
         await upsert_opportunity(contact_id, "visitas", f"{label}: {campos.get('nombre')}")
+        await resolve_push_failure("lead_servicio", lead_id)
         return contact_id
     except Exception as e:
         logger.error("push_lead_servicio_to_ghl(%s) falló: %s", lead_id, e)
         await _record_push_failure("lead_servicio", lead_id, str(e))
         return None
+
+
+TIPO_LEAD_LABEL = {
+    "realtor_casa": "Realtor de la casa",
+    "property_manager": "Property manager",
+    "administracion": "Administración del inmueble",
+}
+
+_LEAD_SERVICIO_SELECT = """
+    SELECT tipo, nombre, email, telefono, barrio, listing_url, mensaje
+    FROM public.leads_servicio WHERE id = $1::uuid
+"""
+
+
+async def sync_lead_servicio(lead_id: str) -> Optional[str]:
+    """Lee leads_servicio y lo re-empuja a GHL (usado por el cron de reintentos).
+    Guarda ghl_contact_id si sale bien, igual que el endpoint público."""
+    if not is_configured():
+        return None
+    pool = get_pool()
+    row = await pool.fetchrow(_LEAD_SERVICIO_SELECT, lead_id)
+    if row is None:
+        return None
+    campos = dict(row)
+    label = TIPO_LEAD_LABEL.get(campos.get("tipo"), "Servicio")
+    cid = await push_lead_servicio_to_ghl(lead_id, campos, label)
+    if cid:
+        await pool.execute(
+            "UPDATE public.leads_servicio SET ghl_contact_id = $2 WHERE id = $1::uuid", lead_id, cid
+        )
+    return cid
+
+
+_NEGOCIO_SELECT = """
+    SELECT nombre_negocio, email, telefono, categoria, barrio_id, plan_tipo, mensaje
+    FROM public.leads_negocio WHERE id = $1
+"""
+
+
+async def sync_negocio(lead_id: int) -> Optional[str]:
+    """Lee leads_negocio y lo re-empuja a GHL (usado por el cron de reintentos)."""
+    if not is_configured():
+        return None
+    row = await get_pool().fetchrow(_NEGOCIO_SELECT, lead_id)
+    if row is None:
+        return None
+    return await push_negocio_lead_to_ghl(lead_id, dict(row))
 
 
 async def push_negocio_lead_to_ghl(lead_id, campos: dict) -> Optional[str]:

@@ -24,6 +24,8 @@ _SYNC = {
     "tienda": (ghl_client.sync_tienda, int),
     "evento": (ghl_client.sync_evento, int),
     "referidor": (ghl_client.sync_referidor, int),
+    "lead_servicio": (ghl_client.sync_lead_servicio, str),
+    "negocio": (ghl_client.sync_negocio, int),
 }
 TIPOS_REINTENTABLES = tuple(_SYNC)
 
