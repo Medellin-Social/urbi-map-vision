@@ -488,6 +488,7 @@ export function ListingDetailContent({
                   </div>
                   <Link
                     to="/simulador"
+                    search={{ listing_id: listing.id }}
                     className="mt-3 inline-block text-xs text-primary underline"
                   >
                     Usar simulador completo →
