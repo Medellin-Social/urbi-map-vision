@@ -1207,7 +1207,7 @@ async def push_visita_to_ghl(visita_id: str, campos: dict) -> Optional[str]:
 
 
 _VISITA_SELECT = """
-    SELECT listing_url, nombre, telefono, fecha_visita, mensaje, agent_id
+    SELECT listing_url, nombre, telefono, email, fecha_visita, mensaje, agent_id
     FROM public.visita_solicitud WHERE id = $1
 """
 
