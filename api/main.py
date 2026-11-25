@@ -177,6 +177,18 @@ async def health():
     return {"status": "ok"}
 
 
+@app.get("/health/ready", include_in_schema=False)
+async def health_ready():
+    # Readiness: /health es liveness (sin DB, a propósito). Este sí toca la DB
+    # para que un monitor externo detecte una DB caída o el pool sin iniciar.
+    try:
+        await asyncio.wait_for(get_pool().fetchval("SELECT 1"), timeout=3)
+    except Exception as e:  # noqa: BLE001 — cualquier fallo = no listo
+        logger.error("health_ready_db_unreachable", error=type(e).__name__)
+        return JSONResponse(status_code=503, content={"status": "unavailable", "db": "down"})
+    return {"status": "ok", "db": "ok"}
+
+
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
     start = time.time()
