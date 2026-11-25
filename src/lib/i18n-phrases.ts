@@ -1,6 +1,10 @@
 /* Spanish -> English dictionary. Loaded lazily (dynamic import) only when the UI language is EN.
  * Order matters: longer phrases first to avoid partial replacements. */
 export const PHRASES: Array<[string, string]> = [
+  // ── Puntaje: asistencia no penaliza ──
+  ["La asistencia a visitas se muestra como referencia pero ", "Visit attendance is shown for reference but "],
+  ["no baja tu puntaje", "doesn't lower your score"],
+  [" — un plantón es del comprador, no tuyo. Necesitas un mínimo de actividad reciente para tener puntaje. Cierres: últimos 12 meses · velocidad y aceptación: últimos 90 días.", " — a no-show is on the buyer, not you. You need a minimum of recent activity to get a score. Closings: last 12 months · speed and acceptance: last 90 days."],
   // ── Estados de error de sección (realtor dashboard) ──
   ["Parece un corte momentáneo de conexión — tus propietarios y leads están a salvo. Vuelve a intentar en un segundo.", "Looks like a brief connection hiccup — your owners and leads are safe. Try again in a second."],
   ["Tus visitas y solicitudes están guardadas. Suele ser un corte momentáneo; reintenta en un segundo.", "Your visits and requests are saved. It's usually a brief hiccup; try again in a second."],
@@ -214,6 +218,7 @@ export const PHRASES: Array<[string, string]> = [
   ["¿Cómo terminó?", "How did it go?"],
   ["Marcar realizada", "Mark as done"],
   ["No asistió", "No-show"],
+  ["Pasó a oferta", "Moved to offer"],
   ["Hará oferta", "Will make an offer"],
   ["Descartado", "Not interested"],
   ["Interesado", "Interested"],

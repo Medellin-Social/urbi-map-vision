@@ -1645,8 +1645,24 @@ function etiquetaDia(ms: number): string {
 
 function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType<typeof useActualizarVisita> }) {
   const [verHistorial, setVerHistorial] = useState(false);
-  const [registrando, setRegistrando] = useState(false);
+  const [registrarInit, setRegistrarInit] = useState<RegistrarInit | null>(null);
+  const [cerrandoListing, setCerrandoListing] = useState<MiListing | null>(null);
+  const { data: misListings = [] } = useMisListings();
   const visitas = data.visitas;
+
+  // Acciones del embudo tras el resultado de una visita (pasos siguientes):
+  const agendarSeguimiento = (v: VisitaSolicitud) =>
+    setRegistrarInit({ listingId: v.listing_url, nombre: v.nombre, telefono: v.telefono ?? undefined });
+  const reportarCierre = (v: VisitaSolicitud) => {
+    const ml = misListings.find((l) => l.id === v.listing_url);
+    if (ml) setCerrandoListing(ml);
+    else setRegistrarInit(null); // no es listing propio → sin cierre directo
+  };
+  const puedeCerrarDesdeVisita = (v: VisitaSolicitud) => misListings.some((l) => l.id === v.listing_url && l.estado !== "cerrado");
+  const avanzar = (v: VisitaSolicitud, resultado: "oferta" | "descartado") =>
+    actualizar.mutate({ id: v.id, estado: "realizada", resultado });
+  const histBtn = "inline-flex min-h-[32px] items-center rounded-lg border px-2.5 text-[11.5px] font-semibold transition hover:opacity-85 disabled:opacity-50";
+  const histGhost = { background: C.card, borderColor: C.line, color: C.sub };
 
   // Por confirmar: primero las vencidas, luego Pro, luego las más antiguas.
   const porConfirmar = visitas
@@ -1681,7 +1697,7 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
   const registrarBtn = (
     <button
       type="button"
-      onClick={() => setRegistrando(true)}
+      onClick={() => setRegistrarInit({})}
       className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border px-3.5 text-[13px] font-semibold transition hover:bg-black/[0.03]"
       style={{ borderColor: C.line, color: C.sub }}
     >
@@ -1698,7 +1714,7 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
           title="Aún no tienes solicitudes de visita"
           msg="Cuando alguien agende una visita a uno de tus inmuebles desde el mapa, aparecerá aquí. También puedes registrar a mano una visita que agendaste por fuera."
         />
-        {registrando && <RegistrarVisitaModal onClose={() => setRegistrando(false)} />}
+        {registrarInit && <RegistrarVisitaModal initial={registrarInit} onClose={() => setRegistrarInit(null)} />}
       </>
     );
   }
@@ -1780,26 +1796,53 @@ function AgendaBody({ data, actualizar }: { data: Agenda; actualizar: ReturnType
                     {v.nota_realtor}
                   </p>
                 )}
+                {/* Pasos siguientes del embudo según el resultado */}
+                {(v.resultado === "interesado" || v.resultado === "oferta" || v.estado === "no_asistio") && (
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {v.resultado === "oferta" && puedeCerrarDesdeVisita(v) && (
+                      <button onClick={() => reportarCierre(v)} className={histBtn} style={{ background: C.brand, color: "#fff", borderColor: C.brand }}>
+                        <Trophy className="mr-1 h-3 w-3" /> Reportar cierre
+                      </button>
+                    )}
+                    {v.resultado === "interesado" && (
+                      <button onClick={() => avanzar(v, "oferta")} className={histBtn} style={{ background: C.brand, color: "#fff", borderColor: C.brand }}>
+                        <TrendingUp className="mr-1 h-3 w-3" /> Pasó a oferta
+                      </button>
+                    )}
+                    <button onClick={() => agendarSeguimiento(v)} className={histBtn} style={histGhost}>
+                      <Calendar className="mr-1 h-3 w-3" /> {v.estado === "no_asistio" ? "Reagendar" : "Agendar otra visita"}
+                    </button>
+                    {v.resultado !== "descartado" && v.estado !== "no_asistio" && (
+                      <button onClick={() => avanzar(v, "descartado")} className={histBtn} style={{ ...histGhost, color: C.muted }}>
+                        Marcar perdido
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })}
         </Panel>
       )}
 
-      {registrando && <RegistrarVisitaModal onClose={() => setRegistrando(false)} />}
+      {registrarInit && <RegistrarVisitaModal initial={registrarInit} onClose={() => setRegistrarInit(null)} />}
+      {cerrandoListing && <CerrarVendidoModal listing={cerrandoListing} onClose={() => setCerrandoListing(null)} />}
     </div>
   );
 }
 
 // Modal: el realtor registra a mano una visita que agendó por fuera del mapa.
-function RegistrarVisitaModal({ onClose }: { onClose: () => void }) {
+// initial: pre-llena para "Agendar 2da visita" (mismo comprador + inmueble).
+type RegistrarInit = { listingId?: string; nombre?: string; telefono?: string };
+function RegistrarVisitaModal({ onClose, initial }: { onClose: () => void; initial?: RegistrarInit }) {
   const dialogRef = useModalA11y(onClose);
   const crear = useCrearVisitaManual();
   const { data: listings = [] } = useMisListings();
   const editables = listings.filter((l) => l.es_propio && l.estado !== "cerrado");
-  const [listingId, setListingId] = useState("");
-  const [nombre, setNombre] = useState("");
-  const [telefono, setTelefono] = useState("");
+  const esSeguimiento = !!(initial?.nombre || initial?.listingId);
+  const [listingId, setListingId] = useState(initial?.listingId ?? "");
+  const [nombre, setNombre] = useState(initial?.nombre ?? "");
+  const [telefono, setTelefono] = useState(initial?.telefono ?? "");
   const [fecha, setFecha] = useState("");
   const [estado, setEstado] = useState<"confirmada" | "realizada">("confirmada");
   const [resultado, setResultado] = useState<"interesado" | "oferta" | "descartado" | "">("");
@@ -1845,8 +1888,8 @@ function RegistrarVisitaModal({ onClose }: { onClose: () => void }) {
             <CalendarClock className="h-5 w-5" style={{ color: C.brand }} />
           </span>
           <div className="min-w-0 flex-1">
-            <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>Registrar visita</h3>
-            <p className="mt-0.5 text-xs" style={{ color: C.muted }}>Una visita que agendaste por fuera del mapa</p>
+            <h3 className="text-[17px] font-bold tracking-tight" style={{ color: C.ink }}>{esSeguimiento ? "Agendar otra visita" : "Registrar visita"}</h3>
+            <p className="mt-0.5 text-xs" style={{ color: C.muted }}>{esSeguimiento ? "Seguimiento del mismo comprador" : "Una visita que agendaste por fuera del mapa"}</p>
           </div>
           <button onClick={onClose} aria-label="Cerrar" className="shrink-0 rounded-lg p-1.5 transition hover:bg-black/5" style={{ color: C.muted }}><X className="h-5 w-5" /></button>
         </div>
