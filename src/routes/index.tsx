@@ -2,7 +2,7 @@ import { AutoTranslate, Name, useT, useLang } from "@/lib/i18n";
 import { observeImpression } from "@/lib/impressions";
 import { seo } from "@/lib/seo";
 import { createFileRoute, useNavigate } from '@tanstack/react-router'
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { MapView } from '@/components/MapView'
 import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { BARRIOS, comunaRep } from '@/components/comunidad/BarrioContext'
@@ -41,6 +41,107 @@ function SecTitle({ children, link, linkLabel }: { children: string; link?: stri
         )}
       </div>
     </div>
+  )
+}
+
+// Hero (Ken, 21-nov): titular fijo + beneficios rotando con crossfade y zoom lento.
+const IMG_CITY = 'https://images.unsplash.com/photo-1697082390861-9f5186b44431?auto=format&fit=crop&w=1800&q=80'
+const IMG_HOME = 'https://images.unsplash.com/photo-1545324418-cc1a3fa10c00?auto=format&fit=crop&w=1800&q=80'
+const HERO_IMGS = [IMG_CITY, IMG_HOME]
+const BENEFITS: { es: string; en: string; img: number }[] = [
+  { es: 'Descubrí los eventos destacados de toda la ciudad', en: 'Discover featured events across the city', img: 0 },
+  { es: 'Publicá tus propios eventos y llegá al público correcto', en: 'List your own events and reach the right crowd', img: 0 },
+  { es: 'La búsqueda más completa de eventos e inmuebles', en: 'The most complete search for events and real estate', img: 0 },
+  { es: 'Encontrá dónde comprar o arrendar: todas las plataformas en una sola búsqueda', en: 'Find a place to buy or rent, from every platform in one search', img: 1 },
+  { es: 'Publicá tu inmueble en venta o arriendo', en: 'List your property for sale or rent', img: 1 },
+  { es: 'Ofertas exclusivas por barrio, solo para suscriptores', en: 'Exclusive barrio offers, for subscribers only', img: 0 },
+  { es: 'Mostrá tu negocio como destacado', en: 'Showcase your business as featured', img: 0 },
+  { es: 'Publicá tus historias y construí tu comunidad', en: 'Publish your stories and build your community', img: 0 },
+]
+
+function usePrefersReducedMotion() {
+  const [reduced, setReduced] = useState(false)
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return
+    const mq = window.matchMedia('(prefers-reduced-motion: reduce)')
+    const on = () => setReduced(mq.matches)
+    on()
+    mq.addEventListener('change', on)
+    return () => mq.removeEventListener('change', on)
+  }, [])
+  return reduced
+}
+
+function HomeHero({ isMobile }: { isMobile: boolean }) {
+  const t = useT()
+  const reduced = usePrefersReducedMotion()
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    if (reduced) { setI(0); return }
+    const id = window.setInterval(() => setI((n) => (n + 1) % BENEFITS.length), 2500)
+    return () => window.clearInterval(id)
+  }, [reduced])
+  const b = BENEFITS[i]
+  const bullets = [
+    { icon: '🎉', label: t('Eventos', 'Events'), href: '#eventos' },
+    { icon: '🏡', label: t('Inmuebles', 'Real estate'), href: '/real-estate' },
+    { icon: '🏷️', label: t('Ofertas especiales', 'Special offers'), href: '#ofertas' },
+    { icon: '🤝', label: t('Comunidad', 'Community'), href: '/comunidad' },
+  ]
+  return (
+    <section style={{ padding: isMobile ? '12px 12px 0' : '22px 26px 0' }}>
+      <style>{`
+        @keyframes heroKenBurns { from { transform: scale(1) } to { transform: scale(1.08) } }
+        @keyframes heroBenefitIn { from { opacity: 0; transform: translateY(12px) } to { opacity: 1; transform: none } }
+        .hero-bg { transition: opacity 1.2s ease; animation: heroKenBurns 12s ease-in-out infinite alternate; }
+        .hero-benefit { animation: heroBenefitIn .4s ease both; }
+        @media (prefers-reduced-motion: reduce) { .hero-bg, .hero-benefit { animation: none; transition: none; } }
+      `}</style>
+      <div style={{
+        position: 'relative', maxWidth: 1240, margin: '0 auto', borderRadius: isMobile ? 18 : 26, overflow: 'hidden',
+        minHeight: isMobile ? 520 : 600, display: 'flex', alignItems: 'flex-end', background: K.ink,
+        boxShadow: '0 20px 60px rgba(17,20,24,.22)',
+      }}>
+        {HERO_IMGS.map((src, n) => (
+          <div key={src} className="hero-bg" aria-hidden style={{
+            position: 'absolute', inset: 0, opacity: b.img === n ? 1 : 0,
+            backgroundImage: `url('${src}')`, backgroundSize: 'cover', backgroundPosition: 'center 40%',
+          }} />
+        ))}
+        <div aria-hidden style={{ position: 'absolute', inset: 0, background: 'linear-gradient(180deg, rgba(17,20,24,.05) 0%, rgba(17,20,24,.4) 45%, rgba(17,20,24,.9) 100%)' }} />
+        <div style={{ display: 'flex', height: 6, position: 'absolute', top: 0, left: 0, right: 0 }} aria-hidden>
+          <div style={{ flex: 2, background: K.amarillo }} /><div style={{ flex: 1, background: K.azul }} /><div style={{ flex: 1, background: K.rojo }} />
+        </div>
+        <div style={{ position: 'relative', padding: isMobile ? '28px 20px 30px' : '56px 56px 54px', color: '#fff', maxWidth: 900 }}>
+          <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.1rem, 6.4vw, 4.4rem)', lineHeight: 1, letterSpacing: '-2px', margin: '0 0 14px' }}>
+            {t('Un solo lugar para locales y turistas en Medellín.', 'One place for locals and tourists in Medellín.')}
+          </h1>
+          <p style={{ fontSize: isMobile ? '1.02rem' : '1.2rem', lineHeight: 1.5, color: 'rgba(255,255,255,.88)', margin: '0 0 18px', maxWidth: 640, fontStyle: 'italic' }}>
+            {t('Convertimos a los locales en turistas y a los turistas en locales.', 'We turn locals into tourists and tourists into locals.')}
+          </p>
+          <p aria-live="polite" style={{ minHeight: isMobile ? '3.2em' : '1.6em', margin: '0 0 20px', fontWeight: 800, fontSize: isMobile ? '1.1rem' : '1.4rem', color: K.amarillo }}>
+            <span key={i} className="hero-benefit" style={{ display: 'inline-block' }}>{t(b.es, b.en)}</span>
+          </p>
+          <ul style={{ listStyle: 'none', padding: 0, margin: '0 0 24px', display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {bullets.map((x) => (
+              <li key={x.href}>
+                <a href={x.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '7px 14px', borderRadius: 999, background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.3)', color: '#fff', fontWeight: 700, fontSize: '.9rem', textDecoration: 'none' }}>
+                  <span aria-hidden>{x.icon}</span>{x.label}
+                </a>
+              </li>
+            ))}
+          </ul>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <a href="#explorar" style={{ background: K.rojo, color: '#fff', fontWeight: 800, padding: '14px 26px', borderRadius: 999, textDecoration: 'none' }}>
+              {t('Explorá el mapa', 'Explore the map')}
+            </a>
+            <a href="#subscribe" style={{ background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', fontWeight: 800, padding: '14px 26px', borderRadius: 999, textDecoration: 'none', backdropFilter: 'blur(6px)' }}>
+              {t('Suscribite gratis', 'Subscribe free')}
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
   )
 }
 
@@ -94,42 +195,7 @@ function HomeContent() {
     <>
       <HomeTourModal isMobile={isMobile} />
 
-      {/* ── HERO — splash estilo revista (Ken, 23-oct): imagen grande + qué es ── */}
-      <section style={{ padding: isMobile ? '12px 12px 0' : '22px 26px 0' }}>
-        <div style={{
-          position: 'relative', maxWidth: 1240, margin: '0 auto', borderRadius: isMobile ? 18 : 26, overflow: 'hidden',
-          minHeight: isMobile ? 460 : 560, display: 'flex', alignItems: 'flex-end',
-          backgroundImage: `linear-gradient(180deg, rgba(17,20,24,.05) 0%, rgba(17,20,24,.35) 45%, rgba(17,20,24,.88) 100%), url('https://images.unsplash.com/photo-1697082390861-9f5186b44431?auto=format&fit=crop&w=1800&q=80')`,
-          backgroundSize: 'cover', backgroundPosition: 'center 40%',
-          boxShadow: '0 20px 60px rgba(17,20,24,.22)',
-        }}>
-          <div style={{ display: 'flex', height: 6, position: 'absolute', top: 0, left: 0, right: 0 }} aria-hidden>
-            <div style={{ flex: 2, background: K.amarillo }} /><div style={{ flex: 1, background: K.azul }} /><div style={{ flex: 1, background: K.rojo }} />
-          </div>
-          <div style={{ padding: isMobile ? '28px 20px 30px' : '56px 56px 54px', color: '#fff', maxWidth: 860 }}>
-            <span style={{ display: 'inline-block', fontSize: 11, fontWeight: 800, letterSpacing: '.18em', textTransform: 'uppercase', background: K.amarillo, color: K.ink, padding: '6px 12px', borderRadius: 999, marginBottom: 18 }}>
-              {t('La revista de tu barrio', 'Your neighborhood magazine')}
-            </span>
-            <h1 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: 'clamp(2.3rem, 7vw, 4.8rem)', lineHeight: .98, letterSpacing: '-2px', margin: '0 0 18px' }}>
-              {t('Medellín, barrio por barrio.', 'Medellín, one barrio at a time.')}
-            </h1>
-            <p style={{ fontSize: isMobile ? '1.02rem' : '1.2rem', lineHeight: 1.55, color: 'rgba(255,255,255,.88)', margin: '0 0 26px', maxWidth: 640 }}>
-              {t(
-                'Eventos, lugares para vivir, negocios 5 estrellas con descuento y las historias de la gente que hace cada barrio. Todo lo local, en un solo lugar.',
-                'Events, places to live, discounted 5-star businesses and the stories of the people who make each barrio. Everything local, in one place.',
-              )}
-            </p>
-            <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-              <a href="#subscribe" style={{ background: K.rojo, color: '#fff', fontWeight: 800, padding: '14px 26px', borderRadius: 999, textDecoration: 'none' }}>
-                {t('Suscríbete gratis', 'Subscribe free')}
-              </a>
-              <a href="#explorar" style={{ background: 'rgba(255,255,255,.14)', border: '1px solid rgba(255,255,255,.4)', color: '#fff', fontWeight: 800, padding: '14px 26px', borderRadius: 999, textDecoration: 'none', backdropFilter: 'blur(6px)' }}>
-                {t('Explora tu barrio ↓', 'Explore your barrio ↓')}
-              </a>
-            </div>
-          </div>
-        </div>
-      </section>
+      <HomeHero isMobile={isMobile} />
 
       {/* ── QUÉ ES / POR QUÉ / PARA QUIÉN ── */}
       <section style={{ padding: isMobile ? '36px 16px 8px' : '64px 26px 16px' }}>
@@ -239,7 +305,7 @@ function HomeContent() {
       </section>
 
       {/* ── QUÉ HACER ESTA SEMANA ─────────────────────── */}
-      <section data-tour="home-eventos-semana" style={{ padding: isMobile ? '24px 16px' : '48px 26px' }}>
+      <section id="eventos" data-tour="home-eventos-semana" style={{ padding: isMobile ? '24px 16px' : '48px 26px' }}>
         <div style={{
           maxWidth: 1200, margin: '0 auto',
           background: `linear-gradient(125deg, ${K.tealDeep}, ${K.teal})`, color: '#fff',
@@ -295,7 +361,7 @@ function HomeContent() {
       </section>
 
       {/* ── SECCIÓN 2 — HOTSPOTS & DEALS ─────────────── */}
-      <section data-tour="home-deals" className="section-padding" style={{ padding: '72px 26px 56px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
+      <section id="ofertas" data-tour="home-deals" className="section-padding" style={{ padding: '72px 26px 56px', background: K.surface, borderBottom: `1px solid ${K.line}` }}>
         <div style={{ maxWidth: 1200, margin: '0 auto' }}>
           <SecTitle link={`/local-business/${barrio.slug}`} linkLabel={t('Ver todos →', 'See all →')}>
             {t('Hotspots & Deals exclusivos', 'Hotspots & Exclusive Deals')}
