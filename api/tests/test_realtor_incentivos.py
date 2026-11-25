@@ -46,8 +46,18 @@ def test_puntaje_perfecto_y_cero():
     assert R._puntaje_standing(cero) == 0
 
 
+def test_asistencia_no_penaliza_al_realtor():
+    # Un plantón (show_rate bajo) NO baja el puntaje: no asistir es del comprador.
+    base = dict(cierres=3, resp_med=3, aceptacion=1.0)
+    con_plantones = _row(show_rate=0.2, **base)
+    sin_plantones = _row(show_rate=1.0, **base)
+    assert R._puntaje_standing(con_plantones) == R._puntaje_standing(sin_plantones)
+    assert "show_rate" not in R._PUNTAJE_PESOS
+    assert abs(sum(R._PUNTAJE_PESOS.values()) - 1.0) < 1e-9
+
+
 def test_puntaje_respeta_pesos():
-    # Solo contribución al tope (peso 0.30) → 30. Verifica que el peso manda.
+    # Solo contribución al tope → contribucion*100. Verifica que el peso manda.
     solo_contrib = _row(cierres=5, resp_med=None, show_rate=0, aceptacion=0)
     assert R._puntaje_standing(solo_contrib) == round(R._PUNTAJE_PESOS["contribucion"] * 100)
     # Contribución topa en _CONTRIB_CAP: 10 cierres no suma más que 5.

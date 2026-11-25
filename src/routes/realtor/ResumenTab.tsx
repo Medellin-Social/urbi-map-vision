@@ -10,11 +10,11 @@ const pctN = (v: number | null | undefined) => (v == null ? null : v * 100);
 // Drivers del puntaje Standing (espejo de _puntaje_standing en el backend). Pesos
 // como % del total; la cédula catastral en los cierres da el nudge de completitud.
 const SCORE_DRIVERS: { label: string; peso: number; desc: string }[] = [
-  { label: "Cierres reportados", peso: 30, desc: "Ventas cerradas y reportadas (últimos 12 meses). Reportar con cédula catastral las hace verificables y sube más tu puntaje." },
-  { label: "Velocidad de respuesta", peso: 30, desc: "Qué tan rápido contestas las solicitudes de visita. Menos de 4 h = puntaje máximo." },
-  { label: "Asistencia a visitas", peso: 20, desc: "De las visitas agendadas, cuántas realmente ocurren (vs. plantones)." },
-  { label: "Aceptación de leads", peso: 20, desc: "De los clientes que te asignamos, cuántos tomas antes de que vuelvan al pool." },
+  { label: "Cierres reportados", peso: 35, desc: "Ventas cerradas y reportadas (últimos 12 meses). Reportar con cédula catastral las hace verificables y sube más tu puntaje." },
+  { label: "Velocidad de respuesta", peso: 35, desc: "Qué tan rápido contestas las solicitudes de visita. Menos de 4 h = puntaje máximo." },
+  { label: "Aceptación de leads", peso: 30, desc: "De los clientes que te asignamos, cuántos tomas antes de que vuelvan al pool." },
 ];
+// Nota mostrada abajo: la asistencia es informativa, NO penaliza (un plantón es del comprador).
 
 function ScoreInfo() {
   const [open, setOpen] = useState(false);
@@ -51,7 +51,7 @@ function ScoreInfo() {
             ))}
           </ul>
           <p className="mt-3 border-t pt-3 text-[11.5px] leading-snug" style={{ borderColor: C.line, color: C.muted }}>
-            Necesitas un mínimo de actividad reciente para tener puntaje. Cierres: últimos 12 meses · velocidad, asistencia y aceptación: últimos 90 días.
+            La asistencia a visitas se muestra como referencia pero <strong>no baja tu puntaje</strong> — un plantón es del comprador, no tuyo. Necesitas un mínimo de actividad reciente para tener puntaje. Cierres: últimos 12 meses · velocidad y aceptación: últimos 90 días.
           </p>
         </div>
       )}

@@ -36,7 +36,11 @@ _DECL_KEYS = ("tiene_escritura", "al_dia_predial", "al_dia_administracion", "tie
 # ── Incentivos del realtor — parámetros de PRODUCTO (PLACEHOLDER, ajustar con negocio) ──
 # NO son decisiones técnicas: definen el comportamiento que premiamos. Tunéalos acá.
 # Pesos del puntaje de standing (0..1, deben sumar 1.0).
-_PUNTAJE_PESOS = {"contribucion": 0.30, "velocidad": 0.30, "show_rate": 0.20, "aceptacion": 0.20}
+# Asistencia (show_rate) SE QUITÓ del puntaje: un plantón es culpa del comprador que
+# no se presenta, no del realtor → no lo penalizamos. Sigue visible como métrica
+# informativa (gauge "Asistencia"), pero no mueve el ranking. Pesos sobre lo que el
+# realtor SÍ controla: cerrar, responder rápido, aceptar sus leads. Suman 1.0.
+_PUNTAJE_PESOS = {"contribucion": 0.35, "velocidad": 0.35, "aceptacion": 0.30}
 _CONTRIB_CAP = 5             # cierres (12m) que topan el componente de contribución
 # Nudge por COMPLETITUD de datos: un cierre reportado con cédula catastral es
 # verificable contra catastro → datos de más calidad. Si todos tus cierres incluyen
@@ -919,8 +923,9 @@ def _componente_velocidad(resp_med: float | None) -> float:
 
 
 def _puntaje_standing(row) -> int:
-    """Puntaje 0..100 del agente a partir de sus 4 componentes. Pesos en
-    _PUNTAJE_PESOS (decisión de producto). Solo se llama para agentes con
+    """Puntaje 0..100 del agente a partir de sus 3 componentes (contribución,
+    velocidad, aceptación). Pesos en _PUNTAJE_PESOS (decisión de producto).
+    Asistencia no entra (plantón = del comprador). Solo se llama para agentes con
     actividad >= umbral — no se infla con ceros."""
     cierres = int(row["cierres"])
     completos = int(row.get("cierres_completos", 0) or 0)  # cierres con cédula catastral
@@ -928,11 +933,10 @@ def _puntaje_standing(row) -> int:
     completitud = (completos / cierres) if cierres else 0.0  # fracción con datos verificables
     contrib = min(100.0, contrib_base * (1 + _COMPLETITUD_BONUS * completitud))
     vel = _componente_velocidad(float(row["resp_med"]) if row["resp_med"] is not None else None)
-    show = float(row["show_rate"] or 0) * 100.0
     acep = float(row["aceptacion"] or 0) * 100.0
+    # show_rate (asistencia) NO entra: el plantón es del comprador, no del realtor.
     p = (_PUNTAJE_PESOS["contribucion"] * contrib
          + _PUNTAJE_PESOS["velocidad"] * vel
-         + _PUNTAJE_PESOS["show_rate"] * show
          + _PUNTAJE_PESOS["aceptacion"] * acep)
     return round(p)
 
