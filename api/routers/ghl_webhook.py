@@ -391,8 +391,50 @@ async def _pago_agent_program(payload: dict) -> None:
         raise HTTPException(status_code=422, detail=str(e))
 
 
+async def _pago_sponsorship(payload: dict) -> None:
+    """Pago aprobado (GHL → Stripe) de una ZONA PATROCINADA exclusiva (barrio/comuna).
+    Crea/extiende el `sponsorship` que rutea los leads de la zona al agente — sin admin.
+
+    Payload (workflow GHL "Pago aprobado"): {object_type:"sponsorship", agent_email | agent_id,
+    zona_nivel:"barrio"|"comuna", zona_codigo, meses (def. 1), pago_ref (id de la orden)}.
+    Idempotente por pago_ref. 409 si la zona ya la tiene otra agencia (dinero cobrado
+    sin zona → acción humana: reembolsar o reasignar)."""
+    from api.services.zona_sponsor_service import ZonaOcupadaError, procesar_pago_zona
+
+    props = payload.get("properties") or payload
+    agent_id = props.get("agent_id")
+    email = (props.get("agent_email") or "").strip().lower()
+    zona_nivel, zona_codigo = props.get("zona_nivel"), str(props.get("zona_codigo") or "")
+    pago_ref = str(props.get("pago_ref") or "").strip()
+    if not pago_ref or pago_ref == "simulado":
+        raise HTTPException(status_code=400, detail="falta pago_ref (id de la orden)")
+    if zona_nivel not in ("barrio", "comuna") or not zona_codigo or (not agent_id and not email):
+        raise HTTPException(status_code=400, detail="falta zona_nivel/zona_codigo o agent_id/agent_email")
+    try:
+        meses = max(1, min(12, int(props.get("meses") or 1)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="meses inválido")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if not agent_id:
+            agent_id = await conn.fetchval(
+                "SELECT id::text FROM agent WHERE lower(email) = $1 AND estado::text = 'activo'", email)
+        if not agent_id:
+            raise HTTPException(status_code=404, detail="agente activo no encontrado")
+    try:
+        sid = await procesar_pago_zona(pool, str(agent_id), zona_nivel, zona_codigo, meses, pago_ref)
+        logger.info("sponsorship pago %s zona=%s/%s agent=%s → %s", pago_ref, zona_nivel, zona_codigo, agent_id, sid)
+    except ZonaOcupadaError as e:
+        logger.error("sponsorship PAGO ZONA OCUPADA pago_ref=%s agent=%s zona=%s/%s: %s",
+                     pago_ref, agent_id, zona_nivel, zona_codigo, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    from api.utils import ghl_client
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
+
+
 _HANDLERS = {
     "agent_program": _pago_agent_program,
+    "sponsorship": _pago_sponsorship,
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
     "evento": _upsert_evento_from_ghl,
