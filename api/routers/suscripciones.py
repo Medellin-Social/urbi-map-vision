@@ -154,10 +154,11 @@ async def registro_agente(
     body: AgenteRegistroIn,
     current_user: dict = Depends(get_current_user),
 ):
-    """Aplicación de agente independiente: crea `agent` en estado 'pendiente'
-    para que el admin lo revise (admin_agentes.py aprobar/rechazar). La
-    agency 'independiente' se crea sola, más tarde, la primera vez que se le
-    asigna una zona (zona_sponsor_service.get_or_create_agency) — no acá."""
+    """Registro de agente independiente: un realtor con correo verificado queda
+    ACTIVO al registrarse (auto-activación — sin aprobación manual de admin). El
+    admin modera reactivamente (suspender/rechazar en admin_agentes.py). La agency
+    'independiente' se crea sola, más tarde, la primera vez que se le asigna una
+    zona (zona_sponsor_service.get_or_create_agency) — no acá."""
     if not body.nombre.strip() or not body.telefono.strip():
         raise HTTPException(400, "Nombre y teléfono son obligatorios")
 
@@ -212,6 +213,12 @@ async def registro_agente(
                 row["id"], (body.bio or "").strip() or None, body.anios_experiencia, zonas,
                 (body.titulo or "").strip() or None, body.foto_url,
                 idiomas, especialidades, json.dumps(licencias))
+            # Auto-activación: el realtor (correo ya verificado) queda 'activo' al
+            # registrarse — sin aprobación manual. Solo promueve 'pendiente'; NO
+            # reactiva un 'rechazado'/'inactivo' (eso sigue siendo acción de admin).
+            await conn.execute(
+                "UPDATE agent SET estado = 'activo', updated_at = now() WHERE id = $1 AND estado = 'pendiente'",
+                row["id"])
             # Agencia declarada: se crea SIN verificar (el equipo la verifica). Nunca se une a una
             # agencia existente por nombre — eso permitiría reclamar la agencia de otro.
             ya = await conn.fetchval("SELECT 1 FROM agency_member WHERE agent_id = $1", row["id"])
@@ -222,26 +229,33 @@ async def registro_agente(
                 await conn.execute(
                     "INSERT INTO agency_member (agency_id, agent_id, rol) VALUES ($1, $2, 'owner')",
                     agency_id, row["id"])
-    if row["estado"] == "pendiente":
-        try:
-            from api.utils.email import notify_admin_new_agente
-            await notify_admin_new_agente(body.nombre.strip(), "—", current_user["email"], body.telefono.strip(),
-                                          f"{_FRONTEND_URL}/panel-x9k2")
-        except Exception:
-            log.exception("notify_admin_new_agente falló")
+    # Estado final tras la auto-activación (activo para un registro normal; respeta
+    # rechazado/inactivo si el row ya existía en ese estado).
+    estado_final = await pool.fetchval("SELECT estado::text FROM agent WHERE id = $1", row["id"])
     # Realtor nuevo → GHL (Contact). Best-effort: hoy sync_agent levanta
     # (stub sin contrato) → se loguea y sigue, igual que afiliados/embajadores.
     try:
         ghl_client.spawn(ghl_client.sync_agent(row["id"]))
     except Exception:
         log.exception("sync_agent(%s) falló", row["id"])  # best-effort, no bloquea el registro
-    if row["estado"] == "pendiente":
-        from api.utils.email import notify_admin_new_agente, notify_agente_solicitud_recibida
-        app_url = os.getenv("APP_URL", "https://medellin.social")
-        ghl_client.spawn(notify_admin_new_agente(
-            body.nombre.strip(), "—", current_user["email"], body.telefono.strip(), f"{app_url}/admin"))
-        ghl_client.spawn(notify_agente_solicitud_recibida(current_user["email"], body.nombre.strip()))
-    return {"id": str(row["id"]), "estado": row["estado"]}
+    app_url = os.getenv("APP_URL", "https://medellin.social")
+    if estado_final == "activo":
+        # Avisa al realtor que ya puede entrar (reemplaza el viejo "solicitud recibida").
+        try:
+            from api.utils.email import notify_agente_aprobado
+            ghl_client.spawn(notify_agente_aprobado(current_user["email"], body.nombre.strip(), f"{app_url}/realtor/dashboard"))
+        except Exception:
+            log.exception("notify_agente_aprobado falló")
+    elif estado_final == "pendiente":
+        # Camino residual (p.ej. un row reclamado que no se pudo promover): avisa al admin.
+        try:
+            from api.utils.email import notify_admin_new_agente, notify_agente_solicitud_recibida
+            ghl_client.spawn(notify_admin_new_agente(
+                body.nombre.strip(), "—", current_user["email"], body.telefono.strip(), f"{app_url}/admin"))
+            ghl_client.spawn(notify_agente_solicitud_recibida(current_user["email"], body.nombre.strip()))
+        except Exception:
+            log.exception("notify pendiente falló")
+    return {"id": str(row["id"]), "estado": estado_final}
 
 
 # ── GET /mi-plan ───────────────────────────────────────────────────────────────
