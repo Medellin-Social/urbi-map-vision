@@ -52,8 +52,13 @@ def _one_line(value: str) -> str:
 
 def _send_sync(to: str, subject: str, html: str) -> None:
     if not _SMTP_USER or not _SMTP_PASS:
-        # Dev fallback: print to stdout so the feature doesn't break
+        # Dev fallback (sin SMTP configurado = ambiente no-prod): imprime el correo
+        # Y sus links para poder completar flujos de verificación/reset/magic-link en
+        # DEV/local sin bandeja real. En prod SMTP está configurado → esta rama no corre.
+        import re
         print(f"[EMAIL STUB] To={mask_email(to)} Subject={subject}")
+        for url in re.findall(r'https?://[^\s"\'<>]+', html):
+            print(f"[EMAIL STUB] link: {url}")
         return
 
     msg = MIMEMultipart("alternative")
