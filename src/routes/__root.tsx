@@ -1,5 +1,5 @@
 import { OG_IMAGE, SITE_URL } from "@/lib/seo";
-import { Outlet, createRootRoute, HeadContent, Scripts, useRouterState } from "@tanstack/react-router";
+import { Outlet, createRootRoute, HeadContent, Scripts, useRouterState, useNavigate } from "@tanstack/react-router";
 import { Link } from "@tanstack/react-router";
 import { useEffect } from "react";
 import { track } from "@/lib/tracking";
@@ -217,6 +217,23 @@ function PageViewTracker() {
   return null;
 }
 
+// Guard de rutas protegidas en el cliente. El beforeLoad por-ruta solo redirige en
+// NAVEGACIÓN; en la CARGA INICIAL (SSR + hydration) se salta porque el server no tiene
+// localStorage → un no-logueado veía el panel renderizado. Esto cubre ese hueco: en el
+// cliente, si la ruta es protegida y no hay sesión, manda a /login. (La API igual gatea
+// 401 server-side; esto es la capa de UX.)
+const _RUTAS_PROTEGIDAS = /^\/(realtor|perfil|comparador|simulador|panel-x9k2)(\/|$|\?)|^\/agentes\/(registro|mi-programa|certificacion)(\/|$|\?)/;
+function RouteGuard() {
+  const path = useRouterState({ select: s => s.location.pathname });
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    if (localStorage.getItem("medellin-social.user")) return;
+    if (_RUTAS_PROTEGIDAS.test(path)) navigate({ to: "/login", search: { redirect: path } as never });
+  }, [path, navigate]);
+  return null;
+}
+
 function RootComponent() {
   // Refresca token si expira, LUEGO trae plan/esAgente frescos de /auth/me → los
   // gates de suscripción dejan de mentir cuando el user se suscribió tras loguearse.
@@ -225,6 +242,7 @@ function RootComponent() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthCacheSync />
+      <RouteGuard />
       <PageViewTracker />
       <LanguageProvider>
         <TargetProvider>

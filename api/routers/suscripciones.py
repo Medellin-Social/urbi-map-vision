@@ -35,6 +35,8 @@ async def get_planes(moneda: str = "COP"):
 
     result = []
     for key, p in PLANES.items():
+        if key == "pro":
+            continue  # Pro existe en la config pero NO se ofrece (inerte): no sale en el form de planes
         result.append({
             "id": key,
             "nombre": p["nombre"],
@@ -60,6 +62,8 @@ async def iniciar_suscripcion(
 ):
     if plan not in PLANES:
         raise HTTPException(400, "Plan inválido")
+    if plan == "pro":
+        raise HTTPException(400, "Plan no disponible")  # Pro inerte: no se puede comprar
     moneda = moneda.upper()
     if moneda not in ("COP", "USD"):
         raise HTTPException(400, "Moneda inválida")
