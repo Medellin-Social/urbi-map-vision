@@ -335,6 +335,7 @@ export type ApiListing = {
 };
 
 export type ApiListingDetail = ApiListing & {
+  listing_uid?: string | null;  // id interno de la cache ({uuid}_ls para propios) — id routeable de la visita
   estrato_real?: number | null;
   descripcion?: string | null;
   // Traducción offline bidireccional (raw.descripcion_traduccion):

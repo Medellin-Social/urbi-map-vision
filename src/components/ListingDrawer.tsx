@@ -1097,29 +1097,29 @@ function ScheduleVisitModal({
     // Persistir la solicitud para la agenda del realtor.
     setEnviando(true);
     try {
-      if (listingUrl) {
-        await apiFetch(API_ENDPOINTS.visitas, {
-          method: "POST",
-          body: JSON.stringify({
-            listing_url: listingUrl,
-            nombre: nombre.trim(),
-            telefono: telefono.trim(),
-            fecha_visita: fecha.toISOString(),
-            mensaje: cuando,
-            // Calificación del lead — solo se mandan los que el usuario llenó.
-            intencion: intencion || undefined,
-            presupuesto: presupuesto || undefined,
-            plazo: plazo || undefined,
-            credito: credito || undefined,
-            // Sin agente de zona → el backend enruta al buzón interno por email.
-            sin_agente: !agente && !(preferido && quierePreferido),
-            agent_id: !agente && preferido && quierePreferido ? preferido.id : undefined,
-          }),
-        });
-      }
-      // Solo se guarda la solicitud (nombre, contacto, listing, fecha). El agente
-      // la ve en su agenda y contacta al interesado. Sin WhatsApp automático.
-      // Pantalla de confirmación con recap → el usuario cierra con "Listo".
+      // Sin id routeable NO se puede registrar → error (antes se mostraba
+      // "¡Visita solicitada!" sin enviar nada y el lead se perdía en silencio).
+      if (!listingUrl) throw new Error("Este inmueble no tiene identificador para agendar.");
+      await apiFetch(API_ENDPOINTS.visitas, {
+        method: "POST",
+        body: JSON.stringify({
+          listing_url: listingUrl,
+          nombre: nombre.trim(),
+          telefono: telefono.trim(),
+          fecha_visita: fecha.toISOString(),
+          mensaje: cuando,
+          // Calificación del lead — solo se mandan los que el usuario llenó.
+          intencion: intencion || undefined,
+          presupuesto: presupuesto || undefined,
+          plazo: plazo || undefined,
+          credito: credito || undefined,
+          // Sin agente de zona → el backend enruta al buzón interno por email.
+          sin_agente: !agente && !(preferido && quierePreferido),
+          agent_id: !agente && preferido && quierePreferido ? preferido.id : undefined,
+        }),
+      });
+      // Confirmación SOLO tras POST exitoso. El agente la ve en su agenda y
+      // contacta al interesado. El usuario cierra con "Listo".
       setEnviado(cuando);
     } catch {
       toast.error("No pudimos registrar la visita. Intenta de nuevo.");
@@ -2235,7 +2235,7 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
           )}
         </AnimatePresence>
         {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
-        {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
+        {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? (listing?.listing_uid ? listing.listing_uid.replace(/_ls$/, "") : null)} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
         {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
         {showAgenteInfo && listing && (
           <AgenteNoRegistradoModal listing={listing} barrio={listing.barrio_display ?? listing.barrio_nombre}
@@ -2384,7 +2384,7 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
         )}
       </AnimatePresence>
       {showAlertModal && listing && <AlertModal listing={listing} onClose={() => setShowAlertModal(false)} />}
-      {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? null} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
+      {showScheduleModal && <ScheduleVisitModal agente={agenteContacto} listingId={listing?.id ?? null} listingUrl={listing?.url ?? (listing?.listing_uid ? listing.listing_uid.replace(/_ls$/, "") : null)} barrioId={listing?.barrio_id ?? null} onClose={() => setShowScheduleModal(false)} />}
       {showReclamar && listingId && <ReclamarListingModal listingId={listingId} onClose={() => setShowReclamar(false)} />}
         {showAgenteInfo && listing && (
           <AgenteNoRegistradoModal listing={listing} barrio={listing.barrio_display ?? listing.barrio_nombre}
