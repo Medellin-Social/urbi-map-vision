@@ -120,7 +120,7 @@ export const API_ENDPOINTS = {
   zonasConfirmarSimulado: `${API_BASE_URL}/zonas/confirmar-simulado`,
 
   // Listings propios
-  listingsPropios: `${API_BASE_URL}/listings-propios`,
+  listingsPropios: `${API_BASE_URL}/listings-propios/`,
   listingsPropiosMe: `${API_BASE_URL}/listings-propios/me`,
   listingsPropiosMis: `${API_BASE_URL}/listings-propios/mis-listings`,
   listingsPropiosById: (id: number) => `${API_BASE_URL}/listings-propios/${id}`,

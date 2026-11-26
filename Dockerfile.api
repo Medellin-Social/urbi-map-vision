@@ -24,4 +24,8 @@ EXPOSE 8000
 RUN useradd --system --uid 10001 --no-create-home --shell /usr/sbin/nologin app
 USER app
 
-CMD sh -c "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port ${PORT}"
+# --proxy-headers + --forwarded-allow-ips='*': detrás del proxy TLS de Railway, sin
+# esto uvicorn no confía en X-Forwarded-Proto y arma los redirects (ej. trailing-slash
+# de /listings-propios) con scheme http:// → el browser los bloquea por mixed-content
+# (publicar se rompía). El contenedor solo es alcanzable vía el proxy → '*' es seguro.
+CMD sh -c "alembic upgrade head && uvicorn api.main:app --host 0.0.0.0 --port ${PORT} --proxy-headers --forwarded-allow-ips='*'"
