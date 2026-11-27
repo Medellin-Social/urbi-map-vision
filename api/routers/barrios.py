@@ -84,6 +84,9 @@ class Scores(BaseModel):
     cat_largo: Optional[str] = None
     perfil_recomendado: Optional[str] = None
     score_activo: Optional[int] = None
+    # POT renta corta: True=apto (alta/media mixtura), False=no permitido (residencial
+    # Medellín), None=sin dato POT (fuera de Medellín). Grano fino real es por predio.
+    apto_renta_corta: Optional[bool] = None
 
 
 class Mercado(BaseModel):
@@ -460,6 +463,17 @@ _BARRIO_SQL = """
         b.excluir_inversion,
         b.uso_suelo_dominante,
         b.uso_suelo_score,
+        -- renta corta (POT): True=alta/media mixtura, False=residencial MDE, NULL=sin dato (fuera MDE)
+        CASE
+          WHEN b.municipio NOT ILIKE 'medellin' THEN NULL
+          WHEN EXISTS (
+            SELECT 1 FROM raw.pot_usos_medellin p
+            WHERE p.areagraluso IN ('Áreas y corredores de alta mixtura',
+                                    'Áreas y corredores de media mixtura')
+              AND ST_Intersects(b.geometry, p.geometry)
+          ) THEN TRUE
+          ELSE FALSE
+        END                                 AS apto_renta_corta,
         -- oportunidad
         op.oportunidad_detectada,
         op.tipo_oportunidad,
@@ -696,6 +710,7 @@ def _build_response(row: dict, score_col: str = "score_corto", perfil: Optional[
             cat_largo=row.get("cat_largo"),
             perfil_recomendado=row.get("perfil_recomendado"),
             score_activo=score_activo,
+            apto_renta_corta=row.get("apto_renta_corta"),
         ),
         mercado=Mercado(
             precio_m2_cop=int(precio_m2_cop) if precio_m2_cop else None,

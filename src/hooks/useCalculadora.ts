@@ -46,6 +46,7 @@ export type ComparativoModalidad = {
   recupero_anos?: number | null;
   riesgo: string;
   es_recomendada: boolean;
+  permitido_pot?: boolean;
 };
 
 export type ProyeccionPunto = {
@@ -89,6 +90,7 @@ export type SimulacionResponse = {
   resumen: string;
   alertas: string[];
   datos_insuficientes: boolean;
+  nota_legal?: string | null;
   zona_score?: number | null;
   zona_categoria?: string | null;
   seguridad_score?: number | null;

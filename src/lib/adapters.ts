@@ -30,6 +30,7 @@ export type Neighborhood = {
   lat: number;
   lng: number;
   score_activo?: number | null;
+  apto_renta_corta?: boolean | null; // POT: true=apto, false=no permitido, null=sin dato
   estado_precio?: string | null;
   pbn_precio_justo?: number | null;
   oportunidad?: { detectada: boolean | null; tipo: string | null; descripcion: string | null } | null;
@@ -121,6 +122,7 @@ export type ApiBarrio = {
     cat_largo: string | null;
     perfil_recomendado: string | null;
     score_activo: number | null;
+    apto_renta_corta?: boolean | null; // POT: true=apto, false=no permitido, null=sin dato
   };
   mercado: {
     precio_m2_cop: number | null;
@@ -505,6 +507,7 @@ export function barrioToNeighborhood(b: ApiBarrio): Neighborhood {
     lat,
     lng,
     score_activo: b.scores.score_activo,
+    apto_renta_corta: b.scores.apto_renta_corta,
     estado_precio: b.mercado.estado_precio,
     oportunidad: b.oportunidad,
     n_cafes_500m: b.conectividad.n_cafes_500m,
