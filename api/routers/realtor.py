@@ -1436,6 +1436,9 @@ async def actualizar_visita(
         )
     if not row:
         raise HTTPException(status_code=404, detail="Visita no encontrada o no es tuya")
+    # Cambio de estado/hora → actualiza el appointment en GHL (UPSERT idempotente
+    # por mapping, no duplica). Best-effort, inerte sin creds/calendario.
+    ghl_client.spawn(ghl_client.sync_visita(visita_id))
     return {"id": visita_id, "estado": req.estado, "resultado": req.resultado}
 
 
@@ -1493,6 +1496,10 @@ async def crear_visita_manual(
             req.listing_id, req.nombre.strip(), (req.telefono or "").strip() or None,
             fecha_dt, req.estado, req.resultado, nota, agent.id,
         )
+    # Lead capturado → Contact en GHL (mismo patrón que visitas.py:246, la visita
+    # pedida desde el mapa). Inerte sin credenciales; best-effort. Sin email ni
+    # teléfono queda como push_failure (upsert_contact necesita uno de los dos).
+    ghl_client.spawn(ghl_client.sync_visita(row["id"]))
     return {"id": str(row["id"]), "estado": req.estado, "origen": "manual"}
 
 

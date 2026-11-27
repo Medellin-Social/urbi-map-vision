@@ -27,6 +27,7 @@ import { Route as OnboardingRouteImport } from './routes/onboarding'
 import { Route as PasantiasRouteImport } from './routes/pasantias'
 import { Route as PerfilRouteImport } from './routes/perfil'
 import { Route as PlanesRouteImport } from './routes/planes'
+import { Route as PoliticaCookiesRouteImport } from './routes/politica-cookies'
 import { Route as PoliticaPrivacidadRouteImport } from './routes/politica-privacidad'
 import { Route as PublicarRouteImport } from './routes/publicar'
 import { Route as RealEstateRouteImport } from './routes/real-estate'
@@ -36,6 +37,7 @@ import { Route as SimuladorRouteImport } from './routes/simulador'
 import { Route as SolicitudesRouteImport } from './routes/solicitudes'
 import { Route as StoresRouteImport } from './routes/stores'
 import { Route as SuscribirseRouteImport } from './routes/suscribirse'
+import { Route as TerminosRouteImport } from './routes/terminos'
 import { Route as VenderRouteImport } from './routes/vender'
 import { Route as VerifyEmailRouteImport } from './routes/verify-email'
 import { Route as AgentesIdRouteImport } from './routes/agentes_.$id'
@@ -153,6 +155,11 @@ const PlanesRoute = PlanesRouteImport.update({
   path: '/planes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PoliticaCookiesRoute = PoliticaCookiesRouteImport.update({
+  id: '/politica-cookies',
+  path: '/politica-cookies',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const PoliticaPrivacidadRoute = PoliticaPrivacidadRouteImport.update({
   id: '/politica-privacidad',
   path: '/politica-privacidad',
@@ -196,6 +203,11 @@ const StoresRoute = StoresRouteImport.update({
 const SuscribirseRoute = SuscribirseRouteImport.update({
   id: '/suscribirse',
   path: '/suscribirse',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminosRoute = TerminosRouteImport.update({
+  id: '/terminos',
+  path: '/terminos',
   getParentRoute: () => rootRouteImport,
 } as any)
 const VenderRoute = VenderRouteImport.update({
@@ -349,6 +361,7 @@ export interface FileRoutesByFullPath {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-cookies': typeof PoliticaCookiesRoute
   '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
@@ -358,6 +371,7 @@ export interface FileRoutesByFullPath {
   '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/terminos': typeof TerminosRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes/$id': typeof AgentesIdRoute
@@ -404,6 +418,7 @@ export interface FileRoutesByTo {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-cookies': typeof PoliticaCookiesRoute
   '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
@@ -413,6 +428,7 @@ export interface FileRoutesByTo {
   '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/terminos': typeof TerminosRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes/$id': typeof AgentesIdRoute
@@ -460,6 +476,7 @@ export interface FileRoutesById {
   '/pasantias': typeof PasantiasRoute
   '/perfil': typeof PerfilRoute
   '/planes': typeof PlanesRoute
+  '/politica-cookies': typeof PoliticaCookiesRoute
   '/politica-privacidad': typeof PoliticaPrivacidadRoute
   '/publicar': typeof PublicarRoute
   '/real-estate': typeof RealEstateRoute
@@ -469,6 +486,7 @@ export interface FileRoutesById {
   '/solicitudes': typeof SolicitudesRoute
   '/stores': typeof StoresRoute
   '/suscribirse': typeof SuscribirseRoute
+  '/terminos': typeof TerminosRoute
   '/vender': typeof VenderRoute
   '/verify-email': typeof VerifyEmailRoute
   '/agentes_/$id': typeof AgentesIdRoute
@@ -517,6 +535,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-cookies'
     | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
@@ -526,6 +545,7 @@ export interface FileRouteTypes {
     | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/terminos'
     | '/vender'
     | '/verify-email'
     | '/agentes/$id'
@@ -572,6 +592,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-cookies'
     | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
@@ -581,6 +602,7 @@ export interface FileRouteTypes {
     | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/terminos'
     | '/vender'
     | '/verify-email'
     | '/agentes/$id'
@@ -627,6 +649,7 @@ export interface FileRouteTypes {
     | '/pasantias'
     | '/perfil'
     | '/planes'
+    | '/politica-cookies'
     | '/politica-privacidad'
     | '/publicar'
     | '/real-estate'
@@ -636,6 +659,7 @@ export interface FileRouteTypes {
     | '/solicitudes'
     | '/stores'
     | '/suscribirse'
+    | '/terminos'
     | '/vender'
     | '/verify-email'
     | '/agentes_/$id'
@@ -683,6 +707,7 @@ export interface RootRouteChildren {
   PasantiasRoute: typeof PasantiasRoute
   PerfilRoute: typeof PerfilRoute
   PlanesRoute: typeof PlanesRoute
+  PoliticaCookiesRoute: typeof PoliticaCookiesRoute
   PoliticaPrivacidadRoute: typeof PoliticaPrivacidadRoute
   PublicarRoute: typeof PublicarRoute
   RealEstateRoute: typeof RealEstateRoute
@@ -692,6 +717,7 @@ export interface RootRouteChildren {
   SolicitudesRoute: typeof SolicitudesRoute
   StoresRoute: typeof StoresRoute
   SuscribirseRoute: typeof SuscribirseRoute
+  TerminosRoute: typeof TerminosRoute
   VenderRoute: typeof VenderRoute
   VerifyEmailRoute: typeof VerifyEmailRoute
   AgentesIdRoute: typeof AgentesIdRoute
@@ -848,6 +874,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PlanesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/politica-cookies': {
+      id: '/politica-cookies'
+      path: '/politica-cookies'
+      fullPath: '/politica-cookies'
+      preLoaderRoute: typeof PoliticaCookiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/politica-privacidad': {
       id: '/politica-privacidad'
       path: '/politica-privacidad'
@@ -909,6 +942,13 @@ declare module '@tanstack/react-router' {
       path: '/suscribirse'
       fullPath: '/suscribirse'
       preLoaderRoute: typeof SuscribirseRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminos': {
+      id: '/terminos'
+      path: '/terminos'
+      fullPath: '/terminos'
+      preLoaderRoute: typeof TerminosRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/vender': {
@@ -1115,6 +1155,7 @@ const rootRouteChildren: RootRouteChildren = {
   PasantiasRoute: PasantiasRoute,
   PerfilRoute: PerfilRoute,
   PlanesRoute: PlanesRoute,
+  PoliticaCookiesRoute: PoliticaCookiesRoute,
   PoliticaPrivacidadRoute: PoliticaPrivacidadRoute,
   PublicarRoute: PublicarRoute,
   RealEstateRoute: RealEstateRoute,
@@ -1124,6 +1165,7 @@ const rootRouteChildren: RootRouteChildren = {
   SolicitudesRoute: SolicitudesRoute,
   StoresRoute: StoresRoute,
   SuscribirseRoute: SuscribirseRoute,
+  TerminosRoute: TerminosRoute,
   VenderRoute: VenderRoute,
   VerifyEmailRoute: VerifyEmailRoute,
   AgentesIdRoute: AgentesIdRoute,

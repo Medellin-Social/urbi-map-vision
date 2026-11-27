@@ -421,13 +421,13 @@ function TabBarrios({
                       const { score, cat } = getProfileScore(b, userGoal);
                       return (
                         <td key={b.barrio_id} className="py-2.5 pl-3">
-                          {fmtScore(score, cat)}
+                          {userGoal === "airbnb" ? fmtCorto(b) : fmtScore(score, cat)}
                         </td>
                       );
                     })}
                   </tr>
                   <SectionLabel label="TODOS LOS SCORES" colSpan={items.length + 1} />
-                  <Row label="Corto plazo" items={items} render={(b) => fmtScore(b.scores.corto, b.scores.cat_corto)} />
+                  <Row label="Corto plazo" items={items} render={(b) => fmtCorto(b)} />
                   <Row label="Mediano plazo" items={items} render={(b) => fmtScore(b.scores.mediano, b.scores.cat_mediano)} />
                   <Row label="Largo plazo" items={items} render={(b) => fmtScore(b.scores.largo, b.scores.cat_largo)} />
                   <SectionLabel label="MERCADO" colSpan={items.length + 1} />
@@ -1006,6 +1006,14 @@ function Row({
       ))}
     </tr>
   );
+}
+
+// Renta corta (Airbnb) gateada por POT: si el barrio no es apto (residencial /
+// baja mixtura en Medellín) el score corto no aplica — se muestra "No permitido".
+function fmtCorto(b: ApiBarrio): React.ReactNode {
+  if (b.scores.apto_renta_corta === false)
+    return <span className="text-[11px] font-semibold" style={{ color: "#CE1126" }}>✗ No permitido (POT)</span>;
+  return fmtScore(b.scores.corto, b.scores.cat_corto);
 }
 
 function fmtScore(score: number | null, _cat?: string | null): React.ReactNode {

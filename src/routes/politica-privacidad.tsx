@@ -34,26 +34,26 @@ const SECCIONES: Seccion[] = [
     bloques: [
       {
         tipo: "p",
-        es: "Medellín Social (en adelante, «Medellín Social», «la Plataforma» o «el Responsable») es responsable del tratamiento de los datos personales recolectados a través del sitio web medellinsocial.com, sus subdominios y aplicaciones asociadas. Los datos de identificación del Responsable son:",
-        en: "Medellín Social (hereinafter «Medellín Social», «the Platform» or «the Controller») is responsible for processing the personal data collected through the website medellinsocial.com, its subdomains and associated applications. The Controller's identification details are:",
+        es: "Medellín Social (en adelante, «Medellín Social», «la Plataforma» o «el Responsable») es responsable del tratamiento de los datos personales recolectados a través del sitio web medellin.social, sus subdominios y aplicaciones asociadas. Los datos de identificación del Responsable son:",
+        en: "Medellín Social (hereinafter «Medellín Social», «the Platform» or «the Controller») is responsible for processing the personal data collected through the website medellin.social, its subdomains and associated applications. The Controller's identification details are:",
       },
       {
         tipo: "lista",
         es: [
-          "Razón social: [RAZÓN SOCIAL DE LA PERSONA JURÍDICA — POR COMPLETAR].",
+          "Razón social: EASE Association [razón social exacta y naturaleza jurídica — POR COMPLETAR].",
           "NIT: [NÚMERO DE IDENTIFICACIÓN TRIBUTARIA — POR COMPLETAR].",
           "Domicilio y dirección de notificaciones: [DIRECCIÓN FÍSICA, CIUDAD, COLOMBIA — POR COMPLETAR].",
-          "Correo electrónico de atención al titular: privacidad@medellinsocial.com.",
+          "Correo electrónico de atención al titular: privacidad@medellin.social.",
           "Teléfono / WhatsApp de atención: [TELÉFONO — POR COMPLETAR].",
-          "Sitio web: https://medellinsocial.com.",
+          "Sitio web: https://medellin.social.",
         ],
         en: [
-          "Legal name: [LEGAL NAME OF THE ENTITY — TO BE COMPLETED].",
+          "Legal name: EASE Association [exact legal name and entity type — TO BE COMPLETED].",
           "Tax ID (NIT): [TAX IDENTIFICATION NUMBER — TO BE COMPLETED].",
           "Registered address and address for notices: [PHYSICAL ADDRESS, CITY, COLOMBIA — TO BE COMPLETED].",
-          "Data subject support email: privacidad@medellinsocial.com.",
+          "Data subject support email: privacidad@medellin.social.",
           "Support phone / WhatsApp: [PHONE — TO BE COMPLETED].",
-          "Website: https://medellinsocial.com.",
+          "Website: https://medellin.social.",
         ],
       },
       {
@@ -314,8 +314,8 @@ const SECCIONES: Seccion[] = [
     bloques: [
       {
         tipo: "p",
-        es: "Consultas (artículo 14). El titular podrá consultar sus datos escribiendo a privacidad@medellinsocial.com. La consulta será atendida en un término máximo de diez (10) días hábiles contados desde su recibo. Cuando no sea posible atenderla en ese plazo, se informará al interesado antes de su vencimiento, indicando los motivos y la fecha en que se atenderá, que no superará los cinco (5) días hábiles siguientes.",
-        en: "Inquiries (article 14). The subject may consult their data by writing to privacidad@medellinsocial.com. The inquiry will be answered within a maximum of ten (10) business days from its receipt. When this is not possible, the interested party will be informed before the deadline, stating the reasons and the date on which it will be answered, which will not exceed the following five (5) business days.",
+        es: "Consultas (artículo 14). El titular podrá consultar sus datos escribiendo a privacidad@medellin.social. La consulta será atendida en un término máximo de diez (10) días hábiles contados desde su recibo. Cuando no sea posible atenderla en ese plazo, se informará al interesado antes de su vencimiento, indicando los motivos y la fecha en que se atenderá, que no superará los cinco (5) días hábiles siguientes.",
+        en: "Inquiries (article 14). The subject may consult their data by writing to privacidad@medellin.social. The inquiry will be answered within a maximum of ten (10) business days from its receipt. When this is not possible, the interested party will be informed before the deadline, stating the reasons and the date on which it will be answered, which will not exceed the following five (5) business days.",
       },
       {
         tipo: "p",
@@ -336,13 +336,13 @@ const SECCIONES: Seccion[] = [
       {
         tipo: "lista",
         es: [
-          "Correo electrónico: privacidad@medellinsocial.com.",
+          "Correo electrónico: privacidad@medellin.social.",
           "Teléfono / WhatsApp: [TELÉFONO — POR COMPLETAR].",
           "Dirección física: [DIRECCIÓN — POR COMPLETAR].",
           "Baja de comunicaciones comerciales: desde el enlace incluido en cada correo o escribiendo al canal anterior.",
         ],
         en: [
-          "Email: privacidad@medellinsocial.com.",
+          "Email: privacidad@medellin.social.",
           "Phone / WhatsApp: [PHONE — TO BE COMPLETED].",
           "Physical address: [ADDRESS — TO BE COMPLETED].",
           "Unsubscribe from commercial communications: via the link included in each email or by writing to the channel above.",

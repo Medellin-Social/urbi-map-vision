@@ -198,6 +198,7 @@ async def registro_agente(
     idiomas = [s.strip()[:40] for s in body.idiomas if s and s.strip()]
     especialidades = [s.strip()[:40] for s in body.especialidades if s and s.strip()]
     licencias = [s.strip()[:200] for s in body.licencias if s and s.strip()]
+    agency_id = None
     async with pool.acquire() as conn:
         async with conn.transaction():
             # Perfil: solo completa campos vacíos o mientras está pendiente (no pisa un perfil aprobado).
@@ -233,6 +234,11 @@ async def registro_agente(
                 await conn.execute(
                     "INSERT INTO agency_member (agency_id, agent_id, rol) VALUES ($1, $2, 'owner')",
                     agency_id, row["id"])
+    # Agencia nueva del registro (sin listings aún) → GHL como Business. Trigger
+    # propio: sin esto una agencia sin anuncios nunca llegaba a GHL (sync_agency
+    # solo se disparaba dentro de link_agency_to_listing). Best-effort, inerte sin creds.
+    if agency_id:
+        ghl_client.spawn(ghl_client.sync_agency(str(agency_id)))
     # Estado final tras la auto-activación (activo para un registro normal; respeta
     # rechazado/inactivo si el row ya existía en ese estado).
     estado_final = await pool.fetchval("SELECT estado::text FROM agent WHERE id = $1", row["id"])

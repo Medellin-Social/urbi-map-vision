@@ -73,7 +73,8 @@ async def test_una_excepcion_no_frena_el_resto(monkeypatch):
 
 
 def test_todo_tipo_reintentable_tiene_sync():
-    assert set(svc.TIPOS_REINTENTABLES) == {"listing", "agency", "agent", "visita", "tienda", "evento", "referidor"}
+    assert set(svc.TIPOS_REINTENTABLES) == {"listing", "agency", "agent", "visita", "tienda",
+                                             "evento", "referidor", "negocio", "lead_servicio"}
 
 
 class _FakePool:

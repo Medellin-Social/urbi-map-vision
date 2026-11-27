@@ -1,0 +1,138 @@
+{
+  "base": "https://web-medellin-social-dev.up.railway.app",
+  "api": "https://social-api-medellin-social-dev.up.railway.app/api/v1",
+  "counts": {
+    "major": 4,
+    "pass": 11,
+    "info": 1,
+    "blocker": 2
+  },
+  "holes": [
+    {
+      "track": "B·flujo",
+      "step": "login",
+      "severity": "blocker",
+      "note": "login falló (401, user=false) — Track B no puede continuar",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "token",
+      "severity": "blocker",
+      "note": "login API 401",
+      "evidence": null
+    },
+    {
+      "track": "A·guards",
+      "step": "/realtor/dashboard",
+      "severity": "major",
+      "note": "HUECO: /realtor/dashboard accesible SIN sesión (quedó en /realtor/dashboard, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·guards",
+      "step": "/agentes/registro",
+      "severity": "major",
+      "note": "HUECO: /agentes/registro accesible SIN sesión (quedó en /agentes/registro, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·guards",
+      "step": "/perfil",
+      "severity": "major",
+      "note": "HUECO: /perfil accesible SIN sesión (quedó en /perfil, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "pageerror",
+      "severity": "major",
+      "note": "Error: Minified React error #418; visit https://react.dev/errors/418?args[]=HTML&args[]= for the full message or use the non-minified dev environment for full e",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "login sin verificar",
+      "severity": "info",
+      "note": "cuenta SIN verificar correo entra igual (REQUIRE_EMAIL_VERIFICATION=false, config by-design hasta que el envío de correo sea confiable) — el flujo 'verifica tu correo' no bloquea hoy",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "registro",
+      "severity": "pass",
+      "note": "201 cuenta creada (sin sesión, debe verificar correo)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "agentes/registro",
+      "severity": "pass",
+      "note": "usuario normal llega al form de registro de agente (/agentes/registro)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/me",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/listings",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/agenda",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/desempeno",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/embudo",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/pool",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/asignados",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/comparables",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/disponibilidad",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    }
+  ]
+}

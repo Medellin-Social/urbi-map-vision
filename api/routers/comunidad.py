@@ -11,6 +11,7 @@ from pydantic import BaseModel, Field, field_validator
 from api.db import get_pool
 from api.dependencies import get_current_user
 from api.limiter import limiter
+from api.utils import ghl_client
 from api.utils.event_import import ImportError_, import_event
 from api.utils.urls import require_plain_text, require_safe_url
 
@@ -1041,6 +1042,9 @@ async def submit_evento(
     except Exception:
         logger.exception("Error inesperado")
         raise HTTPException(status_code=500, detail="Error interno del servidor")
+    # Evento → GHL (custom object event, bidireccional). Best-effort, inerte sin
+    # credenciales. Eventos los sube cualquier usuario con suscripción/realtor.
+    ghl_client.spawn(ghl_client.sync_evento(row["id"]))
     return EventoSubmitOut(id=row["id"], estado="pendiente")
 
 
