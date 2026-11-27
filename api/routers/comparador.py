@@ -114,13 +114,19 @@ async def batch_listings(
     current_user: dict = Depends(require_agente),  # comparador = solo realtors
 ):
     """Devuelve datos completos de hasta 5 listings para la tabla comparativa."""
-    try:
-        id_list = [int(i.strip()) for i in ids.split(",") if i.strip()]
-    except ValueError:
-        raise HTTPException(status_code=400, detail="ids must be comma-separated integers")
-    if not id_list:
+    # ids = enteros (listings scrapeados, hash del url) y/o UUIDs (listings propios,
+    # tabla `listing`; en staging su url = l.id::text). Se matchean los propios por url
+    # directo y los scrapeados por el hash del url — así "Mis listings" usa la misma tabla.
+    int_ids: list[int] = []
+    uuid_ids: list[str] = []
+    for tok in (i.strip() for i in ids.split(",") if i.strip()):
+        try:
+            int_ids.append(int(tok))
+        except ValueError:
+            uuid_ids.append(tok)
+    if not int_ids and not uuid_ids:
         raise HTTPException(status_code=400, detail="Provide at least 1 listing ID")
-    if len(id_list) > 10:
+    if len(int_ids) + len(uuid_ids) > 10:
         raise HTTPException(status_code=400, detail="Máximo 10 listings por comparación")
 
     pool = get_pool()
@@ -141,9 +147,12 @@ async def batch_listings(
                             THEN ROUND(precio_cop::float8 / area_m2)::int
                        ELSE NULL
                    END AS pm2,
-                   fotos[1] AS foto_principal
+                   fotos[1] AS foto_principal,
+                   estrato_real,
+                   fecha_scraping
             FROM staging.stg_listings_unificado
             WHERE ('x'||substr(md5(url),1,8))::bit(32)::int = ANY($1::int[])
+               OR url = ANY($2::text[])
         )
         SELECT
             l.id,
@@ -158,7 +167,7 @@ async def batch_listings(
             l.banos::float8,
             l.url,
             l.foto_principal,
-            g.estrato_real,
+            COALESCE(g.estrato_real, l.estrato_real) AS estrato_real,
             g.url_activa AS disponible_actualmente,
             l.barrio_id,
             b.nombre AS barrio_nombre,
@@ -187,8 +196,8 @@ async def batch_listings(
             END AS yield_estimado,
             m.m2_mediana::int AS precio_m2_mediana_barrio,
             m.arr_mediana::int AS arriendo_p50_barrio,
-            (CURRENT_DATE - g.fecha_primera_vez::date)::int
-                AS dias_en_mercado,
+            COALESCE((CURRENT_DATE - g.fecha_primera_vez::date)::int,
+                     (CURRENT_DATE - l.fecha_scraping::date)::int) AS dias_en_mercado,
             ctx.yield_bruto_pct,
             ctx.score_corto,
             ctx.score_mediano,
@@ -209,7 +218,8 @@ async def batch_listings(
             AND m.tipo_inmueble IS NOT DISTINCT FROM l.tipo_inmueble
         LEFT JOIN analytics.barrios_contexto ctx ON ctx.barrio_id = l.barrio_id
         """,
-        id_list,
+        int_ids,
+        uuid_ids,
     )
     # KPIs inversor (buena_oferta, pct_bajo_mediana, scores, yields) = realtor-only.
     return [_gate_market_fields(dict(r), current_user) for r in rows]

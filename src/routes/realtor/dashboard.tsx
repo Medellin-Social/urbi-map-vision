@@ -309,9 +309,9 @@ function SubNav<T extends string>({ value, onChange, items, label }: {
             tabIndex={active ? 0 : -1}
             onClick={() => onChange(id)}
             onKeyDown={(e) => onKeyNav(e, idx)}
-            className="inline-flex min-h-[40px] items-center gap-1.5 rounded-full px-4 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+            className="inline-flex min-h-[42px] items-center gap-1.5 rounded-lg px-5 text-[13px] font-semibold transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
             style={active
-              ? { background: BRAND_DEEP, color: "#fff" }   // #0C7A45: blanco pasa AA (5.4:1)
+              ? { background: BRAND_DEEP, color: "#fff", boxShadow: "0 3px 10px -2px rgba(12,122,69,.35)" }   // #0C7A45: blanco pasa AA (5.4:1)
               : { background: C.soft, color: C.sub, border: `1px solid ${C.line}` }}
           >
             {lbl}
