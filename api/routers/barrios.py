@@ -1137,6 +1137,68 @@ async def get_barrio_info(barrio_id: int):
     return BarrioInfo(**dict(row))
 
 
+# ── Estimador calibrado con comps reales (no un factor inventado) ─────────────────
+# Mediana del precio de listings de la zona con esas habitaciones y, si hay muestra,
+# en una banda ±30% de m². Rango = p25/p75 REALES del mercado. Fallback barrio→comuna
+# cuando la muestra es chica. Solo lee staging.stg_listings_unificado (lo puebla el cron).
+_ESTIMADOR_MIN_N = 12
+
+
+@router.get("/{barrio_id}/estimador")
+async def get_barrio_estimador(
+    barrio_id: int,
+    tipo_operacion: str = Query(..., pattern="^(venta|arriendo)$"),
+    habitaciones: Optional[int] = Query(None, ge=1, le=6),
+    m2: Optional[int] = Query(None, ge=10, le=2000),
+):
+    pool = get_pool()
+    precio_min, precio_max = (50_000_000, 100_000_000_000) if tipo_operacion == "venta" else (300_000, 50_000_000)
+    banda = (int(m2 * 0.7), int(m2 * 1.3)) if m2 else None
+    cd_comuna = await pool.fetchval("SELECT cd_comuna FROM analytics.barrios_cd WHERE barrio_id = $1", barrio_id)
+
+    async def comps(nivel: str, con_banda: bool):
+        where = ["s.tipo_operacion = $1", "s.precio_cop BETWEEN $2 AND $3"]
+        params: list = [tipo_operacion, precio_min, precio_max]
+        if tipo_operacion == "venta":
+            where.append("s.area_m2 > 20")
+        if nivel == "barrio":
+            params.append(barrio_id)
+            where.append(f"s.barrio_id = ${len(params)}")
+        else:
+            if not cd_comuna:
+                return None
+            params.append(cd_comuna)
+            where.append(f"s.barrio_id IN (SELECT barrio_id FROM analytics.barrios_cd WHERE cd_comuna = ${len(params)})")
+        if habitaciones is not None:
+            params.append(habitaciones)
+            where.append(f"s.habitaciones = ${len(params)}")
+        if con_banda and banda:
+            params.append(banda[0]); lo = len(params)
+            params.append(banda[1]); hi = len(params)
+            where.append(f"s.area_m2 BETWEEN ${lo} AND ${hi}")
+        sql = (
+            "SELECT count(*)::int AS n, "
+            "percentile_cont(0.25) WITHIN GROUP (ORDER BY s.precio_cop) AS p25, "
+            "percentile_cont(0.5)  WITHIN GROUP (ORDER BY s.precio_cop) AS p50, "
+            "percentile_cont(0.75) WITHIN GROUP (ORDER BY s.precio_cop) AS p75 "
+            "FROM staging.stg_listings_unificado s WHERE " + " AND ".join(where)
+        )
+        return await pool.fetchrow(sql, *params)
+
+    # Escalera de fallback: barrio antes que comuna; con banda de m² antes que sin ella.
+    ladder = ([("barrio", True), ("comuna", True)] if banda else []) + [("barrio", False), ("comuna", False)]
+    for nivel, con_banda in ladder:
+        r = await comps(nivel, con_banda)
+        if r and r["n"] and r["n"] >= _ESTIMADOR_MIN_N:
+            return {
+                "n": r["n"], "nivel": nivel, "con_banda": bool(con_banda and banda),
+                "p25": int(r["p25"]), "p50": int(r["p50"]), "p75": int(r["p75"]),
+                "tipo_operacion": tipo_operacion, "habitaciones": habitaciones,
+            }
+    return {"n": 0, "nivel": None, "con_banda": False, "p25": None, "p50": None, "p75": None,
+            "tipo_operacion": tipo_operacion, "habitaciones": habitaciones}
+
+
 # ── Serie de precios por municipio (#14) — da firmeza a la temperatura (#15) ──────
 # compraventas reales SNR/ORIPS, mediana por año. Nivel municipio (no barrio, no hay
 # dato por barrio). Excluye el año en curso (parcial) y años con <30 transacciones.

@@ -26,6 +26,7 @@ import { useMemo } from "react";
 import { ListingMiniPopup } from "@/components/ListingMiniPopup";
 import { ListingPopup } from "@/components/listing-popup/ListingPopup";
 import { ComparadorBadge } from "@/components/ComparadorBadge";
+import { RealtorsZonaCarousel } from "@/components/RealtorsZonaCarousel";
 import { MapTourModal } from "@/components/MapTourModal";
 import { useIsMobile, useIsTablet } from "@/hooks/use-mobile";
 import { List, Map as MapIcon } from "@/lib/icons";
@@ -846,6 +847,18 @@ function MapPageInner() {
 
       {/* Gradiente superior */}
       <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-[108px] bg-gradient-to-b from-background/40 to-transparent" />
+
+      {/* Realtors de la zona (carrusel, esquina sup-derecha): al clickear comuna/barrio
+          muestra sus preferidos deslizando uno a uno. Barrio vacío → cae a comuna. */}
+      {(mlsBarrio || activeComunaCd != null) && (
+        <div className="absolute right-3 z-20" style={{ top: "calc(var(--map-header-h, 53px) + 56px)" }}>
+          <RealtorsZonaCarousel
+            barrioId={mlsBarrio?.id ?? null}
+            cdComuna={mlsBarrio?.cd_comuna ?? activeComunaCd ?? null}
+            zonaNombre={mlsBarrio?.nombre ?? activeComuna ?? activeMunicipio ?? null}
+          />
+        </div>
+      )}
 
       {/* Botón volver a comunas — solo en vista de barrios y cuando no estamos en listings.
           En split lo reemplaza el breadcrumb de la columna izquierda. */}
