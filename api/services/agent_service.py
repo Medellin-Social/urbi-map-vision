@@ -62,3 +62,17 @@ async def suspender_agente(agent: Any, admin_id: str, motivo: str, pool: Any) ->
             agent.id, motivo,
         )
     agent.estado = "inactivo"
+
+
+async def reactivar_agente(agent: Any, admin_id: str, pool: Any) -> None:
+    """inactivo | rechazado → activo. Reactiva un agente suspendido o rechazado
+    (la única vía de vuelta a 'activo' desde esos estados). Respeta
+    chk_agent_activo_requires_usuario: debe tener cuenta vinculada. Limpia el motivo."""
+    if _val(agent.estado) not in ("inactivo", "rechazado"):
+        raise AgentError(f"Solo se reactiva un agente 'inactivo' o 'rechazado' (está {_val(agent.estado)})")
+    if getattr(agent, "usuario_id", None) is None:
+        raise AgentError("El agente debe tener cuenta antes de activarse")
+    async with pool.acquire() as conn:
+        await conn.execute(
+            "UPDATE agent SET estado = 'activo', motivo_estado = NULL WHERE id = $1", agent.id)
+    agent.estado = "activo"

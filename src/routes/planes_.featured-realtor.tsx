@@ -12,7 +12,7 @@ import { K } from "@/design/tokens";
 type Nivel = "barrio" | "comuna";
 type Zona = {
   zona_nivel: Nivel; zona_codigo: string; nombre: string; nivel: string;
-  precio_mensual: number; cupos: number; municipio?: string;
+  precio_mensual: number; cupos: number; municipio?: string; moneda?: string;
 };
 type ZonasOut = { barrios: Zona[]; comunas: Zona[]; capacidad: Record<Nivel, number> };
 type CheckoutOut = { modo: "ghl_stripe" | "simulado"; checkout_url?: string; mensaje?: string; total: number };
@@ -33,6 +33,9 @@ export const Route = createFileRoute("/planes_/featured-realtor")({
 });
 
 const cop = (n: number) => "$" + Math.round(n).toLocaleString("es-CO") + " COP";
+// La tabla de precios mezcla zonas reales (USD) y de ejemplo (COP); formatea por zona.
+const money = (n: number, moneda?: string) =>
+  moneda === "USD" ? "$" + Math.round(n).toLocaleString("en-US") + " USD" : cop(n);
 
 function RealtorPreferidoPage() {
   const t = useT();
@@ -221,7 +224,7 @@ function RealtorPreferidoPage() {
                       style={{ width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, padding: "11px 14px", border: "none", borderBottom: `1px solid ${K.line}`, background: on ? K.tealLight : "#fff", cursor: lleno ? "not-allowed" : "pointer", opacity: lleno ? 0.5 : 1, textAlign: "left", fontFamily: "inherit" }}>
                       <span style={{ fontSize: 14, fontWeight: 600, color: K.ink }}>{z.nombre}{z.municipio && z.municipio !== "MEDELLIN" ? ` · ${z.municipio.charAt(0) + z.municipio.slice(1).toLowerCase()}` : ""}</span>
                       <span style={{ fontSize: 12, color: K.muted, whiteSpace: "nowrap" }}>
-                        {cop(z.precio_mensual)}/{t("mes", "mo")} · {lleno ? t("lleno", "full") : `${z.cupos} ${z.cupos === 1 ? t("cupo", "spot") : t("cupos", "spots")}`}
+                        {money(z.precio_mensual, z.moneda)}/{t("mes", "mo")} · {lleno ? t("lleno", "full") : `${z.cupos} ${z.cupos === 1 ? t("cupo", "spot") : t("cupos", "spots")}`}
                       </span>
                     </button>
                   );
@@ -237,7 +240,7 @@ function RealtorPreferidoPage() {
                     </select>
                   </label>
                   <p style={{ fontSize: 14, color: K.ink, margin: 0 }}>
-                    <strong>{zona.nombre}</strong> — {cop(zona.precio_mensual * meses)} {t("en total", "total")}
+                    <strong>{zona.nombre}</strong> — {money(zona.precio_mensual * meses, zona.moneda)} {t("en total", "total")}
                   </p>
                   <button onClick={comprar} disabled={busy}
                     style={{ background: K.teal, color: "#fff", border: "none", borderRadius: 999, padding: "13px 24px", fontWeight: 800, fontSize: 15, cursor: busy ? "wait" : "pointer", fontFamily: "inherit" }}>
@@ -252,7 +255,7 @@ function RealtorPreferidoPage() {
               )}
               {msg && <p role="status" style={{ marginTop: 12, fontSize: 13, color: msg.ok ? K.teal : K.rojo }}>{msg.text}</p>}
               <p style={{ fontSize: 11, color: K.tertiary, marginTop: 14 }}>
-                {t("Precios mensuales en pesos colombianos. Pago seguro con Stripe.", "Monthly prices in Colombian pesos. Secure payment via Stripe.")}
+                {t("Pago mensual seguro con Stripe. La moneda se indica junto a cada zona.", "Secure monthly payment via Stripe. The currency is shown next to each zone.")}
               </p>
             </div>
           </section>

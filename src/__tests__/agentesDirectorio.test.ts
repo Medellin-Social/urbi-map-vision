@@ -36,4 +36,9 @@ describe("buildBuscarQS", () => {
   it("rating_min=0 no se envía (falsy)", () => {
     expect(parse(buildBuscarQS({ rating_min: 0 }, opts)).rating_min).toBeUndefined();
   });
+
+  it("tipo_agente (deep-link del aviso no-registrado) viaja al endpoint", () => {
+    const q = parse(buildBuscarQS({ tipo_agente: "certified,preferred" }, opts));
+    expect(q.tipo_agente).toBe("certified,preferred");
+  });
 });

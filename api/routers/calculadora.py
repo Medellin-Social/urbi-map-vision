@@ -27,6 +27,50 @@ _OPEX_LABEL: dict[str, str] = {
     "renta_larga": "28% (admin edificio + predial + seguros + mant. + vacancia)",
 }
 
+# ── POT / renta corta (nuevo POT Medellín 2026) ────────────────────────────────
+# El POT clasifica la renta corta (Airbnb/vivienda turística) como servicio de
+# hospedaje y SOLO la permite en suelo de alta o media mixtura; la baja mixtura
+# (residencial) queda excluida. El POT aplica únicamente a Medellín.
+# El grano legal real es POR PREDIO. A nivel barrio (lo único que conoce esta
+# simulación) bloqueamos solo donde NINGÚN predio podría ser legal — es decir,
+# un barrio enteramente de baja mixtura — y advertimos en el resto.
+_POT_MIXTURA_PERMITIDA = (
+    "Áreas y corredores de alta mixtura",
+    "Áreas y corredores de media mixtura",
+)
+_RENTA_CORTA_BLOQUEO_RESIDENCIAL = (
+    "El POT de Medellín no permite renta corta (Airbnb) en esta zona: es de uso "
+    "residencial / baja mixtura. La renta corta solo se permite en predios de alta o "
+    "media mixtura. Usa renta media o renta larga para este barrio."
+)
+_RENTA_CORTA_BLOQUEO_SIN_DATO = (
+    "No tenemos la clasificación de uso del suelo (POT) de esta zona —el POT de renta "
+    "corta aplica solo en Medellín—, así que no podemos confirmar que la renta corta sea "
+    "legal aquí. Verifica la normativa local antes de simular Airbnb."
+)
+_RENTA_CORTA_NOTA = (
+    "El nuevo POT solo permite renta corta en los predios de alta/media mixtura de este "
+    "barrio, no en todo el barrio. Confirma que la dirección exacta esté en zona de "
+    "mixtura y que el inmueble cuente con RNT y autorización de la copropiedad (PH)."
+)
+
+
+def renta_corta_verdict(
+    municipio: str | None, barrio_tiene_mixtura: bool
+) -> tuple[bool, Optional[str]]:
+    """Veredicto POT para renta corta a nivel barrio.
+
+    Devuelve (apto, mensaje_bloqueo). apto=True → permitido (con nota/caveat);
+    apto=False → bloquear con el mensaje. Conservador: fuera de Medellín (sin dato
+    POT) o barrio sin alta/media mixtura → no apto.
+    """
+    es_medellin = (municipio or "").strip().lower() == "medellin"
+    if es_medellin and barrio_tiene_mixtura:
+        return True, None
+    return False, (
+        _RENTA_CORTA_BLOQUEO_RESIDENCIAL if es_medellin else _RENTA_CORTA_BLOQUEO_SIN_DATO
+    )
+
 # LEFT JOIN barrios_airbnb_real to prefer real observed income over projected ADR×ocupacion.
 # LEFT JOIN LATERAL raw.indices_precio_vivienda (fuente='dane') for latest DANE appreciation
 # rate (col: variacion_anual_pct, anio/trimestre) — antes raw.ipvn_dane, fusionada 2026-08-23.
@@ -54,9 +98,17 @@ _SQL = """
         bar.adr_p50_cop                AS adr_real_noche_cop,
         ipvn.variacion_anual_pct       AS ipvn_variacion_anual,
         ctx.seguridad_score,
-        ctx.liquidez_score
+        ctx.liquidez_score,
+        b.municipio                      AS barrio_municipio,
+        EXISTS (
+            SELECT 1 FROM raw.pot_usos_medellin p
+            WHERE p.areagraluso IN ('Áreas y corredores de alta mixtura',
+                                    'Áreas y corredores de media mixtura')
+              AND ST_Intersects(b.geometry, p.geometry)
+        )                                AS barrio_tiene_mixtura
     FROM analytics.barrios_score_consolidado sc
     JOIN  analytics.barrios_mercado          bm   ON sc.barrio_id = bm.barrio_id
+    JOIN  raw.barrios                        b    ON b.id         = sc.barrio_id
     LEFT JOIN analytics.score_largo_plazo    sl   ON sc.barrio_id = sl.barrio_id
     LEFT JOIN analytics.barrios_airbnb_real  bar  ON sc.barrio_id = bar.barrio_id
     LEFT JOIN analytics.barrios_contexto     ctx  ON sc.barrio_id = ctx.barrio_id
@@ -159,6 +211,7 @@ class ComparativoModalidad(BaseModel):
     recupero_anos: Optional[float] = None
     riesgo: str
     es_recomendada: bool = False
+    permitido_pot: bool = True  # False = modalidad no permitida por POT en esta zona
 
 
 class SimulacionResponse(BaseModel):
@@ -183,6 +236,7 @@ class SimulacionResponse(BaseModel):
     resumen: str
     alertas: list[str]
     datos_insuficientes: bool = False
+    nota_legal: Optional[str] = None  # aviso POT cuando tipo_inversion = airbnb
 
     # Zona quality — the barrio's score for this investment type (separate from yield rating)
     zona_score: Optional[int] = None
@@ -353,6 +407,13 @@ async def simular(request: Request, req: SimulacionRequest, current_user: dict =
     data = dict(row)
     alertas: list[str] = []
 
+    # ── Gate legal POT: renta corta solo en alta/media mixtura (Medellín) ──────
+    apto_renta_corta, _rc_bloqueo = renta_corta_verdict(
+        data.get("barrio_municipio"), bool(data.get("barrio_tiene_mixtura"))
+    )
+    if req.tipo_inversion == "airbnb" and not apto_renta_corta:
+        raise HTTPException(status_code=422, detail=_rc_bloqueo)
+
     precio_m2 = float(data.get("precio_m2_venta_p50") or 0)
     if not precio_m2:
         raise HTTPException(
@@ -522,12 +583,15 @@ async def simular(request: Request, req: SimulacionRequest, current_user: dict =
     mejor_yield = -1.0
     mejor_tipo = req.tipo_inversion
     for tipo_c in ["airbnb", "renta_media", "renta_larga"]:
+        # Airbnb solo permitido en barrios con alta/media mixtura (POT) — no se
+        # recomienda ni compite por "mejor yield" donde es ilegal.
+        permitido_c = apto_renta_corta if tipo_c == "airbnb" else True
         try:
             ing_c, _ = calcular(presupuesto, tipo_c, data, [])
             ing_neto_c = ing_c * 12 * (1 - _OPEX[tipo_c])
             yn_c = round(ing_neto_c / presupuesto * 100, 1) if ing_neto_c > 0 else 0.0
             rec_c = round(presupuesto / ing_neto_c, 1) if ing_neto_c > 0 else None
-            if yn_c > mejor_yield:
+            if permitido_c and yn_c > mejor_yield:
                 mejor_yield = yn_c
                 mejor_tipo = tipo_c
             comparativo_list.append(ComparativoModalidad(
@@ -538,12 +602,14 @@ async def simular(request: Request, req: SimulacionRequest, current_user: dict =
                 recupero_anos=rec_c,
                 riesgo=_TIPO_RIESGO[tipo_c],
                 es_recomendada=False,
+                permitido_pot=permitido_c,
             ))
         except Exception:
             log.warning("calculadora: comparativo %s falló", tipo_c, exc_info=True)
             comparativo_list.append(ComparativoModalidad(
                 tipo=tipo_c, label=_TIPO_LABELS[tipo_c],
                 riesgo=_TIPO_RIESGO[tipo_c],
+                permitido_pot=permitido_c,
             ))
     for cm in comparativo_list:
         cm.es_recomendada = (cm.tipo == mejor_tipo)
@@ -615,6 +681,7 @@ async def simular(request: Request, req: SimulacionRequest, current_user: dict =
         resumen=resumen,
         alertas=alertas,
         datos_insuficientes=datos_insuficientes,
+        nota_legal=_RENTA_CORTA_NOTA if req.tipo_inversion == "airbnb" else None,
         seguridad_score=data.get("seguridad_score"),
         liquidez_score=data.get("liquidez_score"),
         flujo_caja_desglose=desglose_val,

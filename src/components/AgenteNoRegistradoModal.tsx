@@ -22,7 +22,7 @@ export function AgenteNoRegistradoModal({ listing, barrio, comuna, onClose }: {
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose]);
 
-  const qs = new URLSearchParams({ tipo: "certified,preferred" });
+  const qs = new URLSearchParams({ tipo_agente: "certified,preferred" });
   if (barrio) qs.set("zona", barrio);
   if (comuna) qs.set("comuna", comuna);
   const directorio = `/agentes?${qs.toString()}`;

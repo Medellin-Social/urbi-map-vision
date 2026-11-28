@@ -6,4 +6,4 @@ del aviso firmó cada usuario; súbela cuando cambie el texto en
 /politica-privacidad para que los consentimientos queden auditables.
 """
 
-HABEAS_DATA_VERSION = "2026-11-07"
+HABEAS_DATA_VERSION = "2026-11-25"

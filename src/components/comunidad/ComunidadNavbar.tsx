@@ -1,5 +1,5 @@
 import { useT } from "@/lib/i18n";
-import { useEffect, useMemo, useState, type CSSProperties } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useBarrio } from './BarrioContext'
 import { useTicker } from '../../hooks/useTicker'
 import { useLang, LanguageToggle } from '../../lib/i18n'
@@ -80,8 +80,12 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
   const [today,       setToday]       = useState('')
   const [path,        setPath]        = useState('')
   const [menuAbierto, setMenuAbierto] = useState(false)
-  const [reOpen,      setReOpen]      = useState(false)
-  const user = auth.get()
+  // auth.get() lee localStorage → difiere SSR(null) vs cliente → hydration #418.
+  // Se gatea con `mounted`: SSR y el 1er render cliente coinciden (logged-out), y el
+  // chip de cuenta aparece tras montar.
+  const [mounted, setMounted] = useState(false)
+  useEffect(() => setMounted(true), [])
+  const user = mounted ? auth.get() : null
   const logged = !!user
   const isAgente = useIsAgente()
   // El agente ve su foto/nombre reales del backend (auth.avatar es local al device);
@@ -97,11 +101,10 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
     const handleClick = (e: MouseEvent) => {
       const el = e.target as Element
       if (menuAbierto && !el.closest('nav')) setMenuAbierto(false)
-      if (reOpen && !el.closest('[data-re-dropdown]')) setReOpen(false)
     }
     document.addEventListener('click', handleClick)
     return () => document.removeEventListener('click', handleClick)
-  }, [menuAbierto, reOpen])
+  }, [menuAbierto])
 
   const { data: apiItems = [] } = useTicker(1)
 
@@ -145,31 +148,15 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
   // El selector de comuna salió del navbar → ahora vive en la barra de filtros de
   // cada sección (ComunaSelect en /eventos y /local-business).
 
-  const links: { href: string; label: string; re?: boolean }[] = [
+  // REAL ESTATE = link plano al hub /real-estate (sin dropdown; las antiguas
+  // sub-páginas viven como bloques del hub). Decisión Ken 26-nov.
+  const links: { href: string; label: string }[] = [
     { href: '/',                              label: t('HOME', 'HOME') },
     { href: `/eventos/${barrio.slug}`,         label: t('EVENTOS', 'EVENTS') },
     { href: `/local-business/${barrio.slug}`,  label: t('NEGOCIOS', 'BUSINESSES') },
-    { href: '/real-estate',                    label: 'REAL ESTATE', re: true },
+    { href: '/real-estate',                    label: 'REAL ESTATE' },
     { href: '/blog',                           label: 'BLOG' },
   ]
-
-  // "REAL ESTATE ▾" hub — destinos que navegan FUERA del mapa (no filtros).
-  // Herramientas solo para agentes (gating heredado del MapNavbar viejo).
-  const reItems = [
-    { href: '/map',         label: t('Mapa', 'Map') },
-    { href: '/vender',      label: t('Vender o arrendar tu inmueble', 'Sell or rent your property') },
-    { href: '/agentes',     label: t('Encuentra un agente', 'Find an agent') },
-    { href: '/agentes/estados', label: t('Guía de estados de agentes', 'Agent status guide') },
-    { href: '/mas-informacion', label: t('¿Necesitas realtor, manager o administración?', 'Need a realtor, manager or administration?') },
-    { href: '/agentes/programa', label: t('Registrarme como agente', 'Register as an agent') },
-  ]
-  // Simulador/Comparador/Calculadora salieron del navbar → solo en el dashboard del realtor.
-  const reActive = ['/map', '/real-estate', '/vender', '/publicar', '/agentes', '/mas-informacion']
-    .some(h => path === h || path.startsWith(h + '/'))
-  const reItemStyle: CSSProperties = {
-    display: 'block', padding: '9px 12px', borderRadius: 7,
-    fontSize: 14, color: K.ink, textDecoration: 'none', fontWeight: 500,
-  }
 
   return (
     <>
@@ -205,7 +192,6 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
         .k-nav-link:hover { background: rgba(255,255,255,0.06); }
         .k-subscribe { transition: background .15s, transform .15s; }
         .k-subscribe:hover { background: ${K.tealMid}; transform: translateY(-1px); }
-        .re-item:hover { background: ${K.tealLight}; }
         .k-ticker:hover .k-ticker-inner { animation-play-state: paused; }
         .k-tricolor { display: flex; height: 3px; }
         .k-tricolor > i { display: block; transform-origin: left; animation: kStripe .7s cubic-bezier(.2,.7,.2,1) both; }
@@ -282,10 +268,10 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             )}
             {/* Tutorial pegado al logo (izquierda): fuera del flujo central, no empuja
                los nav links ni la sección derecha. Solo donde hay tour montado. */}
-            {(path === '/' || path === '/map' || path === '/realtor/dashboard') && (
+            {(path === '/' || path === '/map' || path === '/realtor/dashboard' || path === '/agentes' || path === '/real-estate') && (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
-                data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : 'realtor-tour-replay'}
+                data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : path === '/realtor/dashboard' ? 'realtor-tour-replay' : path === '/agentes' ? 'agentes-tour-replay' : 'real-estate-tour-replay'}
                 aria-label={t('Ver tutorial', 'View tutorial')}
                 title={t('Ver tutorial', 'View tutorial')}
                 style={{
@@ -302,40 +288,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
 
           {/* CENTER: nav links — desktop only */}
           <div className="desktop-nav-links" data-tour="nav-links" style={{ display: 'flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
-            {links.map((lnk) => lnk.re ? (
-              <div key="re" data-re-dropdown style={{ position: 'relative' }}>
-                <button
-                  className="k-nav-link"
-                  aria-expanded={reOpen}
-                  aria-haspopup="menu"
-                  onClick={() => setReOpen(o => !o)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 5, border: 'none', cursor: 'pointer',
-                    background: reOpen ? 'rgba(255,255,255,0.1)' : 'transparent',
-                    color: (reOpen || reActive) ? K.amarillo : 'rgba(255,255,255,0.85)',
-                    font: 'inherit', fontWeight: 700, fontSize: 13, letterSpacing: '0.6px', textTransform: 'uppercase',
-                  }}
-                >
-                  {lnk.label}
-                  <svg width="9" height="9" viewBox="0 0 10 10" aria-hidden="true" style={{ transform: reOpen ? 'rotate(180deg)' : 'none', transition: 'transform .15s' }}>
-                    <path d="M2 3.5 5 6.5 8 3.5" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {reOpen && (
-                  <div role="menu" style={{
-                    position: 'absolute', top: 'calc(100% + 10px)', left: 0,
-                    background: K.paper, border: `1px solid ${K.line}`, borderRadius: 10,
-                    boxShadow: '0 14px 34px rgba(20,32,29,.20)', minWidth: 236, overflow: 'hidden', zIndex: 60, padding: 6,
-                  }}>
-                    {reItems.map(it => (
-                      <a key={it.href} href={it.href} className="re-item" style={reItemStyle}>{it.label}</a>
-                    ))}
-                    {/* Herramientas (simulador/comparador/calculadora) salieron del navbar:
-                       ahora viven solo en el dashboard del realtor. */}
-                  </div>
-                )}
-              </div>
-            ) : (
+            {links.map((lnk) => (
               <a
                 key={lnk.label}
                 href={lnk.href}
@@ -432,25 +385,7 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             padding: '12px 16px 16px',
             borderTop: '0.5px solid rgba(255,255,255,0.1)',
           }}>
-            {links.map(link => link.re ? (
-              <div key="re-m">
-                <div style={{ color: 'rgba(255,255,255,0.85)', padding: '10px 0 4px', fontSize: 15, fontWeight: 700, borderBottom: '0.5px solid rgba(255,255,255,0.08)' }}>
-                  {link.label}
-                </div>
-                {reItems.map(it => (
-                  <a
-                    key={it.href}
-                    href={it.href}
-                    onClick={() => setMenuAbierto(false)}
-                    style={it.href === '/map'
-                      ? { display: 'block', background: K.teal, color: '#fff', padding: '10px 14px', margin: '4px 0', fontSize: 14, fontWeight: 800, textDecoration: 'none', borderRadius: 8 }
-                      : { display: 'block', color: 'rgba(255,255,255,0.72)', padding: '9px 0 9px 14px', fontSize: 14, fontWeight: 500, textDecoration: 'none', borderBottom: '0.5px solid rgba(255,255,255,0.06)' }}
-                  >
-                    {it.label}
-                  </a>
-                ))}
-              </div>
-            ) : (
+            {links.map(link => (
               <a
                 key={link.href}
                 href={link.href}

@@ -74,6 +74,28 @@ async def slots_activos(conn, zona_nivel: str, zona_codigo: str):
     )
 
 
+async def realtors_de_zona(conn, zona_nivel: str, zona_codigo: str):
+    """Lista enriquecida de preferidos activos de la zona, en orden de posición.
+    Solo lectura — NO avanza la rotación (a diferencia de siguiente_realtor). La usa
+    el carrusel del mapa para mostrarlos deslizando uno por uno."""
+    _validar_zona(zona_nivel)
+    return await conn.fetch(
+        "SELECT a.id::text AS id, a.nombre, a.foto_url, a.telefono, "
+        "       a.certificado, a.anios_experiencia, "
+        "       ag.nombre AS agencia_nombre, rev.rating_promedio, rev.n_resenas, s.tipo "
+        "FROM realtor_preferido_slot s "
+        "JOIN agent a ON a.id = s.agent_id AND a.estado::text = 'activo' "
+        "LEFT JOIN agency_member am ON am.agent_id = a.id "
+        "LEFT JOIN agency ag ON ag.id = am.agency_id "
+        "LEFT JOIN LATERAL ("
+        "  SELECT ROUND(AVG(calificacion)::numeric, 1)::float8 AS rating_promedio, COUNT(*)::int AS n_resenas "
+        "  FROM agent_review WHERE agent_id = a.id) rev ON true "
+        "WHERE s.zona_nivel = $1 AND s.zona_codigo = $2 AND s.estado = 'activo' "
+        "AND (s.fecha_fin IS NULL OR s.fecha_fin >= CURRENT_DATE) ORDER BY s.posicion",
+        zona_nivel, zona_codigo,
+    )
+
+
 async def asignar_slot(conn, agent_id: str, zona_nivel: str, zona_codigo: str,
                        tipo: str = "pago", meses: int = 1, pago_ref: str | None = None) -> dict:
     """Asigna o renueva un slot. Correr dentro de una transacción.

@@ -421,13 +421,13 @@ function TabBarrios({
                       const { score, cat } = getProfileScore(b, userGoal);
                       return (
                         <td key={b.barrio_id} className="py-2.5 pl-3">
-                          {fmtScore(score, cat)}
+                          {userGoal === "airbnb" ? fmtCorto(b) : fmtScore(score, cat)}
                         </td>
                       );
                     })}
                   </tr>
                   <SectionLabel label="TODOS LOS SCORES" colSpan={items.length + 1} />
-                  <Row label="Corto plazo" items={items} render={(b) => fmtScore(b.scores.corto, b.scores.cat_corto)} />
+                  <Row label="Corto plazo" items={items} render={(b) => fmtCorto(b)} />
                   <Row label="Mediano plazo" items={items} render={(b) => fmtScore(b.scores.mediano, b.scores.cat_mediano)} />
                   <Row label="Largo plazo" items={items} render={(b) => fmtScore(b.scores.largo, b.scores.cat_largo)} />
                   <SectionLabel label="MERCADO" colSpan={items.length + 1} />
@@ -466,7 +466,7 @@ function TabBarrios({
 
 // ─── TAB INMUEBLES ────────────────────────────────────────────────────────────
 
-type ComparadorListing = ApiListing & {
+export type ComparadorListing = ApiListing & {
   yield_estimado?: number | null;
   arriendo_p50_barrio?: number | null;
   yield_bruto_pct?: number | null;
@@ -492,18 +492,6 @@ function priceBadgeColor(pct: number | null | undefined): string {
   return "#CE1126";
 }
 
-function bestIdx(vals: (number | null | undefined)[], dir: "↑" | "↓"): number {
-  const defined = vals.map((v, i) => ({ v, i })).filter(({ v }) => v != null) as { v: number; i: number }[];
-  if (defined.length === 0) return -1;
-  return defined.reduce((best, cur) => (dir === "↑" ? cur.v > best.v : cur.v < best.v) ? cur : best).i;
-}
-
-function worstIdx(vals: (number | null | undefined)[], dir: "↑" | "↓"): number {
-  const defined = vals.map((v, i) => ({ v, i })).filter(({ v }) => v != null) as { v: number; i: number }[];
-  if (defined.length === 0) return -1;
-  return defined.reduce((worst, cur) => (dir === "↑" ? cur.v < worst.v : cur.v > worst.v) ? cur : worst).i;
-}
-
 function TableRow({
   label,
   vals,
@@ -517,23 +505,31 @@ function TableRow({
   fmt?: (v: number) => string;
   render?: (v: number | null | undefined, i: number) => React.ReactNode;
 }) {
-  const best = vals && dir ? bestIdx(vals, dir) : -1;
-  const worst = vals && dir ? worstIdx(vals, dir) : -1;
+  const defined = (vals ?? []).filter((x): x is number => x != null);
+  const bestVal = dir && defined.length ? (dir === "↑" ? Math.max(...defined) : Math.min(...defined)) : null;
+  // Sólo coronar "mejor" si hay un ganador real — no cuando todos empatan.
+  const hasWinner = bestVal != null && new Set(defined).size > 1;
 
   return (
-    <tr className="border-b" style={{ borderColor: "#E5E0D5" }}>
-      <td className="py-2.5 pr-4 text-[11px] text-[#6E726E] whitespace-nowrap">{label}</td>
+    <tr style={{ borderBottom: "1px solid #EFEADF" }}>
+      <td
+        className="sticky left-0 z-[1] py-2.5 pl-4 pr-4 text-[11.5px] font-medium whitespace-nowrap"
+        style={{ color: "#5B5F5C", background: "#FBFAF6", boxShadow: "1px 0 0 0 #EFEADF" }}
+      >
+        {label}
+      </td>
       {(vals ?? []).map((v, i) => {
-        const isBest = i === best && i !== worst;
-        const isWorst = i === worst && i !== best;
+        const isBest = hasWinner && v != null && v === bestVal;
         const content = render ? render(v, i) : (v != null && fmt ? fmt(v) : "—");
         return (
-          <td
-            key={i}
-            className="py-2.5 pl-3 text-xs font-medium"
-            style={{ color: isBest ? "#0A5C36" : isWorst ? "#CE1126" : "#111418" }}
-          >
-            <span style={isBest ? { background: "#E7F4EC", padding: "2px 6px", borderRadius: 4 } : isWorst ? { background: "#FCE8EA", padding: "2px 6px", borderRadius: 4 } : undefined}>
+          <td key={i} className="px-3 py-2.5 text-[12.5px] tabular-nums" style={{ color: isBest ? "#0A5C36" : "#111418" }}>
+            <span
+              className="inline-flex items-center gap-1"
+              style={isBest
+                ? { background: "#EAF5EF", padding: "3px 9px", borderRadius: 999, fontWeight: 700 }
+                : { fontWeight: 500 }}
+            >
+              {isBest && <span className="text-[9px]" style={{ color: "#0F8A4F" }}>●</span>}
               {content}
             </span>
           </td>
@@ -546,12 +542,11 @@ function TableRow({
 function SectionHeader({ label, colSpan }: { label: string; colSpan: number }) {
   return (
     <tr>
-      <td
-        colSpan={colSpan}
-        className="pb-1 pt-4 text-[9px] font-bold uppercase tracking-widest"
-        style={{ color: "#5B5F5C" }}
-      >
-        {label}
+      <td colSpan={colSpan} className="py-2.5" style={{ background: "#F3F0E8", borderBottom: "1px solid #EFEADF" }}>
+        <div className="sticky left-0 inline-flex items-center gap-2 pl-4 pr-4 text-[10px] font-bold uppercase tracking-[0.14em]" style={{ color: "#0A5C36" }}>
+          <span className="inline-block h-3 w-[3px] rounded-full" style={{ background: "#0F8A4F" }} />
+          {label}
+        </div>
       </td>
     </tr>
   );
@@ -705,51 +700,72 @@ export function TabInmuebles({
         </div>
       </div>
 
-      {/* Tabla comparativa — scroll horizontal */}
-      <div className="mt-6 overflow-x-auto">
-        <div className="min-w-[520px] overflow-hidden rounded-2xl" style={{ border: "0.5px solid #E5E0D5" }}>
-        <table className="w-full text-sm" style={{ background: "#FFFFFF" }}>
+      <ComparisonTable listings={listings} onRemove={(id) => setIds((prev) => prev.filter((x) => x !== id))} />
+    </>
+  );
+}
+
+// Tabla comparativa reutilizable (cualquier listing · mis listings). onRemove opcional:
+// con él, se muestran acciones Ver/Quitar por columna; sin él (mis listings), no —
+// porque el id de un propio es el hash del url, no resuelve /listing/$id, y la
+// selección se maneja arriba con las tarjetas.
+export function ComparisonTable({ listings, onRemove }: {
+  listings: ComparadorListing[];
+  onRemove?: (id: number) => void;
+}) {
+  const n = listings.length;
+  return (
+    <div className="mt-6 rounded-2xl" style={{ border: "1px solid #E7E2D6", background: "#FFFFFF", boxShadow: "0 18px 40px -16px rgba(17,20,24,.28), 0 3px 10px rgba(17,20,24,.06)" }}>
+      <div className="overflow-x-auto rounded-2xl">
+        <table className="w-full min-w-[520px] text-sm" style={{ background: "#FFFFFF" }}>
           <thead>
-            <tr style={{ borderBottom: "0.5px solid #E5E0D5" }}>
-              <th className="py-3 pl-4 pr-3 text-left align-bottom text-[10px] font-semibold uppercase tracking-widest text-[#8A8F8B]"
-                  style={{ minWidth: 120 }}>
-                Inmueble
+            <tr style={{ borderBottom: "1px solid #EFEADF" }}>
+              <th className="sticky left-0 z-[2] py-3 pl-4 pr-4 text-left align-middle" style={{ background: "#FBFAF6", boxShadow: "1px 0 0 0 #EFEADF", minWidth: 150 }}>
+                <div className="text-[13px] font-bold" style={{ color: "#111418" }}>Comparativa</div>
+                <div className="mt-0.5 text-[11px]" style={{ color: "#6E726E" }}>{n} inmueble{n !== 1 ? "s" : ""}</div>
+                <div className="mt-2 inline-flex items-center gap-1.5 text-[10px] font-semibold" style={{ color: "#0A5C36" }}>
+                  <span className="h-2 w-2 rounded-full" style={{ background: "#0F8A4F" }} /> Mejor valor
+                </div>
               </th>
               {listings.map((l) => (
-                <th key={l.id} className="px-2 pb-3 pt-3 text-left align-top font-normal" style={{ width: 168 }}>
-                  <div className="h-28 w-40 overflow-hidden rounded-xl" style={{ border: "0.5px solid #E5E0D5" }}>
-                    {l.foto_principal
-                      ? <img src={l.foto_principal} alt="" className="h-full w-full object-cover" />
-                      : <div className="flex h-full w-full items-center justify-center text-2xl text-white" style={{ background: "linear-gradient(135deg,#0F8A4F,#0A5C36)" }}>🏠</div>
-                    }
-                  </div>
-                  <div className="mt-2 w-40 text-[13px] font-bold text-[#111418]">
-                    {l.precio_cop ? formatCOP(l.precio_cop) : "—"}
-                  </div>
-                  <div className="w-40 truncate text-[10px] uppercase tracking-wide text-[#8A8F8B]">
-                    {(l.tipo_operacion ?? "")} · {(l.tipo_inmueble ?? "")}
-                  </div>
-                  <div className="mt-0.5 flex w-40 items-center gap-1 text-[10px] text-[#6E726E]">
-                    <MapPin className="h-2.5 w-2.5 shrink-0" />
-                    <span className="truncate">{l.barrio_nombre ?? "—"}</span>
-                  </div>
-                  <div className="mt-2 flex w-40 items-center gap-1.5">
-                    <Link
-                      to="/listing/$id"
-                      params={{ id: String(l.id) }}
-                      className="flex-1 rounded-lg py-1 text-center text-[10px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
-                      style={{ border: "0.5px solid #0F8A4F" }}
-                    >
-                      Ver →
-                    </Link>
-                    <button
-                      onClick={() => setIds((prev) => prev.filter((id) => id !== l.id))}
-                      aria-label="Quitar"
-                      className="rounded-lg px-2 py-1 text-[12px] leading-none text-[#6E726E] transition hover:text-[#CE1126]"
-                      style={{ border: "0.5px solid #E5E0D5" }}
-                    >
-                      ×
-                    </button>
+                <th key={l.id} className="px-1.5 pb-3 pt-3 text-left align-top font-normal" style={{ width: 176 }}>
+                  <div className="w-40 rounded-xl p-2" style={{ background: "#FBFAF6", border: "1px solid #EFEADF", boxShadow: "0 1px 2px rgba(17,20,24,.04)" }}>
+                    <div className="h-28 w-full overflow-hidden rounded-lg" style={{ border: "1px solid #E7E2D6" }}>
+                      {l.foto_principal
+                        ? <img src={l.foto_principal} alt="" className="h-full w-full object-cover" onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = "none"; }} />
+                        : <div className="flex h-full w-full items-center justify-center text-2xl text-white" style={{ background: "linear-gradient(135deg,#0F8A4F,#0A5C36)" }}>🏠</div>
+                      }
+                    </div>
+                    <div className="mt-2 text-[13px] font-bold tabular-nums" style={{ color: "#111418" }}>
+                      {l.precio_cop ? formatCOP(l.precio_cop) : "—"}
+                    </div>
+                    <div className="truncate text-[10px] uppercase tracking-wide" style={{ color: "#8A8F8B" }}>
+                      {(l.tipo_operacion ?? "")} · {(l.tipo_inmueble ?? "")}
+                    </div>
+                    <div className="mt-0.5 flex items-center gap-1 text-[10px]" style={{ color: "#6E726E" }}>
+                      <MapPin className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">{l.barrio_nombre ?? "—"}</span>
+                    </div>
+                    {onRemove && (
+                      <div className="mt-2 flex items-center gap-1.5">
+                        <Link
+                          to="/listing/$id"
+                          params={{ id: String(l.id) }}
+                          className="flex-1 rounded-lg py-1 text-center text-[10px] font-semibold text-[#0F8A4F] transition hover:bg-[#E7F4EC]"
+                          style={{ border: "1px solid #0F8A4F" }}
+                        >
+                          Ver →
+                        </Link>
+                        <button
+                          onClick={() => onRemove(l.id)}
+                          aria-label="Quitar"
+                          className="rounded-lg px-2 py-1 text-[12px] leading-none text-[#6E726E] transition hover:text-[#CE1126]"
+                          style={{ border: "1px solid #E7E2D6" }}
+                        >
+                          ×
+                        </button>
+                      </div>
+                    )}
                   </div>
                 </th>
               ))}
@@ -835,9 +851,8 @@ export function TabInmuebles({
             />
           </tbody>
         </table>
-        </div>
       </div>
-    </>
+    </div>
   );
 }
 
@@ -991,6 +1006,14 @@ function Row({
       ))}
     </tr>
   );
+}
+
+// Renta corta (Airbnb) gateada por POT: si el barrio no es apto (residencial /
+// baja mixtura en Medellín) el score corto no aplica — se muestra "No permitido".
+function fmtCorto(b: ApiBarrio): React.ReactNode {
+  if (b.scores.apto_renta_corta === false)
+    return <span className="text-[11px] font-semibold" style={{ color: "#CE1126" }}>✗ No permitido (POT)</span>;
+  return fmtScore(b.scores.corto, b.scores.cat_corto);
 }
 
 function fmtScore(score: number | null, _cat?: string | null): React.ReactNode {

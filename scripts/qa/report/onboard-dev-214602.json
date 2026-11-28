@@ -1,0 +1,26 @@
+{
+  "base": "https://web-medellin-social-dev.up.railway.app",
+  "email": "qa.form.dev-214602@example.com",
+  "steps": [
+    {
+      "step": "1. registro (form)",
+      "ok": true,
+      "note": "POST /auth/register → 201"
+    },
+    {
+      "step": "2. login (form)",
+      "ok": true,
+      "note": "POST /auth/login → 200, sesión=true"
+    },
+    {
+      "step": "3. form agente",
+      "ok": false,
+      "note": "POST /agente/registro → sin resp (medellín soci\nal\ntu ciudad · tu barrio · tu historia\nmiércoles, 25 de noviembre )"
+    },
+    {
+      "step": "4. dashboard como nuevo",
+      "ok": true,
+      "note": "dashboard renderiza (sin datos de agente aún)"
+    }
+  ]
+}

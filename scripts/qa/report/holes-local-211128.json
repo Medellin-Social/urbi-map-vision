@@ -1,0 +1,293 @@
+{
+  "base": "http://localhost:5173",
+  "api": "http://localhost:8011/api/v1",
+  "counts": {
+    "minor": 14,
+    "pass": 22,
+    "major": 2,
+    "info": 1,
+    "blocker": 1
+  },
+  "holes": [
+    {
+      "track": "B·flujo",
+      "step": "login",
+      "severity": "blocker",
+      "note": "login falló (sin resp) — Track B no puede continuar",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "login sin verificar",
+      "severity": "major",
+      "note": "login devolvió sin respuesta (esperado 403 o 200)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "/realtor/dashboard",
+      "severity": "major",
+      "note": "acceso sin redirección a /realtor/dashboard — ¿dashboard expuesto a no-agente?",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 403 ()",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: [GSI_LOGGER]: The given origin is not allowed for the given client ID.",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 403 ()",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: [GSI_LOGGER]: The given origin is not allowed for the given client ID.",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 401 (Unauthorized)",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: Failed to load resource: the server responded with a status of 403 ()",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "console",
+      "severity": "minor",
+      "note": "console.error: [GSI_LOGGER]: The given origin is not allowed for the given client ID.",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "/agentes/registro",
+      "severity": "info",
+      "note": "queda en /agentes/registro — revisar si debería exigir agente aprobado",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "registro",
+      "severity": "pass",
+      "note": "201 cuenta creada (sin sesión, debe verificar correo)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "token",
+      "severity": "pass",
+      "note": "login API 200",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/me",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/listings",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/agenda",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/desempeno",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/embudo",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/pool",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/asignados",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/comparables",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/disponibilidad",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/me",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/listings",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/agenda",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/desempeno",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/embudo",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/pool",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/asignados",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/comparables",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/disponibilidad",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "comparables",
+      "severity": "pass",
+      "note": "sin leak de matrícula/agente/dirección",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "POST /visitas",
+      "severity": "pass",
+      "note": "422 valida body vacío",
+      "evidence": null
+    }
+  ]
+}

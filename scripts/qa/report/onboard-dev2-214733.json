@@ -1,0 +1,26 @@
+{
+  "base": "https://web-medellin-social-dev.up.railway.app",
+  "email": "qa.form.dev2-214733@example.com",
+  "steps": [
+    {
+      "step": "1. registro (form)",
+      "ok": true,
+      "note": "POST /auth/register → 201"
+    },
+    {
+      "step": "2. login (form)",
+      "ok": true,
+      "note": "POST /auth/login → 200, sesión=true"
+    },
+    {
+      "step": "3. form agente",
+      "ok": false,
+      "note": "MURO: POST /agente/registro → 403 'verifica tu correo' — un realtor NO puede completar el onboarding por UI sin verificar email (y no hay link en el flujo)"
+    },
+    {
+      "step": "4. dashboard como nuevo",
+      "ok": true,
+      "note": "dashboard renderiza (sin datos de agente aún)"
+    }
+  ]
+}

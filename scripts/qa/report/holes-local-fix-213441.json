@@ -1,0 +1,277 @@
+{
+  "base": "http://localhost:5173",
+  "api": "http://localhost:8011/api/v1",
+  "counts": {
+    "major": 8,
+    "pass": 29,
+    "info": 1
+  },
+  "holes": [
+    {
+      "track": "A·guards",
+      "step": "/realtor/dashboard",
+      "severity": "major",
+      "note": "HUECO: /realtor/dashboard accesible SIN sesión (quedó en /realtor/dashboard, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·guards",
+      "step": "/agentes/registro",
+      "severity": "major",
+      "note": "HUECO: /agentes/registro accesible SIN sesión (quedó en /agentes/registro, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·guards",
+      "step": "/perfil",
+      "severity": "major",
+      "note": "HUECO: /perfil accesible SIN sesión (quedó en /perfil, sin user) — guard no redirige",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "pageerror",
+      "severity": "major",
+      "note": "Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a ",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "pageerror",
+      "severity": "major",
+      "note": "Error: Hydration failed because the server rendered HTML didn't match the client. As a result this tree will be regenerated on the client. This can happen if a ",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "sección: Herramientas",
+      "severity": "major",
+      "note": "excepción no manejada: TimeoutError: locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: /Herramientas/i }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button role=\"tab\" tabindex=",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "sección: Resultados",
+      "severity": "major",
+      "note": "excepción no manejada: TimeoutError: locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for getByRole('tab', { name: /Resultados/i }).first()\u001b[22m\n\u001b[2m    - locator resolved to <button role=\"tab\" tabindex=\"-",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "visitas/agenda",
+      "severity": "major",
+      "note": "excepción no manejada: TimeoutError: locator.click: Timeout 12000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('button').filter({ hasText: /^Visitas\\b/ }).last()\u001b[22m\n\u001b[2m    - locator resolved to <button type=\"button\"",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "login sin verificar",
+      "severity": "info",
+      "note": "cuenta SIN verificar correo entra igual (REQUIRE_EMAIL_VERIFICATION=false, config by-design hasta que el envío de correo sea confiable) — el flujo 'verifica tu correo' no bloquea hoy",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "registro",
+      "severity": "pass",
+      "note": "201 cuenta creada (sin sesión, debe verificar correo)",
+      "evidence": null
+    },
+    {
+      "track": "A·onboarding",
+      "step": "agentes/registro",
+      "severity": "pass",
+      "note": "usuario normal llega al form de registro de agente (/agentes/registro)",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "login",
+      "severity": "pass",
+      "note": "login 200 como realtor activo",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "dashboard",
+      "severity": "pass",
+      "note": "dashboard cargó",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "sección Bandeja",
+      "severity": "pass",
+      "note": "renderiza",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "sección Mis listings",
+      "severity": "pass",
+      "note": "renderiza",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "editor ficha",
+      "severity": "pass",
+      "note": "modal de edición abre",
+      "evidence": null
+    },
+    {
+      "track": "B·flujo",
+      "step": "herramientas",
+      "severity": "pass",
+      "note": "herramientas renderiza",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "token",
+      "severity": "pass",
+      "note": "login API 200",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/me",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/listings",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/agenda",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/desempeno",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/embudo",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/pool",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/asignados",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/comparables",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/disponibilidad",
+      "severity": "pass",
+      "note": "401 sin token (gate OK)",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/me",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/listings",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/agenda",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/desempeno",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/embudo",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/pool",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/asignados",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/comparables",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "/realtor/disponibilidad",
+      "severity": "pass",
+      "note": "200 con token",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "comparables",
+      "severity": "pass",
+      "note": "sin leak de matrícula/agente/dirección",
+      "evidence": null
+    },
+    {
+      "track": "C·api",
+      "step": "POST /visitas",
+      "severity": "pass",
+      "note": "422 valida body vacío",
+      "evidence": null
+    }
+  ]
+}

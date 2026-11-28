@@ -10,7 +10,7 @@ from api.utils import ghl_client
 from api.limiter import limiter
 from api.routers.admin import _audit, _verify_admin_password, require_admin
 from api.services.agent_service import (
-    AgentError, aprobar_agente, rechazar_agente, suspender_agente,
+    AgentError, aprobar_agente, rechazar_agente, reactivar_agente, suspender_agente,
 )
 
 router = APIRouter()
@@ -98,6 +98,21 @@ async def suspender(request: Request, agent_id: str, req: MotivoConPasswordReque
     await _audit(pool, admin, "suspender_agente", "agent", agent_id, {"motivo": req.motivo}, request)
     ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
     return {"id": agent_id, "estado": "inactivo"}
+
+
+@router.post("/agentes/{agent_id}/reactivar")
+@limiter.limit("30/minute")
+async def reactivar(request: Request, agent_id: str, req: AprobarRequest = Body(...), admin: dict = Depends(require_admin), pool=Depends(get_pool)):
+    """inactivo | rechazado → activo. Única vía de vuelta a 'activo' desde esos estados."""
+    await _verify_admin_password(pool, admin, req.password)
+    agent = await _cargar_agent(agent_id, pool)
+    try:
+        await reactivar_agente(agent, admin["email"], pool)
+    except AgentError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    await _audit(pool, admin, "reactivar_agente", "agent", agent_id, None, request)
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
+    return {"id": agent_id, "estado": "activo"}
 
 
 # ── Zonas del realtor (asignar/quitar patrocinio comuna/barrio) ───────────────

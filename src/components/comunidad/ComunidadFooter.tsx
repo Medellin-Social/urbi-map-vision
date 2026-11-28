@@ -83,7 +83,12 @@ export function ComunidadFooter({ lang }: { lang: 'es' | 'en' }) {
         flexWrap: 'wrap', gap: 10, opacity: .8,
       }}>
         <span>© 2026 Medellín Social · {t('una plataforma comunitaria', 'a community platform')}</span>
-        <span>medellin.social</span>
+        <span style={{ display: 'flex', flexWrap: 'wrap', gap: 14 }}>
+          <a href="/terminos" className="footer-link" style={{ color: '#C9D9CE', textDecoration: 'none' }}>{t('Términos', 'Terms')}</a>
+          <a href="/politica-privacidad" className="footer-link" style={{ color: '#C9D9CE', textDecoration: 'none' }}>{t('Privacidad', 'Privacy')}</a>
+          <a href="/politica-cookies" className="footer-link" style={{ color: '#C9D9CE', textDecoration: 'none' }}>Cookies</a>
+          <span>medellin.social</span>
+        </span>
       </div>
     </footer>
   )

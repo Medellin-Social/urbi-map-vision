@@ -181,10 +181,11 @@ async def test_webhook_auth_matrix(client, monkeypatch):
     ok = {"X-Webhook-Secret": "s3cret-value"}
     assert (await client.post(url, content=b"not json", headers=ok)).status_code == 400
     assert (await client.post(url, json={"object_type": "zzz"}, headers=ok)).status_code == 400
-    # valid auth reaches the handler, which is a documented stub -> 501
-    assert (await client.post(url, json={"object_type": "visita"}, headers=ok)).status_code == 501
+    # valid auth reaches the handler; deal/referidor siguen como stub documentado
+    # ("lo de pagos no es necesario") -> 501. (visita/listing/agent ya implementados.)
+    assert (await client.post(url, json={"object_type": "deal"}, headers=ok)).status_code == 501
     bearer = {"Authorization": "Bearer s3cret-value"}
-    assert (await client.post(url, json={"object_type": "visita"}, headers=bearer)).status_code == 501
+    assert (await client.post(url, json={"object_type": "deal"}, headers=bearer)).status_code == 501
 
 
 async def test_webhook_authenticates_before_reading_body(client, monkeypatch):

@@ -27,6 +27,7 @@ export const API_ENDPOINTS = {
   // Barrios
   barrios: `${API_BASE_URL}/barrios`,
   barrio: (id: number) => `${API_BASE_URL}/barrios/${id}`,
+  barrioEstimador: (id: number, qs: string) => `${API_BASE_URL}/barrios/${id}/estimador?${qs}`,
   barrioMercadoSerie: (id: number) => `${API_BASE_URL}/barrios/${id}/mercado-serie`,
   barrioInfo: (id: number) => `${API_BASE_URL}/barrios/${id}/info`,
   comparar: `${API_BASE_URL}/barrios/comparar`,
@@ -53,6 +54,8 @@ export const API_ENDPOINTS = {
   visitas: `${API_BASE_URL}/visitas`,
   realtorPreferidoSiguiente: (zonaNivel: string, zonaCodigo: string | number) =>
     `${API_BASE_URL}/realtor-preferido/siguiente?zona_nivel=${zonaNivel}&zona_codigo=${encodeURIComponent(String(zonaCodigo))}`,
+  realtorsZona: (zonaNivel: string, zonaCodigo: string | number) =>
+    `${API_BASE_URL}/realtor-preferido/zona-realtors?zona_nivel=${zonaNivel}&zona_codigo=${encodeURIComponent(String(zonaCodigo))}`,
   track: `${API_BASE_URL}/track`,
   trackImpressions: `${API_BASE_URL}/track/impressions`,
 
@@ -120,7 +123,7 @@ export const API_ENDPOINTS = {
   zonasConfirmarSimulado: `${API_BASE_URL}/zonas/confirmar-simulado`,
 
   // Listings propios
-  listingsPropios: `${API_BASE_URL}/listings-propios`,
+  listingsPropios: `${API_BASE_URL}/listings-propios/`,
   listingsPropiosMe: `${API_BASE_URL}/listings-propios/me`,
   listingsPropiosMis: `${API_BASE_URL}/listings-propios/mis-listings`,
   listingsPropiosById: (id: number) => `${API_BASE_URL}/listings-propios/${id}`,

@@ -144,8 +144,8 @@ export function Stars({ value, size = 14 }: { value: number; size?: number }) {
           key={i}
           width={size}
           height={size}
-          fill={i <= Math.round(value) ? K.teal : "none"}
-          stroke={i <= Math.round(value) ? K.teal : "#C9C4B8"}
+          fill={i <= Math.round(value) ? K.amarillo : "none"}
+          stroke={i <= Math.round(value) ? K.amber : "#C9C4B8"}
           strokeWidth={1.5}
         />
       ))}
@@ -386,7 +386,7 @@ const ESP_LABEL: Record<string, string> = {
 // Pura (testeable): el directorio la usa y los tests fijan el contrato filtros→API.
 export type AgentesFiltros = {
   zona?: string; comuna?: string; nombre?: string; intencion?: string; tipo?: string;
-  idiomas?: string; especialidad?: string; orden?: string; rating_min?: number;
+  tipo_agente?: string; idiomas?: string; especialidad?: string; orden?: string; rating_min?: number;
 };
 export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: number; pageSize: number }): string {
   const p = new URLSearchParams();
@@ -396,6 +396,7 @@ export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: num
   if (f.nombre) p.set("nombre", f.nombre);
   if (f.intencion) p.set("intencion", f.intencion);
   if (f.tipo) p.set("tipo", f.tipo);
+  if (f.tipo_agente) p.set("tipo_agente", f.tipo_agente);
   if (f.idiomas) p.set("idiomas", f.idiomas);
   if (f.especialidad) p.set("especialidad", f.especialidad);
   if (f.rating_min) p.set("rating_min", String(f.rating_min));
@@ -408,7 +409,7 @@ export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: num
 function MetricInline({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex flex-col">
-      <span className="text-sm font-bold leading-tight" style={{ color: K.tealDeep, fontFamily: K.serif }}>{value}</span>
+      <span className="text-[15px] font-bold leading-tight" style={{ color: K.ink, fontFamily: K.serif }}>{value}</span>
       <span className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: K.muted }}>{label}</span>
     </div>
   );
@@ -427,18 +428,30 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
   ].filter(Boolean) as { label: string; value: string }[];
 
   return (
-    <div className="rounded-2xl border-l-4 p-4 transition hover:-translate-y-px hover:shadow-md sm:p-5"
-      style={{ borderLeftColor: a.destacado ? K.tealDeep : K.teal, borderTop: `1px solid ${K.line}`, borderRight: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, background: "#FFFFFF", boxShadow: "0 1px 3px rgba(17,20,24,0.05)" }}>
+    <div
+      data-tour="agente-card"
+      className="group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 sm:p-6"
+      style={{
+        background: "#FFFFFF",
+        border: `1px solid ${a.destacado ? "rgba(17,20,24,0.18)" : K.line}`,
+        boxShadow: "0 1px 2px rgba(17,20,24,0.04)",
+      }}
+      onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 8px 24px -8px rgba(17,20,24,0.16)")}
+      onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 1px 2px rgba(17,20,24,0.04)")}
+    >
       {a.destacado && (
-        <div className="mb-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: K.tealDeep, color: "#FFFFFF" }}>
-          <Star width={10} height={10} fill="#FFFFFF" stroke="#FFFFFF" /> Destacado
+        <div className="mb-3 inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+          style={{ background: "rgba(252,209,22,0.16)", color: K.amber }}>
+          <Star width={10} height={10} fill={K.amarillo} stroke={K.amber} /> Destacado
         </div>
       )}
-      <div className="grid grid-cols-[auto_1fr] gap-4 sm:grid-cols-[auto_1fr_auto]">
+      <div className="grid grid-cols-[auto_1fr] gap-4 sm:grid-cols-[auto_1fr_auto] sm:gap-5">
+        {/* Avatar circular, neutro — foto de persona, no bloque de marca */}
         <Link to="/agentes/$id" params={{ id: perfilHref(a) }} aria-label={`Ver perfil de ${a.nombre}`}
-          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-2xl transition hover:opacity-90 sm:h-24 sm:w-24" style={{ background: K.tealLight }}>
+          className="grid h-20 w-20 shrink-0 place-items-center overflow-hidden rounded-full transition hover:opacity-90 sm:h-[88px] sm:w-[88px]"
+          style={{ background: K.surface, boxShadow: `inset 0 0 0 1px ${K.line}` }}>
           {a.foto_url ? <img src={a.foto_url} alt={a.nombre} loading="lazy" className="h-full w-full object-cover" />
-            : <span className="text-xl font-bold sm:text-2xl" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>}
+            : <span className="text-xl font-bold sm:text-2xl" style={{ color: K.ink, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>}
         </Link>
 
         <div className="min-w-0">
@@ -446,56 +459,61 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
             <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="text-lg font-bold leading-tight tracking-tight transition hover:opacity-70 sm:text-xl" style={{ color: K.ink, fontFamily: K.serif }}>
               <Name>{a.nombre}</Name>
             </Link>
-            {a.verificado && <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold" style={{ background: K.tealLight, color: K.tealDeep }}><ShieldCheck className="h-3 w-3" /> Verificado</span>}
+            {a.verificado && (
+              <span data-tour="agente-verificado" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+                style={{ border: `1px solid ${K.line}`, color: K.ink }} title="Información del agente verificada">
+                <ShieldCheck className="h-3 w-3" style={{ color: K.muted }} /> Verificado
+              </span>
+            )}
           </div>
 
           {(a.tipos.length > 0 || a.preferente.length > 0) && (
-            <AgenteTipoBadges tipos={a.tipos} preferente={a.preferente} className="mt-1" linked />
+            <AgenteTipoBadges tipos={a.tipos} preferente={a.preferente} className="mt-1.5" linked />
           )}
 
           {a.rating_promedio != null ? (
-            <div className="mt-0.5 flex items-center gap-1.5">
+            <div data-tour="agente-rating" className="mt-1 flex items-center gap-1.5">
               <Stars value={a.rating_promedio} /><span className="text-xs font-semibold" style={{ color: K.ink }}>{a.rating_promedio.toFixed(1)}</span>
               <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>({a.n_resenas})</span>
             </div>
-          ) : <div className="mt-0.5 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>}
+          ) : <div className="mt-1 text-xs" style={{ color: K.muted }}>Sin reseñas aún</div>}
 
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px]" style={{ color: K.muted }}>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[11px]" style={{ color: K.muted }}>
             {a.agencia_nombre && (
-              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: a.agencia_verificada ? K.tealDeep : K.muted }}>
-                {a.agencia_logo ? <img src={a.agencia_logo} alt="" className="h-3.5 w-3.5 rounded object-contain" /> : a.agencia_verificada ? <ShieldCheck className="h-3 w-3" /> : null}
+              <span className="inline-flex items-center gap-1 font-semibold" style={{ color: K.ink }}>
+                {a.agencia_logo ? <img src={a.agencia_logo} alt="" className="h-3.5 w-3.5 rounded object-contain" /> : a.agencia_verificada ? <ShieldCheck className="h-3 w-3" style={{ color: K.muted }} /> : null}
                 {a.agencia_nombre}
               </span>
             )}
             {a.idiomas.length > 0 && <span className="inline-flex items-center gap-1"><Globe2 className="h-3 w-3" /> {a.idiomas.join(", ")}</span>}
           </div>
 
-          {!compact && a.bio_corta && <p className="mt-1.5 line-clamp-2 text-[13px] leading-snug" style={{ color: K.muted }}>{a.bio_corta}</p>}
+          {!compact && a.bio_corta && <p className="mt-2 line-clamp-2 text-[13px] leading-snug" style={{ color: K.muted }}>{a.bio_corta}</p>}
 
           {(zonasTop.length > 0 || a.especialidades.length > 0) && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
+            <div data-tour="agente-zonas" className="mt-2.5 flex flex-wrap gap-1.5">
               {a.exclusivo && zonasTop[0] && (
-                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold text-white" style={{ background: K.tealDeep }}>
-                  <Star width={10} height={10} fill="#FFFFFF" stroke="#FFFFFF" /> Exclusivo en {zonasTop[0]}
+                <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ border: `1px solid rgba(17,20,24,0.2)`, color: K.ink }}>
+                  <Star width={10} height={10} fill={K.amarillo} stroke={K.amber} /> Exclusivo en {zonasTop[0]}
                 </span>
               )}
-              {zonasTop.map((z) => <span key={z} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}><MapPin className="h-3 w-3" />{z}</span>)}
-              {zonasResto > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.muted }}>+{zonasResto}</span>}
-              {!compact && a.especialidades.slice(0, 3).map((e) => <span key={e} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.tertiary }}>{ESP_LABEL[e] ?? e}</span>)}
+              {zonasTop.map((z) => <span key={z} className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.muted, border: `1px solid ${K.line}` }}><MapPin className="h-3 w-3" />{z}</span>)}
+              {zonasResto > 0 && <span className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.surface, color: K.tertiary }}>+{zonasResto}</span>}
+              {!compact && a.especialidades.slice(0, 3).map((e) => <span key={e} className="rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ background: K.faint, color: K.tertiary }}>{ESP_LABEL[e] ?? e}</span>)}
             </div>
           )}
 
           {!compact && metrics.length > 0 && (
-            <div className="mt-3 flex flex-wrap gap-x-6 gap-y-2">{metrics.map((m) => <MetricInline key={m.label} {...m} />)}</div>
+            <div className="mt-3.5 flex flex-wrap gap-x-7 gap-y-2 border-t pt-3" style={{ borderColor: K.line }}>{metrics.map((m) => <MetricInline key={m.label} {...m} />)}</div>
           )}
         </div>
 
-        <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-40 sm:justify-center">
-          <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="rounded-xl px-5 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}>Ver perfil</Link>
+        <div data-tour="agente-contacto" className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-40 sm:justify-center">
+          <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="rounded-xl px-5 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.ink }}>Ver perfil</Link>
           {a.telefono && (
             <div className="grid grid-cols-2 gap-2">
-              <a href={waFromTel(a.telefono, a.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><MessageCircle className="h-3.5 w-3.5" /> WA</a>
-              <a href={`tel:${a.telefono}`} className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-3.5 w-3.5" /> Llamar</a>
+              <a href={waFromTel(a.telefono, a.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><MessageCircle className="h-3.5 w-3.5" style={{ color: K.green }} /> WA</a>
+              <a href={`tel:${a.telefono}`} className="inline-flex items-center justify-center gap-1 rounded-xl px-2 py-2 text-xs font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-3.5 w-3.5" style={{ color: K.muted }} /> Llamar</a>
             </div>
           )}
         </div>

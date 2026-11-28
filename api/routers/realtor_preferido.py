@@ -4,8 +4,11 @@ Público: precios, ocupación de una zona, próximo realtor de la rotación.
 Realtor: checkout (link de pago Stripe en GHL) y confirmación simulada (solo dev).
 Admin: asignar/liberar slots (incluye los 'gratis' del arranque) y ver cobertura.
 El slot de pago se activa por webhook (ghl_webhook: object_type "realtor_preferido_slot").
+
+NO usar `from __future__ import annotations`: con `@limiter.limit` + params tipados
+(zona_nivel: Nivel) FastAPI no resuelve el ForwardRef y toda GET da 500. (Ver memoria
+fastapi+slowapi body bug.)
 """
-from __future__ import annotations
 
 import os
 from typing import Literal, Optional
@@ -65,11 +68,28 @@ async def zona(request: Request, zona_nivel: Nivel, zona_codigo: str = Query(max
 @router.get("/siguiente")
 @limiter.limit("120/minute")
 async def siguiente(request: Request, zona_nivel: Nivel, zona_codigo: str = Query(max_length=40), pool=Depends(get_pool)):
-    """Realtor que toca ahora en la rotación de la zona (avanza el puntero)."""
+    """Realtor que toca ahora en la rotación de la zona (avanza el puntero).
+    Regla barrio→comuna (Ken): si el barrio no tiene preferidos, cae a su comuna."""
     async with pool.acquire() as conn:
         async with conn.transaction():
             r = await svc.siguiente_realtor(conn, zona_nivel, zona_codigo)
+            if r is None and zona_nivel == "barrio" and zona_codigo.isdigit():
+                cd = await conn.fetchval(
+                    "SELECT cd_comuna FROM analytics.barrios_cd WHERE barrio_id = $1", int(zona_codigo)
+                )
+                if cd:
+                    r = await svc.siguiente_realtor(conn, "comuna", str(cd))
     return {"realtor": dict(r) if r else None}
+
+
+@router.get("/zona-realtors")
+@limiter.limit("120/minute")
+async def zona_realtors(request: Request, zona_nivel: Nivel, zona_codigo: str = Query(max_length=40), pool=Depends(get_pool)):
+    """Todos los preferidos de la zona (solo lectura, NO avanza la rotación).
+    El carrusel del mapa los va mostrando deslizando uno por uno cada pocos segundos."""
+    async with pool.acquire() as conn:
+        rows = await svc.realtors_de_zona(conn, zona_nivel, zona_codigo)
+    return {"realtors": [dict(r) for r in rows]}
 
 
 class CheckoutIn(BaseModel):
@@ -177,8 +197,14 @@ async def zonas(request: Request, pool=Depends(get_pool)):
     """Selector de zona de la landing: barrios y comunas con nivel, precio y cupos de pago."""
     from api.routers.admin import _MUNICIPIO_A_PSEUDO_COMUNA
     async with pool.acquire() as conn:
-        precios = {(r["zona_nivel"], r["nivel"]): float(r["precio_mensual"])
-                   for r in await conn.fetch("SELECT zona_nivel, nivel, precio_mensual FROM realtor_preferido_precio")}
+        # moneda la agregó 0138 (USD para zonas reales, COP para ejemplos); si el env
+        # está driftado y no existe la columna, caemos a COP sin romper el selector.
+        try:
+            prows = await conn.fetch("SELECT zona_nivel, nivel, precio_mensual, COALESCE(moneda, 'COP') AS moneda FROM realtor_preferido_precio")
+        except Exception:
+            log.warning("zonas: columna moneda ausente (0138 no aplicada), fallback COP", exc_info=True)
+            prows = await conn.fetch("SELECT zona_nivel, nivel, precio_mensual, 'COP' AS moneda FROM realtor_preferido_precio")
+        precios = {(r["zona_nivel"], r["nivel"]): (float(r["precio_mensual"]), r["moneda"]) for r in prows}
         ocup = {(r["zona_nivel"], r["zona_codigo"]): r["pagos"] for r in await conn.fetch(
             "SELECT zona_nivel, zona_codigo, COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos "
             "FROM realtor_preferido_slot WHERE estado='activo' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) GROUP BY 1,2")}
@@ -199,8 +225,9 @@ async def zonas(request: Request, pool=Depends(get_pool)):
     def fila(nivel_z, codigo, nombre, extra=None):
         n = niv.get((nivel_z, codigo), "C")
         cap = svc.CAPACIDAD[nivel_z]
+        precio, moneda = precios.get((nivel_z, n), (0.0, "COP"))
         d = {"zona_nivel": nivel_z, "zona_codigo": codigo, "nombre": nombre, "nivel": n,
-             "precio_mensual": precios.get((nivel_z, n), 0.0), "cupos": max(cap - ocup.get((nivel_z, codigo), 0), 0)}
+             "precio_mensual": precio, "moneda": moneda, "cupos": max(cap - ocup.get((nivel_z, codigo), 0), 0)}
         if extra:
             d.update(extra)
         return d

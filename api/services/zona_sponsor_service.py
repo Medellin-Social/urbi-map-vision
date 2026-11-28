@@ -112,10 +112,29 @@ async def asignar_zona(conn, agent_id: str, zona_nivel: str, zona_codigo: str,
     return sid
 
 
-async def procesar_pago_zona(pool, agent_id: str, zona_nivel: str, zona_codigo: str, meses: int = 1) -> str:
+async def procesar_pago_zona(pool, agent_id: str, zona_nivel: str, zona_codigo: str,
+                             meses: int = 1, pago_ref: str | None = None) -> str:
     """Llamado por el webhook de pago APROBADO (o el confirmador simulado en dev).
     Punto único donde una zona se asigna tras pago. NUNCA asignar desde el
-    redirect de 'éxito' del front (falsificable)."""
+    redirect de 'éxito' del front (falsificable).
+
+    Idempotente por pago_ref (ledger sponsorship_pago): un reenvío del webhook NO
+    re-extiende la zona. Sin pago_ref (confirmador dev) mantiene el comportamiento
+    previo. Devuelve el id del sponsorship."""
     async with pool.acquire() as conn:
         async with conn.transaction():
-            return await asignar_zona(conn, agent_id, zona_nivel, zona_codigo, meses)
+            if pago_ref and pago_ref != "simulado":
+                nuevo = await conn.fetchval(
+                    "INSERT INTO sponsorship_pago (pago_ref, agent_id, zona_nivel, zona_codigo) "
+                    "VALUES ($1,$2,$3,$4) ON CONFLICT (pago_ref) DO NOTHING RETURNING 1",
+                    pago_ref, agent_id, zona_nivel, zona_codigo)
+                if not nuevo:  # ya procesado → devuelve el sponsorship vigente, sin re-extender
+                    return await conn.fetchval(
+                        "SELECT id::text FROM sponsorship WHERE zona_nivel = $1 AND zona_codigo = $2 "
+                        "AND estado = 'activa' ORDER BY fecha_fin DESC LIMIT 1",
+                        zona_nivel, zona_codigo)
+            sid = await asignar_zona(conn, agent_id, zona_nivel, zona_codigo, meses)
+            if pago_ref and pago_ref != "simulado":
+                await conn.execute(
+                    "UPDATE sponsorship_pago SET sponsorship_id = $1 WHERE pago_ref = $2", sid, pago_ref)
+            return sid

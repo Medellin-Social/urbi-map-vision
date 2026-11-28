@@ -13,6 +13,10 @@ export const fmt = (n: number | null | undefined) =>
   n == null ? "—" : Math.abs(n) >= 1000 ? Math.round(n).toLocaleString("es-CO") : String(n);
 export const fmtCOP = (n: number | null | undefined) =>
   n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}MM` : n >= 1e6 ? `$${(n / 1e6).toFixed(0)}M` : `$${Math.round(n).toLocaleString("es-CO")}`;
+// Un decimal en el tramo de millones — para métricas densas (precio/m², arriendo) donde
+// valores cercanos (4.1M vs 4.8M) colapsarían a "$4M / $5M" con fmtCOP y se verían iguales.
+export const fmtCOPd = (n: number | null | undefined) =>
+  n == null ? "—" : n >= 1e9 ? `$${(n / 1e9).toFixed(2)}MM` : n >= 1e6 ? `$${(n / 1e6).toFixed(1)}M` : `$${Math.round(n).toLocaleString("es-CO")}`;
 export const pct1 = (v: number | null | undefined, mult = 1) =>
   v == null ? "—" : `${(v * mult).toFixed(1)}%`;
 
@@ -68,11 +72,11 @@ export function Segmented<T extends string>({ value, onChange, options }: {
   value: T; onChange: (v: T) => void; options: { v: T; label: string }[];
 }) {
   return (
-    <div className="inline-flex rounded-xl p-0.5" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
+    <div className="inline-flex rounded-xl p-1" style={{ background: C.soft, border: `1px solid ${C.line}` }}>
       {options.map((o) => (
         <button key={o.v} onClick={() => onChange(o.v)}
-          className="rounded-lg px-3 py-1.5 text-[12px] font-semibold transition"
-          style={value === o.v ? { background: C.card, color: C.ink, boxShadow: "0 1px 2px rgba(0,0,0,0.06)" } : { color: C.muted }}>
+          className="rounded-lg px-4 py-2 text-[12px] font-semibold transition"
+          style={value === o.v ? { background: C.card, color: C.ink, boxShadow: "0 2px 6px -1px rgba(17,20,24,0.12)" } : { color: C.muted }}>
           {o.label}
         </button>
       ))}

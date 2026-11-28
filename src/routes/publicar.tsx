@@ -11,6 +11,7 @@ import { apiFetch, getToken, authHeaders, authCredentials } from "@/lib/apiClien
 import { auth } from "@/lib/auth";
 import { MAPBOX_TOKEN } from "@/lib/mapboxToken";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
+import { BarrioEstimador } from "@/components/BarrioEstimador";
 import { K as TOKENS } from "@/design/tokens";
 
 export const Route = createFileRoute("/publicar")({
@@ -2307,6 +2308,12 @@ function PublicarPage() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Estimador de precio por barrio: debajo del formulario (no dentro), disponible
+            en todos los pasos. Lleva su propio toggle venta/arriendo. */}
+        <div style={{ marginTop: 20 }}>
+          <BarrioEstimador defaultM2={form.area_m2} />
         </div>
         </div>{/* /columna formulario */}
 

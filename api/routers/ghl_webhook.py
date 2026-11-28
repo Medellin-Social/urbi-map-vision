@@ -1,4 +1,22 @@
-"""GHL webhook receiver — skeleton only, esperando contrato de Talal.
+"""GHL webhook receiver.
+
+Regla de simetría: cada entrada es la INVERSA de una salida que ya mandamos.
+Implementados: evento, tienda, listing, agent, visita (+ los 3 handlers de pago:
+agent_program, sponsorship, realtor_slot). listing/evento/tienda/agent usan nombres
+de campo NUESTROS (custom objects + Contact estándar); visita usa la API nativa de
+Calendars/Appointments de GHL — su shape (status/startTime/endpoint) está ASUMIDO
+de la doc pública, pendiente de confirmar contra un appointment real (ver marcador
+ponytail en ghl_client.py y _upsert_visita_from_ghl).
+
+referidor: entra SOLO el estado de la aplicación (aprobado/rechazado) — la
+comisión/pago queda fuera por decisión ("lo de pagos no es necesario").
+
+Sigue en 501 a propósito (pagos, excluido):
+  - deal: convenio/venta con comisión → es pago; además no emitimos nada
+    (push_deal_to_ghl es NotImplementedError) → nada que recibir.
+El pago del agente SÍ se recibe, pero por su handler propio (`agent_program`,
+`sponsorship`, `realtor_slot`): status de que pagó + qué pagó → agent_program_pago
++ agent.registro_pagado_at/cert_plan. Eso cubre "verificar que el agente pagó".
 
 Dirección por entidad:
   - listing, deal: bidireccional (confirmado 2026-08-27) -> este router los
@@ -55,11 +73,108 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 
+# Reverse de ghl_client._listing_campos_to_properties (mismos nombres de campo,
+# §16 PDF) + inversa de los dropdowns confirmados (§5). Un valor de GHL que no
+# esté en el reverse se descarta (mismo criterio que _map_choice en el outbound:
+# no corromper la columna con un label desconocido).
+_OPERACION_FROM_GHL = {"sale": "venta", "rent": "arriendo"}
+_TIPO_INMUEBLE_FROM_GHL = {"apartment": "apartamento", "house": "casa"}
+_ESTADO_FROM_GHL = {"draft": "borrador", "approved": "publicado"}
+_MONEDA_FROM_GHL = {"cop": "COP", "usd": "USD"}
+
+
+def _num(v):
+    """GHL manda números de custom object a veces como str. A número o None (None
+    se descarta del UPDATE, no pisa la columna con basura)."""
+    if v is None or v == "":
+        return None
+    if isinstance(v, (int, float)):
+        return v
+    try:
+        return float(v) if "." in str(v) else int(v)
+    except (TypeError, ValueError):
+        return None
+
+
+def _listing_payload_to_row(props: dict) -> dict:
+    row = {
+        "direccion_aprox": props.get("property_address"),
+        "titulo": props.get("listing_title"),
+        "estado": _ESTADO_FROM_GHL.get(str(props.get("listing_status") or "").lower()),
+        "operacion": _OPERACION_FROM_GHL.get(str(props.get("operation") or "").lower()),
+        "tipo_inmueble": _TIPO_INMUEBLE_FROM_GHL.get(str(props.get("property_type") or "").lower()),
+        "municipio": props.get("municipality"),
+        "barrio": props.get("barrio"),
+        "precio": _num(props.get("price")),
+        "moneda": _MONEDA_FROM_GHL.get(str(props.get("currency") or "").lower()),
+        "administracion": _num(props.get("administration_hoa_fee")),
+        "area_m2": _num(props.get("area_m2")),
+        "area_lote_m2": _num(props.get("lot_area_m2")),
+        "habitaciones": _num(props.get("bedrooms")),
+        "banos": _num(props.get("bathrooms")),
+        "parqueaderos": _num(props.get("parking_spaces")),
+        "estrato": _num(props.get("estrato")),
+        "antiguedad_anios": _num(props.get("property_age_years")),
+        "descripcion": props.get("listing_description"),
+        "video_url": _safe_url(props.get("video_url")),
+        "tour_url": _safe_url(props.get("virtual_tour_url")),
+        "amoblado": _as_bool(props.get("furnished")),
+        "mascotas": _as_bool(props.get("pets_allowed")),
+        "permite_airbnb": _as_bool(props.get("airbnb_allowed")),
+        "nombre_contacto": props.get("contact_name"),
+        "telefono": props.get("contact_phone"),
+        "email_contacto": props.get("contact_email"),
+        "horario_contacto": props.get("preferred_contact_hours"),
+        "mostrar_exacto": _as_bool(props.get("exact_address_public")),
+        # NO entran por webhook aunque SÍ los mandamos (asimetría deliberada):
+        #   - verificado: sello «Verificada» se gana con due diligence, no por
+        #     editar el Contact/record en GHL.
+        #   - destacado: posición Featured es una promoción PAGADA (admin/pago).
+        # Aceptarlos inbound dejaría regalar sello de confianza / posición pagada
+        # con una edición en el CRM, saltándose los gates. estado SÍ entra (es el
+        # publicar/despublicar operativo, el bidireccional confirmado 2026-08-27).
+    }
+    return {k: v for k, v in row.items() if v is not None}
+
+
 async def _upsert_listing_from_ghl(payload: dict) -> None:
-    """Target: public.listing (uuid PK). Ver docs/GHL_DB_SCHEMA_FIELDS.pdf
-    para la lista completa de columnas — falta el nombre de campo del lado
-    GHL para cada una."""
-    raise NotImplementedError("ghl_webhook: falta contrato de payload para listing")
+    """Target: public.listing (uuid PK). Entrada GHL→nosotros — inversa exacta de
+    ghl_client._listing_campos_to_properties (los nombres de campo del lado GHL son
+    NUESTROS: custom object real_estate_listing, no un contrato opaco de Talal).
+
+    SOLO update: los listings nacen en la plataforma (owner/realtor publica); GHL
+    los edita, no los origina → sin INSERT (evita adivinar FKs NOT NULL: owner_id,
+    geom, slug…). Identidad: website_listing_id (uuid que mandamos en el outbound)
+    o, si no viene, ghl_object_id vía ghl_object_mapping. Update parcial: None se
+    descarta, no pisa columnas que el payload no trae. Loop-prevention: NO llama
+    sync_listing (entrada no re-emite salida)."""
+    props = payload.get("properties") or payload
+    ghl_object_id = payload.get("ghl_object_id") or props.get("ghl_object_id") or payload.get("id")
+    website_listing_id = props.get("website_listing_id") or payload.get("website_listing_id")
+
+    pool = get_pool()
+    internal_id = str(website_listing_id) if website_listing_id else None
+    if not internal_id and ghl_object_id:
+        internal_id = await pool.fetchval(
+            "SELECT internal_object_id FROM public.ghl_object_mapping "
+            "WHERE object_type = 'listing' AND ghl_object_id = $1",
+            str(ghl_object_id),
+        )
+    if not internal_id:
+        raise ValueError("listing: falta website_listing_id o mapeo de ghl_object_id")
+
+    row = _listing_payload_to_row(props)
+    if row:
+        sets = [f"{col} = ${i + 1}" for i, col in enumerate(row)]
+        params = list(row.values()) + [internal_id]
+        updated = await pool.fetchval(
+            f"UPDATE public.listing SET {', '.join(sets)}, updated_at = NOW() "
+            f"WHERE id = ${len(params)}::uuid AND deleted_at IS NULL RETURNING id",
+            *params,
+        )
+        if updated is None:
+            raise ValueError(f"listing {internal_id} no existe o está borrado")
+    await _link_mapping(pool, "listing", internal_id, ghl_object_id)
 
 
 async def _upsert_deal_from_ghl(payload: dict) -> None:
@@ -288,32 +403,161 @@ async def _upsert_tienda_from_ghl(payload: dict) -> None:
     await _link_mapping(pool, "tienda", new_id, ghl_object_id)
 
 
+# Estado de la aplicación de referido (aprobado/rechazado desde GHL). SOLO el
+# estado — la comisión/`referidos` (el pago) queda fuera por decisión ("lo de
+# pagos no es necesario"). ASUMIDO el nombre del campo de status del payload.
+_ESTADO_FROM_GHL_REFERIDOR = {
+    "approved": "aprobado", "aprobado": "aprobado",
+    "rejected": "rechazado", "rechazado": "rechazado",
+    "pending": "pendiente", "pendiente": "pendiente",
+}
+
+
 async def _upsert_referidor_from_ghl(payload: dict) -> None:
-    """Target: public.aplicacion_referidor (o el futuro public.referidor una
-    vez que exista el paso de activación). Decisión 2026-09-20: comisión de
-    afiliado/embajador vive en GHL — pero no está en su alcance actual
-    (no aparece en customer_type de la migración 0084) y no hay contrato:
-    falta confirmar si GHL notifica cambio de estado de la aplicación,
-    asignación de `codigo`, o eventos de comisión (`referidos`), y los
-    nombres de campo de cada uno. Ver docs/GHL_PENDIENTES_TALAL.md §4."""
-    raise NotImplementedError("ghl_webhook: falta contrato de payload para referidor")
+    """Target: public.aplicacion_referidor — SOLO el estado de la aplicación
+    (aprobado/rechazado/pendiente) cuando el equipo la gestiona en GHL. La comisión
+    (el pago al afiliado/embajador) NO entra acá a propósito.
+
+    SOLO update: la aplicación nace en nuestros forms (/afiliados, /embajadores);
+    GHL no la origina. Identidad: website_referidor_id (si lo mandamos) o email.
+    Loop-prevention: NO llama sync_referidor."""
+    props = payload.get("properties") or payload
+    website_id = props.get("website_referidor_id") or payload.get("website_referidor_id")
+    email = (props.get("email") or payload.get("email") or "").strip().lower()
+    estado = _ESTADO_FROM_GHL_REFERIDOR.get(
+        str(props.get("status") or props.get("application_status") or props.get("estado") or "").lower())
+    if not estado:
+        logger.warning("ghl_webhook referidor: status desconocido en payload — ignorado")
+        return
+
+    pool = get_pool()
+    internal_id = None
+    if str(website_id or "").isdigit():
+        internal_id = int(website_id)
+    elif email:
+        internal_id = await pool.fetchval(
+            "SELECT id FROM public.aplicacion_referidor WHERE lower(email) = $1 "
+            "ORDER BY created_at DESC LIMIT 1", email)
+    if not internal_id:
+        logger.warning("ghl_webhook referidor: no resuelve (email=%s) — ignorado", email or "—")
+        return
+
+    updated = await pool.fetchval(
+        "UPDATE public.aplicacion_referidor SET estado = $1 WHERE id = $2 RETURNING id",
+        estado, internal_id)
+    if updated is None:
+        raise ValueError(f"aplicacion_referidor {internal_id} no existe")
 
 
 async def _upsert_agent_from_ghl(payload: dict) -> None:
     """Target: public.agent. Agent = Contact (confirmado 2026-10-03). Entrada
-    GHL→nosotros: cuando el realtor se crea/edita/aprueba del lado GHL. Falta
-    el contrato: nombres de campo del lado GHL (custom fields §4a) y si GHL
-    identifica el agent por agent_internal_id (uuid nuestro) o por su contact
-    id propio."""
-    raise NotImplementedError("ghl_webhook: falta contrato de payload para agent")
+    GHL→nosotros: refleja ediciones del Contact. SOLO los campos estándar que
+    mandamos en upsert_contact (nombre/teléfono) — los custom fields agent_* (§4a)
+    no se envían todavía, así que tampoco se reciben ("lo mismo que enviamos").
+
+    email NO se escribe: es identidad y está ligado a usuarios — un cambio de email
+    del lado GHL no debe reasignar la cuenta. SOLO update: el agente nace en el
+    registro (usuario + estado); GHL no lo origina. Identidad: ghl_object_id
+    (contact id) vía ghl_object_mapping, o email conocido. Loop-prevention: NO llama
+    sync_agent."""
+    props = payload.get("properties") or payload
+    ghl_contact_id = payload.get("ghl_object_id") or props.get("ghl_object_id") or payload.get("id")
+    email = (props.get("email") or payload.get("email") or "").strip().lower()
+    first = (props.get("firstName") or props.get("first_name") or "").strip()
+    last = (props.get("lastName") or props.get("last_name") or "").strip()
+    nombre = (props.get("name") or props.get("fullName") or f"{first} {last}").strip() or None
+    telefono = (props.get("phone") or "").strip() or None
+
+    pool = get_pool()
+    agent_id = None
+    if ghl_contact_id:
+        agent_id = await pool.fetchval(
+            "SELECT internal_object_id FROM public.ghl_object_mapping "
+            "WHERE object_type = 'agent' AND ghl_object_id = $1", str(ghl_contact_id))
+    if not agent_id and email:
+        agent_id = await pool.fetchval("SELECT id::text FROM public.agent WHERE lower(email) = $1", email)
+    if not agent_id:
+        raise ValueError("agent: no se pudo resolver (sin mapeo ni email conocido)")
+
+    row = {k: v for k, v in (("nombre", nombre), ("telefono", telefono)) if v is not None}
+    if row:
+        sets = [f"{col} = ${i + 1}" for i, col in enumerate(row)]
+        params = list(row.values()) + [agent_id]
+        await pool.execute(
+            f"UPDATE public.agent SET {', '.join(sets)}, updated_at = NOW() WHERE id = ${len(params)}::uuid",
+            *params)
+    await _link_mapping(pool, "agent", agent_id, ghl_contact_id)
+
+
+# Reverse del push de visita (ghl_client._ESTADO_TO_APPT). ponytail: el shape del
+# webhook de appointment (appointmentStatus/startTime/id) está ASUMIDO — confirmar
+# contra un payload real (mismo marcador que en ghl_client).
+_ESTADO_FROM_APPT = {
+    "new": "pendiente", "confirmed": "confirmada", "showed": "realizada",
+    "noshow": "no_asistio", "cancelled": "cancelada", "invalid": "cancelada",
+}
+
+
+def _parse_dt_tz(v):
+    """ISO con offset → datetime AWARE (visita_solicitud.fecha_visita es
+    timestamptz — a diferencia de eventos.fecha_* que es sin tz). Conservar el
+    offset o la cita queda a la hora equivocada."""
+    if not v:
+        return None
+    try:
+        return datetime.fromisoformat(str(v).replace("Z", "+00:00"))
+    except ValueError:
+        return None
 
 
 async def _upsert_visita_from_ghl(payload: dict) -> None:
-    """Target: public.visita_solicitud. Entrada GHL→nosotros: cuando un
-    comprador reserva / reprograma / cancela en el Calendar del agente (GHL),
-    se refleja acá (estado + fecha_visita). Falta TODO el contrato de
-    Calendars/Appointments de Talal — ver §7 Visita del contrato."""
-    raise NotImplementedError("ghl_webhook: falta contrato de payload para visita")
+    """Target: public.visita_solicitud. Entrada GHL→nosotros: el comprador
+    confirma/reprograma/cancela/atiende en el Calendar (appointment) → se refleja
+    acá (estado + fecha_visita).
+
+    SOLO update: los leads nacidos en GHL ya tienen su camino deduplicado
+    (POST /api/v1/ghl/leads, idempotente por external_id) — NO se inserta acá para
+    no duplicar ni crear filas sin ruteo. Si no resuelve a una visita conocida, se
+    ignora (log). Identidad: website_visita_id → external_id → event_id vía
+    ghl_object_mapping. Loop-prevention: NO llama sync_visita."""
+    props = payload.get("properties") or payload
+    event_id = payload.get("ghl_object_id") or props.get("ghl_object_id") or payload.get("id")
+    website_visita_id = props.get("website_visita_id") or payload.get("website_visita_id")
+    external_id = props.get("external_id") or payload.get("external_id")
+
+    pool = get_pool()
+    internal_id = str(website_visita_id) if website_visita_id else None
+    if not internal_id and external_id:
+        internal_id = await pool.fetchval(
+            "SELECT id::text FROM public.visita_solicitud WHERE external_id = $1", str(external_id))
+    if not internal_id and event_id:
+        internal_id = await pool.fetchval(
+            "SELECT internal_object_id FROM public.ghl_object_mapping "
+            "WHERE object_type = 'visita' AND ghl_object_id = $1", str(event_id))
+    if not internal_id:
+        logger.warning("ghl_webhook visita: no resuelve (event=%s external=%s) — ignorada",
+                       event_id, external_id)
+        return
+
+    row = {}
+    estado = _ESTADO_FROM_APPT.get(str(props.get("appointmentStatus") or props.get("status") or "").lower())
+    if estado:
+        row["estado"] = estado
+    fecha = _parse_dt_tz(props.get("startTime") or props.get("start_time"))
+    if fecha:
+        row["fecha_visita"] = fecha
+
+    if row:
+        sets = [f"{col} = ${i + 1}" for i, col in enumerate(row)]
+        params = list(row.values()) + [internal_id]
+        updated = await pool.fetchval(
+            f"UPDATE public.visita_solicitud SET {', '.join(sets)}, updated_at = NOW() "
+            f"WHERE id = ${len(params)}::uuid RETURNING id",
+            *params,
+        )
+        if updated is None:
+            raise ValueError(f"visita {internal_id} no existe")
+    await _link_mapping(pool, "visita", internal_id, event_id)
 
 
 async def _activar_slot_realtor_preferido(payload: dict) -> None:
@@ -391,8 +635,50 @@ async def _pago_agent_program(payload: dict) -> None:
         raise HTTPException(status_code=422, detail=str(e))
 
 
+async def _pago_sponsorship(payload: dict) -> None:
+    """Pago aprobado (GHL → Stripe) de una ZONA PATROCINADA exclusiva (barrio/comuna).
+    Crea/extiende el `sponsorship` que rutea los leads de la zona al agente — sin admin.
+
+    Payload (workflow GHL "Pago aprobado"): {object_type:"sponsorship", agent_email | agent_id,
+    zona_nivel:"barrio"|"comuna", zona_codigo, meses (def. 1), pago_ref (id de la orden)}.
+    Idempotente por pago_ref. 409 si la zona ya la tiene otra agencia (dinero cobrado
+    sin zona → acción humana: reembolsar o reasignar)."""
+    from api.services.zona_sponsor_service import ZonaOcupadaError, procesar_pago_zona
+
+    props = payload.get("properties") or payload
+    agent_id = props.get("agent_id")
+    email = (props.get("agent_email") or "").strip().lower()
+    zona_nivel, zona_codigo = props.get("zona_nivel"), str(props.get("zona_codigo") or "")
+    pago_ref = str(props.get("pago_ref") or "").strip()
+    if not pago_ref or pago_ref == "simulado":
+        raise HTTPException(status_code=400, detail="falta pago_ref (id de la orden)")
+    if zona_nivel not in ("barrio", "comuna") or not zona_codigo or (not agent_id and not email):
+        raise HTTPException(status_code=400, detail="falta zona_nivel/zona_codigo o agent_id/agent_email")
+    try:
+        meses = max(1, min(12, int(props.get("meses") or 1)))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="meses inválido")
+    pool = get_pool()
+    async with pool.acquire() as conn:
+        if not agent_id:
+            agent_id = await conn.fetchval(
+                "SELECT id::text FROM agent WHERE lower(email) = $1 AND estado::text = 'activo'", email)
+        if not agent_id:
+            raise HTTPException(status_code=404, detail="agente activo no encontrado")
+    try:
+        sid = await procesar_pago_zona(pool, str(agent_id), zona_nivel, zona_codigo, meses, pago_ref)
+        logger.info("sponsorship pago %s zona=%s/%s agent=%s → %s", pago_ref, zona_nivel, zona_codigo, agent_id, sid)
+    except ZonaOcupadaError as e:
+        logger.error("sponsorship PAGO ZONA OCUPADA pago_ref=%s agent=%s zona=%s/%s: %s",
+                     pago_ref, agent_id, zona_nivel, zona_codigo, e)
+        raise HTTPException(status_code=409, detail=str(e))
+    from api.utils import ghl_client
+    ghl_client.spawn(ghl_client.sync_agent_safe(agent_id))
+
+
 _HANDLERS = {
     "agent_program": _pago_agent_program,
+    "sponsorship": _pago_sponsorship,
     "listing": _upsert_listing_from_ghl,
     "deal": _upsert_deal_from_ghl,
     "evento": _upsert_evento_from_ghl,

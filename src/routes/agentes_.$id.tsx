@@ -73,16 +73,16 @@ function ListingCard({ l, cerrado }: { l: PerfilListing; cerrado?: boolean }) {
 
   const inner = (
     <>
-      <div className="relative aspect-[4/3] w-full" style={{ background: K.tealLight }}>
+      <div className="relative aspect-[4/3] w-full" style={{ background: K.surface }}>
         {l.foto_portada
           ? <img src={l.foto_portada} alt={l.titulo ?? ""} loading="lazy" className="h-full w-full object-cover" />
-          : <div className="grid h-full w-full place-items-center"><Home className="h-8 w-8" style={{ color: K.teal }} /></div>}
+          : <div className="grid h-full w-full place-items-center"><Home className="h-8 w-8" style={{ color: K.muted }} /></div>}
         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold text-white"
-          style={{ background: cerrado ? K.tealDeep : "rgba(17,20,24,0.72)" }}>
+          style={{ background: "rgba(17,20,24,0.78)" }}>
           {cerrado ? <><CheckCircle className="h-3 w-3" /> Vendido</> : cap(l.operacion) || "En venta"}
         </span>
         {mapHref && (
-          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-bold opacity-0 shadow-sm transition group-hover:opacity-100" style={{ color: K.tealDeep }}>
+          <span className="absolute right-2 top-2 inline-flex items-center gap-1 rounded-full bg-white/95 px-2 py-0.5 text-[10px] font-bold opacity-0 shadow-sm transition group-hover:opacity-100" style={{ color: K.ink }}>
             <MapPin className="h-3 w-3" /> Ver en el mapa ↗
           </span>
         )}
@@ -115,8 +115,8 @@ function ListingCard({ l, cerrado }: { l: PerfilListing; cerrado?: boolean }) {
 function Stat({ label, value, icon: Icon }: { label: string; value: string; icon?: typeof Bed }) {
   return (
     <div className="rounded-xl px-3 py-2.5 text-center" style={{ background: K.paper, border: `1px solid ${K.line}` }}>
-      <div className="flex items-center justify-center gap-1 text-base font-bold leading-tight break-words sm:text-lg" style={{ color: K.tealDeep, fontFamily: K.serif }}>
-        {Icon && <Icon className="h-4 w-4" style={{ color: K.teal }} />} {value}
+      <div className="flex items-center justify-center gap-1 text-base font-bold leading-tight break-words sm:text-lg" style={{ color: K.ink, fontFamily: K.serif }}>
+        {Icon && <Icon className="h-4 w-4" style={{ color: K.muted }} />} {value}
       </div>
       <div className="mt-0.5 text-[11px] font-semibold uppercase tracking-wide" style={{ color: K.muted }}>{label}</div>
     </div>
@@ -134,14 +134,14 @@ function Seccion({ titulo, sub, children }: { titulo: string; sub?: string; chil
 }
 
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.tealLight, color: K.tealDeep }}>{children}</span>;
+  return <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.surface, color: K.ink, border: `1px solid ${K.line}` }}>{children}</span>;
 }
 
 function AgenteMiniCard({ a }: { a: Agente }) {
   return (
     <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="flex items-center gap-3 rounded-xl p-3 transition hover:shadow-sm" style={{ border: `1px solid ${K.line}`, background: "#FFFFFF" }}>
-      <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl" style={{ background: K.tealLight }}>
-        {a.foto_url ? <img src={a.foto_url} alt={a.nombre} loading="lazy" className="h-full w-full object-cover" /> : <span className="text-sm font-bold" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>}
+      <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: K.surface, boxShadow: `inset 0 0 0 1px ${K.line}` }}>
+        {a.foto_url ? <img src={a.foto_url} alt={a.nombre} loading="lazy" className="h-full w-full object-cover" /> : <span className="text-sm font-bold" style={{ color: K.ink, fontFamily: K.serif }}>{iniciales(a.nombre)}</span>}
       </div>
       <div className="min-w-0">
         <div className="truncate text-sm font-bold" style={{ color: K.ink }}><Name>{a.nombre}</Name></div>
@@ -185,7 +185,7 @@ function AgentePerfilPage() {
   return (
     <ComunidadLayout>
       <div className="mx-auto max-w-5xl px-4 pb-24 pt-6 lg:pb-16">
-        <Link to="/agentes" className="inline-flex items-center gap-1 text-sm font-semibold transition hover:opacity-70" style={{ color: K.tealDeep }}>
+        <Link to="/agentes" className="inline-flex items-center gap-1 text-sm font-semibold transition hover:opacity-70" style={{ color: K.ink }}>
           <ArrowRight className="h-4 w-4" style={{ transform: "rotate(180deg)" }} /> Agentes
         </Link>
 
@@ -193,7 +193,7 @@ function AgentePerfilPage() {
         {isError && !p && (
           <div className="mt-10 rounded-2xl border px-6 py-12 text-center" style={{ borderColor: K.line, background: "#FFFFFF" }}>
             <p className="text-sm font-semibold" style={{ color: K.ink }}>No se pudo cargar este agente</p>
-            <Link to="/agentes" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: K.tealDeep }}>Volver al directorio <ArrowRight className="h-4 w-4" /></Link>
+            <Link to="/agentes" className="mt-4 inline-flex items-center gap-1.5 text-sm font-semibold" style={{ color: K.ink }}>Volver al directorio <ArrowRight className="h-4 w-4" /></Link>
           </div>
         )}
 
@@ -202,8 +202,8 @@ function AgentePerfilPage() {
             {/* Header */}
             <div className="mt-4 rounded-2xl p-5 sm:p-6" style={{ background: "#FFFFFF", border: `1px solid ${K.line}` }}>
               <div className="flex flex-col items-start gap-5 sm:flex-row sm:items-center">
-                <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-2xl" style={{ background: K.tealLight }}>
-                  {p.foto_url ? <img src={p.foto_url} alt={p.nombre} className="h-full w-full object-cover" /> : <span className="text-3xl font-bold" style={{ color: K.tealDeep, fontFamily: K.serif }}>{iniciales(p.nombre)}</span>}
+                <div className="grid h-28 w-28 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: K.surface, boxShadow: `inset 0 0 0 1px ${K.line}` }}>
+                  {p.foto_url ? <img src={p.foto_url} alt={p.nombre} className="h-full w-full object-cover" /> : <span className="text-3xl font-bold" style={{ color: K.ink, fontFamily: K.serif }}>{iniciales(p.nombre)}</span>}
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -213,12 +213,12 @@ function AgentePerfilPage() {
                     {p.tipos?.length ? (
                       <AgenteTipoBadges tipos={p.tipos} preferente={p.preferente} linked />
                     ) : p.verificado && (
-                      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold" style={{ background: K.tealLight, color: K.tealDeep }}>
-                        <ShieldCheck className="h-3.5 w-3.5" /> Agente verificado
+                      <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold uppercase tracking-wide" style={{ border: `1px solid ${K.line}`, color: K.ink }}>
+                        <ShieldCheck className="h-3.5 w-3.5" style={{ color: K.muted }} /> Verificado
                       </span>
                     )}
                   </div>
-                  {p.titulo && <div className="mt-0.5 text-sm font-semibold" style={{ color: K.tealDeep }}>{p.titulo}</div>}
+                  {p.titulo && <div className="mt-0.5 text-sm font-semibold" style={{ color: K.muted }}>{p.titulo}</div>}
                   {p.rating_promedio != null ? (
                     <div className="mt-1 flex items-center gap-1.5">
                       <Stars value={p.rating_promedio} /><span className="text-sm font-semibold" style={{ color: K.ink }}>{p.rating_promedio.toFixed(1)}</span>
@@ -227,9 +227,9 @@ function AgentePerfilPage() {
                   ) : <div className="mt-1 text-sm" style={{ color: K.muted }}>Sin reseñas aún</div>}
                   <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
                     {p.agencia_nombre && (
-                      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={p.agencia_verificada ? { background: K.tealLight, color: K.tealDeep } : { background: K.surface, color: K.muted }}>
+                      <span className="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={{ background: K.surface, color: p.agencia_verificada ? K.ink : K.muted, border: `1px solid ${K.line}` }}>
                         {p.agencia_logo && <img src={p.agencia_logo} alt="" className="h-4 w-4 rounded object-contain" />}
-                        {p.agencia_verificada && !p.agencia_logo && <ShieldCheck className="h-3 w-3" />} {p.agencia_nombre}
+                        {p.agencia_verificada && !p.agencia_logo && <ShieldCheck className="h-3 w-3" style={{ color: K.muted }} />} {p.agencia_nombre}
                       </span>
                     )}
                     {p.responde_rapido && <Chip><Clock className="h-3 w-3" /> Responde rápido{p.mediana_resp_horas != null ? ` (~${Math.round(p.mediana_resp_horas)}h)` : ""}</Chip>}
@@ -238,9 +238,9 @@ function AgentePerfilPage() {
                   </div>
                   {/* Acciones rápidas (desktop) */}
                   <div className="mt-4 hidden flex-wrap gap-2 sm:flex">
-                    <button onClick={scrollToContacto} className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}>Contactar</button>
-                    {p.telefono && <a href={`tel:${p.telefono}`} className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" /> Llamar</a>}
-                    {p.telefono && <a href={waFromTel(p.telefono, p.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><MessageCircle className="h-4 w-4" /> WhatsApp</a>}
+                    <button onClick={scrollToContacto} className="rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.ink }}>Contactar</button>
+                    {p.telefono && <a href={`tel:${p.telefono}`} className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" style={{ color: K.muted }} /> Llamar</a>}
+                    {p.telefono && <a href={waFromTel(p.telefono, p.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><MessageCircle className="h-4 w-4" style={{ color: K.green }} /> WhatsApp</a>}
                   </div>
                 </div>
               </div>
@@ -262,7 +262,7 @@ function AgentePerfilPage() {
                     {p.bio ? (d.bioLong && !bioOpen ? p.bio.slice(0, 280) + "…" : p.bio) : "Este agente aún no agregó una descripción."}
                   </p>
                   {d.bioLong && (
-                    <button onClick={() => setBioOpen((o) => !o)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: K.tealDeep }}>
+                    <button onClick={() => setBioOpen((o) => !o)} className="mt-1.5 inline-flex items-center gap-1 text-xs font-semibold" style={{ color: K.ink }}>
                       {bioOpen ? "Ver menos" : "Ver más"} <ChevronDown className="h-3.5 w-3.5" style={{ transform: bioOpen ? "rotate(180deg)" : "none" }} />
                     </button>
                   )}
@@ -284,8 +284,8 @@ function AgentePerfilPage() {
                   <Seccion titulo="Zonas de servicio" sub="Dónde el agente está activo">
                     <div className="flex flex-wrap gap-1.5">
                       {p.zonas.map((z) => (
-                        <span key={`${z.nivel}-${z.nombre}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={z.exclusivo ? { background: K.tealDeep, color: "#FFFFFF" } : { background: K.tealLight, color: K.tealDeep }}>
-                          {z.exclusivo && <Star width={11} height={11} fill="#FFFFFF" stroke="#FFFFFF" />} <MapPin className="h-3 w-3" /> <Name>{z.nombre ?? ""}</Name>{z.exclusivo ? " · exclusivo" : ""}
+                        <span key={`${z.nivel}-${z.nombre}`} className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-semibold" style={z.exclusivo ? { border: `1px solid rgba(17,20,24,0.2)`, color: K.ink } : { background: K.surface, color: K.muted, border: `1px solid ${K.line}` }}>
+                          {z.exclusivo && <Star width={11} height={11} fill={K.amarillo} stroke={K.amber} />} <MapPin className="h-3 w-3" /> <Name>{z.nombre ?? ""}</Name>{z.exclusivo ? " · exclusivo" : ""}
                         </span>
                       ))}
                     </div>
@@ -337,15 +337,15 @@ function AgentePerfilPage() {
                   {p.rating_promedio != null ? (
                     <div className="mb-4 flex flex-col gap-4 rounded-xl p-4 sm:flex-row sm:items-center" style={{ background: K.paper, border: `1px solid ${K.line}` }}>
                       <div className="text-center sm:w-32 sm:shrink-0">
-                        <div className="text-4xl font-bold leading-none" style={{ color: K.tealDeep, fontFamily: K.serif }}>{p.rating_promedio.toFixed(1)}</div>
+                        <div className="text-4xl font-bold leading-none" style={{ color: K.ink, fontFamily: K.serif }}>{p.rating_promedio.toFixed(1)}</div>
                         <div className="mt-1 flex justify-center"><Stars value={p.rating_promedio} /></div>
                         <div data-i18n-skip="true" className="mt-1 text-[11px]" style={{ color: K.muted }}>{p.n_resenas} reseña{p.n_resenas === 1 ? "" : "s"}</div>
                       </div>
                       <div className="flex-1 space-y-1">
                         {d.dist.map(({ star, n }) => (
                           <div key={star} className="flex items-center gap-2">
-                            <span className="inline-flex w-10 items-center gap-0.5 text-[11px] font-semibold" style={{ color: K.muted }}>{star} <Star width={10} height={10} fill={K.teal} stroke={K.teal} /></span>
-                            <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: K.surface }}><div className="h-full rounded-full" style={{ width: `${(n / d.maxN) * 100}%`, background: K.teal }} /></div>
+                            <span className="inline-flex w-10 items-center gap-0.5 text-[11px] font-semibold" style={{ color: K.muted }}>{star} <Star width={10} height={10} fill={K.amarillo} stroke={K.amber} /></span>
+                            <div className="h-2 flex-1 overflow-hidden rounded-full" style={{ background: K.surface }}><div className="h-full rounded-full" style={{ width: `${(n / d.maxN) * 100}%`, background: K.ink }} /></div>
                             <span data-i18n-skip="true" className="w-5 text-right text-[11px]" style={{ color: K.muted }}>{n}</span>
                           </div>
                         ))}
@@ -367,7 +367,7 @@ function AgentePerfilPage() {
                   )}
                   <div className="mt-3">
                     {reseñando ? <ResenaForm agentId={p.id} onDone={() => setReseñando(false)} />
-                      : logueado ? <button onClick={() => setReseñando(true)} className="text-xs font-semibold" style={{ color: K.tealDeep }}>Escribir una reseña</button>
+                      : logueado ? <button onClick={() => setReseñando(true)} className="text-xs font-semibold" style={{ color: K.ink }}>Escribir una reseña</button>
                       : <Link to="/login" className="text-xs font-semibold" style={{ color: K.muted }}>Inicia sesión para dejar una reseña</Link>}
                   </div>
                 </Seccion>
@@ -387,15 +387,15 @@ function AgentePerfilPage() {
                   <ContactoAgenteForm agentId={p.id} agentNombre={p.nombre} />
                   {p.telefono && (
                     <div className="mt-3 grid grid-cols-2 gap-2">
-                      <a href={`tel:${p.telefono}`} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" /> Llamar</a>
-                      <a href={waFromTel(p.telefono, p.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}><MessageCircle className="h-4 w-4" /> WhatsApp</a>
+                      <a href={`tel:${p.telefono}`} className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" style={{ color: K.muted }} /> Llamar</a>
+                      <a href={waFromTel(p.telefono, p.nombre)} target="_blank" rel="noopener noreferrer" className="inline-flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.green }}><MessageCircle className="h-4 w-4" /> WhatsApp</a>
                     </div>
                   )}
                 </div>
 
                 {/* CTA secundario */}
-                <Link to="/vender" className="mt-3 flex items-center gap-3 rounded-2xl p-4 transition hover:shadow-sm" style={{ background: K.tealLight, border: `1px solid ${K.teal}` }}>
-                  <Home className="h-5 w-5 shrink-0" style={{ color: K.tealDeep }} />
+                <Link to="/vender" className="mt-3 flex items-center gap-3 rounded-2xl p-4 transition hover:shadow-sm" style={{ background: K.paper, border: `1px solid ${K.line}` }}>
+                  <Home className="h-5 w-5 shrink-0" style={{ color: K.ink }} />
                   <div>
                     <div className="text-sm font-bold" style={{ color: K.ink }}>¿Quieres vender?</div>
                     <div className="text-xs" style={{ color: K.muted }}>Estima el precio de tu propiedad gratis</div>
@@ -410,8 +410,8 @@ function AgentePerfilPage() {
       {/* Barra fija inferior (móvil) */}
       {p && (
         <div className="fixed inset-x-0 bottom-0 z-40 flex gap-2 border-t p-3 lg:hidden" style={{ background: "#FFFFFF", borderColor: K.line }}>
-          {p.telefono && <a href={`tel:${p.telefono}`} className="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition hover:opacity-80" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" /> Llamar</a>}
-          <button onClick={scrollToContacto} className="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.tealDeep }}><MessageCircle className="h-4 w-4" /> Contactar</button>
+          {p.telefono && <a href={`tel:${p.telefono}`} className="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold transition hover:bg-black/[0.03]" style={{ border: `1px solid ${K.line}`, color: K.ink }}><Phone className="h-4 w-4" style={{ color: K.muted }} /> Llamar</a>}
+          <button onClick={scrollToContacto} className="flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.ink }}><MessageCircle className="h-4 w-4" /> Contactar</button>
         </div>
       )}
     </ComunidadLayout>

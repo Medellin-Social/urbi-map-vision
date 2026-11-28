@@ -117,7 +117,13 @@ export function SimuladorTab() {
         </div>
       </Card>
 
-      {sim.isError && <div className="rounded-xl px-4 py-3 text-[12px]" style={{ background: "#FDECEA", color: C.bad }}>No se pudo simular esa zona. Prueba otro barrio.</div>}
+      {sim.isError && <div className="rounded-xl px-4 py-3 text-[12px]" style={{ background: "#FDECEA", color: C.bad }}>{(sim.error as Error)?.message || "No se pudo simular esa zona. Prueba otro barrio."}</div>}
+
+      {r && modalidad === "airbnb" && r.nota_legal && (
+        <div className="rounded-xl px-4 py-3 text-[12px] leading-relaxed" style={{ background: "#FFF7E6", color: "#7A5B00", border: "1px solid #F0D98C" }}>
+          <span className="font-semibold">⚖️ Renta corta (POT): </span>{r.nota_legal}
+        </div>
+      )}
 
       {r && (
         <>
