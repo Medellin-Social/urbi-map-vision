@@ -1,198 +1,150 @@
-import { useEffect, useRef, useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X } from "@/lib/icons";
-import { useLang } from "@/lib/i18n";
+import { SpotlightTour, type TourStep } from "./SpotlightTour";
 
-const LS_KEY = "realtor_tour_seen";
-const PAD = 8; // spotlight ring padding around target rect
-const FIND_TIMEOUT_MS = 2500;
-
-type LocStr = { es: string; en: string };
-type TourStep = { title: LocStr; body: LocStr; selector?: string; icon?: string };
-
-// Recorrido corto a propósito: el panel aún está en construcción. Orienta por las
-// 5 secciones del nav y el botón de repetir — sin entrar al detalle de cada dato.
+// Recorrido guiado del Centro de agente. La página se mueve sola: cada paso cambia
+// a su sección (`section`), entra a la sub-pestaña (`clickSelector` sobre `#subtab-*`)
+// y la resalta, mientras el texto explica qué es y cómo se usa.
+// Mantener alineado con SECTIONS y los SubNav de dashboard.tsx (orden e ids).
 const STEPS: TourStep[] = [
   {
     title: { es: "Tu centro de agente", en: "Your agent hub" },
     body: {
-      es: "Un vistazo rápido al panel. Aquí viven tus leads, zonas, listings y la inteligencia de mercado.",
-      en: "A quick look at the panel. Your leads, zones, listings and market intel all live here.",
+      es: "Un recorrido rápido: te llevo por cada sección y te muestro qué hace y cómo se usa. La página se irá moviendo sola; toca Siguiente.",
+      en: "A quick walkthrough: I'll take you through each section and show what it does and how to use it. The page moves on its own; tap Next.",
     },
     icon: "📊",
   },
+
+  // ── Bandeja y agenda ──────────────────────────────────────────────
   {
-    title: { es: "Las 5 secciones", en: "The 5 sections" },
+    title: { es: "Bandeja y agenda", en: "Inbox & calendar" },
     body: {
-      es: "Inicio (resumen), Mis listings (tus inmuebles), Bandeja y agenda (leads y visitas), Mercado (precios e inteligencia) y Herramientas. Toca cada una para explorar.",
-      en: "Home (overview), My listings (your properties), Inbox & calendar (leads and visits), Market (prices and intel) and Tools. Tap each to explore.",
+      es: "Tu día empieza acá. Está organizada por quién te busca, en tres pestañas: Propietarios, Visitas e Interesados. El número rojo del menú es lo que espera tu respuesta.",
+      en: "Your day starts here. Organized by who's looking for you, in three tabs: Owners, Visits and Interested. The red number in the menu is what's awaiting your reply.",
     },
-    selector: '[data-tour="realtor-sections"]',
+    section: "bandeja",
+    selector: "#tab-bandeja",
+  },
+  {
+    title: { es: "Propietarios", en: "Owners" },
+    body: {
+      es: "Dueños de tu zona que quieren publicar contigo. Ábrelos y sigue 3 pasos: Aceptar → completar la Ficha → Publicar. Si tu zona todavía no tiene agente, aparecen en el «Pool»: el primero que lo tome se lo queda. Verificar los documentos le da al aviso el sello «Verificada».",
+      en: "Owners in your zone who want to list with you. Open one and follow 3 steps: Accept → fill the Listing → Publish. If your zone has no agent yet, they appear in the «Pool»: first agent to grab it keeps it. Verifying the documents earns the «Verified» badge.",
+    },
+    section: "bandeja",
+    clickSelector: "#subtab-propietarios",
+    selector: "#subtab-propietarios",
+  },
+  {
+    title: { es: "Visitas", en: "Visits" },
+    body: {
+      es: "Compradores que pidieron ver un inmueble. Confírmalas rápido (las destacadas, en menos de 4 h). Después de la visita marca en un toque cómo terminó: Hará oferta, Interesado o No le interesó. También puedes registrar a mano una visita que agendaste por fuera.",
+      en: "Buyers who asked to see a property. Confirm fast (featured ones in under 4 h). After the visit, mark in one tap how it went: Will make an offer, Interested or Not interested. You can also log by hand a visit you set up elsewhere.",
+    },
+    section: "bandeja",
+    clickSelector: "#subtab-visitas",
+    selector: "#subtab-visitas",
+  },
+  {
+    title: { es: "Interesados", en: "Interested" },
+    body: {
+      es: "Quienes guardaron tus inmuebles en favoritos — compradores tibios. Están agrupados por listing; escríbeles con un toque para ofrecerles una visita antes de que se enfríen.",
+      en: "People who saved your properties as favorites — warm buyers. Grouped by listing; message them in one tap to offer a visit before they cool off.",
+    },
+    section: "bandeja",
+    clickSelector: "#subtab-interesados",
+    selector: "#subtab-interesados",
+  },
+
+  // ── Mis listings ──────────────────────────────────────────────────
+  {
+    title: { es: "Mis listings", en: "My listings" },
+    body: {
+      es: "Tu portafolio de inmuebles. Arriba, cuatro números que también son filtros: tócalos para ver solo Publicados, En preparación, Aperturas (visitas al aviso) o Favoritos. Abajo buscas por título/barrio y ordenas (recientes, más vistos, precio).",
+      en: "Your property portfolio. Up top, four numbers that are also filters: tap them to see only Published, In preparation, Views or Favorites. Below, search by title/neighborhood and sort (recent, most viewed, price).",
+    },
+    section: "listings",
+    selector: "#tab-listings",
+  },
+  {
+    title: { es: "Se agrupan por etapa", en: "Grouped by stage" },
+    body: {
+      es: "Tus inmuebles salen en tres bloques: «En preparación» (borradores y los rechazados por corregir), «Activos» (publicados en el mapa o pausados) y «Cerrados» (ya vendidos o arrendados). Así ves de un vistazo qué necesita trabajo y qué ya está vivo.",
+      en: "Your properties show in three blocks: «In preparation» (drafts and rejected ones to fix), «Active» (published on the map or paused) and «Closed» (already sold or rented). You see at a glance what needs work and what's live.",
+    },
+    section: "listings",
+    selector: '[data-tour="listings-grupos"]',
+  },
+  {
+    title: { es: "Los botones de cada aviso", en: "Each listing's buttons" },
+    body: {
+      es: "En cada tarjeta: «Editar» abre la ficha completa (fotos, precio, características, documentos). «Pausar» lo oculta del mapa sin borrarlo y «Reactivar» lo vuelve a mostrar. «Marcar vendido» reporta el cierre — desbloquea los precios reales de venta y sube tu puntaje. «Eliminar» lo quita (recuperable con soporte).",
+      en: "On each card: «Edit» opens the full listing (photos, price, features, documents). «Pause» hides it from the map without deleting it and «Reactivate» shows it again. «Mark as sold» reports the closing — unlocks real sale prices and raises your score. «Delete» removes it (recoverable via support).",
+    },
+    section: "listings",
+    selector: '[data-tour="listing-acciones"]',
+  },
+
+  // ── Herramientas ──────────────────────────────────────────────────
+  {
+    title: { es: "Herramientas", en: "Tools" },
+    body: {
+      es: "Dos ayudas para asesorar a tu cliente: Comparador y Simulador. Te muestro cada una por dentro.",
+      en: "Two aids to advise your client: Comparator and Simulator. Let me show you inside each.",
+    },
+    section: "herramientas",
+    selector: "#tab-herramientas",
+  },
+  {
+    title: { es: "Comparador", en: "Comparator" },
+    body: {
+      es: "Arriba eliges «Por barrio» o «Por listing». Por barrio: escoge la comuna y toca hasta 4 barrios; abajo salen las tablas que los comparan en rentabilidad, valorización, precio, seguridad, metro, estrato y si se permite Airbnb según el POT — el mejor valor de cada fila lleva ★. Por listing: compara tus propios inmuebles o cualquiera que marques desde el mapa.",
+      en: "Up top pick «By neighborhood» or «By listing». By neighborhood: choose the comuna and tap up to 4 neighborhoods; below, tables compare them on returns, appreciation, price, safety, metro, stratum and whether Airbnb is allowed under the POT — the best value in each row gets a ★. By listing: compare your own properties or any you flag from the map.",
+    },
+    section: "herramientas",
+    clickSelector: "#subtab-comparador",
+    selector: "#subpanel-comparador",
+  },
+  {
+    title: { es: "Simulador", en: "Simulator" },
+    body: {
+      es: "Llena los parámetros: Comuna y Barrio, el Presupuesto (botones de $200M a $1.000M) y la Modalidad (Airbnb, Renta media o Renta larga). Toca «Simular» y abajo aparecen el yield (ganancia anual), los años para recuperar la inversión, el flujo de caja mes a mes y la proyección del valor a 5 años — para mostrárselo al cliente.",
+      en: "Fill the parameters: Comuna and Neighborhood, the Budget (buttons from $200M to $1,000M) and the Mode (Airbnb, Mid-term or Long-term rent). Tap «Simulate» and below you get the yield (annual return), years to recoup, month-by-month cash flow and the 5-year value projection — to show the client.",
+    },
+    section: "herramientas",
+    clickSelector: "#subtab-simulador",
+    selector: "#subpanel-simulador",
+  },
+
+  // ── Resultados + Servicios + repaso ───────────────────────────────
+  {
+    title: { es: "Resultados", en: "Results" },
+    body: {
+      es: "Para revisar cada semana. Tu puntaje (0–100) y lo que lo mueve: cierres, qué tan rápido respondes y cuántos leads aceptas. Más abajo, si tu zona pagada te está rindiendo. Ojo: que un comprador te deje plantado NO te baja el puntaje.",
+      en: "To review weekly. Your score (0–100) and what moves it: closings, how fast you respond and how many leads you accept. Below, whether your paid zone is paying off. Note: a buyer no-show does NOT lower your score.",
+    },
+    section: "inicio",
+    selector: "#tab-inicio",
+  },
+  {
+    title: { es: "Servicios", en: "Services" },
+    body: {
+      es: "Tu configuración, en tres pestañas. «Perfil público»: foto y descripción con las que te ven en el directorio de agentes (botón Guardar). «Horario de visitas»: prende los días y fija las horas en que te pueden agendar (Guardar horario). «Zonas patrocinadas»: elige nivel (comuna o barrio), la zona y los meses, y toca Comprar zona para ser el agente exclusivo de ahí.",
+      en: "Your settings, in three tabs. «Public profile»: photo and bio shown in the agent directory (Save button). «Visit hours»: switch on the days and set the hours buyers can book you (Save hours). «Sponsored zones»: pick level (comuna or neighborhood), the zone and the months, then Buy zone to become its exclusive agent.",
+    },
+    section: "servicios",
+    selector: "#tab-servicios",
   },
   {
     title: { es: "¿Repasar después?", en: "Review later?" },
     body: {
-      es: "Con este botón vuelves a ver esta guía cuando quieras.",
-      en: "This button replays this guide whenever you want.",
+      es: "Con este botón «Tutorial» vuelves a ver esta guía cuando quieras.",
+      en: "This «Tutorial» button replays this guide whenever you want.",
     },
+    section: "bandeja",
     selector: '[data-tour="realtor-tour-replay"]',
   },
 ];
 
-export function RealtorTourModal() {
-  const [step, setStep] = useState(0);
-  const [show, setShow] = useState(false);
-  const [rect, setRect] = useState<DOMRect | null>(null);
-  const tooltipRef = useRef<HTMLDivElement>(null);
-  const { lang } = useLang();
-  const tr = (o: LocStr) => (lang === "es" ? o.es : o.en);
-  const tt = (es: string, en: string) => (lang === "es" ? es : en);
-
-  useEffect(() => {
-    if (localStorage.getItem(LS_KEY) === "true") return;
-    const t = setTimeout(() => setShow(true), 600);
-    return () => clearTimeout(t);
-  }, []);
-
-  // El botón de replay vive en el header del panel — escucha su evento.
-  useEffect(() => {
-    const h = () => { setStep(0); setRect(null); setShow(true); };
-    window.addEventListener("replay-tour", h);
-    return () => window.removeEventListener("replay-tour", h);
-  }, []);
-
-  // Best-effort spotlight: poll for the target, scroll it into view, keep tracking.
-  useEffect(() => {
-    if (!show) return;
-    const selector = STEPS[step]?.selector;
-    if (!selector) { setRect(null); return; }
-    let raf = 0;
-    let cancelled = false;
-    let scrolled = false;
-    const start = performance.now();
-    const tick = () => {
-      if (cancelled) return;
-      const el = document.querySelector(selector);
-      if (el) {
-        if (!scrolled) {
-          el.scrollIntoView({ behavior: "smooth", block: "center", inline: "center" });
-          scrolled = true;
-        }
-        setRect(el.getBoundingClientRect());
-        raf = requestAnimationFrame(tick);
-      } else if (performance.now() - start < FIND_TIMEOUT_MS) {
-        raf = requestAnimationFrame(tick);
-      } else {
-        setRect(null); // gave up — fall back to a centered tooltip
-      }
-    };
-    tick();
-    return () => { cancelled = true; cancelAnimationFrame(raf); };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, show]);
-
-  const finish = () => {
-    setShow(false);
-    setRect(null);
-    try { localStorage.setItem(LS_KEY, "true"); } catch { /* storage blocked */ }
-  };
-
-  const s = STEPS[step];
-  const isLast = step === STEPS.length - 1;
-
-  const wrapperStyle: React.CSSProperties = rect
-    ? {
-        position: "fixed",
-        left: Math.min(Math.max(rect.left, 16), window.innerWidth - 336),
-        top: rect.bottom + PAD * 2 + 12 < window.innerHeight - 160
-          ? rect.bottom + PAD * 2 + 12
-          : Math.max(rect.top - 12 - 220, 16),
-      }
-    : {
-        position: "fixed", inset: 0,
-        display: "flex", alignItems: "center", justifyContent: "center",
-      };
-
-  const card = (
-    <motion.div
-      ref={tooltipRef}
-      initial={{ opacity: 0, scale: 0.95 }}
-      animate={{ opacity: 1, scale: 1 }}
-      exit={{ opacity: 0, scale: 0.95 }}
-      transition={{ duration: 0.2 }}
-      className="pointer-events-auto w-[320px] max-w-[92vw] rounded-2xl shadow-2xl"
-      style={{ background: "#FAF8F3", border: "1px solid #E5E0D5" }}
-    >
-      <button
-        onClick={finish}
-        aria-label={tt("Cerrar guía", "Close guide")}
-        className="absolute right-2.5 top-2.5 grid h-7 w-7 place-items-center rounded-full text-[#5B5F5C] transition hover:bg-[#E5E0D5] hover:text-[#111418]"
-      >
-        <X className="h-3.5 w-3.5" />
-      </button>
-
-      <div className="p-5 pb-4">
-        <div className="h-1 w-full overflow-hidden rounded-full" style={{ background: "#E5E0D5" }}>
-          <div className="h-full rounded-full transition-all" style={{ width: `${((step + 1) / STEPS.length) * 100}%`, background: "#0F8A4F" }} />
-        </div>
-
-        <h2 data-i18n-skip className="mt-3 font-display text-lg font-semibold leading-tight text-[#111418]">{tr(s.title)}</h2>
-        <p data-i18n-skip className="mt-1.5 text-sm text-[#5B5F5C]">{tr(s.body)}</p>
-        {s.icon && <div className="mt-3 text-center text-3xl">{s.icon}</div>}
-
-        <div className="mt-4 flex items-center justify-between">
-          <button
-            onClick={finish}
-            className="text-xs font-medium text-[#5B5F5C] transition hover:text-[#111418] hover:underline"
-          >
-            {tt("Saltar recorrido", "Skip tour")}
-          </button>
-          <div className="flex gap-2">
-            {step > 0 && (
-              <button
-                onClick={() => setStep((n) => n - 1)}
-                className="rounded-lg px-3 py-1.5 text-sm font-medium text-[#5B5F5C] transition hover:bg-[#E5E0D5]"
-              >
-                {tt("Atrás", "Back")}
-              </button>
-            )}
-            <button
-              onClick={() => (isLast ? finish() : setStep((n) => n + 1))}
-              className="rounded-lg px-4 py-1.5 text-sm font-semibold text-white transition hover:opacity-90"
-              style={{ background: "#0F8A4F" }}
-            >
-              {isLast ? tt("Entendido", "Got it") : tt("Siguiente", "Next")}
-            </button>
-          </div>
-        </div>
-      </div>
-    </motion.div>
-  );
-
-  return (
-    <AnimatePresence>
-      {show && (
-        <>
-          {rect ? (
-            <div
-              className="pointer-events-none fixed z-[9998] rounded-xl border-2"
-              style={{
-                left: rect.left - PAD, top: rect.top - PAD,
-                width: rect.width + PAD * 2, height: rect.height + PAD * 2,
-                borderColor: "#0F8A4F",
-                boxShadow: "0 0 0 9999px rgba(20,18,8,0.55)",
-                transition: "left .2s ease, top .2s ease, width .2s ease, height .2s ease",
-              }}
-            />
-          ) : (
-            <div className="pointer-events-none fixed inset-0 z-[9998]" style={{ background: "rgba(20,18,8,0.45)" }} />
-          )}
-
-          <div className="pointer-events-none fixed z-[9999]" style={wrapperStyle}>
-            {card}
-          </div>
-        </>
-      )}
-    </AnimatePresence>
-  );
+export function RealtorTourModal({ onSection }: { onSection?: (s: string) => void } = {}) {
+  return <SpotlightTour steps={STEPS} storageKey="realtor_tour_seen" onSection={onSection} />;
 }

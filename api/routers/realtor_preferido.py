@@ -197,8 +197,14 @@ async def zonas(request: Request, pool=Depends(get_pool)):
     """Selector de zona de la landing: barrios y comunas con nivel, precio y cupos de pago."""
     from api.routers.admin import _MUNICIPIO_A_PSEUDO_COMUNA
     async with pool.acquire() as conn:
-        precios = {(r["zona_nivel"], r["nivel"]): float(r["precio_mensual"])
-                   for r in await conn.fetch("SELECT zona_nivel, nivel, precio_mensual FROM realtor_preferido_precio")}
+        # moneda la agregó 0138 (USD para zonas reales, COP para ejemplos); si el env
+        # está driftado y no existe la columna, caemos a COP sin romper el selector.
+        try:
+            prows = await conn.fetch("SELECT zona_nivel, nivel, precio_mensual, COALESCE(moneda, 'COP') AS moneda FROM realtor_preferido_precio")
+        except Exception:
+            log.warning("zonas: columna moneda ausente (0138 no aplicada), fallback COP", exc_info=True)
+            prows = await conn.fetch("SELECT zona_nivel, nivel, precio_mensual, 'COP' AS moneda FROM realtor_preferido_precio")
+        precios = {(r["zona_nivel"], r["nivel"]): (float(r["precio_mensual"]), r["moneda"]) for r in prows}
         ocup = {(r["zona_nivel"], r["zona_codigo"]): r["pagos"] for r in await conn.fetch(
             "SELECT zona_nivel, zona_codigo, COUNT(*) FILTER (WHERE tipo='pago')::int AS pagos "
             "FROM realtor_preferido_slot WHERE estado='activo' AND (fecha_fin IS NULL OR fecha_fin >= CURRENT_DATE) GROUP BY 1,2")}
@@ -219,8 +225,9 @@ async def zonas(request: Request, pool=Depends(get_pool)):
     def fila(nivel_z, codigo, nombre, extra=None):
         n = niv.get((nivel_z, codigo), "C")
         cap = svc.CAPACIDAD[nivel_z]
+        precio, moneda = precios.get((nivel_z, n), (0.0, "COP"))
         d = {"zona_nivel": nivel_z, "zona_codigo": codigo, "nombre": nombre, "nivel": n,
-             "precio_mensual": precios.get((nivel_z, n), 0.0), "cupos": max(cap - ocup.get((nivel_z, codigo), 0), 0)}
+             "precio_mensual": precio, "moneda": moneda, "cupos": max(cap - ocup.get((nivel_z, codigo), 0), 0)}
         if extra:
             d.update(extra)
         return d

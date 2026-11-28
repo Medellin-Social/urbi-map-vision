@@ -222,6 +222,7 @@ function FichaCaracteristicas({ c }: { c?: ListingCaracteristicas | null }) {
   if (c.acepta_permuta) flags.push("Acepta permuta");
   if (c.acepta_credito) flags.push("Apto para crédito");
   if (c.comision_incluida) flags.push("Comisión incluida");
+  if (typeof c.comision_pct === "number" && c.comision_pct > 0) flags.push(`Comisión a agentes ${c.comision_pct}%`);
 
   const servicios = Array.isArray(c.servicios_incluidos) ? c.servicios_incluidos.filter(Boolean) : [];
   const requisitos = Array.isArray(c.requisitos) ? c.requisitos.filter(Boolean) : [];

@@ -11,6 +11,7 @@ import { ComunidadLayout } from '@/components/comunidad/ComunidadLayout'
 import { MapView } from '@/components/MapView'
 import { useIsMobile } from '@/hooks/use-mobile'
 import { K as TOKENS } from "@/design/tokens";
+import { RealEstateTourModal } from '@/components/RealEstateTourModal'
 
 export const Route = createFileRoute('/real-estate')({
   component: RealEstateRoot,
@@ -62,7 +63,7 @@ const STATS = [
 function MapHero({ isMobile }: { isMobile: boolean }) {
   const t = useT()
   return (
-    <section style={{ padding: isMobile ? '12px 12px 0' : '22px 26px 0' }}>
+    <section data-tour="re-hero" style={{ padding: isMobile ? '12px 12px 0' : '22px 26px 0' }}>
       <style>{`
         @keyframes reKenBurns { from { transform: scale(1) } to { transform: scale(1.06) } }
         .re-map-bg { animation: reKenBurns 16s ease-in-out infinite alternate; }
@@ -129,10 +130,10 @@ function AccionesSection({ isMobile }: { isMobile: boolean }) {
     },
   ]
   return (
-    <section style={{ padding: isMobile ? '40px 16px 8px' : '72px 26px 16px' }}>
+    <section data-tour="re-acciones" style={{ padding: isMobile ? '40px 16px 8px' : '72px 26px 16px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, 1fr)', gap: isMobile ? 22 : 32 }}>
         {cards.map((c) => (
-          <div key={c.n} style={{ borderTop: `3px solid ${K.ink}`, paddingTop: 18, display: 'flex', flexDirection: 'column' }}>
+          <div key={c.n} data-tour={`re-camino-${c.n}`} style={{ borderTop: `3px solid ${K.ink}`, paddingTop: 18, display: 'flex', flexDirection: 'column' }}>
             <div style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1rem', color: K.rojo, marginBottom: 6 }}>{c.n}</div>
             <h2 style={{ fontFamily: K.serif, fontWeight: 900, fontSize: '1.5rem', margin: '0 0 10px', color: K.ink, letterSpacing: '-.4px' }}>{c.h}</h2>
             <p style={{ color: K.muted, lineHeight: 1.6, margin: '0 0 18px', flex: 1 }}>{c.p}</p>
@@ -161,7 +162,7 @@ function RealtorsSection({ isMobile }: { isMobile: boolean }) {
     { h: 'Comuna Preferred', p: t('8 cupos por comuna. Rotás en toda la comuna, visibilidad premium.', '8 slots per comuna. You rotate across the whole comuna, premium visibility.') },
   ]
   return (
-    <section style={{ padding: isMobile ? '28px 16px' : '56px 26px' }}>
+    <section data-tour="re-realtors" style={{ padding: isMobile ? '28px 16px' : '56px 26px' }}>
       <div style={{
         maxWidth: 1200, margin: '0 auto',
         background: `linear-gradient(125deg, ${K.tealDeep}, ${K.teal})`, color: '#fff',
@@ -285,7 +286,7 @@ function ListingsDestacadosSection({ isMobile }: { isMobile: boolean }) {
   }, [data])
 
   return (
-    <section style={{ background: K.surface, borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, padding: isMobile ? '40px 16px' : '72px 26px' }}>
+    <section data-tour="re-destacados" style={{ background: K.surface, borderTop: `1px solid ${K.line}`, borderBottom: `1px solid ${K.line}`, padding: isMobile ? '40px 16px' : '72px 26px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto' }}>
         <SecTitle link="/map" linkLabel={t('Ver todas →', 'See all →')}>{t('Propiedades destacadas', 'Featured properties')}</SecTitle>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(270px, 1fr))', gap: 20 }}>
@@ -305,7 +306,7 @@ function HistoriaSection({ isMobile }: { isMobile: boolean }) {
     { val: t('reales', 'verified'), lbl: t('datos verificados', 'verified data') },
   ]
   return (
-    <section style={{ padding: isMobile ? '44px 16px' : '80px 26px' }}>
+    <section data-tour="re-historia" style={{ padding: isMobile ? '44px 16px' : '80px 26px' }}>
       <div style={{ maxWidth: 1200, margin: '0 auto', display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: isMobile ? 32 : 60, alignItems: 'center' }}>
         <div style={{ borderRadius: 18, overflow: 'hidden', aspectRatio: '4/3', minHeight: 260, position: 'relative', background: `linear-gradient(145deg, ${K.tealDeep} 0%, #1a6b50 100%)` }}>
           <img src="https://images.unsplash.com/photo-1697082390861-9f5186b44431?auto=format&fit=crop&w=900&q=80" alt="Medellín" loading="lazy"
@@ -384,6 +385,7 @@ function RealEstatePage() {
   const isMobile = useIsMobile()
   return (
     <>
+      <RealEstateTourModal />
       <MapHero isMobile={isMobile} />
       <AccionesSection isMobile={isMobile} />
       <RealtorsSection isMobile={isMobile} />

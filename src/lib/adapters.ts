@@ -405,6 +405,7 @@ export type ListingCaracteristicas = {
   acepta_permuta?: boolean;
   acepta_credito?: boolean;
   comision_incluida?: boolean;
+  comision_pct?: number;     // % que el propietario paga al agente que cierra (solo propios)
   [k: string]: unknown;
 };
 

@@ -8,13 +8,19 @@ import { API_ENDPOINTS } from "@/config/api";
 import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { K } from "@/design/tokens";
 import { type AgenteCard as AgenteCardT, AgentCard, buildBuscarQS } from "@/components/agentes/agenteShared";
+import { AGENTE_TIPO_LABEL } from "@/lib/agenteTipos";
+import { AgentesTourModal } from "@/components/AgentesTourModal";
 
 type Intencion = "comprar" | "vender" | "arrendar";
 type DirSearch = {
   ciudad?: string; zona?: string; comuna?: string; nombre?: string; intencion?: Intencion;
-  tipo?: string; idiomas?: string; especialidad?: string; orden?: string;
+  tipo?: string; tipo_agente?: string; idiomas?: string; especialidad?: string; orden?: string;
   rating_min?: number; pg?: number;
 };
+
+// Etiqueta legible del filtro por estado del agente (deep-link ?tipo_agente=certified,preferred).
+const tipoAgenteLabel = (v: string) =>
+  v.split(",").map((x) => (AGENTE_TIPO_LABEL as Record<string, { es: string }>)[x.trim()]?.es ?? x.trim()).join(" · ");
 
 const str = (s: unknown) => (typeof s === "string" && s.trim() ? s.trim() : undefined);
 const CIUDAD_DEFAULT = "medellin";
@@ -25,7 +31,7 @@ export const Route = createFileRoute("/agentes")({
   validateSearch: (s: Record<string, unknown>): DirSearch => ({
     ciudad: str(s.ciudad), zona: str(s.zona), comuna: str(s.comuna), nombre: str(s.nombre),
     intencion: (["comprar", "vender", "arrendar"] as const).includes(s.intencion as Intencion) ? (s.intencion as Intencion) : undefined,
-    tipo: str(s.tipo), idiomas: str(s.idiomas), especialidad: str(s.especialidad),
+    tipo: str(s.tipo), tipo_agente: str(s.tipo_agente), idiomas: str(s.idiomas), especialidad: str(s.especialidad),
     orden: str(s.orden), rating_min: typeof s.rating_min === "number" ? s.rating_min : undefined,
     pg: typeof s.pg === "number" && s.pg > 1 ? s.pg : undefined,
   }),
@@ -112,6 +118,7 @@ function DirectorioPage() {
 
   const chips = [
     sp.zona && { k: "zona", label: sp.zona },
+    sp.tipo_agente && { k: "tipo_agente", label: tipoAgenteLabel(sp.tipo_agente) },
     sp.intencion && { k: "intencion", label: INTENCIONES.find((i) => i.v === sp.intencion)?.label },
     sp.tipo && { k: "tipo", label: TIPOS.find((t) => t.v === sp.tipo)?.label },
     sp.idiomas && { k: "idiomas", label: sp.idiomas },
@@ -124,6 +131,7 @@ function DirectorioPage() {
 
   return (
     <ComunidadLayout>
+      <AgentesTourModal />
       <div className="mx-auto max-w-5xl px-4 pb-20 pt-6">
         {/* Breadcrumb */}
         <nav aria-label="Ruta" className="flex flex-wrap items-center gap-1 text-xs" style={{ color: K.muted }}>
@@ -140,7 +148,7 @@ function DirectorioPage() {
         </p>
 
         {/* Buscador + intención */}
-        <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div data-tour="agentes-buscar" className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: K.muted }} />
             <input defaultValue={sp.nombre ?? ""} onKeyDown={(e) => { if (e.key === "Enter") setFilter({ nombre: str((e.target as HTMLInputElement).value) }); }}
@@ -161,7 +169,7 @@ function DirectorioPage() {
         </div>
 
         {/* Barra de filtros */}
-        <div className="mt-3 flex flex-wrap items-center gap-2">
+        <div data-tour="agentes-filtros" className="mt-3 flex flex-wrap items-center gap-2">
           <FilterSelect label="Tipo de agente" value={sp.tipo ?? ""} onChange={(e) => setFilter({ tipo: str(e.target.value) })}>{TIPOS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>
           <FilterSelect label="Idioma" value={sp.idiomas ?? ""} onChange={(e) => setFilter({ idiomas: str(e.target.value) })}>{IDIOMAS.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>
           <FilterSelect label="Especialidad" value={sp.especialidad ?? ""} onChange={(e) => setFilter({ especialidad: str(e.target.value) })}>{ESPECIALIDADES.map((t) => <option key={t.v} value={t.v}>{t.label}</option>)}</FilterSelect>

@@ -268,10 +268,10 @@ export function ComunidadNavbar({ compact = false, hideTicker = false }: { compa
             )}
             {/* Tutorial pegado al logo (izquierda): fuera del flujo central, no empuja
                los nav links ni la sección derecha. Solo donde hay tour montado. */}
-            {(path === '/' || path === '/map' || path === '/realtor/dashboard') && (
+            {(path === '/' || path === '/map' || path === '/realtor/dashboard' || path === '/agentes' || path === '/real-estate') && (
               <button
                 onClick={() => window.dispatchEvent(new CustomEvent('replay-tour'))}
-                data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : 'realtor-tour-replay'}
+                data-tour={path === '/' ? 'tour-replay-home' : path === '/map' ? 'tour-replay' : path === '/realtor/dashboard' ? 'realtor-tour-replay' : path === '/agentes' ? 'agentes-tour-replay' : 'real-estate-tour-replay'}
                 aria-label={t('Ver tutorial', 'View tutorial')}
                 title={t('Ver tutorial', 'View tutorial')}
                 style={{

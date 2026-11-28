@@ -1,7 +1,8 @@
 // Registro de agente — paso 1 del Programa de agentes (docs/Medellin-Social-Programa-
 // Inmobiliario-ES.md §Cómo inscribirte): perfil profesional + agencia. Luego el agente
 // sigue en /agentes/mi-programa: pago del registro ($25 USD), vinculación de anuncios
-// y certificación. El equipo aprueba la cuenta (panel admin).
+// y certificación. La cuenta se activa automáticamente al registrarse (con el correo
+// verificado); el equipo solo modera a posteriori (suspender/reactivar).
 import { seo } from "@/lib/seo";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useState } from "react";

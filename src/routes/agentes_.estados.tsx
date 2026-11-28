@@ -145,7 +145,7 @@ function EstadosAgentePage() {
               <h2 style={h2}>{e.titulo}</h2>
               {e.parrafos.map((x) => <p key={x} style={p}>{x}</p>)}
               {e.id === "no-registrado" && (
-                <Link to="/agentes" search={{ tipo: "certified,preferred" } as never} style={{ fontSize: 13, fontWeight: 700, color: K.teal }}>
+                <Link to="/agentes" search={{ tipo_agente: "certified,preferred" } as never} style={{ fontSize: 13, fontWeight: 700, color: K.teal }}>
                   {t("Buscar agentes certificados y preferentes →", "Find certified and preferred agents →")}
                 </Link>
               )}

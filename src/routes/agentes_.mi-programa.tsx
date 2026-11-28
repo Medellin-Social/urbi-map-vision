@@ -58,7 +58,7 @@ function MiProgramaPage() {
           </div>
           {nuevo && (
             <div role="status" style={{ ...pCard, background: K.tealLight, border: "none", fontSize: 14, color: K.tealDeep }}>
-              {t("Recibimos tu perfil. Paga tu registro para que el equipo lo revise y lo active.", "We received your profile. Pay your registration so our team can review and activate it.")}
+              {t("Tu cuenta ya quedó activa. Paga tu registro para aparecer en el directorio y vincular tus anuncios.", "Your account is already active. Pay your registration to appear in the directory and link your listings.")}
             </div>
           )}
 
@@ -75,15 +75,15 @@ function MiProgramaPage() {
                 </div>
               )}
             </Paso>
-            <Paso hecho={activo} actual={!activo && !!e.registro_pagado_at}>
-              <strong>{t("Aprobación del equipo", "Team approval")}</strong> — {activo ? t("cuenta activa", "account active")
-                : e.estado === "pendiente" ? t("en revisión", "under review")
+            <Paso hecho={activo} actual={!activo}>
+              <strong>{t("Cuenta activa", "Account active")}</strong> — {activo ? t("se activó automáticamente al registrarte", "activated automatically when you registered")
+                : e.estado === "pendiente" ? t("verifica tu correo para activarla", "verify your email to activate it")
                 : t("cuenta no habilitada; escríbenos a hola@medellin.social", "account not enabled; write to hola@medellin.social")}
             </Paso>
             <Paso hecho={e.registrado}>
               <strong>{t("Agente registrado", "Registered agent")}</strong> — {e.registrado
                 ? t("tu perfil aparece en el directorio y en tus anuncios cubiertos", "your profile appears in the directory and on your covered listings")
-                : t("se activa con el pago y la aprobación", "activates with payment and approval")}
+                : t("se activa al pagar el registro", "activates when you pay the registration")}
             </Paso>
             <Paso hecho={e.certificado} actual={!!cert && !e.certificado}>
               <strong>{t("Agente certificado", "Certified agent")}</strong> — {e.certificado ? t("insignia activa", "badge active")

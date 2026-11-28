@@ -386,7 +386,7 @@ const ESP_LABEL: Record<string, string> = {
 // Pura (testeable): el directorio la usa y los tests fijan el contrato filtros→API.
 export type AgentesFiltros = {
   zona?: string; comuna?: string; nombre?: string; intencion?: string; tipo?: string;
-  idiomas?: string; especialidad?: string; orden?: string; rating_min?: number;
+  tipo_agente?: string; idiomas?: string; especialidad?: string; orden?: string; rating_min?: number;
 };
 export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: number; pageSize: number }): string {
   const p = new URLSearchParams();
@@ -396,6 +396,7 @@ export function buildBuscarQS(f: AgentesFiltros, opts: { ciudad: string; pg: num
   if (f.nombre) p.set("nombre", f.nombre);
   if (f.intencion) p.set("intencion", f.intencion);
   if (f.tipo) p.set("tipo", f.tipo);
+  if (f.tipo_agente) p.set("tipo_agente", f.tipo_agente);
   if (f.idiomas) p.set("idiomas", f.idiomas);
   if (f.especialidad) p.set("especialidad", f.especialidad);
   if (f.rating_min) p.set("rating_min", String(f.rating_min));
@@ -428,6 +429,7 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
 
   return (
     <div
+      data-tour="agente-card"
       className="group rounded-2xl p-5 transition-all duration-200 hover:-translate-y-0.5 sm:p-6"
       style={{
         background: "#FFFFFF",
@@ -458,7 +460,7 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
               <Name>{a.nombre}</Name>
             </Link>
             {a.verificado && (
-              <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
+              <span data-tour="agente-verificado" className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide"
                 style={{ border: `1px solid ${K.line}`, color: K.ink }} title="Información del agente verificada">
                 <ShieldCheck className="h-3 w-3" style={{ color: K.muted }} /> Verificado
               </span>
@@ -470,7 +472,7 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
           )}
 
           {a.rating_promedio != null ? (
-            <div className="mt-1 flex items-center gap-1.5">
+            <div data-tour="agente-rating" className="mt-1 flex items-center gap-1.5">
               <Stars value={a.rating_promedio} /><span className="text-xs font-semibold" style={{ color: K.ink }}>{a.rating_promedio.toFixed(1)}</span>
               <span data-i18n-skip="true" className="text-xs" style={{ color: K.muted }}>({a.n_resenas})</span>
             </div>
@@ -489,7 +491,7 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
           {!compact && a.bio_corta && <p className="mt-2 line-clamp-2 text-[13px] leading-snug" style={{ color: K.muted }}>{a.bio_corta}</p>}
 
           {(zonasTop.length > 0 || a.especialidades.length > 0) && (
-            <div className="mt-2.5 flex flex-wrap gap-1.5">
+            <div data-tour="agente-zonas" className="mt-2.5 flex flex-wrap gap-1.5">
               {a.exclusivo && zonasTop[0] && (
                 <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ border: `1px solid rgba(17,20,24,0.2)`, color: K.ink }}>
                   <Star width={10} height={10} fill={K.amarillo} stroke={K.amber} /> Exclusivo en {zonasTop[0]}
@@ -506,7 +508,7 @@ export function AgentCard({ a, compact }: { a: AgenteCard; compact?: boolean }) 
           )}
         </div>
 
-        <div className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-40 sm:justify-center">
+        <div data-tour="agente-contacto" className="col-span-2 flex flex-col gap-2 sm:col-span-1 sm:w-40 sm:justify-center">
           <Link to="/agentes/$id" params={{ id: perfilHref(a) }} className="rounded-xl px-5 py-2.5 text-center text-sm font-semibold text-white transition hover:opacity-90" style={{ background: K.ink }}>Ver perfil</Link>
           {a.telefono && (
             <div className="grid grid-cols-2 gap-2">

@@ -1907,6 +1907,7 @@ async def buscar_agentes(
     nombre: Optional[str] = Query(default=None),       # nombre agente o agencia
     intencion: Optional[str] = Query(default=None),    # comprar|vender|arrendar
     tipo: Optional[str] = Query(default=None),         # todos|compra-venta|arrendamiento|inversion
+    tipo_agente: Optional[str] = Query(default=None),  # member|certified|preferred|casa (CSV, OR) — estado del agente
     idiomas: Optional[str] = Query(default=None),      # csv
     especialidad: Optional[str] = Query(default=None),
     precio_min: Optional[float] = Query(default=None),
@@ -1939,6 +1940,12 @@ async def buscar_agentes(
         esp_overlap.append(especialidad)
     if esp_overlap:
         add("c.especialidades && $$::text[]", list(set(esp_overlap)))
+    if tipo_agente:
+        # estado del agente (deep-link del aviso "no registrado": ?tipo_agente=certified,preferred).
+        # Valores desconocidos se ignoran (no 422) para no vaciar el directorio por un typo.
+        ta = [x for x in (s.strip() for s in tipo_agente.split(",")) if x in AGENTE_TIPOS]
+        if ta:
+            add("COALESCE(c.tipos && $$::text[], FALSE)", ta)
     if idiomas:
         add("c.idiomas && $$::text[]", [s.strip() for s in idiomas.split(",") if s.strip()])
     if precio_min is not None:

@@ -86,7 +86,7 @@ export const Route = createFileRoute("/realtor/dashboard")({
 // (falla AA texto normal); #0C7A45 da 5.4:1 → pasa AA. Usado en sub-nav/badges activos.
 const BRAND_DEEP = "#0C7A45";
 
-type Section = "inicio" | "listings" | "bandeja" | "mercado" | "herramientas";
+type Section = "inicio" | "listings" | "bandeja" | "mercado" | "herramientas" | "servicios";
 
 // Navegación entre secciones desde cualquier hijo (p.ej. "Reportar un cierre" en
 // Mercado lleva a Mis listings).
@@ -103,6 +103,9 @@ const SECTIONS: { id: Section; label: string }[] = [
   // Componente (MercadoSection) se deja en el archivo por si se repurposea.
   { id: "herramientas", label: "Herramientas" },
   { id: "inicio",       label: "Resultados" },
+  // Servicios (perfil público, horario, zonas patrocinadas): config de cuenta, no
+  // herramienta de asesoría. Sección propia; antes era sub-tab de Herramientas.
+  { id: "servicios",    label: "Servicios" },
 ];
 
 // Deep-link: ids viejos de ?tab= → sección nueva (no romper enlaces del navbar/listing).
@@ -111,7 +114,7 @@ const TAB_TO_SECTION: Record<string, Section> = {
   listings: "listings",
   inbox: "bandeja", agenda: "bandeja",
   resultados: "inicio", inteligencia: "inicio",  // Mercado oculto → viejos deep-links caen en Inicio
-  simulador: "herramientas", comparador: "herramientas", config: "herramientas",
+  simulador: "herramientas", comparador: "herramientas", config: "servicios",
 };
 
 // El viejo ?tab= también fija el sub-tab de la sección (p.ej. /realtor/dashboard?tab=comparador
@@ -169,7 +172,7 @@ function RealtorDashboardPage() {
     <BarrioProvider>
     <GoToSection.Provider value={goTo}>
     <div className="paper-theme min-h-screen bg-background">
-      <RealtorTourModal />
+      <RealtorTourModal onSection={(s) => setSection(s as Section)} />
       {/* Navbar del home (masthead + barra teal sticky top:0 h52), sin la barra de
           noticias (ticker). RealtorNav (tabs) se stickea debajo a top-[55px]; el
           masthead es estático → scrollea fuera y solo queda la barra teal. */}
@@ -187,6 +190,7 @@ function RealtorDashboardPage() {
         {section === "listings"     && <ListingsTab />}
         {section === "bandeja"      && <BandejaSection />}
         {section === "herramientas" && <HerramientasSection />}
+        {section === "servicios"    && <ConfiguracionTab />}
       </main>
     </div>
     </GoToSection.Provider>
@@ -492,10 +496,8 @@ function MercadoSection() {
 // ── Sección: Herramientas (Simulador + Servicios) ─────────────────────────────
 
 function HerramientasSection() {
-  const [sub, setSub] = useState<"simulador" | "comparador" | "servicios">(() => {
-    const t = tabParam();
-    return t === "simulador" ? "simulador" : t === "config" ? "servicios" : "comparador";
-  });
+  const [sub, setSub] = useState<"simulador" | "comparador">(() =>
+    tabParam() === "simulador" ? "simulador" : "comparador");
   return (
     <div>
       <SubNav
@@ -505,18 +507,15 @@ function HerramientasSection() {
         items={[
           { id: "comparador", label: "Comparador" },
           { id: "simulador", label: "Simulador" },
-          { id: "servicios", label: "Servicios" },
         ]}
       />
       <p className="-mt-2 mb-5 text-[13px]" style={{ color: C.sub }}>
         {sub === "simulador" && "Proyecta la rentabilidad de una inversión en cualquier barrio para mostrársela a tu cliente."}
         {sub === "comparador" && "Pon hasta 4 barrios o listings lado a lado para comparar."}
-        {sub === "servicios" && "Tu perfil público, el horario en que aceptas visitas y las zonas que patrocinas."}
       </p>
       <div id={`subpanel-${sub}`} role="tabpanel" aria-labelledby={`subtab-${sub}`}>
         {sub === "simulador" && <SimuladorTab />}
         {sub === "comparador" && <ComparadorTab />}
-        {sub === "servicios" && <ConfiguracionTab />}
       </div>
     </div>
   );
@@ -2433,7 +2432,7 @@ function ListingsTab() {
           {visible.length === 0 ? (
             <EmptyBlock icon={Search} msg="Ningún listing coincide con este filtro o búsqueda." />
           ) : grupo === "todos" ? (
-            <div className="space-y-8">
+            <div className="space-y-8" data-tour="listings-grupos">
               {(["preparacion", "activos", "cerrados"] as const).map((g) => {
                 const total = visible.filter((l) => GRUPO_DE[l.estado] === g).length;
                 const items = shown.filter((l) => GRUPO_DE[l.estado] === g);
@@ -2781,7 +2780,7 @@ function ListingCard({ listing: l, busy, onEditar, onMarcarVendido, onPausar, on
         )}
 
         {/* Acciones */}
-        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3">
+        <div className="mt-auto flex flex-wrap items-center gap-1.5 pt-3" data-tour="listing-acciones">
           <span className="mr-auto text-[11px]" style={{ color: C.muted }}>Actualizado {relativeTime(l.updated_at)}</span>
           {l.estado !== "cerrado" && (
             <RowAction onClick={onEditar} disabled={busy} variant="primary" title="Editar la ficha completa">Editar</RowAction>
