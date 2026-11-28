@@ -51,6 +51,9 @@ function OnboardingPage() {
   const [primeraPropiedad, setPrimeraPropiedad] = useState<boolean | null>(null);
   const [wantsAgent, setWantsAgent] = useState<boolean | null>(null);
 
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+
   const handleUserType = (type: UserType) => {
     setUserType(type);
     if (type === "explorer") {
@@ -82,6 +85,35 @@ function OnboardingPage() {
     }
     // Final submit
     if (!budget || !goal || !risk || primeraPropiedad === null || wantsAgent === null) return;
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
+
+    // Guardar primero; solo navegar si el servidor confirmó. Si falla, se queda aquí.
+    try {
+      await apiFetch(API_ENDPOINTS.onboarding, {
+        method: "POST",
+        body: JSON.stringify({
+          presupuesto: budget,
+          objetivo: GOAL_TO_OBJETIVO[goal],
+          perfil_riesgo: risk,
+          tipo_usuario: userType ?? "investor",
+          n_unidades:          goal === "airbnb"        ? questionA : null,
+          tipo_gestion:        goal === "airbnb"        ? questionB : null,
+          target_inquilino:    goal === "mediano_plazo" ? questionA : null,
+          amoblado:            goal === "mediano_plazo" ? questionB : null,
+          tipo_pago:           goal === "renta-larga"   ? questionA : null,
+          horizonte_inversion: goal === "renta-larga"   ? questionB : null,
+          primera_propiedad: primeraPropiedad,
+          wants_agent: wantsAgent,
+        }),
+      });
+    } catch {
+      setSaving(false);
+      setSaveError("No pudimos guardar tu perfil. Revisa tu conexión e inténtalo de nuevo.");
+      toast.error("No pudimos guardar tu perfil. Revisa tu conexión e inténtalo de nuevo.");
+      return;
+    }
 
     auth.patch({
       userType: userType ?? "investor",
@@ -96,26 +128,6 @@ function OnboardingPage() {
       horizonteInversion:goal === "renta-larga"   ? (questionB ?? undefined) : undefined,
       primeraPropiedad,
       wantsAgent,
-    });
-
-    apiFetch(API_ENDPOINTS.onboarding, {
-      method: "POST",
-      body: JSON.stringify({
-        presupuesto: budget,
-        objetivo: GOAL_TO_OBJETIVO[goal],
-        perfil_riesgo: risk,
-        tipo_usuario: userType ?? "investor",
-        n_unidades:          goal === "airbnb"        ? questionA : null,
-        tipo_gestion:        goal === "airbnb"        ? questionB : null,
-        target_inquilino:    goal === "mediano_plazo" ? questionA : null,
-        amoblado:            goal === "mediano_plazo" ? questionB : null,
-        tipo_pago:           goal === "renta-larga"   ? questionA : null,
-        horizonte_inversion: goal === "renta-larga"   ? questionB : null,
-        primera_propiedad: primeraPropiedad,
-        wants_agent: wantsAgent,
-      }),
-    }).catch(() => {
-      toast.error("No pudimos guardar tu perfil en el servidor. Puedes continuar normalmente.");
     });
 
     navigate({ to: "/map" });
@@ -459,21 +471,26 @@ function OnboardingPage() {
         </AnimatePresence>
 
         {/* Navigation — only for investor steps */}
+        {step === INVESTOR_STEPS && saveError && (
+          <div role="alert" className="mt-6 rounded-md border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {saveError}
+          </div>
+        )}
         {step > 0 && (
           <div className="mt-8 flex items-center justify-between">
             <button
-              onClick={() => setStep((s) => Math.max(1, s - 1))}
-              disabled={step === 1}
+              onClick={() => { setSaveError(null); setStep((s) => Math.max(1, s - 1)); }}
+              disabled={step === 1 || saving}
               className="rounded-md border border-border px-4 py-2 text-sm text-muted-foreground transition hover:text-foreground disabled:opacity-30"
             >
               Atrás
             </button>
             <button
               onClick={next}
-              disabled={!canNext()}
+              disabled={!canNext() || saving}
               className="rounded-md bg-primary px-6 py-2 text-sm font-semibold text-primary-foreground transition hover:opacity-90 disabled:opacity-40 disabled:shadow-none glow-cyan"
             >
-              {step === INVESTOR_STEPS ? "Ir al mapa" : "Continuar"}
+              {step === INVESTOR_STEPS ? (saving ? "Guardando…" : "Ir al mapa") : "Continuar"}
             </button>
           </div>
         )}

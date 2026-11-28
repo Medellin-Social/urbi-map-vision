@@ -789,8 +789,8 @@ export const PHRASES: Array<[string, string]> = [
   ["Quitar", "Remove"],
 
   // ---- Onboarding / mapa ----
-  ["No pudimos guardar tu perfil en el servidor. Puedes continuar normalmente.",
-    "Could not save your profile to the server. You can continue normally."],
+  ["No pudimos guardar tu perfil. Revisa tu conexión e inténtalo de nuevo.",
+    "Could not save your profile. Check your connection and try again."],
   ["Mayor yield potencial en zonas emergentes", "Highest yield potential in emerging areas"],
   ["Zonas consolidadas con yields estables", "Consolidated areas with stable yields"],
   ["Zonas emergentes", "Emerging areas"],
@@ -1314,9 +1314,7 @@ export const PHRASES: Array<[string, string]> = [
   ["Este listing", "This listing"],
 
   // ── Simulador ─────────────────────────────────────────────────────────────
-  ["El Simulador de Inversión es exclusivo de MLS Pro", "The Investment Simulator is exclusive to MLS Pro"],
   ["Calcula el yield real, flujo de caja y ROI de cualquier propiedad en el Valle de Aburrá con datos reales del mercado.", "Calculate the real yield, cash flow and ROI of any property in the Aburrá Valley with real market data."],
-  ["Suscribirse a MLS Pro → Desde $79,000 COP/mes", "Subscribe to MLS Pro → From $79,000 COP/mo"],
   ["Impuesto predial (M COP/año — vacío = 0.5% estimado)", "Property tax (M COP/yr — blank = 0.5% estimate)"],
   ["Retención en la fuente (3.5% si canon >$1.3M)", "Source withholding (3.5% if rent >$1.3M)"],
   ["Promedio bancos: ~12–14%", "Bank average: ~12–14%"],
@@ -1346,7 +1344,6 @@ export const PHRASES: Array<[string, string]> = [
   ["Contado", "Cash"],
 
   // ── Comparador ────────────────────────────────────────────────────────────
-  ["Con MLS Pro compara barrios ilimitados y accede a métricas avanzadas.", "With MLS Pro compare unlimited neighborhoods and access advanced metrics."],
   ["Con el plan Free puedes comparar hasta", "With the Free plan you can compare up to"],
   ["Aún no tienes comparaciones guardadas.", "No saved comparisons yet."],
   ["Mis comparaciones guardadas", "My saved comparisons"],
@@ -1615,8 +1612,6 @@ export const PHRASES: Array<[string, string]> = [
   ["Debes confirmar que eres propietario o tienes autorización", "You must confirm you are the owner or have authorization"],
   ["Debes aceptar el modelo de comisión", "You must accept the commission model"],
   ["Verifica tu teléfono en el paso de contacto antes de publicar.", "Verify your phone in the contact step before publishing."],
-  ["Vendé más rápido con MLS Pro", "Sell faster with MLS Pro"],
-  ["Análisis de tiempo de venta por barrio, posicionamiento para inversores extranjeros y comparador Airbnb vs renta larga.", "Neighborhood sale-time analysis, positioning for foreign investors and an Airbnb vs. long-term rental comparator."],
   ["Confirmo que soy el propietario o tengo autorización para publicar esta propiedad", "I confirm I am the owner or have authorization to list this property"],
   ["Acepto el modelo de comisión del 3% sobre el precio de venta (solo aplica si se cierra la venta)", "I accept the 3% commission model on the sale price (only applies if the sale closes)"],
   ["Acepto los términos y condiciones de Medellín Social", "I accept the terms and conditions of Medellín Social"],
@@ -1782,7 +1777,11 @@ export const PHRASES: Array<[string, string]> = [
   ["Score inversión", "Investment score"],
   ["Yield bruto barrio", "Neighborhood gross yield"],
   ["Listing no encontrado", "Listing not found"],
-  ["Será agregado próximamente", "Coming soon"],
+  ["Amenidades del edificio", "Building amenities"],
+  ["Tour virtual 360°", "360° virtual tour"],
+  ["Ver tour virtual →", "View virtual tour →"],
+  ["Referencia por m² de la comuna", "Reference per m² in the comuna"],
+  ["Simulación detallada con costos, impuestos y proyecciones", "Detailed simulation with costs, taxes and projections"],
   ["Días en mercado", "Days on market"],
   ["Características", "Features"],
   ["Más información", "More info"],
@@ -2349,6 +2348,8 @@ export const PHRASES: Array<[string, string]> = [
   ["Publicar mi primera propiedad", "Publish my first property"],
   ["Ver detalles de mi plan", "View my plan details"],
   ["Ir al MLS Pro →", "Go to MLS Pro →"],
+  ["Esta herramienta es para realtors", "This tool is for realtors"],
+  ["Registrate como realtor (gratis)", "Sign up as a realtor (free)"],
   ["Activando plan…", "Activating plan…"],
 
   // ── suscripcion/cancelada.tsx ─────────────────────────────────────────────
@@ -2471,7 +2472,6 @@ export const PHRASES: Array<[string, string]> = [
    "Information published by external sources and owners. Medellín Social does not guarantee the accuracy of prices, availability, or details — verify with the agent before deciding."],
   ["Score de inversión", "Investment score"],
   ["Score zona", "Zone score"],
-  ["Desbloquea el análisis completo con MLS Pro", "Unlock the full analysis with MLS Pro"],
   ["se vende más rápido que", "sells faster than"],
   ["de la zona", "of the area"],
   ["guardados", "saves"],

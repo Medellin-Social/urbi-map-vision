@@ -1,9 +1,11 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as RTooltip, ResponsiveContainer, Legend,
 } from "recharts";
 import { useBarriosComunas, useBarriosPorComuna } from "@/hooks/useBarrios";
-import { useSimular, type SimulacionRequest, type FlujoCajaDesglose } from "@/hooks/useCalculadora";
+import { useSimular, useListingSimuladorData, type SimulacionRequest, type FlujoCajaDesglose } from "@/hooks/useCalculadora";
+import { apiFetch } from "@/lib/apiClient";
+import { API_ENDPOINTS } from "@/config/api";
 import { C, fmtCOP, Card, Gauge, Stat, Segmented } from "./_kit";
 
 const PRESUPUESTOS = [200, 350, 500, 800, 1000]; // millones COP
@@ -50,6 +52,13 @@ function FlujoCaja({ f }: { f: FlujoCajaDesglose }) {
   );
 }
 
+// Deep-link desde /simulador?listing_id=|barrio=|precio= (el redirect conserva los params).
+function numParam(name: string): number | null {
+  if (typeof window === "undefined") return null;
+  const n = Number(new URLSearchParams(window.location.search).get(name));
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+
 export function SimuladorTab() {
   const [comuna, setComuna] = useState<string | null>(null);
   const [barrioId, setBarrioId] = useState<number | null>(null);
@@ -57,9 +66,37 @@ export function SimuladorTab() {
   const [modalidad, setModalidad] = useState<Modalidad>("renta_larga");
   const horizonte = 5;
 
+  const [listingId] = useState(() => numParam("listing_id"));
+  const [barrioParam] = useState(() => numParam("barrio"));
+  const [precioParam] = useState(() => numParam("precio"));
+  const { data: listingData } = useListingSimuladorData(listingId);
+
   const { data: comunas } = useBarriosComunas();
   const { data: barrios } = useBarriosPorComuna(comuna);
   const sim = useSimular();
+
+  // Prellenar barrio + comuna + presupuesto desde el listing (o desde ?barrio=&precio=).
+  const prefillBarrio = listingData?.barrio_id ?? barrioParam;
+  const prefillPrecio = listingData?.precio ?? precioParam;
+  useEffect(() => {
+    if (prefillPrecio) setPresupuesto(Math.max(1, Math.round(prefillPrecio / 1e6)));
+  }, [prefillPrecio]);
+  useEffect(() => {
+    if (!prefillBarrio) return;
+    let cancel = false;
+    apiFetch<{ comuna: string | null; municipio: string }>(API_ENDPOINTS.barrioInfo(prefillBarrio))
+      .then((b) => {
+        if (cancel) return;
+        setComuna(b.comuna ?? b.municipio);
+        setBarrioId(prefillBarrio);
+      })
+      .catch(() => {});
+    return () => { cancel = true; };
+  }, [prefillBarrio]);
+
+  const presupuestoOpts = PRESUPUESTOS.includes(presupuesto)
+    ? PRESUPUESTOS
+    : [...PRESUPUESTOS, presupuesto].sort((a, b) => a - b);
 
   const correr = () => {
     if (barrioId == null) return;
@@ -100,7 +137,7 @@ export function SimuladorTab() {
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Presupuesto</span>
               <Segmented value={String(presupuesto)} onChange={(v) => setPresupuesto(Number(v))}
-                options={PRESUPUESTOS.map((p) => ({ v: String(p), label: p >= 1000 ? "$1.000M" : `$${p}M` }))} />
+                options={presupuestoOpts.map((p) => ({ v: String(p), label: p >= 1000 ? `$${p.toLocaleString("es-CO")}M` : `$${p}M` }))} />
             </div>
             <div className="flex flex-col gap-1.5">
               <span className="text-[11px] font-semibold uppercase tracking-wide" style={{ color: C.muted }}>Modalidad</span>

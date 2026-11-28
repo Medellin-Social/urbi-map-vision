@@ -66,7 +66,7 @@ const searchSchema = z.object({
 export const Route = createFileRoute("/simulador")({
   head: () => seo({ title: "Simulador de inversión · Medellín Social", description: "Simula la rentabilidad de un inmueble en Medellín: renta corta, media y larga, con datos reales del barrio.", path: "/simulador" }),
   validateSearch: searchSchema,
-  beforeLoad: () => {
+  beforeLoad: ({ search }) => {
     if (typeof window === "undefined") return;
     const raw = localStorage.getItem("medellin-social.user");
     if (!raw) {
@@ -76,7 +76,12 @@ export const Route = createFileRoute("/simulador")({
     const u = JSON.parse(raw);
     // El simulador vive ahora DENTRO del centro de agente (tab), no como página suelta.
     if (u.plan === "agente" || u.esAgente === true) {
-      throw redirect({ href: "/realtor/dashboard?tab=simulador" });
+      // Conserva los params (listing_id, barrio, precio...) para que el tab prellene.
+      const qs = new URLSearchParams({ tab: "simulador" });
+      for (const [k, v] of Object.entries(search)) {
+        if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+      }
+      throw redirect({ href: `/realtor/dashboard?${qs.toString()}` });
     }
     throw redirect({ to: "/planes", search: { audiencia: "agente" } });
   },

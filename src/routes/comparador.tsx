@@ -611,18 +611,18 @@ export function TabInmuebles({
         <Lock className="h-8 w-8 text-[#5B5F5C]" />
         <div>
           <p className="font-semibold text-[#111418]">
-            El Comparador de Inmuebles es exclusivo de MLS Pro
+            Esta herramienta es para realtors
           </p>
           <p className="mt-1 text-sm text-[#5B5F5C]">
             Compara hasta 10 propiedades lado a lado con análisis de precio, yield y zona.
           </p>
         </div>
         <Link
-          to="/planes"
+          to="/agentes/registro"
           className="rounded-xl px-6 py-2.5 text-sm font-semibold text-white transition hover:opacity-90"
           style={{ background: "#0F8A4F" }}
         >
-          Suscribirse a MLS Pro →
+          Registrate como realtor (gratis)
         </Link>
       </div>
     );

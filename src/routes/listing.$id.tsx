@@ -201,14 +201,16 @@ function Chip({
   );
 }
 
-function ComingSoon({ title }: { title: string }) {
+function InfoCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-xl p-5 text-center" style={{ border: '1px dashed #E5E0D5' }}>
-      <div className="text-sm text-muted-foreground">{title}</div>
-      <div className="mt-1 text-xs italic" style={{ color: '#6E726E' }}>Será agregado próximamente</div>
+    <div className="rounded-xl p-5" style={{ border: '0.5px solid #E5E0D5', background: '#F3F0E8' }}>
+      <div className="text-sm font-medium" style={{ color: '#111418' }}>{title}</div>
+      <div className="mt-2">{children}</div>
     </div>
   );
 }
+
+const isHttpUrl = (u: string | null | undefined): u is string => !!u && /^https?:\/\//i.test(u);
 
 // ─── Exported for modal reuse ─────────────────────────────────────────────────
 export function ListingDetailContent({
@@ -378,16 +380,14 @@ export function ListingDetailContent({
             </section>
 
             {/* Description */}
-            <section className="space-y-3">
-              <h2 className="text-lg font-semibold" style={{ color: '#111418' }}>Descripción</h2>
-              {listing.descripcion ? (
+            {listing.descripcion && (
+              <section className="space-y-3">
+                <h2 className="text-lg font-semibold" style={{ color: '#111418' }}>Descripción</h2>
                 <p className="whitespace-pre-line text-sm leading-relaxed text-muted-foreground">
                   {listing.descripcion}
                 </p>
-              ) : (
-                <ComingSoon title="Descripción del inmueble" />
-              )}
-            </section>
+              </section>
+            )}
 
             {/* Investment analysis — venta only, PRO gated */}
             {tipoOp === "venta" && (
@@ -484,10 +484,11 @@ export function ListingDetailContent({
                 <div className="rounded-xl border border-dashed border-primary/30 bg-primary/5 p-5 text-center">
                   <div className="text-sm font-medium text-primary">Simulador de rentabilidad</div>
                   <div className="mt-1 text-xs text-muted-foreground">
-                    Simulación detallada con costos, impuestos y proyecciones — próximamente
+                    Simulación detallada con costos, impuestos y proyecciones
                   </div>
                   <Link
                     to="/simulador"
+                    search={{ listing_id: listing.id }}
                     className="mt-3 inline-block text-xs text-primary underline"
                   >
                     Usar simulador completo →
@@ -527,16 +528,54 @@ export function ListingDetailContent({
                 </div>
               </section>
             )}
-            <section className="space-y-4">
-              <h2 className="text-lg font-semibold" style={{ color: '#111418' }}>Más información</h2>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <ComingSoon title="Tour virtual 360°" />
-                <ComingSoon title="Historial de precios" />
-                <ComingSoon title="Avalúo catastral" />
-                <ComingSoon title="Amenidades del edificio" />
-                <ComingSoon title="Gastos de administración" />
-              </div>
-            </section>
+            {/* Más información: solo las tarjetas con dato real (sin placeholders) */}
+            {(isHttpUrl(listing.tour_url) || (listing.amenidades?.length ?? 0) > 0 ||
+              (listing.precio_historia?.length ?? 0) > 0 || listing.avaluo_m2_catastro != null) && (
+              <section className="space-y-4">
+                <h2 className="text-lg font-semibold" style={{ color: '#111418' }}>Más información</h2>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {(listing.amenidades?.length ?? 0) > 0 && (
+                    <InfoCard title="Amenidades del edificio">
+                      <div className="flex flex-wrap gap-2">
+                        {listing.amenidades!.map((a) => (
+                          <span key={a} className="rounded-lg px-2.5 py-1 text-xs" style={{ border: '0.5px solid #E5E0D5', background: '#fff', color: '#111418' }}>
+                            {a}
+                          </span>
+                        ))}
+                      </div>
+                    </InfoCard>
+                  )}
+                  {isHttpUrl(listing.tour_url) && (
+                    <InfoCard title="Tour virtual 360°">
+                      <a href={listing.tour_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary underline">
+                        Ver tour virtual →
+                      </a>
+                    </InfoCard>
+                  )}
+                  {(listing.precio_historia?.length ?? 0) > 0 && (
+                    <InfoCard title="Historial de precios">
+                      <ul className="space-y-1 text-xs text-muted-foreground">
+                        {listing.precio_historia!.map((h) => (
+                          <li key={`${h.fecha}-${h.precio}`} className="flex justify-between gap-3">
+                            <span>{new Date(h.fecha).toLocaleDateString("es-CO")}</span>
+                            <span style={{ color: '#111418' }}>
+                              {formatPrice(h.precio)}
+                              {h.delta_pct != null && h.delta_pct !== 0 && ` (${h.delta_pct > 0 ? "+" : ""}${h.delta_pct.toFixed(1)}%)`}
+                            </span>
+                          </li>
+                        ))}
+                      </ul>
+                    </InfoCard>
+                  )}
+                  {listing.avaluo_m2_catastro != null && (
+                    <InfoCard title="Avalúo catastral">
+                      <div className="text-lg font-bold" style={{ color: '#111418' }}>{formatPrice(listing.avaluo_m2_catastro)}/m²</div>
+                      <div className="text-xs text-muted-foreground">Referencia por m² de la comuna</div>
+                    </InfoCard>
+                  )}
+                </div>
+              </section>
+            )}
 
             {/* Similar listings */}
             {similarList.length > 0 && (

@@ -2041,14 +2041,14 @@ export function ListingDrawer({ listingId, onClose, onLocate }: Props) {
       {isRegistered && isLandlord && <YieldMultiModal listing={listing} />}
 
 
-      {/* CTA único para usuarios free */}
+      {/* CTA único para usuarios free: las herramientas de inversión son solo para realtors */}
       {!isPro && (
         <a
-          href="/planes"
+          href="/agentes/registro"
           className="flex w-full items-center justify-center rounded-xl py-3 text-[13px] font-semibold transition hover:opacity-90"
           style={{ background: "#111418", color: "#FFFFFF" }}
         >
-          Desbloquea el análisis completo con MLS Pro
+          Registrate como realtor (gratis)
         </a>
       )}
 

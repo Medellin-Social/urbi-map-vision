@@ -14,7 +14,17 @@ import { ComunidadLayout } from "@/components/comunidad/ComunidadLayout";
 import { BarrioEstimador } from "@/components/BarrioEstimador";
 import { K as TOKENS } from "@/design/tokens";
 
+type PublicarSearch = {
+  operacion?: "venta" | "arriendo";
+  plazo?: "corto" | "largo";
+};
+
 export const Route = createFileRoute("/publicar")({
+  // Las tarjetas de /real-estate llegan con ?operacion=arriendo&plazo=corto|largo o ?operacion=venta
+  validateSearch: (s: Record<string, unknown>): PublicarSearch => ({
+    operacion: s.operacion === "venta" || s.operacion === "arriendo" ? s.operacion : undefined,
+    plazo: s.operacion === "arriendo" && (s.plazo === "corto" || s.plazo === "largo") ? s.plazo : undefined,
+  }),
   component: PublicarRoot,
   head: () => seo({ title: "Publica tu inmueble · Medellín Social", description: "Publica tu apartamento, casa o local gratis y llega a compradores e inversionistas en Medellín.", path: "/publicar" }),
 });
@@ -1894,11 +1904,21 @@ function validateStep(step: number, data: FormData): string | null {
 
 // ── Main page ──────────────────────────────────────────────────────────────────
 
+/** Preselecciona operación (y plazo de arriendo) según los params de la URL. */
+function formFromSearch({ operacion, plazo }: PublicarSearch): FormData {
+  if (!operacion) return INITIAL_FORM;
+  const f: FormData = { ...INITIAL_FORM, tipo_operacion: operacion };
+  if (plazo === "corto") f.permite_airbnb = "si";
+  if (plazo === "largo") f.estadia_minima_meses = "12";
+  return f;
+}
+
 function PublicarPage() {
   const navigate  = useNavigate();
   const user      = typeof window !== "undefined" ? auth.get() : null;
   const [step, setStep]       = useState(0);
-  const [form, setFormRaw]    = useState<FormData>(INITIAL_FORM);
+  const search = Route.useSearch();
+  const [form, setFormRaw]    = useState<FormData>(() => formFromSearch(search));
   const [photos, setPhotos]   = useState<PhotoEntry[]>([]);
   const [error, setError]     = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -2123,57 +2143,6 @@ function PublicarPage() {
 
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_340px] lg:gap-7 lg:items-start">
         <div className="min-w-0">
-
-        {!esAgente && user?.plan !== "pro" && user?.plan !== "agente" && (
-          <div
-            style={{
-              marginBottom: 20,
-              padding: "16px 20px",
-              background: K.tealLight,
-              border: `1.5px solid rgba(29,158,117,0.3)`,
-              borderRadius: 12,
-              display: "flex",
-              gap: 16,
-              alignItems: "flex-start",
-              flexWrap: "wrap",
-            }}
-          >
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <p
-                style={{
-                  fontFamily: K.serif,
-                  fontSize: "0.95rem",
-                  fontWeight: 800,
-                  color: K.tealDeep,
-                  margin: "0 0 6px",
-                }}
-              >
-                Vendé más rápido con MLS Pro
-              </p>
-              <p style={{ fontSize: 12, color: K.muted, margin: 0, lineHeight: 1.6 }}>
-                Análisis de tiempo de venta por barrio, posicionamiento para
-                inversores extranjeros y comparador Airbnb vs renta larga.
-              </p>
-            </div>
-            <Link
-              to="/planes"
-              style={{
-                display: "inline-block",
-                background: K.tealDeep,
-                color: "#fff",
-                padding: "9px 18px",
-                borderRadius: 8,
-                fontWeight: 700,
-                fontSize: 13,
-                textDecoration: "none",
-                flexShrink: 0,
-                alignSelf: "center",
-              }}
-            >
-              Ver planes Pro →
-            </Link>
-          </div>
-        )}
 
         <div
           style={{

@@ -1,5 +1,5 @@
 import { AutoTranslate, Name, useT, useLang } from "@/lib/i18n";
-import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import { createFileRoute, Link, useNavigate } from '@tanstack/react-router'
 import { useQuery } from '@tanstack/react-query'
 import { useMemo, useState, type ReactNode } from 'react'
 import { MapView } from '@/components/MapView'
@@ -336,7 +336,7 @@ function BarrioPage({ slug }: { slug: string }) {
           {[0, 1].map((i) => {
             const r = realtors[i]
             return r ? (
-              <a key={r.id} href={`/agentes?agente=${r.id}`} style={{ display: 'flex', gap: 16, alignItems: 'center', background: K.paper, border: `1px solid ${K.line}`, borderRadius: 16, padding: 16, textDecoration: 'none', color: K.ink }}>
+              <Link key={r.id} to="/agentes/$id" params={{ id: r.id }} style={{ display: 'flex', gap: 16, alignItems: 'center', background: K.paper, border: `1px solid ${K.line}`, borderRadius: 16, padding: 16, textDecoration: 'none', color: K.ink }}>
                 <ImgBox round src={r.foto_url} alt={r.nombre} height={76} fallback="🏠" bg={K.azulLight} />
                 <div style={{ minWidth: 0 }}>
                   <div style={kicker(K.azul, 10.5)}>{r.tier === 'preferred' ? 'Preferred' : t('Realtor destacado', 'Featured realtor')}</div>
@@ -347,7 +347,7 @@ function BarrioPage({ slug }: { slug: string }) {
                   </div>
                   <div style={{ fontSize: '.85rem', fontWeight: 700, color: K.rojo, marginTop: 4 }}>{t(`Conecta con ${r.nombre.split(' ')[0]} →`, `Connect with ${r.nombre.split(' ')[0]} →`)}</div>
                 </div>
-              </a>
+              </Link>
             ) : (
               <a key={`slot-${i}`} href={`/planes/featured-realtor?zona_nivel=barrio&zona_codigo=${b.barrio_id}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', minHeight: 108, border: `2px dashed ${K.line}`, borderRadius: 16, padding: 16, color: K.muted, textDecoration: 'none', fontWeight: 700 }}>
                 {t(`¿Eres realtor en ${b.nombre}? Este espacio es tuyo →`, `Realtor in ${b.nombre}? This spot is yours →`)}
