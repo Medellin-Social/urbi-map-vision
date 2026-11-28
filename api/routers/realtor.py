@@ -350,12 +350,14 @@ async def sumarme_listing_abierto(listing_id: str, user: dict = Depends(get_curr
     agent = await _agent_del_usuario(user, pool)
     async with pool.acquire() as conn:
         lst = await conn.fetchrow(
-            "SELECT agent_id, estado::text AS estado, barrio_id FROM listing "
+            "SELECT agent_id, estado::text AS estado, barrio_id, directo_dueno FROM listing "
             "WHERE id = $1 AND deleted_at IS NULL",
             listing_id,
         )
         if not lst:
             raise HTTPException(status_code=404, detail="Listing no encontrado")
+        if lst["directo_dueno"]:
+            raise HTTPException(status_code=409, detail="El dueño eligió vender directo; no acepta agentes")
         if lst["agent_id"] is not None:
             raise HTTPException(status_code=409, detail="Este listing tiene agente exclusivo; no es abierto")
         if lst["estado"] != "publicado":
@@ -1592,3 +1594,123 @@ async def put_disponibilidad(
                     agent.id, f.dia_semana, _time(hi, mi), _time(hf, mf),
                 )
     return {"ok": True, "franjas": len(franjas)}
+
+
+# ── Vistas del realtor: historial + guardados (comparaciones y simulaciones) ────
+# Cada corrida se registra como HISTORIAL (guardado=false, nombre auto). "Guardar"
+# promueve una a guardado=true con nombre propio (PATCH). Guardamos los INPUTS;
+# scoped por agent_id. El historial sin guardar se poda al tope.
+_HISTORIAL_MAX = 30
+
+
+class VistaGuardadaCreate(BaseModel):
+    tipo: str = Field(pattern=r"^(comparador|simulador)$")
+    nombre: str | None = Field(default=None, max_length=120)
+    guardado: bool = False
+    payload: dict = Field(default_factory=dict)
+
+
+class VistaGuardadaPatch(BaseModel):
+    nombre: str | None = Field(default=None, max_length=120)
+    guardado: bool | None = None
+
+
+def _fila_vista(r) -> dict:
+    import json
+    p = r["payload"]
+    return {
+        "id": str(r["id"]), "tipo": r["tipo"], "nombre": r["nombre"], "guardado": r["guardado"],
+        "payload": json.loads(p) if isinstance(p, str) else (p or {}),
+        "created_at": r["created_at"].isoformat(),
+    }
+
+
+@router.get("/vistas")
+async def listar_vistas(tipo: str | None = None, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    cols = "id, tipo, nombre, guardado, payload, created_at"
+    async with pool.acquire() as conn:
+        if tipo in ("comparador", "simulador"):
+            rows = await conn.fetch(
+                f"SELECT {cols} FROM realtor_vista_guardada "
+                "WHERE agent_id = $1 AND tipo = $2 ORDER BY guardado DESC, created_at DESC",
+                agent.id, tipo,
+            )
+        else:
+            rows = await conn.fetch(
+                f"SELECT {cols} FROM realtor_vista_guardada "
+                "WHERE agent_id = $1 ORDER BY guardado DESC, created_at DESC",
+                agent.id,
+            )
+    return [_fila_vista(r) for r in rows]
+
+
+@router.post("/vistas")
+async def crear_vista(req: VistaGuardadaCreate, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    import json
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    nombre = (req.nombre or "").strip() or None
+    async with pool.acquire() as conn:
+        if req.guardado:
+            n = await conn.fetchval(
+                "SELECT count(*) FROM realtor_vista_guardada WHERE agent_id = $1 AND tipo = $2 AND guardado",
+                agent.id, req.tipo,
+            )
+            if n and n >= 50:
+                raise HTTPException(400, "Llegaste al máximo de 50 guardadas de este tipo. Borra alguna.")
+        vid = await conn.fetchval(
+            "INSERT INTO realtor_vista_guardada (agent_id, tipo, nombre, guardado, payload) "
+            "VALUES ($1, $2, $3, $4, $5::jsonb) RETURNING id",
+            agent.id, req.tipo, nombre, req.guardado, json.dumps(req.payload),
+        )
+        # poda el historial sin guardar al tope (nunca toca los guardados)
+        if not req.guardado:
+            await conn.execute(
+                "DELETE FROM realtor_vista_guardada WHERE id IN ("
+                " SELECT id FROM realtor_vista_guardada "
+                " WHERE agent_id = $1 AND tipo = $2 AND NOT guardado "
+                " ORDER BY created_at DESC OFFSET $3)",
+                agent.id, req.tipo, _HISTORIAL_MAX,
+            )
+    return {"id": str(vid)}
+
+
+@router.patch("/vistas/{vista_id}")
+async def actualizar_vista(vista_id: str, req: VistaGuardadaPatch, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    sets, vals = [], []
+    if req.nombre is not None:
+        vals.append(req.nombre.strip() or None); sets.append(f"nombre = ${len(vals)}")
+    if req.guardado is not None:
+        vals.append(req.guardado); sets.append(f"guardado = ${len(vals)}")
+    if not sets:
+        raise HTTPException(400, "Nada que actualizar")
+    vals.extend([vista_id, agent.id])
+    async with pool.acquire() as conn:
+        try:
+            res = await conn.execute(
+                f"UPDATE realtor_vista_guardada SET {', '.join(sets)} "
+                f"WHERE id = ${len(vals) - 1}::uuid AND agent_id = ${len(vals)}",
+                *vals,
+            )
+        except Exception:
+            raise HTTPException(400, "id inválido")
+    if res.endswith(" 0"):
+        raise HTTPException(404, "No encontrada")
+    return {"ok": True}
+
+
+@router.delete("/vistas/{vista_id}")
+async def eliminar_vista(vista_id: str, user: dict = Depends(get_current_user), pool=Depends(get_pool)):
+    agent = await _agent_del_usuario(user, pool, exigir_activo=False)
+    async with pool.acquire() as conn:
+        try:
+            res = await conn.execute(
+                "DELETE FROM realtor_vista_guardada WHERE id = $1::uuid AND agent_id = $2",
+                vista_id, agent.id,
+            )
+        except Exception:
+            raise HTTPException(400, "id inválido")
+    if res.endswith(" 0"):
+        raise HTTPException(404, "No encontrada")
+    return {"ok": True}

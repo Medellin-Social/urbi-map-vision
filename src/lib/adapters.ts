@@ -261,10 +261,18 @@ export type ApiListingRepresentante = {
   preferente: { nivel: string; nombre: string }[];
 };
 
+/** Dueño que publicó SIN realtor ("directo con el dueño") → su contacto. */
+export type ApiListingDirecto = {
+  nombre?: string | null;
+  telefono?: string | null;
+  email?: string | null;
+};
+
 export type ApiListingAgentes = {
-  comuna?: ApiListingAgente | null; // patrocinio caro → tarjeta principal
-  barrio?: ApiListingAgente | null; // patrocinio barato → tarjeta secundaria
+  comuna?: ApiListingAgente | null; // dentro del listing: bloque de arriba
+  barrio?: ApiListingAgente | null; // dentro del listing: bloque de abajo (más chico)
   representante?: ApiListingRepresentante | null;
+  directo?: ApiListingDirecto | null; // dueño directo (sin realtor) → gana sobre todo
 };
 
 export type SimilarListing = {

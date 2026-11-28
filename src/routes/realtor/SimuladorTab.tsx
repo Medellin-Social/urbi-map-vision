@@ -5,6 +5,8 @@ import {
 import { useBarriosComunas, useBarriosPorComuna } from "@/hooks/useBarrios";
 import { useSimular, type SimulacionRequest, type FlujoCajaDesglose } from "@/hooks/useCalculadora";
 import { C, fmtCOP, Card, Gauge, Stat, Segmented } from "./_kit";
+import { useCrearVista } from "@/hooks/useRealtorDashboard";
+import { VistasTabla } from "./-VistasTabla";
 
 const PRESUPUESTOS = [200, 350, 500, 800, 1000]; // millones COP
 type Modalidad = "airbnb" | "renta_media" | "renta_larga";
@@ -60,6 +62,7 @@ export function SimuladorTab() {
   const { data: comunas } = useBarriosComunas();
   const { data: barrios } = useBarriosPorComuna(comuna);
   const sim = useSimular();
+  const crear = useCrearVista();
 
   const correr = () => {
     if (barrioId == null) return;
@@ -68,6 +71,14 @@ export function SimuladorTab() {
       horizonte_anos: horizonte, con_credito: false,
     };
     sim.mutate(req);
+    // Auto-historial: registra la corrida.
+    const bn = (barrios ?? []).find((b) => b.id === barrioId)?.nombre ?? "";
+    const ml = MODALIDADES.find((m) => m.v === modalidad)?.label ?? modalidad;
+    crear.mutate({
+      tipo: "simulador", guardado: false,
+      nombre: `${bn} · ${ml} · $${presupuesto}M`,
+      payload: { comuna, barrio_id: barrioId, barrio_nombre: bn, presupuesto, modalidad },
+    });
   };
 
   const r = sim.data;
@@ -168,6 +179,15 @@ export function SimuladorTab() {
           {r.resumen && <div className="rounded-2xl px-5 py-4 text-[13px] leading-relaxed" style={{ background: C.soft, color: C.ink, border: `1px solid ${C.line}` }}>{r.resumen}</div>}
         </>
       )}
+
+      <VistasTabla tipo="simulador" onOpen={(v) => {
+        const p = v.payload as { comuna?: string | null; barrio_id?: number; presupuesto?: number; modalidad?: Modalidad };
+        setComuna(p.comuna ?? null);
+        if (p.barrio_id != null) setBarrioId(p.barrio_id);
+        if (p.presupuesto != null) setPresupuesto(p.presupuesto);
+        if (p.modalidad) setModalidad(p.modalidad);
+        if (p.barrio_id != null) sim.mutate({ barrio_id: p.barrio_id, presupuesto_cop: (p.presupuesto ?? 500) * 1e6, tipo_inversion: p.modalidad ?? "renta_larga", horizonte_anos: horizonte, con_credito: false });
+      }} />
     </div>
   );
 }

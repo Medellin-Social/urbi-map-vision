@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useBarriosComunas, useBarriosPorComuna, useComparar } from "@/hooks/useBarrios";
-import { useMisListings } from "@/hooks/useRealtorDashboard";
+import { useMisListings, useCrearVista } from "@/hooks/useRealtorDashboard";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { TabInmuebles, ComparisonTable, type ComparadorListing } from "@/routes/comparador";
 import type { Neighborhood } from "@/lib/adapters";
 import { C, fmtCOP, fmtCOPd, Card } from "./_kit";
+import { VistasTabla } from "./-VistasTabla";
 
 type Metric = {
   key: string; label: string; grupo: "negocio" | "zona"; get: (n: Neighborhood) => number | null;
@@ -111,6 +112,22 @@ function BarrioCompare() {
   const { data: barrios } = useBarriosPorComuna(comuna);
   const { data: comp } = useComparar(sel.map((s) => s.id));
 
+  // Auto-historial: registra la comparación cuando la selección se estabiliza (2s),
+  // deduplicada por firma para no loguear cada barrio que se agrega.
+  const crear = useCrearVista();
+  const lastSig = useRef("");
+  useEffect(() => {
+    if (sel.length < 2 || !comp || comp.length < 2) return;
+    const sig = [...sel.map((s) => s.id)].sort((a, b) => a - b).join(",");
+    if (sig === lastSig.current) return;
+    const h = setTimeout(() => {
+      lastSig.current = sig;
+      crear.mutate({ tipo: "comparador", guardado: false, nombre: sel.map((s) => s.nombre).join(" vs ").slice(0, 120), payload: { modo: "barrio", barrios: sel } });
+    }, 2000);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sel, comp]);
+
   const add = (id: number, nombre: string) => {
     if (sel.length >= 4 || sel.some((s) => s.id === id)) return;
     setSel([...sel, { id, nombre }]);
@@ -212,6 +229,12 @@ function BarrioCompare() {
       ) : (
         <div className="py-10 text-center text-[13px]" style={{ color: C.muted }}>Cargando comparación…</div>
       )}
+
+      <VistasTabla tipo="comparador" filterModo="barrio" onOpen={(v) => {
+        const b = (v.payload as { barrios?: { id: number; nombre: string }[] }).barrios ?? [];
+        lastSig.current = [...b.map((x) => x.id)].sort((a, z) => a - z).join(",");
+        setSel(b);
+      }} />
     </div>
   );
 }
@@ -290,6 +313,21 @@ function MisListingsCompare() {
   // arbitrario; para un propio, su `url` === el UUID seleccionado.
   const ordered = selIds.map((id) => enriched.find((e) => e.url === id)).filter(Boolean) as ComparadorListing[];
 
+  // Auto-historial: registra la comparación de listings cuando se estabiliza (2s).
+  const crear = useCrearVista();
+  const lastSig = useRef("");
+  useEffect(() => {
+    if (selIds.length < 2 || ordered.length < 2) return;
+    const sig = [...selIds].sort().join(",");
+    if (sig === lastSig.current) return;
+    const h = setTimeout(() => {
+      lastSig.current = sig;
+      crear.mutate({ tipo: "comparador", guardado: false, nombre: sel.map((l) => l.titulo).join(" vs ").slice(0, 120), payload: { modo: "listing", ids: selIds } });
+    }, 2000);
+    return () => clearTimeout(h);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selIds, ordered.length]);
+
   if (isLoading) return <div className="py-10 text-center text-[13px]" style={{ color: C.muted }}>Cargando tus listings…</div>;
   if (listings.length === 0)
     return (
@@ -358,6 +396,12 @@ function MisListingsCompare() {
           Estos listings aún no aparecen en el mapa para comparar. Espera unos minutos tras publicar e inténtalo de nuevo.
         </div>
       )}
+
+      <VistasTabla tipo="comparador" filterModo="listing" onOpen={(v) => {
+        const ids = (v.payload as { ids?: string[] }).ids ?? [];
+        lastSig.current = [...ids].sort().join(",");
+        setSelIds(ids);
+      }} />
     </div>
   );
 }

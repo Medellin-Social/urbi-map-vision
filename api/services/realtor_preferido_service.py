@@ -172,7 +172,8 @@ async def siguiente_realtor(conn, zona_nivel: str, zona_codigo: str):
     )
     elegido = activos[contador % len(activos)]
     return await conn.fetchrow(
-        "SELECT a.id::text AS id, a.nombre, a.foto_url, "
+        "SELECT a.id::text AS id, a.nombre, a.foto_url, a.telefono, "
+        "       a.certificado, a.anios_experiencia, "
         "       ag.nombre AS agencia_nombre, rev.rating_promedio, rev.n_resenas, $1::text AS tipo "
         "FROM agent a "
         "LEFT JOIN agency_member am ON am.agent_id = a.id "

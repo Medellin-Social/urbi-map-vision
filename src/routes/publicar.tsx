@@ -105,6 +105,7 @@ type FormData = {
   acepta_terminos: boolean;
   acepta_propietario: boolean;
   acepta_comision: boolean;
+  directo_dueno: boolean;   // vender SIN realtor (solo dueños, no agentes)
 };
 
 const INITIAL_FORM: FormData = {
@@ -129,6 +130,7 @@ const INITIAL_FORM: FormData = {
   nombre_contacto: "", telefono: "", email_contacto: "",
   horario_contacto: "", acepta_terminos: false,
   acepta_propietario: false, acepta_comision: false,
+  directo_dueno: false,
 };
 
 const STEPS = ["Información básica", "Características", "Ubicación y fotos", "Información legal", "Contacto"];
@@ -1511,14 +1513,36 @@ function Step4({
       )}
 
       {!esAgente && (
-        <div
-          style={{
-            background: K.surface,
-            border: `1px solid ${K.line}`,
-            borderRadius: 12,
-            padding: "16px",
-          }}
-        >
+        <div style={{ background: K.surface, border: `1px solid ${K.line}`, borderRadius: 12, padding: "16px" }}>
+          <label style={{ display: "flex", gap: 10, alignItems: "flex-start", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={data.directo_dueno}
+              onChange={(e) => setData({ directo_dueno: e.target.checked })}
+              style={{ marginTop: 3, width: 16, height: 16, accentColor: K.ink, flexShrink: 0 }}
+            />
+            <span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: K.ink }}>
+                Quiero venderlo yo mismo, sin agente inmobiliario
+              </span>
+              <span style={{ display: "block", fontSize: 12.5, color: K.muted, marginTop: 2, lineHeight: 1.5 }}>
+                Tu inmueble aparecerá como “Directo con el dueño” con tu contacto. No participará ningún realtor.
+              </span>
+            </span>
+          </label>
+          {data.directo_dueno && (
+            <div style={{ marginTop: 12, background: "rgba(252,209,22,0.14)", border: `1px solid ${K.amber}`, borderRadius: 10, padding: "10px 12px" }}>
+              {/* ponytail: 50% es el número a calibrar — ajústalo cuando tengas el dato real. */}
+              <span style={{ fontSize: 12.5, color: K.amber, fontWeight: 600, lineHeight: 1.5 }}>
+                ⚠️ Sin la ayuda de un agente inmobiliario, tu inmueble puede tardar hasta un 50% más en venderse. ¿Estás seguro?
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!esAgente && !data.directo_dueno && (
+        <div style={{ background: K.surface, border: `1px solid ${K.line}`, borderRadius: 12, padding: "16px" }}>
           <p style={{ fontSize: 13, fontWeight: 700, color: K.ink, marginBottom: 6 }}>
             ¿Quieres más visibilidad?
           </p>
@@ -1532,7 +1556,7 @@ function Step4({
         </div>
       )}
 
-      {(data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo") && (
+      {!data.directo_dueno && (data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo") && (
         <Field
           label="Comisión para el realtor"
           info="El porcentaje que ofreces al agente que cierre la operación. Solo se cobra si se cierra. Un % más alto atrae a más realtors a trabajar tu inmueble."
@@ -1564,7 +1588,7 @@ function Step4({
             key: "acepta_propietario" as const,
             label: "Confirmo que soy el propietario o tengo autorización para publicar esta propiedad",
           },
-          ...(data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo"
+          ...(!data.directo_dueno && (data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo")
             ? [{
                 key: "acepta_comision" as const,
                 label: `Acepto el modelo de comisión del ${data.comision_pct || "3"}% ${data.tipo_operacion === "venta" ? "sobre el precio de venta" : "sobre el canon"} (solo aplica si se cierra la operación)`,
@@ -1887,7 +1911,7 @@ function validateStep(step: number, data: FormData): string | null {
     if (!data.acepta_terminos) return "Debes aceptar los términos y condiciones";
     if (!data.acepta_propietario) return "Debes confirmar que eres propietario o tienes autorización";
     const tieneOperacion = data.tipo_operacion === "venta" || data.tipo_operacion === "arriendo";
-    if (tieneOperacion && !data.acepta_comision) return "Debes aceptar el modelo de comisión";
+    if (tieneOperacion && !data.directo_dueno && !data.acepta_comision) return "Debes aceptar el modelo de comisión";
   }
   return null;
 }
@@ -1990,6 +2014,7 @@ function PublicarPage() {
       fd.append("acepta_terminos",    String(form.acepta_terminos));
       fd.append("acepta_propietario", String(form.acepta_propietario));
       if (form.acepta_comision) fd.append("acepta_comision", "true");
+      if (form.directo_dueno) fd.append("directo_dueno", "true");
 
       // Declaraciones legales → JSON (booleans; strings/null para el resto).
       const b = (v: string) => (v === "si" ? true : v === "no" ? false : null);

@@ -3229,4 +3229,43 @@ export const PHRASES: Array<[string, string]> = [
   ["Tu foto de portada", "Your cover photo"],
   ["¿Quieres que nuestro realtor preferido", "Do you want our preferred realtor"],
   ["te contacte y te ayude a encontrar tu hogar?", "to contact you and help you find your home?"],
+
+  // ── Realtor › Herramientas: Comparador + Simulador (labels por prop/array que el
+  //    scanner no extrae; sin estas entradas las tablas quedaban en español en EN) ──
+  ["Años de recupero", "Years to recoup"],
+  ["Valorización anual", "Annual appreciation"],
+  ["Dist. al metro", "Dist. to metro"],
+  ["Rentabilidad & negocio", "Returns & business"],
+  ["Precio & zona", "Price & area"],
+  ["Compara barrios (hasta 4)", "Compare neighborhoods (up to 4)"],
+  ["Renta corta / Airbnb — nuevo POT", "Short-term rental / Airbnb — new POT"],
+  ["Agrega al menos 2 barrios para comparar.", "Add at least 2 neighborhoods to compare."],
+  ["¿Qué listings quieres comparar?", "Which listings do you want to compare?"],
+  ["Elige tus listings (2 a 5)", "Choose your listings (2 to 5)"],
+  ["Selecciona al menos 2 de tus listings para comparar.", "Select at least 2 of your listings to compare."],
+  ["Por barrio", "By neighborhood"],
+  ["Por listing", "By listing"],
+  ["Cualquier listing", "Any listing"],
+  ["Comparando", "Comparing"],
+  ["No permitido", "Not allowed"],
+  ["Sin dato POT", "No POT data"],
+  ["Permitido", "Allowed"],
+  ["El POT solo permite renta corta en predios de alta/media mixtura, no en todo el barrio.", "The POT only allows short-term rental on mixed-use (high/medium) lots, not across the whole neighborhood."],
+  ["Modalidad", "Mode"],
+  ["Ganancia 5 años", "5-year gain"],
+  ["Flujo de caja mensual", "Monthly cash flow"],
+  ["Cuota crédito", "Loan payment"],
+  ["Flujo real", "Real cash flow"],
+  ["recuperar la inversión", "to recoup the investment"],
+  ["Valor del inmueble", "Property value"],
+  ["Ingresos acumulados", "Cumulative income"],
+  ["Elige barrio…", "Choose neighborhood…"],
+  // Comparador público (ComparisonTable "Por listing")
+  ["Comparativa", "Comparison"],
+  ["Limpiar selección", "Clear selection"],
+  // Vistas guardadas (toasts de hooks)
+  ["No se pudo guardar", "Couldn't save"],
+  ["No se pudo eliminar", "Couldn't delete"],
+  // ListingDrawer (sesión paralela)
+  ["Directo con el dueño", "Direct with the owner"],
 ];

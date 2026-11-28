@@ -70,6 +70,7 @@ async def zona(request: Request, zona_nivel: Nivel, zona_codigo: str = Query(max
 async def siguiente(request: Request, zona_nivel: Nivel, zona_codigo: str = Query(max_length=40), pool=Depends(get_pool)):
     """Realtor que toca ahora en la rotación de la zona (avanza el puntero).
     Regla barrio→comuna (Ken): si el barrio no tiene preferidos, cae a su comuna."""
+    nivel_out = zona_nivel
     async with pool.acquire() as conn:
         async with conn.transaction():
             r = await svc.siguiente_realtor(conn, zona_nivel, zona_codigo)
@@ -79,7 +80,8 @@ async def siguiente(request: Request, zona_nivel: Nivel, zona_codigo: str = Quer
                 )
                 if cd:
                     r = await svc.siguiente_realtor(conn, "comuna", str(cd))
-    return {"realtor": dict(r) if r else None}
+                    nivel_out = "comuna"
+    return {"realtor": dict(r) if r else None, "nivel": nivel_out if r else None}
 
 
 @router.get("/zona-realtors")

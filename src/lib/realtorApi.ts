@@ -428,6 +428,19 @@ export function datosMinimosCompletos(l: ListingDraft): { ok: boolean; faltan: s
 
 // ── API interface ──────────────────────────────────────────────────────────────
 
+// Vista del realtor: comparación/simulación. guardado=false → historial (auto),
+// guardado=true → guardada con nombre. Guarda inputs (no snapshot).
+export type VistaGuardada = {
+  id: string;
+  tipo: "comparador" | "simulador";
+  nombre: string | null;
+  guardado: boolean;
+  payload: Record<string, unknown>;
+  created_at: string;
+};
+export type VistaGuardadaInput = { tipo: "comparador" | "simulador"; nombre?: string | null; guardado?: boolean; payload: Record<string, unknown> };
+export type VistaGuardadaPatch = { nombre?: string | null; guardado?: boolean };
+
 export interface RealtorDashboardApi {
   /** GET /api/v1/realtor/me */
   getPerfil(): Promise<PerfilAgente>;
@@ -479,6 +492,14 @@ export interface RealtorDashboardApi {
   eliminarListing(listingId: string): Promise<void>;
   /** GET /api/v1/realtor/comparables — comparables de cierre (gated por reciprocidad) */
   getComparables(params?: { barrioId?: number; tipoInmueble?: string; operacion?: string; meses?: number }): Promise<ComparablesResponse>;
+  /** GET /api/v1/realtor/vistas?tipo= — comparaciones/simulaciones guardadas */
+  listarVistas(tipo: "comparador" | "simulador"): Promise<VistaGuardada[]>;
+  /** POST /api/v1/realtor/vistas — registra historial o guarda con nombre */
+  guardarVista(input: VistaGuardadaInput): Promise<{ id: string }>;
+  /** PATCH /api/v1/realtor/vistas/:id — promueve a guardado / renombra */
+  actualizarVista(id: string, patch: VistaGuardadaPatch): Promise<void>;
+  /** DELETE /api/v1/realtor/vistas/:id */
+  eliminarVista(id: string): Promise<void>;
 }
 
 // ── Mock ───────────────────────────────────────────────────────────────────────
@@ -851,6 +872,10 @@ const mockApi: RealtorDashboardApi = {
       ],
     } satisfies ComparablesResponse;
   },
+  async listarVistas() { await _d(150); return []; },
+  async guardarVista() { await _d(200); return { id: "mock-vista" }; },
+  async actualizarVista() { await _d(150); },
+  async eliminarVista() { await _d(150); },
 };
 
 // ── HTTP — api/routers/realtor.py ──────────────────────────────────────────────
@@ -922,6 +947,10 @@ const httpApi: RealtorDashboardApi = {
       throw new Error((b as { detail?: string }).detail ?? `Error ${res.status}`);
     }
   },
+  listarVistas:   (tipo)      => apiFetch<VistaGuardada[]>(`${API_BASE_URL}/realtor/vistas?tipo=${tipo}`),
+  guardarVista:   (input)     => apiFetch<{ id: string }>(`${API_BASE_URL}/realtor/vistas`, { method: "POST", body: JSON.stringify(input) }),
+  actualizarVista:(id, patch) => apiFetch<void>(`${API_BASE_URL}/realtor/vistas/${id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+  eliminarVista:  (id)        => apiFetch<void>(`${API_BASE_URL}/realtor/vistas/${id}`, { method: "DELETE" }),
 };
 
 // Backend real por defecto. Mock solo si VITE_REALTOR_USE_MOCK="true" explícito.

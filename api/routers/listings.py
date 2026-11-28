@@ -17,6 +17,7 @@ from api.dependencies import get_current_user, get_optional_user, is_agente
 from api.limiter import _client_ip, limiter, view_throttle
 from api.services.asignador_service import asignar_intake
 from api.services.intake_service import get_or_create_owner
+from api.services.realtor_preferido_service import siguiente_realtor
 from api.services.personalizacion import calcular_relevancia, get_match_label, PRESUPUESTO_MAX
 from api.utils.ttl_cache import TTLCache
 from api.services.trm_service import cop_from_moneda, get_usd_rate, usd_from_cop
@@ -2419,12 +2420,22 @@ class ListingRepresentante(BaseModel):
     preferente: list[dict] = []
 
 
+class ListingDirecto(BaseModel):
+    # El dueño publicó SIN realtor ("directo con el dueño") → se muestra su contacto,
+    # el que capturamos al subir el listing. El front muestra el mensaje sin X de cerrar.
+    nombre: Optional[str] = None
+    telefono: Optional[str] = None
+    email: Optional[str] = None
+
+
 class ListingAgentes(BaseModel):
     comuna: Optional[ListingAgente] = None
     barrio: Optional[ListingAgente] = None
     # Programa de agentes: agente registrado que representa ESTE anuncio (representación
     # aprobada + cobertura). None = el anuncio no tiene agente registrado -> aviso.
     representante: Optional[ListingRepresentante] = None
+    # Dueño eligió "directo con el dueño" (sin realtor) → su contacto. Gana sobre todo.
+    directo: Optional[ListingDirecto] = None
 
 
 _LISTING_REPRESENTANTE_SQL = """
@@ -2456,42 +2467,61 @@ LIMIT 1
 """.replace("__AGENTE_TIPOS__", _agente_tipos_sql("a")).replace("__PREFERENTE__", _preferente_zonas_sql("a"))
 
 
-_LISTING_AGENTE_SQL = """
-WITH lz AS (
-    SELECT l.barrio_id, bc.cd_comuna
-    FROM staging.stg_listings_unificado l
-    LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
-    WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
-    LIMIT 1
-),
-ranked AS (
-    SELECT a.nombre, a.telefono, a.foto_url, a.email, s.zona_nivel::text AS zona_nivel,
-           ROW_NUMBER() OVER (
-               PARTITION BY s.zona_nivel
-               ORDER BY CASE WHEN am.rol::text = 'owner' THEN 0 ELSE 1 END, s.fecha_inicio
-           ) AS rn
-    FROM sponsorship s
-    JOIN agency_member am ON am.agency_id = s.agency_id
-    JOIN agent a ON a.id = am.agent_id AND a.estado = 'activo'
-    JOIN lz ON (
-        (s.zona_nivel = 'barrio' AND s.zona_codigo = lz.barrio_id::text)
-        OR (s.zona_nivel = 'comuna' AND s.zona_codigo = lz.cd_comuna::text)
-    )
-    WHERE s.estado = 'activa' AND CURRENT_DATE BETWEEN s.fecha_inicio AND s.fecha_fin
-)
-SELECT nombre, telefono, foto_url, email, zona_nivel FROM ranked WHERE rn = 1
+# Zona (barrio_id + cd_comuna) del listing scrapeado, por el hash del url.
+_LISTING_ZONA_SQL = """
+SELECT l.barrio_id, bc.cd_comuna
+FROM staging.stg_listings_unificado l
+LEFT JOIN analytics.barrios_cd bc ON bc.barrio_id = l.barrio_id
+WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1
+LIMIT 1
 """
+
+# Dueño directo: listing propio con directo_dueno=TRUE → su contacto (capturado al subir).
+_LISTING_DIRECTO_SQL = """
+SELECT lp.nombre_contacto AS nombre, lp.telefono, lp.email_contacto AS email
+FROM staging.stg_listings_unificado l
+JOIN public.listing lp ON lp.id::text = l.url AND l.fuente = 'propio'
+WHERE ('x'||substr(md5(l.url),1,8))::bit(32)::int = $1 AND lp.directo_dueno = TRUE
+LIMIT 1
+"""
+
+# Slots PAGADOS vigentes de una zona, en orden de progresión (posicion).
+async def _siguiente_zona(conn, zona_nivel: str, zona_codigo: str) -> Optional["ListingAgente"]:
+    """1 realtor de la rotación de la zona. Reusa `siguiente_realtor` (cursor
+    compartido `realtor_preferido_rotacion`) — el MISMO que el carrusel del mapa,
+    así la rotación es consistente entre superficies. None si la zona no tiene slots."""
+    r = await siguiente_realtor(conn, zona_nivel, zona_codigo)
+    if not r:
+        return None
+    return ListingAgente(nombre=r["nombre"], telefono=r["telefono"] or "",
+                         foto_url=r["foto_url"], email=None, zona_nivel=zona_nivel)
 
 
 @router.get("/{listing_id}/agente", response_model=ListingAgentes)
 @limiter.limit("100/minute")
-async def get_listing_agente(request: Request, listing_id: int):
+async def get_listing_agente(request: Request, listing_id: int, contexto: str = "listing"):
+    """Agente(s) del listing. Precedencia:
+
+      1. directo_dueno → el dueño publicó SIN realtor → su contacto (no rota, sin X).
+      2. representante formal / agente propio asignado → ese, exclusivo, sin rotar.
+      3. rotación de zona (round-robin sobre slots pagados, cursor en DB):
+         - contexto='listing' → 2 bloques: comuna + barrio.
+         - contexto='popup'   → 1 bloque: barrio si existe, si no comuna (fuera del listing).
+    """
     pool = get_pool()
     out = ListingAgentes()
-    # 1) Representante formal (agent-program, listing_representacion) o, si no hay,
-    #    el agente ASIGNADO del listing propio (quien lo tomó/gestiona + cobra).
-    #    Cualquiera de los dos es "el agente del inmueble" → se muestra SOLO ese,
-    #    sin la vitrina rotatoria de sponsors de zona (el listing no es vitrina).
+
+    # 1) Dueño directo (sin realtor) — gana sobre todo.
+    try:
+        directo = await pool.fetchrow(_LISTING_DIRECTO_SQL, listing_id)
+    except Exception:
+        logger.exception("directo_dueno de listing %s falló", listing_id)
+        directo = None
+    if directo:
+        out.directo = ListingDirecto(**dict(directo))
+        return out
+
+    # 2) Representante formal o agente propio asignado → exclusivo, sin rotación.
     try:
         rep = await pool.fetchrow(_LISTING_REPRESENTANTE_SQL, listing_id)
         if not rep:
@@ -2504,16 +2534,36 @@ async def get_listing_agente(request: Request, listing_id: int):
         d["tipos"] = list(d["tipos"] or [])
         d["preferente"] = _parse_preferente(d.pop("preferente_json", None))
         out.representante = ListingRepresentante(**d)
-        return out  # listing con dueño/agente asignado → solo ese, sin sponsors de zona
+        return out
 
-    # 2) Listing sin agente asignado (scrapeado) → vitrina de sponsors de la zona.
-    rows = await pool.fetch(_LISTING_AGENTE_SQL, listing_id)
-    for r in rows:
-        ag = ListingAgente(**dict(r))
-        if ag.zona_nivel == "comuna":
-            out.comuna = ag
+    # 3) Rotación de zona (slots pagados round-robin, avance por carga).
+    try:
+        zona = await pool.fetchrow(_LISTING_ZONA_SQL, listing_id)
+    except Exception:
+        logger.exception("zona de listing %s falló", listing_id)
+        zona = None
+    if not zona:
+        return out
+    barrio_cod = str(zona["barrio_id"]) if zona["barrio_id"] is not None else None
+    comuna_cod = str(zona["cd_comuna"]) if zona["cd_comuna"] is not None else None
+
+    async with pool.acquire() as conn:
+        if contexto == "popup":
+            # Fuera del listing: 1 realtor — barrio si existe, si no comuna.
+            ag = await _siguiente_zona(conn, "barrio", barrio_cod) if barrio_cod else None
+            if ag is None and comuna_cod:
+                ag = await _siguiente_zona(conn, "comuna", comuna_cod)
+            if ag is not None:
+                if ag.zona_nivel == "comuna":
+                    out.comuna = ag
+                else:
+                    out.barrio = ag
         else:
-            out.barrio = ag
+            # Dentro del listing: 2 bloques (comuna arriba, barrio abajo en el front).
+            if comuna_cod:
+                out.comuna = await _siguiente_zona(conn, "comuna", comuna_cod)
+            if barrio_cod:
+                out.barrio = await _siguiente_zona(conn, "barrio", barrio_cod)
     return out
 
 

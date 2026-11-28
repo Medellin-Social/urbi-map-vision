@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { motion, AnimatePresence, useReducedMotion } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
 import { apiFetch } from "@/lib/apiClient";
 import { API_ENDPOINTS } from "@/config/api";
 import { useLang } from "@/lib/i18n";
@@ -21,8 +21,6 @@ export type RealtorZona = {
 
 type Nivel = "barrio" | "comuna";
 
-// Intervalo del deslizado (Edward: "uno diferente cada 5 o 10 segundos").
-const ROTA_MS = 6000;
 // Oro sobrio sobre fondo claro — distingue la comuna (paga más) sin ser chillón.
 const ORO = "#C8972E";
 const ORO_RING = "#E6CD93";
@@ -49,39 +47,32 @@ function WhatsAppIcon() {
   );
 }
 
-/** Realtors preferidos de la zona (regla barrio→comuna): lista del barrio; si el
- *  barrio no tiene preferidos, cae a la comuna. Devuelve nivel resuelto + loading. */
-function useRealtorsZona(barrioId?: number | null, cdComuna?: number | null): { realtors: RealtorZona[]; nivel: Nivel | null; loading: boolean } {
+/** UN realtor preferido de la zona por CARGA (regla barrio→comuna en el server).
+ *  `/siguiente` avanza el cursor compartido (realtor_preferido_rotacion) y devuelve
+ *  el que toca → estático en esta vista, el siguiente al recargar. Reparte parejo
+ *  entre los que pagaron. Devuelve el realtor, el nivel resuelto y loading. */
+function useRealtorZonaSiguiente(barrioId?: number | null, cdComuna?: number | null): { realtor: RealtorZona | null; nivel: Nivel | null; loading: boolean } {
   const barrioKey = barrioId != null && barrioId > 0 ? String(barrioId) : null;
   const comunaKey = cdComuna != null && cdComuna > 0 ? String(cdComuna) : null;
-  const [state, setState] = useState<{ realtors: RealtorZona[]; nivel: Nivel | null; loading: boolean }>({ realtors: [], nivel: null, loading: false });
+  const [state, setState] = useState<{ realtor: RealtorZona | null; nivel: Nivel | null; loading: boolean }>({ realtor: null, nivel: null, loading: false });
 
   useEffect(() => {
     let cancel = false;
-    if (!barrioKey && !comunaKey) { setState({ realtors: [], nivel: null, loading: false }); return; }
-    setState({ realtors: [], nivel: null, loading: true });
-
-    const pedir = async (nivel: Nivel, codigo: string): Promise<RealtorZona[]> => {
-      try {
-        const r = await apiFetch<{ realtors: RealtorZona[] }>(API_ENDPOINTS.realtorsZona(nivel, codigo));
-        return r.realtors ?? [];
-      } catch {
-        return [];
-      }
-    };
+    if (!barrioKey && !comunaKey) { setState({ realtor: null, nivel: null, loading: false }); return; }
+    setState({ realtor: null, nivel: null, loading: true });
 
     (async () => {
-      let out: RealtorZona[] = [];
-      let niv: Nivel | null = null;
-      if (barrioKey) {
-        const b = await pedir("barrio", barrioKey);
-        if (b.length) { out = b; niv = "barrio"; }
+      // El más específico; el server cae a comuna si el barrio no tiene preferidos.
+      const nivel: Nivel = barrioKey ? "barrio" : "comuna";
+      const codigo = barrioKey ?? comunaKey!;
+      try {
+        const r = await apiFetch<{ realtor: RealtorZona | null; nivel: Nivel | null }>(
+          API_ENDPOINTS.realtorPreferidoSiguiente(nivel, codigo),
+        );
+        if (!cancel) setState({ realtor: r.realtor, nivel: r.nivel, loading: false });
+      } catch {
+        if (!cancel) setState({ realtor: null, nivel: null, loading: false });
       }
-      if (!out.length && comunaKey) {
-        const c = await pedir("comuna", comunaKey);
-        if (c.length) { out = c; niv = "comuna"; }
-      }
-      if (!cancel) setState({ realtors: out, nivel: niv, loading: false });
     })();
 
     return () => { cancel = true; };
@@ -105,31 +96,18 @@ export function RealtorsZonaCarousel({
 }) {
   const { lang } = useLang();
   const reduce = useReducedMotion();
-  const { realtors, nivel, loading } = useRealtorsZona(barrioId, cdComuna);
-  const [idx, setIdx] = useState(0);
-  const [paused, setPaused] = useState(false);
-  const [dismissed, setDismissed] = useState(false);
+  const { realtor: cur, nivel, loading } = useRealtorZonaSiguiente(barrioId, cdComuna);
 
   const zonaSel = (barrioId != null && barrioId > 0) || (cdComuna != null && cdComuna > 0);
-  const cur: RealtorZona | null = realtors.length ? realtors[idx % realtors.length] : null;
 
-  useEffect(() => { setIdx(0); }, [realtors]);
-  useEffect(() => { setDismissed(false); }, [barrioId, cdComuna]); // reaparece al cambiar de zona
-  useEffect(() => {
-    if (reduce || realtors.length <= 1 || paused) return;
-    const t = setInterval(() => setIdx((i) => (i + 1) % realtors.length), ROTA_MS);
-    return () => clearInterval(t);
-  }, [realtors.length, paused, reduce]);
   // Impresión: registra el realtor que se muestra (exposición = valor del cupo pago).
   useEffect(() => {
-    if (!cur || dismissed) return;
-    track("realtor_zona_impresion", { entity_type: "agent", entity_id: cur.id, metadata: { zona_nivel: nivel, zona: zonaNombre, posicion: idx + 1 } });
-  }, [cur?.id, dismissed]);
-
-  if (dismissed) return null;
+    if (!cur) return;
+    track("realtor_zona_impresion", { entity_type: "agent", entity_id: cur.id, metadata: { zona_nivel: nivel, zona: zonaNombre } });
+  }, [cur?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Zona seleccionada pero sin preferidos (y ya cargó) → gancho de captación.
-  if (!loading && !realtors.length && zonaSel) {
+  if (!loading && !cur && zonaSel) {
     const nivelVacio = barrioId != null && barrioId > 0 ? "barrio" : "comuna";
     const codigoVacio = nivelVacio === "barrio" ? barrioId : cdComuna;
     return (
@@ -173,16 +151,10 @@ export function RealtorsZonaCarousel({
       }
     : {};
 
-  const dx = reduce ? 0 : 32;
-
   return (
     <motion.div
       data-testid="realtors-zona-carousel"
       data-nivel={nivel ?? ""}
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
       {...pulso}
       style={{
         width: 278,
@@ -195,7 +167,7 @@ export function RealtorsZonaCarousel({
         ...(pulso.animate ? {} : { boxShadow: "0 10px 28px rgba(20,32,29,0.16)" }),
       }}
     >
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 9 }}>
+      <div style={{ marginBottom: 9, minWidth: 0 }}>
         {premium ? (
           <span style={{ display: "inline-flex", alignItems: "center", gap: 5, minWidth: 0 }}>
             <span style={{ flexShrink: 0, fontFamily: K.manrope, fontSize: 9.5, fontWeight: 800, letterSpacing: ".08em", textTransform: "uppercase", color: ORO, background: ORO_CHIP, border: `1px solid ${ORO_BORDE}`, borderRadius: 999, padding: "3px 8px" }}>
@@ -206,36 +178,14 @@ export function RealtorsZonaCarousel({
             </span>
           </span>
         ) : (
-          <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: K.ink, minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {(lang === "en" ? "Agents in " : "Agentes en ") + (zonaNombre ?? "")}
+          <span style={{ display: "block", fontFamily: K.manrope, fontSize: 10, fontWeight: 800, letterSpacing: ".06em", textTransform: "uppercase", color: K.ink, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+            {(lang === "en" ? "Agent in " : "Agente en ") + (zonaNombre ?? "")}
           </span>
         )}
-        <span style={{ display: "inline-flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
-          <span style={{ fontFamily: K.manrope, fontSize: 10, fontWeight: 700, color: K.muted }}>
-            {idx + 1}/{realtors.length}
-          </span>
-          <button
-            onClick={() => setDismissed(true)}
-            aria-label={lang === "en" ? "Close" : "Cerrar"}
-            style={{ border: "none", background: "transparent", cursor: "pointer", color: K.muted, fontSize: 15, lineHeight: 1, padding: 0 }}
-          >
-            ×
-          </button>
-        </span>
       </div>
 
-      {/* Altura fija: unos realtors traen agencia/rating y otros no → sin esto el
-          rectángulo salta de tamaño al deslizar. */}
-      <div style={{ position: "relative", overflow: "hidden", height: 56 }}>
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={cur.id}
-            initial={{ x: dx, opacity: 0 }}
-            animate={{ x: 0, opacity: 1 }}
-            exit={{ x: -dx, opacity: 0 }}
-            transition={{ duration: reduce ? 0 : 0.35, ease: "easeOut" }}
-            style={{ position: "absolute", inset: 0 }}
-          >
+      {/* Altura fija: unos realtors traen agencia/rating y otros no → sin saltos. */}
+      <div style={{ height: 56 }}>
             <a
               href={`/agentes/${cur.id}`}
               onClick={() => track("realtor_zona_click", { entity_type: "agent", entity_id: cur.id, metadata: { accion: "perfil", zona_nivel: nivel } })}
@@ -272,8 +222,6 @@ export function RealtorsZonaCarousel({
                 )}
               </div>
             </a>
-          </motion.div>
-        </AnimatePresence>
       </div>
 
       {/* CTA: lead directo al realtor mostrado (el que paga recibe el lead). */}
@@ -293,19 +241,6 @@ export function RealtorsZonaCarousel({
         {wa ? <WhatsAppIcon /> : null}
         {wa ? (lang === "en" ? "Contact" : "Contactar") : (lang === "en" ? "View profile" : "Ver perfil")}
       </a>
-
-      {realtors.length > 1 && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 5, marginTop: 10 }}>
-          {realtors.map((r, i) => (
-            <button
-              key={r.id}
-              aria-label={r.nombre}
-              onClick={() => setIdx(i)}
-              style={{ width: i === idx % realtors.length ? 16 : 6, height: 6, borderRadius: 999, border: "none", cursor: "pointer", padding: 0, background: i === idx % realtors.length ? (premium ? ORO : K.teal) : K.line, transition: "width .25s, background .25s" }}
-            />
-          ))}
-        </div>
-      )}
     </motion.div>
   );
 }

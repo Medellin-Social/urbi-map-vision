@@ -3515,11 +3515,13 @@ function DisponibilidadTab() {
 }
 
 // ── Zonas: comprar patrocinio (self-serve) ────────────────────────────────────
+// El precio es POR ZONA (varía por nivel A/B/C/D): cada comuna/barrio trae su
+// precio_mensual. El backend ya NO devuelve un `precios` plano {comuna,barrio}.
+type ZonaDispItem = { nombre: string; nivel: string; precio_mensual: number };
 type ZonasDisp = {
-  comunas: { cd_comuna: number; nombre: string }[];
-  barrios: { id: number; nombre: string; cd_comuna: number }[];
+  comunas: ({ cd_comuna: number } & ZonaDispItem)[];
+  barrios: ({ id: number; cd_comuna: number } & ZonaDispItem)[];
   ocupadas: { comuna: string[]; barrio: string[] };
-  precios: { comuna: number; barrio: number };
 };
 
 function ZonasCompraTab() {
@@ -3559,13 +3561,21 @@ function ZonasCompraTab() {
   const ocupComuna = new Set(disp.data?.ocupadas.comuna ?? []);
   const ocupBarrio = new Set(disp.data?.ocupadas.barrio ?? []);
   const barriosDeComuna = (disp.data?.barrios ?? []).filter((b) => String(b.cd_comuna) === comunaFiltro);
-  const precioMes = nivel === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0);
   const zonaCodigo = nivel === "comuna" ? comunaSel : barrioSel;
   const puede = !!zonaCodigo;
-  const zonaNombre = nivel === "comuna"
-    ? disp.data?.comunas.find((c) => String(c.cd_comuna) === comunaSel)?.nombre
-    : disp.data?.barrios.find((b) => String(b.id) === barrioSel)?.nombre;
+  // Zona seleccionada → su precio_mensual (varía por nivel). Sin selección, 0.
+  const zonaSel = nivel === "comuna"
+    ? disp.data?.comunas.find((c) => String(c.cd_comuna) === comunaSel)
+    : disp.data?.barrios.find((b) => String(b.id) === barrioSel);
+  const zonaNombre = zonaSel?.nombre;
+  const precioMes = zonaSel?.precio_mensual ?? 0;
   const total = precioMes * meses;
+  // "desde $X/mes" para el botón de nivel: el mínimo entre las zonas de ese nivel.
+  const precioDesde = (lvl: "comuna" | "barrio") => {
+    const arr = lvl === "comuna" ? (disp.data?.comunas ?? []) : (disp.data?.barrios ?? []);
+    const ps = arr.map((z) => z.precio_mensual).filter((p) => p > 0);
+    return ps.length ? Math.min(...ps) : 0;
+  };
   const onConfirmar = () => comprar.mutate({ zona_nivel: nivel, zona_codigo: zonaCodigo, meses });
 
   return (
@@ -3607,7 +3617,7 @@ function ZonasCompraTab() {
                 >
                   <div className="text-[14px] font-bold" style={{ color: C.ink }}>{n === "comuna" ? "Comuna" : "Barrio"}</div>
                   <div className="text-[12px] tabular-nums" style={{ color: on ? TONE.brand.fg : C.muted }}>
-                    {formatCOP(n === "comuna" ? (disp.data?.precios.comuna ?? 0) : (disp.data?.precios.barrio ?? 0))}/mes
+                    desde {formatCOP(precioDesde(n))}/mes
                   </div>
                 </button>
               );
@@ -3636,14 +3646,14 @@ function ZonasCompraTab() {
               ? (disp.data?.comunas ?? []).map((c) => {
                   const codigo = String(c.cd_comuna);
                   return (
-                    <ZonaCard key={codigo} nombre={c.nombre} ocupada={ocupComuna.has(codigo)} selected={comunaSel === codigo}
+                    <ZonaCard key={codigo} nombre={c.nombre} precio={c.precio_mensual} ocupada={ocupComuna.has(codigo)} selected={comunaSel === codigo}
                       onClick={() => setComunaSel(codigo)} />
                   );
                 })
               : barriosDeComuna.map((b) => {
                   const codigo = String(b.id);
                   return (
-                    <ZonaCard key={codigo} nombre={b.nombre} ocupada={ocupBarrio.has(codigo)} selected={barrioSel === codigo}
+                    <ZonaCard key={codigo} nombre={b.nombre} precio={b.precio_mensual} ocupada={ocupBarrio.has(codigo)} selected={barrioSel === codigo}
                       onClick={() => setBarrioSel(codigo)} />
                   );
                 })}
@@ -3703,7 +3713,7 @@ function ZonasCompraTab() {
   );
 }
 
-function ZonaCard({ nombre, ocupada, selected, onClick }: { nombre: string; ocupada: boolean; selected: boolean; onClick: () => void }) {
+function ZonaCard({ nombre, precio, ocupada, selected, onClick }: { nombre: string; precio?: number; ocupada: boolean; selected: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
@@ -3715,6 +3725,9 @@ function ZonaCard({ nombre, ocupada, selected, onClick }: { nombre: string; ocup
         : { background: C.card, boxShadow: `inset 0 0 0 1px ${C.line}` }}
     >
       <div className="truncate font-semibold" style={{ color: C.ink }}>{nombre}</div>
+      {precio != null && precio > 0 && (
+        <div className="text-[11px] tabular-nums" style={{ color: C.muted }}>{formatCOP(precio)}/mes</div>
+      )}
       <div className="mt-0.5 flex items-center gap-1 text-[11px] font-medium" style={{ color: ocupada ? C.muted : TONE.brand.fg }}>
         {ocupada ? <Lock className="h-3 w-3" /> : selected ? <Check className="h-3 w-3" /> : null}
         {ocupada ? "Ocupada" : selected ? "Seleccionada" : "Disponible"}

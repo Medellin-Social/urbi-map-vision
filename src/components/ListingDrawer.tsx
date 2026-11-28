@@ -33,7 +33,7 @@ import { AgenteNoRegistradoModal } from "@/components/AgenteNoRegistradoModal";
 import { AgenteTipoBadges } from "@/components/agentes/agenteShared";
 import { toast } from "sonner";
 import { copyText } from "@/lib/clipboard";
-import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, ApiListingRepresentante, SimilarListing, ListingCaracteristicas } from "@/lib/adapters";
+import type { ApiListingDetail, ApiListingAgente, ApiListingAgentes, ApiListingDirecto, ApiListingRepresentante, SimilarListing, ListingCaracteristicas } from "@/lib/adapters";
 import { toEmbedSrc } from "@/lib/embed";
 import { PhotoGallery } from "@/components/PhotoGallery";
 import { useComparadorStore } from "@/hooks/useComparadorStore";
@@ -1331,8 +1331,8 @@ function waLink(agente: ApiListingAgente, listingId: number): string {
 /** Realtor de comuna — patrocinio principal ($1k), tarjeta prominente. El de
  *  barrio (secundario) aparece discreto como un botón al lado, estilo agendar. */
 function RealtorPrimaryCard({
-  listingId, agente, secondary, onSchedule, onContactWa,
-}: { listingId: number; agente: ApiListingAgente; secondary?: ApiListingAgente | null; onSchedule: () => void; onContactWa: () => void }) {
+  listingId, agente, onSchedule, onContactWa,
+}: { listingId: number; agente: ApiListingAgente; onSchedule: () => void; onContactWa: () => void }) {
   const esComuna = agente.zona_nivel === "comuna";
   return (
     <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #0F8A4F", background: "#FFFFFF", boxShadow: "0 4px 16px rgba(29,158,117,0.12)" }}>
@@ -1367,20 +1367,6 @@ function RealtorPrimaryCard({
         >
           <Calendar className="h-4 w-4" /> Agendar visita
         </button>
-        {/* Realtor 2 (barrio) — discreto, un botón al lado como los de arriba */}
-        {secondary && (
-          <a
-            href={waLink(secondary, listingId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            onClick={onContactWa}
-            className="flex w-full items-center justify-center gap-1.5 pt-1 text-[11px] transition hover:opacity-70"
-            style={{ color: "#6E726E" }}
-          >
-            <User className="h-3 w-3" />
-            <span className="truncate">También: <Name>{secondary.nombre}</Name>, agente del barrio</span>
-          </a>
-        )}
       </div>
     </div>
   );
@@ -1459,22 +1445,94 @@ function RepresentanteCard({ listingId, rep, onSchedule, onContactWa }: {
   );
 }
 
-/** Columna 2 completa: agente representante del anuncio; si no hay, realtors de la zona
- *  (comuna principal + barrio secundario) o fallback, más el aviso de "agente no
+/** Dueño directo (sin realtor): mensaje fijo (SIN X de cerrar) + contacto del dueño
+ *  que capturamos al subir el listing. No participa ningún agente. */
+function DirectoDuenoCard({ directo, listingId }: { directo: ApiListingDirecto; listingId: number }) {
+  const tel = (directo.telefono ?? "").replace(/\D/g, "");
+  const waNum = tel ? (tel.startsWith("57") ? tel : `57${tel}`) : null;
+  const waText = encodeURIComponent(`Hola, me interesa este inmueble (ID: ${listingId}).`);
+  return (
+    <div className="overflow-hidden rounded-2xl" style={{ border: "1px solid #E5E0D5", background: "#FFFFFF" }}>
+      <div className="px-4 pt-4 pb-3">
+        <div className="flex items-center gap-2 text-sm font-bold" style={{ color: "#111418" }}>
+          <Home className="h-4 w-4" style={{ color: "#5B5F5C" }} /> Directo con el dueño
+        </div>
+        <p className="mt-1 text-[12.5px] leading-snug" style={{ color: "#5B5F5C" }}>
+          Este inmueble lo vende directamente su propietario, sin agente inmobiliario. Escríbele:
+        </p>
+      </div>
+      <div className="space-y-2 px-4 pb-4">
+        {waNum && (
+          <a href={`https://wa.me/+${waNum}?text=${waText}`} target="_blank" rel="noopener noreferrer"
+            className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold text-white transition hover:opacity-90" style={{ background: "#25D366" }}>
+            <Phone className="h-4 w-4" /> WhatsApp{directo.nombre ? <> · <Name>{directo.nombre}</Name></> : ""}
+          </a>
+        )}
+        {directo.telefono && (
+          <a href={`tel:${directo.telefono}`} className="flex w-full items-center justify-center gap-2 rounded-xl py-3 text-sm font-semibold transition hover:opacity-90"
+            style={{ border: "1px solid #E5E0D5", color: "#111418" }}>
+            <Phone className="h-4 w-4" style={{ color: "#5B5F5C" }} /> {directo.telefono}
+          </a>
+        )}
+        {directo.email && (
+          <a href={`mailto:${directo.email}`} className="block w-full truncate text-center text-[13px] font-medium transition hover:opacity-80" style={{ color: "#5B5F5C" }}>
+            {directo.email}
+          </a>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Bloque 2 (barrio): tarjeta más pequeña, debajo de la de comuna. */
+function RealtorSecondaryCard({ listingId, agente, onContactWa }: { listingId: number; agente: ApiListingAgente; onContactWa: () => void }) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl px-3 py-2.5" style={{ border: "0.5px solid #E5E0D5", background: "#FFFFFF" }}>
+      <div className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full" style={{ background: "#F3F0E8" }}>
+        {agente.foto_url ? <img src={agente.foto_url} alt={agente.nombre} className="h-full w-full object-cover" /> : <User className="h-4 w-4" style={{ color: "#5B5F5C" }} />}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-[13px] font-semibold" style={{ color: "#111418" }}><Name>{agente.nombre}</Name></div>
+        <div className="text-[11px]" style={{ color: "#6E726E" }}>Agente del barrio</div>
+      </div>
+      <a href={waLink(agente, listingId)} target="_blank" rel="noopener noreferrer" onClick={onContactWa}
+        className="shrink-0 rounded-lg px-3 py-1.5 text-[12px] font-semibold transition hover:opacity-85" style={{ border: "1px solid #0F8A4F", color: "#0A5C36" }}>
+        Contactar
+      </a>
+    </div>
+  );
+}
+
+/** Columna 2 completa. Prioridad: dueño directo → agente representante → 2 bloques de
+ *  zona (comuna arriba + barrio abajo más chico) → fallback. Más el aviso "agente no
  *  registrado" en anuncios importados. */
 function RealtorColumn({
   listingId, agentes, waUrl, onSchedule, onContactWa, importado = false, onAgenteInfo,
 }: { listingId: number; agentes?: ApiListingAgentes | null; waUrl: string; onSchedule: () => void; onContactWa: () => void;
      importado?: boolean; onAgenteInfo?: () => void }) {
   const { lang } = useLang();
+  // 1) Dueño directo (sin realtor) — gana sobre todo, sin X.
+  if (agentes?.directo) return <DirectoDuenoCard directo={agentes.directo} listingId={listingId} />;
+  // 2) Agente representante del anuncio.
   const rep = agentes?.representante ?? null;
   if (rep) return <RepresentanteCard listingId={listingId} rep={rep} onSchedule={onSchedule} onContactWa={onContactWa} />;
+  // 3) Dos bloques: comuna (arriba, principal) + barrio (abajo, más chico).
   const comuna = agentes?.comuna ?? null;
   const barrio = agentes?.barrio ?? null;
-  // Comuna = principal; barrio = botón discreto al lado. Sin comuna, barrio sube a principal.
-  const card = !comuna && !barrio
-    ? <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} onContactWa={onContactWa} />
-    : <RealtorPrimaryCard listingId={listingId} agente={comuna ?? barrio!} secondary={comuna ? barrio : null} onSchedule={onSchedule} onContactWa={onContactWa} />;
+  let card: React.ReactNode;
+  if (!comuna && !barrio) {
+    card = <RealtorFallbackCard waUrl={waUrl} onSchedule={onSchedule} onContactWa={onContactWa} />;
+  } else if (comuna) {
+    card = (
+      <div className="space-y-2">
+        <RealtorPrimaryCard listingId={listingId} agente={comuna} onSchedule={onSchedule} onContactWa={onContactWa} />
+        {barrio && <RealtorSecondaryCard listingId={listingId} agente={barrio} onContactWa={onContactWa} />}
+      </div>
+    );
+  } else {
+    // Solo barrio → sube a principal.
+    card = <RealtorPrimaryCard listingId={listingId} agente={barrio!} onSchedule={onSchedule} onContactWa={onContactWa} />;
+  }
   if (!importado || !onAgenteInfo) return card;
   return (
     <div className="space-y-2">

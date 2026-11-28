@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { realtorApi, type ItemPool, type ZonaNivel } from "@/lib/realtorApi";
+import { realtorApi, type ItemPool, type ZonaNivel, type VistaGuardadaInput, type VistaGuardadaPatch } from "@/lib/realtorApi";
 import { apiFetch } from "@/lib/apiClient";
 import { API_BASE_URL } from "@/config/api";
 
@@ -267,5 +267,45 @@ export function useInteligenciaBarrio(zonaCodigo: string | null, nivel?: ZonaNiv
     queryFn: () => realtorApi.getInteligenciaBarrio(zonaCodigo!, nivel),
     enabled: zonaCodigo !== null,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+// ── Vistas del realtor: historial + guardados (comparaciones + simulaciones) ────
+export function useVistasGuardadas(tipo: "comparador" | "simulador") {
+  return useQuery({
+    queryKey: ["realtor", "vistas", tipo],
+    queryFn: () => realtorApi.listarVistas(tipo),
+    staleTime: 60_000,
+  });
+}
+
+/** Registra una corrida en el historial (guardado=false). Silencioso (auto-log). */
+export function useCrearVista() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: VistaGuardadaInput) => realtorApi.guardarVista(input),
+    onSuccess: (_r, input) => qc.invalidateQueries({ queryKey: ["realtor", "vistas", input.tipo] }),
+  });
+}
+
+/** Promueve una vista del historial a guardada (nombre) o la renombra. */
+export function useActualizarVista(tipo: "comparador" | "simulador") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: VistaGuardadaPatch }) => realtorApi.actualizarVista(id, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["realtor", "vistas", tipo] });
+      toast.success("Guardado");
+    },
+    onError: (e) => toast.error(e instanceof Error && /\b50\b/.test(e.message) ? e.message : "No se pudo guardar"),
+  });
+}
+
+export function useEliminarVista(tipo: "comparador" | "simulador") {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => realtorApi.eliminarVista(id),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ["realtor", "vistas", tipo] }),
+    onError: () => toast.error("No se pudo eliminar"),
   });
 }

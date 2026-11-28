@@ -293,6 +293,10 @@ async def crear_listing(
     acepta_terminos:   bool            = Form(...),
     acepta_propietario: bool           = Form(...),
     acepta_comision:   Optional[bool]  = Form(None),
+    # Dueño eligió vender SIN realtor ("directo con el dueño"): no entra al pool/bridge
+    # y el listing muestra su contacto. Solo aplica a no-agentes (un agente que publica
+    # ES el agente del inmueble). Se persiste en listing.directo_dueno.
+    directo_dueno:     Optional[bool]  = Form(False),
     # Files
     fotos: Optional[List[UploadFile]]  = File(None),
     current_user: dict = Depends(get_current_user),
@@ -324,6 +328,9 @@ async def crear_listing(
     agente_id = await _get_agente_id(pool, current_user["id"])
     es_agente = await _es_agente_activo(pool, current_user["id"])
     owner_id = await get_or_create_owner(current_user, pool)
+    # "Directo con el dueño": solo para no-agentes. No entra al pool/bridge y el
+    # listing mostrará su contacto en vez de un realtor.
+    directo = bool(directo_dueno) and not es_agente
 
     # Anti-spam (equivalente a la llamada de verificación de Zillow FSBO):
     # un owner no publica sin teléfono verificado. Los agentes ya pasaron
@@ -466,10 +473,15 @@ async def crear_listing(
                     listing_id, url, i, i == 0,
                 )
 
+    # "Directo con el dueño": persistir el flag (la columna default es FALSE).
+    if directo:
+        await pool.execute("UPDATE listing SET directo_dueno = TRUE WHERE id = $1", listing_id)
+
     ghl_client.spawn(ghl_client.sync_listing(listing_id))
     # Puente al inbox del realtor: la publicación del owner crea un intake y el
     # asignador lo entrega (zona patrocinada → realtor; sin patrocinador → pool).
-    if not es_agente:
+    # Si el dueño eligió "directo" (sin realtor) → NO entra al pool/bridge.
+    if not es_agente and not directo:
         try:
             intake_id = str(uuid.uuid4())
             zona_codigo = str(barrio_id) if barrio_id is not None else None
