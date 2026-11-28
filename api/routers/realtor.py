@@ -1294,7 +1294,7 @@ async def agenda(user: dict = Depends(get_current_user), pool=Depends(get_pool))
                             'Nuevo lead'
                    ) AS listing_titulo,
                    COALESCE(v.nombre, u.nombre, 'Visitante') AS nombre,
-                   v.telefono, u.email,
+                   v.telefono, COALESCE(v.email, u.email) AS email,
                    v.fecha_visita, v.mensaje, v.estado, v.resultado, v.created_at,
                    v.nota_realtor, v.origen,
                    -- Ficha del inmueble (para que el realtor sepa cuál es y a dónde ir).
